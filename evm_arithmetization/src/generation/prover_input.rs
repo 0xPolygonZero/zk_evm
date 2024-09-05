@@ -643,9 +643,11 @@ impl<F: Field> GenerationState<F> {
 
         log::debug!("Accounts btree before = {:?}", self.accounts);
 
-        let Some((_, &before_ptr)) = self.accounts.range(..addr).next_back() else {
-            return Err(ProgramError::ProverInputError(InvalidInput));
-        };
+        let (_, &before_ptr) = self
+            .accounts
+            .range(..addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
         self.accounts
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
@@ -674,12 +676,19 @@ impl<F: Field> GenerationState<F> {
         let storage_linked_list =
             StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
 
-        let Some((_, &before_ptr)) = self.storage.range(..(addr, key)).next_back() else {
-            return Err(ProgramError::ProverInputError(InvalidInput));
-        };
+        log::debug!("Storage Linked list = {:?}", storage_linked_list);
+
+        log::debug!("Storage btree before = {:?}", self.storage);
+
+        let (_, &before_ptr) = self.storage.range(..(addr, key)).next_back().unwrap_or((
+            &(U256::MAX, U256::zero()),
+            &(Segment::StorageLinkedList as usize),
+        ));
         self.storage
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+
+        log::debug!("Storage btree after = {:?}", self.storage);
 
         if let Some(([.., ptr], _, _)) = storage_linked_list
             .tuple_windows()

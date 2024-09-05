@@ -74,6 +74,8 @@ fn build_segment_data<F: RichField>(
             trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
+            accounts: interpreter.generation_state.accounts.clone(),
+            storage: interpreter.generation_state.storage.clone(),
         },
     }
 }
@@ -114,6 +116,7 @@ impl<F: RichField> SegmentDataIterator<F> {
     ) -> Result<SegmentRunResult, SegmentError> {
         // Get the (partial) current segment data, if it is provided. Otherwise,
         // initialize it.
+        log::debug!("accounts btree before = {:?}", self.interpreter.generation_state.accounts);
         let mut segment_data = if let Some(partial) = partial_segment_data {
             if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
                 return Ok(None);
@@ -142,6 +145,7 @@ impl<F: RichField> SegmentDataIterator<F> {
             ));
 
             segment_data.registers_after = updated_registers;
+            log::debug!("accounts btree after = {:?}", self.interpreter.generation_state.accounts);
             Ok(Some(Box::new((segment_data, partial_segment_data))))
         } else {
             let inputs = &self.interpreter.get_generation_state().inputs;
@@ -162,6 +166,7 @@ impl<F: RichField> SegmentDataIterator<F> {
                 txn_range,
                 run.unwrap_err()
             );
+            log::debug!("accounts btree = {:?}", self.interpreter.generation_state.accounts);
             Err(SegmentError(s))
         }
     }

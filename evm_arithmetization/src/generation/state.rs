@@ -570,6 +570,8 @@ impl<F: Field> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
+        self.accounts.clone_from(&segment_data.extra_data.accounts);
+        self.storage.clone_from(&segment_data.extra_data.storage);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,

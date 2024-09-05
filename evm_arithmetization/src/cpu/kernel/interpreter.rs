@@ -5,7 +5,7 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
@@ -117,6 +117,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    pub(crate) accounts: BTreeMap<U256, usize>,
+    pub(crate) storage: BTreeMap<(U256, U256), usize>,
     pub(crate) next_txn_index: usize,
 }
 
