@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
 use prover::BlockProverInput;
-use rpc::{retry::build_http_retry_provider, RpcParams, RpcType};
+use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::block_interval::BlockIntervalStream;
@@ -19,8 +19,16 @@ use zero_bin_common::provider::CachedProvider;
 use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
 
+#[derive(Clone, Debug, Copy)]
+struct FetchParams {
+    pub start_block: u64,
+    pub end_block: u64,
+    pub checkpoint_block_number: Option<u64>,
+    pub rpc_type: RpcType,
+}
+
 #[derive(Args, Clone, Debug)]
-pub(crate) struct RpcConfig {
+struct RpcToolConfig {
     /// The RPC URL.
     #[arg(short = 'u', long, value_hint = ValueHint::Url)]
     rpc_url: Url,
@@ -36,7 +44,7 @@ pub(crate) struct RpcConfig {
 }
 
 #[derive(Subcommand)]
-pub(crate) enum Command {
+enum Command {
     Fetch {
         /// Starting block of interval to fetch.
         #[arg(short, long)]
@@ -60,18 +68,18 @@ pub(crate) enum Command {
 }
 
 #[derive(Parser)]
-pub(crate) struct Cli {
+struct Cli {
     #[clap(flatten)]
-    pub(crate) config: RpcConfig,
+    pub(crate) config: RpcToolConfig,
 
     /// Fetch and generate prover input from the RPC endpoint.
     #[command(subcommand)]
     pub(crate) command: Command,
 }
 
-pub(crate) async fn retrieve_block_prover_inputs<ProviderT, TransportT>(
+pub(crate) async fn fetch_block_prover_inputs<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
-    params: RpcParams,
+    params: FetchParams,
 ) -> Result<Vec<BlockProverInput>, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -127,7 +135,7 @@ impl Cli {
                 end_block,
                 checkpoint_block_number,
             } => {
-                let params = RpcParams {
+                let params = FetchParams {
                     start_block,
                     end_block,
                     checkpoint_block_number,
@@ -135,7 +143,7 @@ impl Cli {
                 };
 
                 let block_prover_inputs =
-                    retrieve_block_prover_inputs(cached_provider, params).await?;
+                    fetch_block_prover_inputs(cached_provider, params).await?;
                 serde_json::to_writer_pretty(std::io::stdout(), &block_prover_inputs)?;
             }
             Command::Extract { tx, batch_size } => {
@@ -153,7 +161,7 @@ impl Cli {
                             "transaction {} does not have block number",
                             tx_hash
                         ))?;
-                        let params = RpcParams {
+                        let params = FetchParams {
                             start_block: block_number,
                             end_block: block_number,
                             checkpoint_block_number: None,
@@ -161,7 +169,7 @@ impl Cli {
                         };
 
                         let block_prover_inputs =
-                            retrieve_block_prover_inputs(cached_provider, params).await?;
+                            fetch_block_prover_inputs(cached_provider, params).await?;
 
                         let block_prover_input =
                             block_prover_inputs.into_iter().next().ok_or(anyhow!(
