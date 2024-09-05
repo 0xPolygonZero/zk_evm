@@ -14,6 +14,7 @@ use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_accoun
 use crate::generation::mpt::AccountRlp;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
+use crate::testing_utils::init_logger;
 use crate::util::h2u;
 use crate::Node;
 
@@ -34,6 +35,7 @@ fn mpt_delete_leaf_nonoverlapping_keys() -> Result<()> {
 
 #[test]
 fn mpt_delete_leaf_overlapping_keys() -> Result<()> {
+    init_logger();
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),

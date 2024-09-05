@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
+use itertools::Itertools;
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
@@ -19,6 +20,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::linked_list::{AccountsLinkedList, StorageLinkedList};
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -29,7 +31,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
-use crate::util::h2u;
+use crate::util::{h2u, u256_to_usize};
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
     MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
@@ -253,6 +255,10 @@ impl<F: Field> Interpreter<F> {
         );
         self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
 
+        // Initialize the accounts and storage BTrees.
+        self.generation_state.insert_all_slots_in_memory();
+        self.generation_state.insert_all_accounts_in_memory();
+
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
@@ -382,7 +388,7 @@ impl<F: Field> Interpreter<F> {
 
         self.set_memory_multi_addresses(&registers_before_fields);
     }
-
+    
     /// Applies all memory operations since the last checkpoint. The memory
     /// operations are cleared at each checkpoint.
     pub(crate) fn apply_memops(&mut self) -> Result<(), anyhow::Error> {

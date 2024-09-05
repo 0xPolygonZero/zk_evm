@@ -10,7 +10,9 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
-use super::linked_list::{empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
+use super::linked_list::{
+    empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
+};
 use super::TrimmedTrieInputs;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;

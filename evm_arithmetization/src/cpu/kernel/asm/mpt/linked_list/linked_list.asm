@@ -226,7 +226,7 @@ insert_new_account:
 /// Returns 0 if the account was not found or `original_ptr` if it was already present.
 global search_account:
     // stack: addr_key, retdest
-    PROVER_INPUT(linked_list::insert_account)
+    PROVER_INPUT(linked_list::search_account)
     // stack: pred_ptr/4, addr_key, retdest
     %get_valid_account_ptr
     // stack: pred_ptr, addr_key, retdest
@@ -700,7 +700,7 @@ next_node_ok:
 /// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global search_slot:
     // stack: addr_key, key, payload_ptr, retdest
-    PROVER_INPUT(linked_list::insert_slot)
+    PROVER_INPUT(linked_list::search_slot)
     // stack: pred_ptr/5, addr_key, key, payload_ptr, retdest
     %get_valid_slot_ptr
 
