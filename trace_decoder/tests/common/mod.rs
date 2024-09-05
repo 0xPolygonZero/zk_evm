@@ -11,7 +11,7 @@ pub fn cases() -> anyhow::Result<Vec<Case>> {
     print!("loading test vectors...");
     let ret = glob::glob(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/tests/data/witnesses/zero_jerigon/*_header.json"
+        "/tests/cases/*_header.json"
     ))
     .expect("valid glob pattern")
     .map(|res| {
