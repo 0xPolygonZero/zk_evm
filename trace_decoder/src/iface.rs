@@ -1,6 +1,6 @@
 //! Public types for this crate.
 //!
-//! These are all in one place because they're about to be refactored away.
+//! These are all in one place because they're about to be heavily refactored.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

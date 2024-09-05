@@ -1,12 +1,12 @@
 use std::{
     cmp,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     mem,
     ops::Range,
 };
 
 use alloy_compat::Compat as _;
-use anyhow::{anyhow, ensure, Context as _};
+use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
@@ -20,8 +20,6 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 
 use crate::{
-    decoding::eth_to_gwei,
-    processed_block_trace::{map_receipt_bytes, Hash2Code},
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
@@ -567,3 +565,61 @@ fn cancun_hook<StateTrieT: StateTrie + Clone>(
 
 // TODO(0xaatif): is this _meant_ to exclude the final member?
 const PRECOMPILE_ADDRESS_RANGE: Range<U256> = U256([1, 0, 0, 0])..U256([10, 0, 0, 0]);
+
+fn eth_to_gwei(eth: U256) -> U256 {
+    // 1 ether = 10^9 gwei.
+    eth * U256::from(10).pow(9.into())
+}
+
+fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    match rlp::decode::<evm_arithmetization::generation::mpt::LegacyReceiptRlp>(&bytes) {
+        Ok(_) => Ok(bytes),
+        Err(_) => {
+            rlp::decode(&bytes).context("couldn't decode receipt as a legacy receipt or raw bytes")
+        }
+    }
+}
+
+/// Code hash mappings that we have constructed from parsing the block
+/// trace.
+/// If there are any txns that create contracts, then they will also
+/// get added here as we process the deltas.
+struct Hash2Code {
+    /// Key must always be [`hash`] of value.
+    inner: HashMap<H256, Vec<u8>>,
+}
+
+impl Hash2Code {
+    pub fn new() -> Self {
+        let mut this = Self {
+            inner: HashMap::new(),
+        };
+        this.insert(vec![]);
+        this
+    }
+    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
+        match self.inner.get(&hash) {
+            Some(code) => Ok(code.clone()),
+            None => bail!("no code for hash {}", hash),
+        }
+    }
+    pub fn insert(&mut self, code: Vec<u8>) {
+        self.inner.insert(keccak_hash::keccak(&code), code);
+    }
+}
+
+impl Extend<Vec<u8>> for Hash2Code {
+    fn extend<II: IntoIterator<Item = Vec<u8>>>(&mut self, iter: II) {
+        for it in iter {
+            self.insert(it)
+        }
+    }
+}
+
+impl FromIterator<Vec<u8>> for Hash2Code {
+    fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
+        let mut this = Self::new();
+        this.extend(iter);
+        this
+    }
+}

@@ -319,7 +319,7 @@ impl StateTrie for StateMpt {
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>> {
         #[expect(deprecated)]
-        self.insert_by_hashed_address(crate::hash(address), account)
+        self.insert_by_hashed_address(keccak_hash::keccak(address), account)
     }
     /// Insert a deferred part of the trie
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
@@ -332,11 +332,9 @@ impl StateTrie for StateMpt {
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
-        Ok(
-            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
-                self.typed.as_mut_hashed_partial_trie_unchecked(),
-                &TrieKey::from_address(address),
-            )?,
+        delete_node_and_report_remaining_key_if_branch_collapsed(
+            self.typed.as_mut_hashed_partial_trie_unchecked(),
+            TrieKey::from_address(address),
         )
     }
     fn contains_address(&self, address: Address) -> bool {
@@ -444,12 +442,7 @@ impl StorageTrie {
         &self.untyped
     }
     pub fn reporting_remove(&mut self, key: TrieKey) -> anyhow::Result<Option<TrieKey>> {
-        Ok(
-            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
-                &mut self.untyped,
-                &key,
-            )?,
-        )
+        delete_node_and_report_remaining_key_if_branch_collapsed(&mut self.untyped, key)
     }
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
@@ -468,4 +461,49 @@ impl From<StorageTrie> for HashedPartialTrie {
     fn from(value: StorageTrie) -> Self {
         value.untyped
     }
+}
+
+/// If a branch collapse occurred after a delete, then we must ensure that
+/// the other single child that remains also is not hashed when passed into
+/// plonky2. Returns the key to the remaining child if a collapse occurred.
+fn delete_node_and_report_remaining_key_if_branch_collapsed(
+    trie: &mut HashedPartialTrie,
+    key: TrieKey,
+) -> anyhow::Result<Option<TrieKey>> {
+    let old_trace = get_trie_trace(trie, key);
+    trie.delete(key.into_nibbles())?;
+    let new_trace = get_trie_trace(trie, key);
+    Ok(
+        node_deletion_resulted_in_a_branch_collapse(&old_trace, &new_trace)
+            .map(TrieKey::from_nibbles),
+    )
+}
+
+fn get_trie_trace(trie: &HashedPartialTrie, k: TrieKey) -> mpt_trie::utils::TriePath {
+    mpt_trie::special_query::path_for_query(trie, k.into_nibbles(), true).collect()
+}
+
+/// Comparing the path of the deleted key before and after the deletion,
+/// determine if the deletion resulted in a branch collapsing into a leaf or
+/// extension node, and return the path to the remaining child if this
+/// occurred.
+fn node_deletion_resulted_in_a_branch_collapse(
+    old_path: &mpt_trie::utils::TriePath,
+    new_path: &mpt_trie::utils::TriePath,
+) -> Option<mpt_trie::nibbles::Nibbles> {
+    // Collapse requires at least 2 nodes.
+    if old_path.0.len() < 2 {
+        return None;
+    }
+
+    // If the node path length decreased after the delete, then a collapse occurred.
+    // As an aside, note that while it's true that the branch could have collapsed
+    // into an extension node with multiple nodes below it, the query logic will
+    // always stop at most one node after the keys diverge, which guarantees that
+    // the new trie path will always be shorter if a collapse occurred.
+    let branch_collapse_occurred = old_path.0.len() > new_path.0.len();
+
+    // Now we need to determine the key of the only remaining node after the
+    // collapse.
+    branch_collapse_occurred.then(|| mpt_trie::utils::IntoTrieKey::into_key(new_path.iter()))
 }
