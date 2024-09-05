@@ -1,4 +1,4 @@
-#![cfg(not(feature = "cdk_erigon"))]
+#![cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
 
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{

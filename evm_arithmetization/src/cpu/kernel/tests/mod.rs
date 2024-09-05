@@ -1,10 +1,13 @@
 mod account_code;
+#[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
 mod add11;
 mod balance;
 mod bignum;
 mod blake2_f;
+#[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
 mod blobhash;
 mod block_hash;
+#[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
 mod bls381;
 mod bn254;
 mod core;

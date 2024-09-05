@@ -33,12 +33,16 @@ read_txn_from_memory:
     %jumpi(process_type_2_txn)
     // stack: rlp_start_addr, retdest
 
-    DUP1
-    MLOAD_GENERAL
-    %eq_const(3)
-    // stack: first_byte == 3, rlp_start_addr, retdest
-    %jumpi(process_type_3_txn)
-    // stack: rlp_start_addr, retdest
+    // Only Ethereum mainnet supports Blob-transactions.
+    #[cfg(not(feature = polygon_pos,cdk_erigon))]
+    {
+        DUP1
+        MLOAD_GENERAL
+        %eq_const(3)
+        // stack: first_byte == 3, rlp_start_addr, retdest
+        %jumpi(process_type_3_txn)
+        // stack: rlp_start_addr, retdest
+    }
 
     // At this point, since it's not a type 1, 2 or 3 transaction,
     // it must be a legacy (aka type 0) transaction.

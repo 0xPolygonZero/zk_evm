@@ -8,7 +8,7 @@ global pre_block_execution:
     // stack: (empty)
     PUSH txn_loop
     // stack: retdest
-    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
+    PUSH @ADDRESS_SCALABLE_L2
     %is_non_existent
     %jumpi(create_scalable_l2_account)
 

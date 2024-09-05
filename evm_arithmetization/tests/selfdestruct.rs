@@ -1,4 +1,4 @@
-#![cfg(not(feature = "cdk_erigon"))]
+#![cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
 
 use std::str::FromStr;
 use std::time::Duration;

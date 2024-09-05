@@ -86,6 +86,10 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
         U256::from(global_exit_root::GLOBAL_EXIT_ROOT_STORAGE_POS.1),
     );
     c.insert(
+        global_exit_root::ADDRESS_SCALABLE_L2.0.into(),
+        U256::from_big_endian(&global_exit_root::ADDRESS_SCALABLE_L2.1),
+    );
+    c.insert(
         global_exit_root::ADDRESS_SCALABLE_L2_STATE_KEY.0.into(),
         U256::from_big_endian(&global_exit_root::ADDRESS_SCALABLE_L2_STATE_KEY.1),
     );

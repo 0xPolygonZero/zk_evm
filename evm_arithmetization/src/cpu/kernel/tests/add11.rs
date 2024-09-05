@@ -1,5 +1,3 @@
-#![cfg(not(feature = "cdk_erigon"))]
-
 use std::collections::HashMap;
 use std::str::FromStr;
 

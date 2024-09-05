@@ -9,6 +9,7 @@ use crate::{
 mod parse_type_0_txn;
 mod parse_type_1_txn;
 mod parse_type_2_txn;
+#[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
 mod parse_type_3_txn;
 
 pub(crate) fn prepare_interpreter_for_txn_parsing<F: Field>(
