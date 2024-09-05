@@ -380,12 +380,11 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 
 #[test]
 fn test_tries() {
-    for (ix, case) in serde_json::from_str::<Vec<super::Case>>(include_str!(
-        "../tests/data/tries/zero_jerigon.json"
-    ))
-    .unwrap()
-    .into_iter()
-    .enumerate()
+    for (ix, case) in
+        serde_json::from_str::<Vec<super::Case>>(include_str!("cases/zero_jerigon.json"))
+            .unwrap()
+            .into_iter()
+            .enumerate()
     {
         println!("case {}", ix);
         let instructions = crate::wire::parse(&case.bytes).unwrap();

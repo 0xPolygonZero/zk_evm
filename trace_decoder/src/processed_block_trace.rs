@@ -14,10 +14,11 @@ use crate::{ContractCodeUsage, TxnInfo};
 const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
 const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
 
+/// A processed block trace, ready to be used to generate prover input payloads.
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
     pub tries: PartialTriePreImages,
-    pub txn_info: Vec<ProcessedTxnInfo>,
+    pub txn_info: Vec<ProcessedTxnBatchInfo>,
     pub withdrawals: Vec<(Address, U256)>,
 }
 
@@ -27,9 +28,11 @@ pub(crate) struct ProcessedBlockTracePreImages {
     pub extra_code_hash_mappings: Option<HashMap<H256, Vec<u8>>>,
 }
 
+/// A processed transaction batch, containing all information necessary to
+/// reproduce the state transition incurred by its set of transactions.
 #[derive(Debug, Default)]
-pub(crate) struct ProcessedTxnInfo {
-    pub nodes_used_by_txn: NodesUsedByTxn,
+pub(crate) struct ProcessedTxnBatchInfo {
+    pub nodes_used_by_txn: NodesUsedByTxnBatch,
     pub contract_code_accessed: HashSet<Vec<u8>>,
     pub meta: Vec<TxnMetaState>,
 }
@@ -77,8 +80,8 @@ impl TxnInfo {
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
         extra_state_accesses: &[Address],
         hash2code: &mut Hash2Code,
-    ) -> anyhow::Result<ProcessedTxnInfo> {
-        let mut nodes_used_by_txn = NodesUsedByTxn::default();
+    ) -> anyhow::Result<ProcessedTxnBatchInfo> {
+        let mut nodes_used_by_txn = NodesUsedByTxnBatch::default();
         let mut contract_code_accessed = HashSet::from([vec![]]); // we always "access" empty code
         let mut meta = Vec::with_capacity(tx_infos.len());
 
@@ -243,7 +246,7 @@ impl TxnInfo {
             });
         }
 
-        Ok(ProcessedTxnInfo {
+        Ok(ProcessedTxnBatchInfo {
             nodes_used_by_txn,
             contract_code_accessed,
             meta,
@@ -260,13 +263,15 @@ fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
     }
 }
 
-/// Note that "*_accesses" includes writes.
+/// A collection of all the state and storage accesses performed by a batch of
+/// transaction.
+///
+/// Note that "*_accesses" fields include writes.
 #[derive(Debug, Default)]
-pub(crate) struct NodesUsedByTxn {
+pub(crate) struct NodesUsedByTxnBatch {
     pub state_accesses: HashSet<Address>,
     pub state_writes: HashMap<Address, StateWrite>,
 
-    // Note: All entries in `storage_writes` also appear in `storage_accesses`.
     pub storage_accesses: HashMap<H256, Vec<TrieKey>>,
     pub storage_writes: HashMap<H256, HashMap<TrieKey, Vec<u8>>>,
 

@@ -24,7 +24,7 @@ use mpt_trie::{
 use crate::{
     hash,
     processed_block_trace::{
-        NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
+        NodesUsedByTxnBatch, ProcessedBlockTrace, ProcessedTxnBatchInfo, StateWrite, TxnMetaState,
     },
     typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages, TryIntoExt as TryIntoBounds,
@@ -119,7 +119,7 @@ pub fn into_txn_proof_gen_ir(
 fn update_beacon_block_root_contract_storage(
     trie_state: &mut PartialTrieState<impl StateTrie>,
     delta_out: &mut TrieDeltaApplicationOutput,
-    nodes_used: &mut NodesUsedByTxn,
+    nodes_used: &mut NodesUsedByTxnBatch,
     block_data: &BlockMetadata,
 ) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
@@ -251,7 +251,7 @@ fn init_any_needed_empty_storage_tries<'a>(
 
 fn create_minimal_partial_tries_needed_by_txn(
     curr_block_tries: &PartialTrieState<impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>>,
-    nodes_used_by_txn: &NodesUsedByTxn,
+    nodes_used_by_txn: &NodesUsedByTxnBatch,
     txn_range: Range<usize>,
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
@@ -294,7 +294,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 
 fn apply_deltas_to_trie_state(
     trie_state: &mut PartialTrieState<impl StateTrie>,
-    deltas: &NodesUsedByTxn,
+    deltas: &NodesUsedByTxnBatch,
     meta: &[TxnMetaState],
 ) -> anyhow::Result<TrieDeltaApplicationOutput> {
     let mut out = TrieDeltaApplicationOutput::default();
@@ -512,7 +512,7 @@ fn update_trie_state_from_withdrawals<'a>(
 fn process_txn_info(
     txn_range: Range<usize>,
     is_initial_payload: bool,
-    txn_info: ProcessedTxnInfo,
+    txn_info: ProcessedTxnBatchInfo,
     curr_block_tries: &mut PartialTrieState<
         impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>,
     >,

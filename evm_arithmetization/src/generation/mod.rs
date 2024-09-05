@@ -66,8 +66,8 @@ pub struct GenerationInputs {
     /// `gas_used_before`.
     pub gas_used_after: U256,
 
-    /// A None would yield an empty proof, otherwise this contains the encoding
-    /// of a transaction.
+    /// A batch of individually RLP-encoded transactions, which may be empty for
+    /// dummy payloads.
     pub signed_txns: Vec<Vec<u8>>,
     /// Target address for the base fee to be 'burnt', if there is one. If
     /// `None`, then the base fee is directly burnt.
