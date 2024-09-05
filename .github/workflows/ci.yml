@@ -180,7 +180,7 @@ jobs:
           RUST_BACKTRACE: 1
 
   simple_proof_regular:
-    name: prove_stdio (small - b19807080)
+    name: Execute bash script to generate and verify a proof for a small block.
     runs-on: zero-ci
 
     steps:
@@ -193,7 +193,7 @@ jobs:
           ./prove_stdio.sh artifacts/witness_b19807080.json
 
   simple_proof_witness_only:
-    name: prove_stdio test_only (small - b19807080)
+    name: Execute bash script to generate the proof witness for a small block.
     runs-on: zero-ci
 
     steps:
@@ -206,7 +206,7 @@ jobs:
           ./prove_stdio.sh artifacts/witness_b19807080.json test_only
 
   multi_blocks_proof_regular:
-    name: prove_stdio (wide - b3_b6)
+    name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
     runs-on: zero-ci
 
     steps:
