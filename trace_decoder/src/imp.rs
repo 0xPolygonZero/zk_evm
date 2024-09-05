@@ -185,10 +185,7 @@ fn start(
 
 /// Break `txns` into batches of length `hint`, prioritising creating at least
 /// two batches.
-///
-/// [`None`] represents a dummy transaction.
-fn batch(txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<Option<TxnInfo>>> {
-    let mut txns = txns.into_iter().map(Some).collect::<Vec<_>>();
+fn batch(mut txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<TxnInfo>> {
     let hint = cmp::max(hint, 1);
     let n_batches = txns.iter().chunks(hint).into_iter().count();
     match (txns.len(), n_batches) {
@@ -207,7 +204,7 @@ fn batch(txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<Option<TxnInfo>>> {
         // add padding
         (0 | 1, _) => txns
             .into_iter()
-            .pad_using(2, |_ix| None)
+            .pad_using(2, |_ix| TxnInfo::default())
             .map(|it| vec![it])
             .collect(),
     }
@@ -265,9 +262,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
     mut state_trie: StateTrieT,
     // storage at the beginning of the block
     mut storage: BTreeMap<H256, StorageTrie>,
-    // None represents a dummy txn
-    // All vecs must be non-empty.
-    batches: Vec<Vec<Option<TxnInfo>>>,
+    batches: Vec<Vec<TxnInfo>>,
     code: &mut Hash2Code,
     block_timestamp: U256,
     parent_beacon_block_root: H256,
@@ -295,7 +290,6 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
     let mut curr_txn_ix = 0;
     let len_txns = batches.iter().flatten().count();
-
     for batch in batches {
         let batch_first_txn_ix = curr_txn_ix; // GOTCHA: if there are no transactions in this batch
         let mut batch_gas_used = 0;
@@ -314,7 +308,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
         let mut storage_masks = BTreeMap::<_, BTreeSet<TrieKey>>::new();
         let mut state_mask = BTreeSet::new();
 
-        if curr_txn_ix == 0 && batch[0].is_some() {
+        if curr_txn_ix == 0 {
             cancun_hook(
                 block_timestamp,
                 &mut storage,
@@ -333,7 +327,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     new_receipt_trie_node_byte,
                     gas_used: txn_gas_used,
                 },
-        } in batch.into_iter().flatten()
+        } in batch
         {
             if let Ok(nonempty) = nunny::Vec::new(txn_byte_code) {
                 batch_byte_code.push(nonempty.clone());
@@ -378,9 +372,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     } // if txn failed, don't commit changes to trie
                 };
 
-                let storage_mask = storage_masks.entry(addr).or_default();
+                let trim_storage = storage_masks.entry(addr).or_default();
 
-                storage_mask.extend(
+                trim_storage.extend(
                     storage_written
                         .keys()
                         .chain(&storage_read)
@@ -418,7 +412,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                             let slot = TrieKey::from_hash(keccak_hash::keccak(k));
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => storage_mask.extend(storage.reporting_remove(slot)?),
+                                true => trim_storage.extend(storage.reporting_remove(slot)?),
                                 false => {
                                     storage.insert(slot, rlp::encode(&v).to_vec())?;
                                 }
@@ -475,9 +469,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 false => vec![],
             },
             before: {
-                before.state.mask(state_mask)?;
-                before.receipt.mask(batch_first_txn_ix..curr_txn_ix)?;
-                before.transaction.mask(batch_first_txn_ix..curr_txn_ix)?;
+                before.state.trim_to(state_mask)?;
+                before.receipt.trim_to(batch_first_txn_ix..curr_txn_ix)?;
+                before
+                    .transaction
+                    .trim_to(batch_first_txn_ix..curr_txn_ix)?;
 
                 let keep = storage_masks
                     .keys()
@@ -487,7 +483,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
                 for (addr, mask) in storage_masks {
                     if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.mask(mask)?
+                        it.trim_to(mask)?
                     } // TODO(0xaatif): why is this fallible?
                 }
                 before
@@ -506,7 +502,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
 fn cancun_hook<StateTrieT: StateTrie + Clone>(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
-    storage_masks: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
     parent_beacon_block_root: H256,
     trim_state: &mut BTreeSet<TrieKey>,
     state_trie: &mut StateTrieT,
@@ -517,7 +513,7 @@ fn cancun_hook<StateTrieT: StateTrie + Clone>(
     let beacon_storage = storage
         .get_mut(&keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS))
         .context("missing beacon contract storage trie")?;
-    let storage_mask = storage_masks
+    let beacon_trim = trim_storage
         .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
         .or_default();
     for (ix, u) in [
@@ -530,13 +526,13 @@ fn cancun_hook<StateTrieT: StateTrie + Clone>(
         let mut h = [0; 32];
         ix.to_big_endian(&mut h);
         let slot = TrieKey::from_hash(keccak_hash::keccak(H256::from_slice(&h)));
-        storage_mask.insert(slot);
+        beacon_trim.insert(slot);
 
         match u.is_zero() {
-            true => storage_mask.extend(beacon_storage.reporting_remove(slot)?),
+            true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
             false => {
                 beacon_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
-                storage_mask.insert(slot);
+                beacon_trim.insert(slot);
             }
         }
     }

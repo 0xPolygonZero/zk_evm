@@ -256,7 +256,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
     let mut state_trie = curr_block_tries.state.clone();
-    state_trie.mask(
+    state_trie.trim_to(
         nodes_used_by_txn
             .state_accesses
             .iter()
@@ -457,7 +457,7 @@ fn add_withdrawals_to_txns(
 
     if last_inputs.signed_txns.is_empty() {
         let mut state_trie = final_trie_state.state.clone();
-        state_trie.mask(
+        state_trie.trim_to(
             // This is a dummy payload, hence it does not contain yet
             // state accesses to the withdrawal addresses.
             withdrawals
