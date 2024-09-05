@@ -38,6 +38,7 @@ pub struct Case {
     ///
     /// Used as a test identifier.
     pub name: String,
+    #[allow(unused)] // only used by one of the test binaries
     pub header: Header,
     pub trace: BlockTrace,
     pub other: OtherBlockData,
