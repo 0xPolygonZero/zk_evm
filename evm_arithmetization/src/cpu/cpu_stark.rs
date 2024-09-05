@@ -465,6 +465,11 @@ pub(crate) fn ctl_filter_set_context<F: Field>() -> Filter<F> {
 #[cfg(feature = "cdk_erigon")]
 /// Returns the `TableWithColumns` for the CPU rows calling POSEIDON.
 pub(crate) fn ctl_poseidon_simple_op<F: Field>() -> TableWithColumns<F> {
+    // When executing POSEIDON, the GP memory channels are used as follows:
+    // GP channel 0: stack[-1] = x
+    // GP channel 1: stack[-2] = y
+    // GP channel 2: stack[-3] = z
+    // Such that we can compute `POSEIDON(x || y || z)`.
     let mut columns = Vec::new();
     for channel in 0..3 {
         for i in 0..VALUE_LIMBS / 2 {
@@ -503,6 +508,8 @@ pub(crate) fn ctl_poseidon_general_input<F: Field>() -> TableWithColumns<F> {
 }
 
 #[cfg(feature = "cdk_erigon")]
+/// CTL filter for the `POSEIDON` operation.
+/// POSEIDON is differentiated from POSEIDON_GENERAL by its first bit set to 0.
 pub(crate) fn ctl_poseidon_simple_filter<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(
@@ -514,6 +521,8 @@ pub(crate) fn ctl_poseidon_simple_filter<F: Field>() -> Filter<F> {
 }
 
 #[cfg(feature = "cdk_erigon")]
+/// CTL filter for the `POSEIDON_GENERAL` operation.
+/// POSEIDON_GENERAL is differentiated from POSEIDON by its first bit set to 1.
 pub(crate) fn ctl_poseidon_general_filter<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(

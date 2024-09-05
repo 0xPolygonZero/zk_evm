@@ -29,7 +29,7 @@ use crate::witness::memory::MemoryAddress;
 /// Maximum number of bytes that can be packed into a field element without
 /// performing a modular reduction.
 // TODO(Alonso): this constant depends on the size of F, which is not bounded.
-pub const FELT_MAX_BYTES: usize = 7;
+pub(crate) const FELT_MAX_BYTES: usize = 7;
 
 pub(crate) fn ctl_looked_simple_op<F: Field>() -> TableWithColumns<F> {
     let mut columns = Column::singles(POSEIDON_COL_MAP.input).collect_vec();
@@ -75,7 +75,7 @@ pub(crate) fn ctl_looked_general_input<F: Field>() -> TableWithColumns<F> {
     )
 }
 
-pub fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
+pub(crate) fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
     let cols = POSEIDON_COL_MAP;
     let mut res = vec![Column::constant(F::ONE)]; // is_read
 
@@ -121,7 +121,7 @@ pub fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
     res
 }
 
-pub fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
+pub(crate) fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
     let cols = POSEIDON_COL_MAP;
     Filter::new(
         vec![(
@@ -133,16 +133,16 @@ pub fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
 }
 
 #[derive(Clone, Debug)]
-pub enum PoseidonOp<F: Field> {
+pub(crate) enum PoseidonOp<F: Field> {
     PoseidonSimpleOp(PoseidonSimpleOp<F>),
     PoseidonGeneralOp(PoseidonGeneralOp),
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PoseidonSimpleOp<F: Field>(pub [F; POSEIDON_SPONGE_WIDTH]);
+pub(crate) struct PoseidonSimpleOp<F: Field>(pub [F; POSEIDON_SPONGE_WIDTH]);
 
 #[derive(Clone, Debug)]
-pub struct PoseidonGeneralOp {
+pub(crate) struct PoseidonGeneralOp {
     /// The base address at which inputs are read.
     pub(crate) base_address: MemoryAddress,
 
@@ -158,7 +158,7 @@ pub struct PoseidonGeneralOp {
 }
 
 #[derive(Copy, Clone, Default)]
-pub struct PoseidonStark<F, const D: usize> {
+pub(crate) struct PoseidonStark<F, const D: usize> {
     pub(crate) f: PhantomData<F>,
 }
 
@@ -405,7 +405,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             .copy_from_slice(&state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH]);
     }
 
-    pub fn generate_trace(
+    pub(crate) fn generate_trace(
         &self,
         operations: Vec<PoseidonOp<F>>,
         min_rows: usize,
