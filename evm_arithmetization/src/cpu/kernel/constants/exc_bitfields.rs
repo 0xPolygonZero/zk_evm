@@ -28,7 +28,7 @@ const fn u256_from_set_index_ranges<const N: usize>(ranges: &[RangeInclusive<u8>
     U256(res_limbs)
 }
 
-#[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+#[cfg(feature = "eth_mainnet")]
 pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_index_ranges(&[
     0x30..=0x30, // ADDRESS
     0x32..=0x34, // ORIGIN, CALLER, CALLVALUE
@@ -43,7 +43,7 @@ pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_inde
     0x5f..=0x8f, // PUSH*, DUP*
 ]);
 
-#[cfg(any(feature = "polygon_pos", feature = "cdk_erigon"))]
+#[cfg(not(feature = "eth_mainnet"))]
 pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_index_ranges(&[
     0x30..=0x30, // ADDRESS
     0x32..=0x34, // ORIGIN, CALLER, CALLVALUE

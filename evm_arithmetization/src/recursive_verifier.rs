@@ -383,11 +383,7 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
     // This contains the `block_beneficiary`, `block_random`, `block_base_fee`,
     // `block_blob_gas_used`, `block_excess_blob_gas`, `parent_beacon_block_root`
     // as well as `cur_hash`.
-    const LENGTH: usize = if cfg!(feature = "polygon_pos") || cfg!(feature = "cdk_erigon") {
-        4
-    } else {
-        7
-    };
+    const LENGTH: usize = if cfg!(feature = "eth_mainnet") { 7 } else { 4 };
     let block_fields_arrays: [(GlobalMetadata, &[Target]); LENGTH] = [
         (
             GlobalMetadata::BlockBeneficiary,
@@ -401,17 +397,17 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
             GlobalMetadata::BlockBaseFee,
             &public_values.block_metadata.block_base_fee,
         ),
-        #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             &public_values.block_metadata.block_blob_gas_used,
         ),
-        #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             &public_values.block_metadata.block_excess_blob_gas,
         ),
-        #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             &public_values.block_metadata.parent_beacon_block_root,
@@ -1054,7 +1050,7 @@ where
         block_metadata_target.block_gas_used,
         u256_to_u32(block_metadata.block_gas_used)?,
     );
-    #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+    #[cfg(feature = "eth_mainnet")]
     {
         // BlobGasUsed fits in 2 limbs
         let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;

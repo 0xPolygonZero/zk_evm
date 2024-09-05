@@ -309,7 +309,7 @@ where
             GlobalMetadata::BlockBaseFee,
             public_values.block_metadata.block_base_fee,
         ),
-        #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             h2u(public_values.block_metadata.parent_beacon_block_root),
@@ -322,12 +322,12 @@ where
             GlobalMetadata::BlockGasUsed,
             public_values.block_metadata.block_gas_used,
         ),
-        #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             public_values.block_metadata.block_blob_gas_used,
         ),
-        #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             public_values.block_metadata.block_excess_blob_gas,
@@ -540,17 +540,17 @@ pub(crate) mod debug_utils {
                 GlobalMetadata::BlockGasUsed,
                 public_values.block_metadata.block_gas_used,
             ),
-            #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 public_values.block_metadata.block_blob_gas_used,
             ),
-            #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 public_values.block_metadata.block_excess_blob_gas,
             ),
-            #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(public_values.block_metadata.parent_beacon_block_root),

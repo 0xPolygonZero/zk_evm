@@ -283,17 +283,17 @@ impl<F: Field> Interpreter<F> {
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
-            #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 metadata.block_blob_gas_used,
             ),
-            #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 metadata.block_excess_blob_gas,
             ),
-            #[cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(metadata.parent_beacon_block_root),

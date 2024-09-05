@@ -183,6 +183,17 @@
 #![allow(clippy::field_reassign_with_default)]
 #![feature(let_chains)]
 
+#[cfg_attr(
+    not(any(feature = "polygon_pos", feature = "cdk_erigon")),
+    cfg(feature = "eth_mainnet")
+)]
+#[cfg(any(
+    all(feature = "cdk_erigon", feature = "polygon_pos"),
+    all(feature = "cdk_erigon", feature = "eth_mainnet"),
+    all(feature = "polygon_pos", feature = "eth_mainnet"),
+))]
+compile_error!("Only a single network feature should be enabled at a time!");
+
 // Individual STARK processing units
 pub mod arithmetic;
 pub mod byte_packing;

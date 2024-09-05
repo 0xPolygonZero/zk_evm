@@ -1,4 +1,4 @@
-#![cfg(not(any(feature = "polygon_pos", feature = "cdk_erigon")))]
+#![cfg(feature = "eth_mainnet")]
 
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
@@ -177,10 +177,10 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         &[
             16..17,
             8..9,
-            14..15,
+            12..13,
             9..10,
             8..9,
-            7..8,
+            6..7,
             17..18,
             17..18,
             7..8,
