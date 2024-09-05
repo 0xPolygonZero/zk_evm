@@ -612,10 +612,6 @@ impl<F: Field> GenerationState<F> {
         let accounts_mem = self
             .memory
             .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "Accounts linked list pipopi = {:?}",
-            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
-        );
         self.accounts.extend(
             AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
                 .expect("There must be at least an empty accounts linked list")
@@ -632,7 +628,6 @@ impl<F: Field> GenerationState<F> {
                     }
                 }),
         );
-        log::debug!("el accounts bitri = {:?}", self.accounts);
     }
 }
 

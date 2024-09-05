@@ -521,49 +521,24 @@ impl<F: Field> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
     fn run_next_insert_account(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        let accounts_linked_list =
-            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)?;
 
-        log::debug!("Accounts Linked list = {:?}", accounts_linked_list);
-
-        log::debug!("Accounts btree before = {:?}", self.accounts);
-
-        let (&other_pred_addr, &other_pred_ptr) = self
+        let (&pred_addr, &pred_ptr) = self
             .accounts
             .range(..=addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        log::debug!(
-            "other_pred_addr = {:?},  other_pred_ptr = {:?}",
-            other_pred_addr,
-            other_pred_ptr
-        );
-        if other_pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
-            log::debug!(
-                "Insertiing {:?} with key {:?}",
-                Segment::AccountsLinkedList as usize + accounts_mem.len(),
-                addr,
-            );
+
+        if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
             self.accounts.insert(
                 addr,
-                Segment::AccountsLinkedList as usize + accounts_mem.len(),
+                Segment::AccountsLinkedList as usize
+                    + self
+                        .memory
+                        .get_preinit_memory(Segment::AccountsLinkedList)
+                        .len(),
             );
         }
-        log::debug!("Accounts btree after = {:?}", self.accounts);
-        if let Some(([.., pred_ptr], [_, ..], _)) =
-            accounts_linked_list
-                .tuple_windows()
-                .find(|&(_, [prev_addr, ..], [next_addr, ..])| {
-                    (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
-                })
-        {
-            log::debug!("pred_addr = {:?}, pred_ptr = {:?}", addr, pred_ptr);
-            assert_eq!(other_pred_ptr, u256_to_usize(pred_ptr).unwrap());
-            Ok(pred_ptr / U256::from(ACCOUNTS_LINKED_LIST_NODE_SIZE))
-        } else {
-            Ok((Segment::AccountsLinkedList as usize).into())
-        }
+        Ok(U256::from(pred_ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }
 
     /// Returns an unscaled pointer to a node in the list such that
@@ -573,77 +548,34 @@ impl<F: Field> GenerationState<F> {
     fn run_next_insert_slot(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        let storage_linked_list =
-            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
 
-        log::debug!("Storage Linked list = {:?}", storage_linked_list);
-
-        log::debug!("Storage btree before = {:?}", self.storage);
-        let (&(other_pred_addr, other_pred_slot_key), &other_pred_ptr) =
+        let (&(pred_addr, pred_slot_key), &pred_ptr) =
             self.storage.range(..=(addr, key)).next_back().unwrap_or((
                 &(U256::MAX, U256::zero()),
                 &(Segment::StorageLinkedList as usize),
             ));
-        log::debug!(
-            "other_pred_addr = {:?}, other_pred_slot_key = {:?}, other_pred_ptr = {:?}",
-            other_pred_addr,
-            other_pred_slot_key,
-            other_pred_ptr
-        );
-        if (other_pred_addr != addr || other_pred_slot_key != key) && input_fn.0[1] == "insert_slot"
-        {
-            log::debug!(
-                "Insertiing {:?} with key {:?}",
-                Segment::StorageLinkedList as usize + storage_mem.len(),
-                (addr, key)
-            );
+        if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
             self.storage.insert(
                 (addr, key),
-                Segment::StorageLinkedList as usize + storage_mem.len(),
+                Segment::StorageLinkedList as usize
+                    + self
+                        .memory
+                        .get_preinit_memory(Segment::StorageLinkedList)
+                        .len(),
             );
         }
-        log::debug!("Storage btree after = {:?}", self.storage);
-        if let Some(([.., pred_ptr], [addr, key, ..], _)) =
-            storage_linked_list.tuple_windows().find(
-                |&(_, [prev_addr, prev_key, ..], [next_addr, next_key, ..])| {
-                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
-                        || (prev_addr == addr && prev_key <= key);
-                    let next_is_strictly_larger =
-                        next_addr > addr || (next_addr == addr && next_key > key);
-                    prev_is_less_or_equal && next_is_strictly_larger
-                },
-            )
-        {
-            log::debug!(
-                "pred_addr = {:?}, pred_slot_key = {:?}, pred_ptr = {:?}",
-                addr,
-                key,
-                pred_ptr
-            );
-            assert_eq!(other_pred_ptr, u256_to_usize(pred_ptr).unwrap());
-            Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
-                / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
-        } else {
-            Ok(U256::zero())
-        }
+        Ok(U256::from(
+            (pred_ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE,
+        ))
     }
 
     /// Returns a pointer `ptr` to a node of the form [..] -> [next_addr, ..]
     /// list such that `next_addr = addr` and `addr` is the top of the stack.
     /// If the element is not in the list, loops forever.
     fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
-        init_logger();
         let addr = stack_peek(self, 0)?;
-        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        let accounts_linked_list =
-            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)?;
 
-        log::debug!("Accounts Linked list = {:?}", accounts_linked_list);
-
-        log::debug!("Accounts btree before = {:?}", self.accounts);
-
-        let (_, &before_ptr) = self
+        let (_, &ptr) = self
             .accounts
             .range(..addr)
             .next_back()
@@ -652,17 +584,7 @@ impl<F: Field> GenerationState<F> {
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
-        log::debug!("Accounts btree after = {:?}", self.accounts);
-
-        if let Some(([.., ptr], _, _)) = accounts_linked_list
-            .tuple_windows()
-            .find(|&(_, _, [next_node_addr, ..])| next_node_addr == addr)
-        {
-            assert_eq!(before_ptr, u256_to_usize(ptr).unwrap());
-            Ok(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE)
-        } else {
-            Ok((Segment::AccountsLinkedList as usize).into())
-        }
+        Ok(U256::from(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }
 
     /// Returns a pointer `ptr` to a node = `[next_addr, next_key]` in the list
@@ -672,15 +594,8 @@ impl<F: Field> GenerationState<F> {
     fn run_next_remove_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        let storage_linked_list =
-            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
 
-        log::debug!("Storage Linked list = {:?}", storage_linked_list);
-
-        log::debug!("Storage btree before = {:?}", self.storage);
-
-        let (_, &before_ptr) = self.storage.range(..(addr, key)).next_back().unwrap_or((
+        let (_, &ptr) = self.storage.range(..(addr, key)).next_back().unwrap_or((
             &(U256::MAX, U256::zero()),
             &(Segment::StorageLinkedList as usize),
         ));
@@ -688,18 +603,7 @@ impl<F: Field> GenerationState<F> {
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
-        log::debug!("Storage btree after = {:?}", self.storage);
-
-        if let Some(([.., ptr], _, _)) = storage_linked_list
-            .tuple_windows()
-            .find(|&(_, _, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
-        {
-            assert_eq!(before_ptr, u256_to_usize(ptr).unwrap());
-            Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
-                / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
-        } else {
-            Ok((Segment::StorageLinkedList as usize).into())
-        }
+        Ok(U256::from(ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE)
     }
 
     /// Returns a pointer `ptr` to a storage node in the storage linked list.
@@ -710,11 +614,8 @@ impl<F: Field> GenerationState<F> {
     /// stack.
     fn run_next_remove_address_slots(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        let storage_linked_list =
-            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
 
-        let (_, &other_pred_ptr) = self
+        let (_, &pred_ptr) = self
             .storage
             .range(..(addr, U256::zero()))
             .next_back()
@@ -722,20 +623,10 @@ impl<F: Field> GenerationState<F> {
                 &(U256::MAX, U256::zero()),
                 &(Segment::StorageLinkedList as usize),
             ));
-        self.storage.retain(|&(slot_addr, _), _| slot_addr != addr);
-        if let Some(([.., pred_ptr], _, _)) = storage_linked_list.tuple_windows().find(
-            |&(_, [prev_addr, _, ..], [next_addr, _, ..])| {
-                let prev_is_less = prev_addr < addr || prev_addr == U256::MAX;
-                let next_is_larger_or_equal = next_addr >= addr;
-                prev_is_less && next_is_larger_or_equal
-            },
-        ) {
-            assert_eq!(other_pred_ptr, u256_to_usize(pred_ptr).unwrap());
-            Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
-                / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
-        } else {
-            Ok((Segment::StorageLinkedList as usize).into())
-        }
+
+        Ok(U256::from(
+            (pred_ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE,
+        ))
     }
 
     /// Returns the first part of the KZG precompile output.

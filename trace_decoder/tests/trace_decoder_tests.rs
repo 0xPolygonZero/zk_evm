@@ -21,7 +21,6 @@ use pretty_env_logger::env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use prover::BlockProverInput;
 use rstest::rstest;
 use trace_decoder::OtherBlockData;
-use ethereum_types::U256;
 
 type F = GoldilocksField;
 
@@ -84,7 +83,7 @@ fn decode_generation_inputs(
     let trace_decoder_output = trace_decoder::entrypoint(
         block_prover_input.block_trace,
         block_prover_input.other_data.clone(),
-        3,
+        200,
         use_burn_addr,
     )
     .context(format!(
@@ -190,7 +189,7 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                 let block_generation_inputs =
                     decode_generation_inputs(block_prover_input, use_burn_addr)?;
                 block_generation_inputs
-                    .into_iter()
+                    .into_par_iter()
                     .map(|generation_inputs| {
                         // For every generation input, simulate execution.
                         // Execution will be simulated in parallel.
@@ -206,10 +205,8 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                             ),
                             log::Level::Info,
                         );
-                        if generation_inputs.txn_number_before == U256::from(42) {
-                            simulate_execution_all_segments::<F>(generation_inputs, 25)?;
-                            timing.filter(Duration::from_millis(100)).print();
-                        }
+                        simulate_execution_all_segments::<F>(generation_inputs, 25)?;
+                        timing.filter(Duration::from_millis(100)).print();
                         Ok::<(), anyhow::Error>(())
                     })
                     .collect::<Result<Vec<_>, anyhow::Error>>()
