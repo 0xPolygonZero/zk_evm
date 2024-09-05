@@ -44,7 +44,7 @@ jobs:
           RUST_BACKTRACE: 1
 
   test_trace_decoder:
-    name: test trace_decoder
+    name: Test trace_decoder
     runs-on: zero-ci
     timeout-minutes: 30
     env:
