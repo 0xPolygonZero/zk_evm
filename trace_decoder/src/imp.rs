@@ -319,6 +319,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
             )?;
         }
 
+        let is_dummy = batch.iter().all(|it| it.meta.byte_code.is_empty());
+
         for TxnInfo {
             traces,
             meta:
@@ -469,22 +471,24 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 false => vec![],
             },
             before: {
-                before.state.trim_to(state_mask)?;
-                before.receipt.trim_to(batch_first_txn_ix..curr_txn_ix)?;
-                before
-                    .transaction
-                    .trim_to(batch_first_txn_ix..curr_txn_ix)?;
+                if !is_dummy {
+                    before.state.trim_to(state_mask)?;
+                    before.receipt.trim_to(batch_first_txn_ix..curr_txn_ix)?;
+                    before
+                        .transaction
+                        .trim_to(batch_first_txn_ix..curr_txn_ix)?;
 
-                let keep = storage_masks
-                    .keys()
-                    .map(keccak_hash::keccak)
-                    .collect::<BTreeSet<_>>();
-                before.storage.retain(|haddr, _| keep.contains(haddr));
+                    let keep = storage_masks
+                        .keys()
+                        .map(keccak_hash::keccak)
+                        .collect::<BTreeSet<_>>();
+                    before.storage.retain(|haddr, _| keep.contains(haddr));
 
-                for (addr, mask) in storage_masks {
-                    if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.trim_to(mask)?
-                    } // TODO(0xaatif): why is this fallible?
+                    for (addr, mask) in storage_masks {
+                        if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
+                            it.trim_to(mask)?
+                        } // TODO(0xaatif): why is this fallible?
+                    }
                 }
                 before
             },
