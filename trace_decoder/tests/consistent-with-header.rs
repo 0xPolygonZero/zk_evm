@@ -24,7 +24,10 @@ fn main() -> anyhow::Result<()> {
             let gis = trace_decoder::entrypoint(trace.clone(), other.clone(), 3, false)
                 .map_err(|e| format!("{e:?}"))?; // get the full cause chain
             check!(gis.len() >= 2);
-            check!(other.checkpoint_state_trie_root == gis[0].tries.state_trie.hash());
+            check!(
+                Some(other.checkpoint_state_trie_root)
+                    == gis.first().map(|it| it.tries.state_trie.hash())
+            );
             let pairs = || gis.iter().tuple_windows::<(_, _)>();
             check!(
                 pairs().position(|(before, after)| {
@@ -51,6 +54,7 @@ fn main() -> anyhow::Result<()> {
                     .position(|it| it.block_metadata.block_timestamp != header.timestamp.into())
                     == None
             );
+            check!(gis.last().map(|it| it.block_hashes.cur_hash.compat()) == Some(header.hash));
             check!(
                 gis.iter().position(|it| it
                     .block_hashes
