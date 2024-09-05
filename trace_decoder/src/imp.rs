@@ -185,8 +185,12 @@ fn start(
 
 /// Break `txns` into batches of length `hint`, prioritising creating at least
 /// two batches.
-fn batch(mut txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<TxnInfo>> {
+///
+/// [`None`] represents a dummy transaction that should not increment the
+/// transaction index.
+fn batch(txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<Option<TxnInfo>>> {
     let hint = cmp::max(hint, 1);
+    let mut txns = txns.into_iter().map(Some).collect::<Vec<_>>();
     let n_batches = txns.iter().chunks(hint).into_iter().count();
     match (txns.len(), n_batches) {
         // enough
@@ -204,7 +208,7 @@ fn batch(mut txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<TxnInfo>> {
         // add padding
         (0 | 1, _) => txns
             .into_iter()
-            .pad_using(2, |_ix| TxnInfo::default())
+            .pad_using(2, |_ix| None)
             .map(|it| vec![it])
             .collect(),
     }
@@ -262,7 +266,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
     mut state_trie: StateTrieT,
     // storage at the beginning of the block
     mut storage: BTreeMap<H256, StorageTrie>,
-    batches: Vec<Vec<TxnInfo>>,
+    // None represents a dummy transaction that should not increment the transaction index
+    // all batches SHOULD not be empty
+    batches: Vec<Vec<Option<TxnInfo>>>,
     code: &mut Hash2Code,
     block_timestamp: U256,
     parent_beacon_block_root: H256,
@@ -319,17 +325,18 @@ fn middle<StateTrieT: StateTrie + Clone>(
             )?;
         }
 
-        for TxnInfo {
-            traces,
-            meta:
-                TxnMeta {
-                    byte_code: txn_byte_code,
-                    new_receipt_trie_node_byte,
-                    gas_used: txn_gas_used,
-                },
-        } in batch
-        {
-            if let Ok(nonempty) = nunny::Vec::new(txn_byte_code) {
+        for txn in batch {
+            let increment_txn_ix = txn.is_some();
+            let TxnInfo {
+                traces,
+                meta:
+                    TxnMeta {
+                        byte_code,
+                        new_receipt_trie_node_byte,
+                        gas_used: txn_gas_used,
+                    },
+            } = txn.unwrap_or_default();
+            if let Ok(nonempty) = nunny::Vec::new(byte_code) {
                 batch_byte_code.push(nonempty.clone());
                 transaction_trie.insert(curr_txn_ix, nonempty.into())?;
                 receipt_trie.insert(
@@ -355,6 +362,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 .into_iter()
                 .map(|(addr, trc)| (addr, trc == TxnTrace::default(), trc))
             {
+                // - created and failed
+                //   - access the state trie, no change to storage trie
+                // - created and self destructed
+                //   - access the state trie
+                // - empty trace requires the account to be present in the state trie
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
                     .map(|acct| (acct, false))
@@ -442,7 +454,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 }
             }
 
-            curr_txn_ix += 1;
+            if increment_txn_ix {
+                curr_txn_ix += 1;
+            }
         } // txn in batch
 
         out.push(Batch {
