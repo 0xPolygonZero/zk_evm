@@ -18,9 +18,9 @@ fn main() -> anyhow::Result<()> {
         other,
     } in cases()?
     {
-        let gis = trace_decoder::entrypoint(trace, other, 3, false)
+        let gen_inputs = trace_decoder::entrypoint(trace, other, 3, false)
             .context(format!("error in `trace_decoder` for {name}"))?;
-        for (ix, gi) in gis.into_iter().enumerate() {
+        for (ix, gi) in gen_inputs.into_iter().enumerate() {
             trials.push(Trial::test(format!("{name}/{ix}"), move || {
                 evm_arithmetization::prover::testing::simulate_execution_all_segments::<
                     GoldilocksField,

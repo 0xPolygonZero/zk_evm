@@ -21,14 +21,14 @@ fn main() -> anyhow::Result<()> {
     } in cases()?
     {
         trials.push(Trial::test(name, move || {
-            let gis = trace_decoder::entrypoint(trace.clone(), other.clone(), 3, false)
+            let gen_inputs = trace_decoder::entrypoint(trace.clone(), other.clone(), 3, false)
                 .map_err(|e| format!("{e:?}"))?; // get the full cause chain
-            check!(gis.len() >= 2);
+            check!(gen_inputs.len() >= 2);
             check!(
                 Some(other.checkpoint_state_trie_root)
-                    == gis.first().map(|it| it.tries.state_trie.hash())
+                    == gen_inputs.first().map(|it| it.tries.state_trie.hash())
             );
-            let pairs = || gis.iter().tuple_windows::<(_, _)>();
+            let pairs = || gen_inputs.iter().tuple_windows::<(_, _)>();
             check!(
                 pairs().position(|(before, after)| {
                     before.trie_roots_after.state_root != after.tries.state_trie.hash()
@@ -46,17 +46,25 @@ fn main() -> anyhow::Result<()> {
                 }) == None
             );
             check!(
-                gis.last().map(|it| it.trie_roots_after.state_root.compat())
+                gen_inputs
+                    .last()
+                    .map(|it| it.trie_roots_after.state_root.compat())
                     == Some(header.state_root)
             );
             check!(
-                gis.iter()
+                gen_inputs
+                    .iter()
                     .position(|it| it.block_metadata.block_timestamp != header.timestamp.into())
                     == None
             );
-            check!(gis.last().map(|it| it.block_hashes.cur_hash.compat()) == Some(header.hash));
             check!(
-                gis.iter().position(|it| it
+                gen_inputs
+                    .last()
+                    .map(|it| it.block_hashes.cur_hash.compat())
+                    == Some(header.hash)
+            );
+            check!(
+                gen_inputs.iter().position(|it| it
                     .block_hashes
                     .prev_hashes
                     .last()
