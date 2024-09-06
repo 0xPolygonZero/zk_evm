@@ -10,8 +10,9 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
-use super::linked_list::empty_list_mem;
-use super::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
+use super::linked_list::{
+    empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
+};
 use super::TrimmedTrieInputs;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
@@ -133,7 +134,7 @@ fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     Ok(vec![value])
 }
 
-const fn parse_storage_value_no_return(_value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+fn parse_storage_value_no_return(_value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     Ok(vec![])
 }
 
@@ -404,10 +405,10 @@ fn get_state_and_storage_leaves(
                 Segment::AccountsLinkedList as usize + state_leaves.len(),
             ));
             // The nibbles are the address.
-            let address = merged_key
+            let addr_key = merged_key
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
-            state_leaves.push(Some(address));
+            state_leaves.push(Some(addr_key));
             // Set `value_ptr_ptr`.
             state_leaves.push(Some(trie_data.len().into()));
             // Set counter.
@@ -422,7 +423,7 @@ fn get_state_and_storage_leaves(
             trie_data.push(Some(0.into()));
             trie_data.push(Some(code_hash.into_uint()));
             get_storage_leaves(
-                address,
+                addr_key,
                 empty_nibbles(),
                 storage_trie,
                 storage_leaves,
@@ -436,7 +437,7 @@ fn get_state_and_storage_leaves(
 }
 
 pub(crate) fn get_storage_leaves<F>(
-    address: U256,
+    addr_key: U256,
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
@@ -453,7 +454,7 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
+                get_storage_leaves(addr_key, extended_key, child, storage_leaves, parse_value)?;
             }
 
             Ok(())
@@ -461,7 +462,7 @@ where
 
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
+            get_storage_leaves(addr_key, extended_key, child, storage_leaves, parse_value)?;
 
             Ok(())
         }
@@ -473,7 +474,7 @@ where
                 Segment::StorageLinkedList as usize + storage_leaves.len(),
             ));
             // Write the address.
-            storage_leaves.push(Some(address));
+            storage_leaves.push(Some(addr_key));
             // Write the key.
             storage_leaves.push(Some(
                 merged_key

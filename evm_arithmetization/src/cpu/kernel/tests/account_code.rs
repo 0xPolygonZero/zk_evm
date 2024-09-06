@@ -44,6 +44,9 @@ pub(crate) fn initialize_mpts<F: Field>(
         trie_data.clone();
     interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
 
+    interpreter.generation_state.insert_all_slots_in_memory();
+    interpreter.generation_state.insert_all_accounts_in_memory();
+
     if trie_root_ptrs.state_root_ptr.is_none() {
         trie_root_ptrs.state_root_ptr = Some(
             load_state_mpt(
