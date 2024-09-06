@@ -302,7 +302,6 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     mut batch_size: usize,
-    use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
@@ -458,7 +457,6 @@ pub fn entrypoint(
             withdrawals: other.b_data.withdrawals.clone(),
         },
         other,
-        use_burn_addr,
         batch_size,
     )
 }

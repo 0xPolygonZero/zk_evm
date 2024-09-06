@@ -1,7 +1,6 @@
 use std::{cmp::min, collections::HashMap, ops::Range};
 
 use anyhow::{anyhow, Context as _};
-use ethereum_types::H160;
 use ethereum_types::{Address, H256, U256, U512};
 #[cfg(feature = "eth_mainnet")]
 use evm_arithmetization::testing_utils::{
@@ -57,7 +56,6 @@ pub fn into_txn_proof_gen_ir(
         withdrawals,
     }: ProcessedBlockTrace,
     other_data: OtherBlockData,
-    use_burn_addr: bool,
     batch_size: usize,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     let mut curr_block_tries = PartialTrieState {
@@ -94,7 +92,6 @@ pub fn into_txn_proof_gen_ir(
                 &mut curr_block_tries,
                 &mut extra_data,
                 &other_data,
-                use_burn_addr,
             )
             .context(format!(
                 "at transaction range {}..{}",
@@ -544,7 +541,6 @@ fn process_txn_info(
     >,
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
-    use_burn_target: bool,
 ) -> anyhow::Result<GenerationInputs> {
     log::trace!(
         "Generating proof IR for txn {} through {}...",
@@ -603,15 +599,9 @@ fn process_txn_info(
         delta_out,
     )?;
 
-    let burn_addr = match use_burn_target {
-        // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
-        //       Retrieve the actual burn address from `cdk-erigon`.
-        true => Some(H160::zero()),
-        false => None,
-    };
     let gen_inputs = GenerationInputs {
         txn_number_before: extra_data.txn_number_before,
-        burn_addr,
+        burn_addr: other_data.burn_addr,
         gas_used_before: extra_data.gas_used_before,
         gas_used_after: extra_data.gas_used_after,
         signed_txns: txn_info

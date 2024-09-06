@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
         } in cases()?
         {
             trials.push(Trial::test(format!("{name}@{batch_size}"), move || {
-                let gen_inputs = trace_decoder::entrypoint(trace, other.clone(), batch_size, false)
+                let gen_inputs = trace_decoder::entrypoint(trace, other.clone(), batch_size)
                     .map_err(|e| format!("{e:?}"))?; // get the full cause chain
                 check!(gen_inputs.len() >= 2);
                 check!(
