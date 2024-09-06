@@ -30,10 +30,10 @@ use crate::{
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    batch_size: usize,
+    batch_size_hint: usize,
     use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
-    ensure!(batch_size != 0);
+    ensure!(batch_size_hint != 0);
 
     let BlockTrace {
         trie_pre_images,
@@ -63,7 +63,7 @@ pub fn entrypoint(
     let batches = middle(
         state,
         storage,
-        batch(txn_info, batch_size),
+        batch(txn_info, batch_size_hint),
         &mut code,
         b_meta.block_timestamp,
         b_meta.parent_beacon_block_root,
@@ -188,13 +188,13 @@ fn start(
     })
 }
 
-/// Break `txns` into batches of length `hint`, prioritising creating at least
-/// two batches.
+/// Break `txns` into batches of length `batch_size_hint`, prioritising creating
+/// at least two batches.
 ///
 /// [`None`] represents a dummy transaction that should not increment the
 /// transaction index.
-fn batch(txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<Option<TxnInfo>>> {
-    let hint = cmp::max(hint, 1);
+fn batch(txns: Vec<TxnInfo>, batch_size_hint: usize) -> Vec<Vec<Option<TxnInfo>>> {
+    let hint = cmp::max(batch_size_hint, 1);
     let mut txns = txns.into_iter().map(Some).collect::<Vec<_>>();
     let n_batches = txns.iter().chunks(hint).into_iter().count();
     match (txns.len(), n_batches) {
