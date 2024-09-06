@@ -50,6 +50,9 @@ global update_scalable_prev_block_root_hash:
     %write_scalable_storage
     // stack: retdest
 
+// Note: We assume that if the l1 info tree has been re-used or the GER does not exist,
+// the payload will not contain any root to store, in which case calling `PROVER_INPUT(ger)`
+// will return `U256::MAX` causing this to return early.
 global update_scalable_l1blockhash:
     // stack: retdest
     PROVER_INPUT(ger)

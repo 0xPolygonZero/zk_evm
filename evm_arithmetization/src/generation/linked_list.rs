@@ -32,14 +32,14 @@ pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>;
 }
 
 impl<'a, const N: usize> LinkedList<'a, N> {
-    pub fn from_mem_and_segment(
+    pub const fn from_mem_and_segment(
         mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
         Self::from_mem_len_and_segment(mem, segment)
     }
 
-    pub fn from_mem_len_and_segment(
+    pub const fn from_mem_len_and_segment(
         mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {

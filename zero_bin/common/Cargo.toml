@@ -35,5 +35,12 @@ cargo_metadata = { workspace = true }
 vergen = { workspace = true }
 anyhow = { workspace = true }
 
+[features]
+default = []
+cdk_erigon = [
+    "evm_arithmetization/cdk_erigon",
+    "proof_gen/cdk_erigon"
+]
+
 [lints]
 workspace = true

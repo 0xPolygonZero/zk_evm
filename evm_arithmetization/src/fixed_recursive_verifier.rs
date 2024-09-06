@@ -749,14 +749,22 @@ where
         let mem_before = RecursiveCircuitsForTable::new(
             Table::MemBefore,
             &all_stark.mem_before_stark,
-            degree_bits_ranges[Table::MemBefore as usize].clone(),
+            degree_bits_ranges[*Table::MemBefore].clone(),
             &all_stark.cross_table_lookups,
             stark_config,
         );
         let mem_after = RecursiveCircuitsForTable::new(
             Table::MemAfter,
             &all_stark.mem_after_stark,
-            degree_bits_ranges[Table::MemAfter as usize].clone(),
+            degree_bits_ranges[*Table::MemAfter].clone(),
+            &all_stark.cross_table_lookups,
+            stark_config,
+        );
+        #[cfg(feature = "cdk_erigon")]
+        let poseidon = RecursiveCircuitsForTable::new(
+            Table::Poseidon,
+            &all_stark.poseidon_stark,
+            degree_bits_ranges[*Table::Poseidon].clone(),
             &all_stark.cross_table_lookups,
             stark_config,
         );
@@ -771,6 +779,8 @@ where
             memory,
             mem_before,
             mem_after,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon,
         ];
         let root = Self::create_segment_circuit(&by_table, stark_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);

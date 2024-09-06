@@ -19,5 +19,9 @@ hashbrown = { workspace = true }
 # Local dependencies
 evm_arithmetization = { workspace = true }
 
+[features]
+default = []
+cdk_erigon = ["evm_arithmetization/cdk_erigon"]
+
 [lints]
 workspace = true

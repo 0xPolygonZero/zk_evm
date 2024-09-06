@@ -172,6 +172,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
+
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
         &[

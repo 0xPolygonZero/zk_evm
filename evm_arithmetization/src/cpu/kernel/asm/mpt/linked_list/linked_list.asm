@@ -859,9 +859,10 @@ remove_all_slots_end:
 %macro read_storage_linked_list
     // stack: slot
     %slot_to_storage_key
+    %stack (storage_key) -> (storage_key, 0, %%after)
     %address
     %addr_to_state_key
-    %stack (addr_key, key) -> (addr_key, key, 0, %%after)
+    // stack: addr_key, storage_key, 0, %%after
     %jump(search_slot)
 %%after:
     // stack: slot_value
@@ -870,9 +871,9 @@ remove_all_slots_end:
 %macro read_storage_linked_list_w_addr
     // stack: slot, address
     %slot_to_storage_key
-    SWAP1
+    %stack (storage_key, address) -> (address, storage_key, 0, %%after)
     %addr_to_state_key
-    %stack (addr_key, key) -> (addr_key, key, 0, %%after)
+    // stack: addr_key, storage_key, 0, %%after
     %jump(search_slot)
 %%after:
     // stack: slot_value
@@ -881,8 +882,7 @@ remove_all_slots_end:
 %macro read_storage_linked_list_w_state_key
     // stack: slot, state_key
     %slot_to_storage_key
-    SWAP1
-    %stack (state_key, key) -> (state_key, key, 0, %%after)
+    %stack (storage_key, state_key) -> (state_key, storage_key, 0, %%after)
     %jump(search_slot)
 %%after:
     // stack: slot_ptr

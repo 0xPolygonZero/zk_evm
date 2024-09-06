@@ -8,7 +8,6 @@ use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -99,7 +98,7 @@ pub struct GenerationInputs {
     /// hashes.
     pub block_hashes: BlockHashes,
 
-    /// The the global exit root along with the l1blockhash to write to the GER
+    /// The global exit root along with the l1blockhash to write to the GER
     /// manager.
     ///
     /// This is specific to `cdk-erigon`.
@@ -556,7 +555,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values))
 }
 
-fn simulate_cpu<F: Field>(
+fn simulate_cpu<F: RichField>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {

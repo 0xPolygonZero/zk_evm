@@ -48,6 +48,7 @@ serde-big-array = { workspace = true }
 
 # Local dependencies
 mpt_trie = { workspace = true }
+smt_trie = { workspace = true, optional = true }
 zk_evm_proc_macro = { workspace = true }
 
 [dev-dependencies]
@@ -59,7 +60,7 @@ ripemd = { workspace = true }
 default = ["eth_mainnet"]
 asmtools = ["hex"]
 polygon_pos = []
-cdk_erigon = []
+cdk_erigon = ["smt_trie"]
 eth_mainnet = []
 
 [[bin]]

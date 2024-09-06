@@ -25,6 +25,11 @@ use crate::logic::LogicStark;
 use crate::memory::memory_stark::MemoryStark;
 use crate::memory::memory_stark::{self, ctl_context_pruning_looking};
 use crate::memory_continuation::memory_continuation_stark::{self, MemoryContinuationStark};
+#[cfg(feature = "cdk_erigon")]
+use crate::poseidon::{
+    columns::POSEIDON_SPONGE_RATE,
+    poseidon_stark::{self, PoseidonStark, FELT_MAX_BYTES},
+};
 
 /// Structure containing all STARKs and the cross-table lookups.
 #[derive(Clone)]
@@ -38,6 +43,8 @@ pub struct AllStark<F: RichField + Extendable<D>, const D: usize> {
     pub(crate) memory_stark: MemoryStark<F, D>,
     pub(crate) mem_before_stark: MemoryContinuationStark<F, D>,
     pub(crate) mem_after_stark: MemoryContinuationStark<F, D>,
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) poseidon_stark: PoseidonStark<F, D>,
     pub(crate) cross_table_lookups: Vec<CrossTableLookup<F>>,
 }
 
@@ -55,6 +62,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
             memory_stark: MemoryStark::default(),
             mem_before_stark: MemoryContinuationStark::default(),
             mem_after_stark: MemoryContinuationStark::default(),
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_stark: PoseidonStark::default(),
             cross_table_lookups: all_cross_table_lookups(),
         }
     }
@@ -72,6 +81,8 @@ impl<F: RichField + Extendable<D>, const D: usize> AllStark<F, D> {
             self.memory_stark.num_lookup_helper_columns(config),
             self.mem_before_stark.num_lookup_helper_columns(config),
             self.mem_after_stark.num_lookup_helper_columns(config),
+            #[cfg(feature = "cdk_erigon")]
+            self.poseidon_stark.num_lookup_helper_columns(config),
         ]
     }
 }
@@ -90,6 +101,8 @@ pub enum Table {
     Memory = 6,
     MemBefore = 7,
     MemAfter = 8,
+    #[cfg(feature = "cdk_erigon")]
+    Poseidon = 9,
 }
 
 impl Deref for Table {
@@ -98,12 +111,20 @@ impl Deref for Table {
     fn deref(&self) -> &Self::Target {
         // Hacky way to implement `Deref` for `Table` so that we don't have to
         // call `Table::Foo as usize`, but perhaps too ugly to be worth it.
-        [&0, &1, &2, &3, &4, &5, &6, &7, &8][*self as TableIdx]
+        #[cfg(not(feature = "cdk_erigon"))]
+        return [&0, &1, &2, &3, &4, &5, &6, &7, &8][*self as TableIdx];
+
+        #[cfg(feature = "cdk_erigon")]
+        [&0, &1, &2, &3, &4, &5, &6, &7, &8, &9][*self as TableIdx]
     }
 }
 
 /// Number of STARK tables.
-pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
+pub const NUM_TABLES: usize = if cfg!(feature = "cdk_erigon") {
+    Table::MemAfter as usize + 2
+} else {
+    Table::MemAfter as usize + 1
+};
 
 impl Table {
     /// Returns all STARK table indices.
@@ -118,6 +139,8 @@ impl Table {
             Self::Memory,
             Self::MemBefore,
             Self::MemAfter,
+            #[cfg(feature = "cdk_erigon")]
+            Self::Poseidon,
         ]
     }
 }
@@ -135,6 +158,12 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_mem_before(),
         ctl_mem_after(),
         ctl_context_pruning(),
+        #[cfg(feature = "cdk_erigon")]
+        ctl_poseidon_simple(),
+        #[cfg(feature = "cdk_erigon")]
+        ctl_poseidon_general_input(),
+        #[cfg(feature = "cdk_erigon")]
+        ctl_poseidon_general_output(),
     ]
 }
 
@@ -307,6 +336,16 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
         memory_continuation_stark::ctl_data_memory(),
         memory_continuation_stark::ctl_filter(),
     );
+
+    #[cfg(feature = "cdk_erigon")]
+    let poseidon_general_reads = (0..FELT_MAX_BYTES * POSEIDON_SPONGE_RATE).map(|i| {
+        TableWithColumns::new(
+            *Table::Poseidon,
+            poseidon_stark::ctl_looking_memory(i),
+            poseidon_stark::ctl_looking_memory_filter(),
+        )
+    });
+
     let all_lookers = vec![
         cpu_memory_code_read,
         cpu_push_write_ops,
@@ -317,8 +356,12 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     .chain(cpu_memory_gp_ops)
     .chain(keccak_sponge_reads)
     .chain(byte_packing_ops)
-    .chain(iter::once(mem_before_ops))
-    .collect();
+    .chain(iter::once(mem_before_ops));
+
+    #[cfg(feature = "cdk_erigon")]
+    let all_lookers = all_lookers.chain(poseidon_general_reads);
+
+    let all_lookers = all_lookers.collect();
     let memory_looked = TableWithColumns::new(
         *Table::Memory,
         memory_stark::ctl_data(),
@@ -367,4 +410,28 @@ fn ctl_mem_after<F: Field>() -> CrossTableLookup<F> {
         memory_continuation_stark::ctl_filter(),
     );
     CrossTableLookup::new(all_lookers, mem_after_looked)
+}
+
+#[cfg(feature = "cdk_erigon")]
+fn ctl_poseidon_simple<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![cpu_stark::ctl_poseidon_simple_op()],
+        poseidon_stark::ctl_looked_simple_op(),
+    )
+}
+
+#[cfg(feature = "cdk_erigon")]
+fn ctl_poseidon_general_input<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![cpu_stark::ctl_poseidon_general_input()],
+        poseidon_stark::ctl_looked_general_input(),
+    )
+}
+
+#[cfg(feature = "cdk_erigon")]
+fn ctl_poseidon_general_output<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![cpu_stark::ctl_poseidon_general_output()],
+        poseidon_stark::ctl_looked_general_output(),
+    )
 }
