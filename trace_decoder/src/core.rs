@@ -368,14 +368,10 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     code_usage,
                     self_destructed,
                 },
-            ) in traces.into_iter().map(|(addr, trc)| {
-                (
-                    addr,
-                    // This is our fork of Erigon's way of letting us know
-                    trc == TxnTrace::default(),
-                    trc,
-                )
-            }) {
+            ) in traces
+                .into_iter()
+                .map(|(addr, trc)| (addr, trc == TxnTrace::default(), trc))
+            {
                 let (_, _, receipt) = evm_arithmetization::generation::mpt::decode_receipt(
                     &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                 )
