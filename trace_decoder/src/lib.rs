@@ -8,9 +8,8 @@
 //! - [The specific changes to the storage tries](TxnTrace::storage_written).
 //! - [Changes to account balance in the state trie](TxnTrace::balance).
 //!
-//! The tries and the transactions can be proved to be correct using a
-//! zero-knowledge prover like [`evm_arithmetization`],
-//! an Ethereum-y frontend for [`plonky2`].
+//! The state execution correctness is then asserted by the zkEVM prover in
+//! [`evm_arithmetization`], relying on `starky` and [`plonky2`].
 //!
 //! **Prover perfomance is a high priority.**
 //!
