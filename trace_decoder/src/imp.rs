@@ -376,27 +376,36 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     trc,
                 )
             }) {
-                // - created and failed
-                //   - access the state trie, no change to storage trie
-                // - created and self destructed
-                //   - access the state trie
-                // - empty trace requires the account to be present in the state trie
+                let (_, _, receipt) = evm_arithmetization::generation::mpt::decode_receipt(
+                    &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
+                )
+                .map_err(|e| anyhow!("{e:?}"))
+                .context("couldn't decode receipt")?;
+
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
-                let do_writes = match born {
-                    false => !just_access,
-                    true => {
-                        let (_, _, receipt) = evm_arithmetization::generation::mpt::decode_receipt(
-                            &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
-                        )
-                        .map_err(|e| anyhow!("{e:?}"))
-                        .context("couldn't decode receipt")?;
-                        receipt.status && !just_access
-                    } // if txn failed, don't commit changes to trie
-                };
+                if born || just_access {
+                    state_trie
+                        .clone()
+                        .insert_by_address(addr, acct)
+                        .context(format!(
+                            "couldn't reach state of {} address {addr:x}",
+                            match born {
+                                true => "created",
+                                false => "accessed",
+                            }
+                        ))?;
+                }
+
+                let do_writes = !just_access
+                    && match born {
+                        // if txn failed, don't commit changes to trie
+                        true => receipt.status,
+                        false => true,
+                    };
 
                 let trim_storage = storage_masks.entry(addr).or_default();
 
@@ -458,14 +467,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 let precompiled_addresses = address!("0000000000000000000000000000000000000001")
                     ..address!("000000000000000000000000000000000000000a");
 
-                // Trie witnesses will only include accessed precompile accounts as hash
-                // nodes if the transaction calling them reverted. If this is the case, we
-                // shouldn't include them in this transaction's `state_accesses` to allow the
-                // decoder to build a minimal state trie without hitting any hash node.
-
-                if !precompiled_addresses.contains(&addr.compat())
-                    || state_trie.get_by_address(addr).is_some()
-                {
+                if !precompiled_addresses.contains(&addr.compat()) {
+                    // TODO(0xaatif): this looks like an optimization,
+                    //                but if it's omitted, the tests fail...
                     state_mask.insert(TrieKey::from_address(addr));
                 }
             }
