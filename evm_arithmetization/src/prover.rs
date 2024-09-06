@@ -40,9 +40,8 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
-        log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
-    }
+    features_check(&inputs);
+
     // Sanity check on the provided config
     assert_eq!(DEFAULT_CAP_LEN, 1 << config.fri_config.cap_height);
 
@@ -473,6 +472,20 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
+/// Sanity checks on the consistency between this proof payload and the feature
+/// flags being used.
+pub(crate) fn features_check(inputs: &TrimmedGenerationInputs) {
+    if cfg!(feature = "polygon_pos") || cfg!(feature = "cdk_erigon") {
+        assert!(inputs.block_metadata.parent_beacon_block_root.is_zero());
+        assert!(inputs.block_metadata.block_blob_gas_used.is_zero());
+        assert!(inputs.block_metadata.block_excess_blob_gas.is_zero());
+    }
+
+    if !cfg!(feature = "cdk_erigon") {
+        assert!(inputs.burn_addr.is_none());
+    }
+}
+
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
@@ -488,9 +501,8 @@ pub mod testing {
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
     pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
-        if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
-            log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
-        }
+        features_check(&inputs.clone().trim());
+
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["init"];
         let mut interpreter: Interpreter<F> =
@@ -545,6 +557,8 @@ pub mod testing {
     where
         F: RichField,
     {
+        features_check(&inputs.clone().trim());
+
         for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
             if let Err(e) = segment {
                 return Err(anyhow::format_err!(e));

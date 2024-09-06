@@ -1,4 +1,4 @@
-#![cfg(not(feature = "cdk_erigon"))]
+#![cfg(feature = "eth_mainnet")]
 
 use std::collections::HashMap;
 use std::time::Duration;

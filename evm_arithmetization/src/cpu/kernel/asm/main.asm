@@ -127,10 +127,20 @@ global start_txns:
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE)
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 
-    // If txn_idx == 0, update the beacon_root and exit roots.
-    %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
-    ISZERO
-    %jumpi(set_beacon_root)
+    #[cfg(feature = eth_mainnet)]
+    {
+        // If txn_idx == 0, update the beacon_root for Ethereum mainnet.
+        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        ISZERO
+        %jumpi(set_beacon_root)
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        // If txn_idx == 0, perform pre-state execution for CDK erigon.
+        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        ISZERO
+        %jumpi(pre_block_execution)
+    }
 
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 global txn_loop:
@@ -255,5 +265,8 @@ global check_final_state_trie:
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
     PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
 
-    %reset_blob_versioned_hashes
+    #[cfg(feature = eth_mainnet)]
+    {
+        %reset_blob_versioned_hashes
+    }
 %endmacro

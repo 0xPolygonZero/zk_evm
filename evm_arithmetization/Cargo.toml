@@ -24,15 +24,15 @@ hex-literal = { workspace = true }
 itertools = { workspace = true }
 keccak-hash = { workspace = true }
 log = { workspace = true }
-plonky2_maybe_rayon = { workspace = true }
+plonky2_maybe_rayon = { workspace = true, features = ["parallel"] }
 num = { workspace = true }
 num-bigint = { workspace = true }
 once_cell = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
-plonky2 = { workspace = true }
+plonky2 = { workspace = true, features = ["parallel"] }
 plonky2_util = { workspace = true }
-starky = { workspace = true }
+starky = { workspace = true, features = ["parallel"] }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rlp = { workspace = true }
@@ -57,15 +57,11 @@ hex = { workspace = true }
 ripemd = { workspace = true }
 
 [features]
-default = ["parallel"]
+default = ["eth_mainnet"]
 asmtools = ["hex"]
-parallel = [
-  "plonky2/parallel",
-  "plonky2_maybe_rayon/parallel",
-  "starky/parallel",
-]
 polygon_pos = []
 cdk_erigon = ["smt_trie"]
+eth_mainnet = []
 
 [[bin]]
 name = "assemble"

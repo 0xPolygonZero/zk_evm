@@ -320,6 +320,7 @@ where
             GlobalMetadata::BlockBaseFee,
             public_values.block_metadata.block_base_fee,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             h2u(public_values.block_metadata.parent_beacon_block_root),
@@ -332,10 +333,12 @@ where
             GlobalMetadata::BlockGasUsed,
             public_values.block_metadata.block_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             public_values.block_metadata.block_blob_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             public_values.block_metadata.block_excess_blob_gas,
@@ -505,6 +508,13 @@ pub(crate) mod debug_utils {
                 GlobalMetadata::BlockBeneficiary,
                 U256::from_big_endian(&public_values.block_metadata.block_beneficiary.0),
             ),
+            #[cfg(feature = "cdk_erigon")]
+            (
+                GlobalMetadata::BurnAddr,
+                public_values
+                    .burn_addr
+                    .expect("There should be an address set in cdk_erigon."),
+            ),
             (
                 GlobalMetadata::BlockTimestamp,
                 public_values.block_metadata.block_timestamp,
@@ -541,14 +551,17 @@ pub(crate) mod debug_utils {
                 GlobalMetadata::BlockGasUsed,
                 public_values.block_metadata.block_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 public_values.block_metadata.block_blob_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 public_values.block_metadata.block_excess_blob_gas,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(public_values.block_metadata.parent_beacon_block_root),

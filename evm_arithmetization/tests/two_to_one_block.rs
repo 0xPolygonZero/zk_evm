@@ -1,4 +1,4 @@
-#![cfg(not(feature = "cdk_erigon"))]
+#![cfg(feature = "eth_mainnet")]
 
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
@@ -173,36 +173,19 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    let circuit_ranges = if cfg!(feature = "cdk_erigon") {
-        vec![
-            16..17_usize,
-            8..9,
-            14..15,
-            9..10,
-            8..9,
-            7..8,
-            17..18,
-            17..18,
-            7..8,
-            4..5,
-        ]
-    } else {
-        vec![
-            16..17_usize,
-            8..9,
-            14..15,
-            9..10,
-            8..9,
-            7..8,
-            17..18,
-            17..18,
-            7..8,
-        ]
-    };
-
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &circuit_ranges.try_into().unwrap(),
+        &[
+            16..17,
+            8..9,
+            12..13,
+            9..10,
+            8..9,
+            6..7,
+            17..18,
+            17..18,
+            7..8,
+        ],
         &config,
     );
 

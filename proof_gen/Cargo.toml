@@ -20,8 +20,13 @@ hashbrown = { workspace = true }
 evm_arithmetization = { workspace = true }
 
 [features]
-default = []
-cdk_erigon = ["evm_arithmetization/cdk_erigon"]
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "evm_arithmetization/eth_mainnet"
+]
+cdk_erigon = [
+    "evm_arithmetization/cdk_erigon"
+]
 
 [lints]
 workspace = true
