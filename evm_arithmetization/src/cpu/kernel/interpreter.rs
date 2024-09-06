@@ -390,7 +390,7 @@ impl<F: RichField> Interpreter<F> {
 
         self.set_memory_multi_addresses(&registers_before_fields);
     }
-    
+
     /// Applies all memory operations since the last checkpoint. The memory
     /// operations are cleared at each checkpoint.
     pub(crate) fn apply_memops(&mut self) -> Result<(), anyhow::Error> {
@@ -740,7 +740,7 @@ impl<F: RichField> Transition<F> for Interpreter<F> {
         Ok(())
     }
 }
-git
+
 #[cfg(test)]
 mod tests {
     use ethereum_types::U256;

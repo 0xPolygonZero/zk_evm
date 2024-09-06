@@ -17,14 +17,13 @@ use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    init_logger, preinitialized_state_and_storage_tries,
-    update_beacon_roots_account_storage, GLOBAL_EXIT_ROOT_ACCOUNT,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use crate::GenerationInputs;
 
 #[test]
 fn test_add11_yml() {
-    init_logger();
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");

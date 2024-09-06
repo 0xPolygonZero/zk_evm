@@ -550,10 +550,6 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
 
-        let mem =  self
-        .memory
-        .get_preinit_memory(Segment::StorageLinkedList);
-
         let (&(pred_addr, pred_slot_key), &pred_ptr) =
             self.storage.range(..=(addr, key)).next_back().unwrap_or((
                 &(U256::MAX, U256::zero()),
