@@ -13,10 +13,21 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 use zero_bin_common::fs::generate_block_proof_file_name;
+
+// All the proving tasks run in parallel. For the big block intervals,
+// this leads to a common situation where the very distant future blocks are
+// being proved first. So we create a pool of permits to limit the number of
+// parallel proving block tasks, and they are retrieved in block increasing
+// order. Initially we put 16, may be a reasonable default. We output proof file
+// when the block batch is finished, so this helps with getting the results
+// sooner.
+const NUMBER_OF_PARALLEL_BLOCK_PROVING: usize = 16;
+static BLOCK_PROVING_PERMIT_POOL: Semaphore =
+    Semaphore::const_new(NUMBER_OF_PARALLEL_BLOCK_PROVING);
 
 #[derive(Debug, Clone)]
 pub struct ProverConfig {
@@ -242,6 +253,9 @@ pub async fn prove(
         let previous_block_proof = prev_proof.take();
         let runtime = runtime.clone();
         let block_number = block_prover_input.get_block_number();
+
+        let prove_permit = BLOCK_PROVING_PERMIT_POOL.acquire().await?;
+
         let _abort_handle = task_set.spawn(async move {
             let block_number = block_prover_input.get_block_number();
             info!("Proving block {block_number}");
@@ -253,6 +267,7 @@ pub async fn prove(
                 prover_config.clone(),
             )
             .then(move |proof| async move {
+                drop(prove_permit);
                 let proof = proof.inspect_err(|e| {
                     error!("failed to generate proof for block {block_number}, error {e:?}")
                 })?;
