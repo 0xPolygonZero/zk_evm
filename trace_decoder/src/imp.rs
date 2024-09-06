@@ -532,6 +532,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
     Ok(out)
 }
 
+/// Updates the storage of the beacon block root contract,
+/// according to <https://eips.ethereum.org/EIPS/eip-4788>
+///
+/// This is cancun-specific, and runs at the start of the block,
+/// before any transactions (as per the EIP).
 fn cancun_hook<StateTrieT: StateTrie + Clone>(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
