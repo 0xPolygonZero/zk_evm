@@ -72,10 +72,9 @@ global update_scalable_l1blockhash:
     KECCAK_GENERAL
     // stack: slot, l1blockhash, retdest
     %slot_to_storage_key
-    // stack: slot, 1blockhash, retdest
-    // stack: storage_key, 1blockhash, retdest
+    // stack: storage_key, l1blockhash, retdest
     PUSH @GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY
-    // stack: state_key, storage_key, 1blockhash, retdest
+    // stack: state_key, storage_key, l1blockhash, retdest
     %insert_slot_with_value_from_keys
     // stack: retdest
     JUMP
