@@ -380,9 +380,10 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         ),
     ];
 
-    // This contains the `block_beneficiary`, `block_random`, `block_base_fee`,
-    // `block_blob_gas_used`, `block_excess_blob_gas`, `parent_beacon_block_root`
-    // as well as `cur_hash`.
+    // This contains the `block_beneficiary`, `block_random`, `block_base_fee`, and
+    // `cur_hash`, as well as the additional `block_blob_gas_used`,
+    // `block_excess_blob_gas`, `parent_beacon_block_root` when compiling with
+    // `eth_mainnet` feature flag.
     const LENGTH: usize = if cfg!(feature = "eth_mainnet") { 7 } else { 4 };
     let block_fields_arrays: [(GlobalMetadata, &[Target]); LENGTH] = [
         (

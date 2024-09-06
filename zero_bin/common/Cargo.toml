@@ -32,7 +32,6 @@ evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
 
-
 [build-dependencies]
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
