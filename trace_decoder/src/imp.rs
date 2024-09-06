@@ -517,7 +517,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 for (addr, mask) in storage_masks {
                     if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
                         it.mask(mask)?
-                    } // TODO(0xaatif): why is this fallible?
+                    } // else self_destructed
                 }
                 before
             },
