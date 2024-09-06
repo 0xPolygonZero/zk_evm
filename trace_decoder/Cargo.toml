@@ -66,6 +66,10 @@ cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
     "prover/cdk_erigon",
 ]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "prover/polygon_pos",
+]
 
 [[bench]]
 name = "block_processing"

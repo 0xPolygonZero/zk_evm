@@ -34,3 +34,7 @@ cdk_erigon = [
     "proof_gen/cdk_erigon",
     "zero_bin_common/cdk_erigon",
 ]
+polygon_pos = [
+    "proof_gen/polygon_pos",
+    "zero_bin_common/polygon_pos",
+]

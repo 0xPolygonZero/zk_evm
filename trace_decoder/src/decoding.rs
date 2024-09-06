@@ -2,16 +2,17 @@ use std::{cmp::min, collections::HashMap, ops::Range};
 
 use anyhow::{anyhow, Context as _};
 use ethereum_types::H160;
-use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
+use ethereum_types::{Address, H256, U256, U512};
+#[cfg(feature = "eth_mainnet")]
+use evm_arithmetization::testing_utils::{
+    BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
+};
 use evm_arithmetization::{
     generation::{
         mpt::{decode_receipt, AccountRlp},
         GenerationInputs, TrieInputs,
     },
-    proof::{BlockMetadata, ExtraBlockData, TrieRoots},
-    testing_utils::{
-        BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
-    },
+    proof::{ExtraBlockData, TrieRoots},
 };
 use mpt_trie::{
     nibbles::Nibbles,
@@ -113,6 +114,24 @@ pub fn into_txn_proof_gen_ir(
     Ok(txn_gen_inputs)
 }
 
+/// Includes additional state and storage updates for pre-block execution.
+#[allow(unused)]
+fn pre_block_execution(
+    trie_state: &mut PartialTrieState<impl StateTrie>,
+    delta_out: &mut TrieDeltaApplicationOutput,
+    nodes_used: &mut NodesUsedByTxnBatch,
+    block_data: &evm_arithmetization::proof::BlockMetadata,
+) -> anyhow::Result<()> {
+    #[cfg(feature = "eth_mainnet")]
+    return update_beacon_block_root_contract_storage(
+        trie_state, delta_out, nodes_used, block_data,
+    );
+
+    #[cfg(not(feature = "eth_mainnet"))]
+    Ok(())
+}
+
+#[cfg(feature = "eth_mainnet")]
 /// Cancun HF specific: At the start of a block, prior txn execution, we
 /// need to update the storage of the beacon block root contract.
 // See <https://eips.ethereum.org/EIPS/eip-4788>.
@@ -120,8 +139,10 @@ fn update_beacon_block_root_contract_storage(
     trie_state: &mut PartialTrieState<impl StateTrie>,
     delta_out: &mut TrieDeltaApplicationOutput,
     nodes_used: &mut NodesUsedByTxnBatch,
-    block_data: &BlockMetadata,
+    block_data: &evm_arithmetization::proof::BlockMetadata,
 ) -> anyhow::Result<()> {
+    use ethereum_types::BigEndianHash;
+
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
 
     let timestamp_idx = block_data.block_timestamp % HISTORY_BUFFER_LENGTH_MOD;
@@ -457,18 +478,23 @@ fn add_withdrawals_to_txns(
 
     if last_inputs.signed_txns.is_empty() {
         let mut state_trie = final_trie_state.state.clone();
+        let is_eth_mainnet = cfg!(feature = "eth_mainnet");
         state_trie.trim_to(
             // This is a dummy payload, hence it does not contain yet
             // state accesses to the withdrawal addresses.
             withdrawals
                 .iter()
                 .map(|(addr, _)| *addr)
-                .chain(match last_inputs.txn_number_before == 0.into() {
-                    // We need to include the beacon roots contract as this payload is at the
-                    // start of the block execution.
-                    true => Some(BEACON_ROOTS_CONTRACT_ADDRESS),
-                    false => None,
-                })
+                .chain(
+                    match is_eth_mainnet && last_inputs.txn_number_before == 0.into() {
+                        // We need to include the beacon roots contract as this payload is at the
+                        // start of the block execution.
+                        true => {
+                            Some(evm_arithmetization::testing_utils::BEACON_ROOTS_CONTRACT_ADDRESS)
+                        }
+                        false => None,
+                    },
+                )
                 .map(TrieKey::from_address),
         )?;
         last_inputs.tries.state_trie = state_trie.try_into()?;
@@ -558,7 +584,7 @@ fn process_txn_info(
 
     let nodes_used_by_txn = if is_initial_payload {
         let mut nodes_used = txn_info.nodes_used_by_txn;
-        update_beacon_block_root_contract_storage(
+        pre_block_execution(
             curr_block_tries,
             &mut delta_out,
             &mut nodes_used,

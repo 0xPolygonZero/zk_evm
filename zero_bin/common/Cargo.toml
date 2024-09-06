@@ -49,6 +49,11 @@ cdk_erigon = [
     "proof_gen/cdk_erigon",
     "trace_decoder/cdk_erigon",
 ]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "proof_gen/polygon_pos",
+    "trace_decoder/polygon_pos",
+]
 
 [lints]
 workspace = true

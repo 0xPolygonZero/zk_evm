@@ -27,6 +27,9 @@ eth_mainnet = [
 cdk_erigon = [
     "evm_arithmetization/cdk_erigon"
 ]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos"
+]
 
 [lints]
 workspace = true

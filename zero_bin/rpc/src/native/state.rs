@@ -2,13 +2,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use alloy::{
-    primitives::{keccak256, Address, StorageKey, B256, U256},
+    primitives::{keccak256, Address, StorageKey, B256},
     providers::Provider,
     rpc::types::eth::{Block, BlockTransactionsKind, EIP1186AccountProofResponse},
     transports::Transport,
 };
 use anyhow::Context as _;
-use evm_arithmetization::testing_utils::{BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH};
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
 use trace_decoder::{
@@ -65,6 +64,7 @@ pub fn process_states_access(
 ) -> anyhow::Result<HashMap<Address, HashSet<StorageKey>>> {
     let mut state_access = HashMap::<Address, HashSet<StorageKey>>::new();
 
+    #[cfg(feature = "eth_mainnet")]
     insert_beacon_roots_update(&mut state_access, block)?;
 
     if let Some(w) = block.withdrawals.as_ref() {
@@ -88,11 +88,17 @@ pub fn process_states_access(
     Ok(state_access)
 }
 
+#[cfg(feature = "eth_mainnet")]
 /// Cancun HF specific, see <https://eips.ethereum.org/EIPS/eip-4788>.
 fn insert_beacon_roots_update(
     state_access: &mut HashMap<Address, HashSet<StorageKey>>,
     block: &Block,
 ) -> anyhow::Result<()> {
+    use alloy::primitives::U256;
+    use evm_arithmetization::testing_utils::{
+        BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH,
+    };
+
     let timestamp = block.header.timestamp;
 
     const MODULUS: u64 = HISTORY_BUFFER_LENGTH.1;

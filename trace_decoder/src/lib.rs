@@ -68,6 +68,17 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 
+#[cfg_attr(
+    not(any(feature = "polygon_pos", feature = "cdk_erigon")),
+    cfg(feature = "eth_mainnet")
+)]
+#[cfg(any(
+    all(feature = "cdk_erigon", feature = "polygon_pos"),
+    all(feature = "cdk_erigon", feature = "eth_mainnet"),
+    all(feature = "polygon_pos", feature = "eth_mainnet"),
+))]
+compile_error!("Only a single network feature should be enabled at a time!");
+
 /// The broad overview is as follows:
 ///
 /// 1. Ethereum nodes emit a bunch of binary [`wire::Instruction`]s, which are
@@ -268,6 +279,9 @@ pub struct OtherBlockData {
     pub b_data: BlockLevelData,
     /// State trie root hash at the checkpoint.
     pub checkpoint_state_trie_root: H256,
+    /// Address to store the base fee to be burnt.
+    /// Will be `None` when `cdk_erigon` feature flag is off.
+    pub burn_addr: Option<Address>,
 }
 
 /// Data that is specific to a block and is constant for all txns in a given

@@ -1,3 +1,14 @@
+#[cfg_attr(
+    not(any(feature = "polygon_pos", feature = "cdk_erigon")),
+    cfg(feature = "eth_mainnet")
+)]
+#[cfg(any(
+    all(feature = "cdk_erigon", feature = "polygon_pos"),
+    all(feature = "cdk_erigon", feature = "eth_mainnet"),
+    all(feature = "polygon_pos", feature = "eth_mainnet"),
+))]
+compile_error!("Only a single network feature should be enabled at a time!");
+
 use std::env;
 use std::fs::File;
 

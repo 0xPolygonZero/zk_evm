@@ -1,7 +1,19 @@
+#[cfg_attr(
+    not(any(feature = "polygon_pos", feature = "cdk_erigon")),
+    cfg(feature = "eth_mainnet")
+)]
+#[cfg(any(
+    all(feature = "cdk_erigon", feature = "polygon_pos"),
+    all(feature = "cdk_erigon", feature = "eth_mainnet"),
+    all(feature = "polygon_pos", feature = "eth_mainnet"),
+))]
+compile_error!("Only a single network feature should be enabled at a time!");
+
 use std::sync::Arc;
 
+use __compat_primitive_types::{H256, U256};
 use alloy::{
-    primitives::{Bytes, FixedBytes, B256},
+    primitives::{Address, Bytes, FixedBytes, B256},
     providers::Provider,
     rpc::types::eth::{BlockId, BlockTransactionsKind, Withdrawal},
     transports::Transport,
@@ -232,21 +244,33 @@ where
                     .into(),
                 block_gas_used: target_block.header.gas_used.into(),
                 block_bloom: target_block.header.logs_bloom.compat(),
-                parent_beacon_block_root: target_block
-                    .header
-                    .parent_beacon_block_root
-                    .context("target block is missing field `parent_beacon_block_root`")?
-                    .compat(),
-                block_blob_gas_used: target_block
-                    .header
-                    .blob_gas_used
-                    .context("target block is missing field `blob_gas_used`")?
-                    .into(),
-                block_excess_blob_gas: target_block
-                    .header
-                    .excess_blob_gas
-                    .context("target block is missing field `excess_blob_gas`")?
-                    .into(),
+                parent_beacon_block_root: if cfg!(feature = "eth_mainnet") {
+                    target_block
+                        .header
+                        .parent_beacon_block_root
+                        .context("target block is missing field `parent_beacon_block_root`")?
+                        .compat()
+                } else {
+                    H256::zero()
+                },
+                block_blob_gas_used: if cfg!(feature = "eth_mainnet") {
+                    target_block
+                        .header
+                        .blob_gas_used
+                        .context("target block is missing field `blob_gas_used`")?
+                        .into()
+                } else {
+                    U256::zero()
+                },
+                block_excess_blob_gas: if cfg!(feature = "eth_mainnet") {
+                    target_block
+                        .header
+                        .excess_blob_gas
+                        .context("target block is missing field `excess_blob_gas`")?
+                        .into()
+                } else {
+                    U256::zero()
+                },
             },
             b_hashes: BlockHashes {
                 prev_hashes: prev_hashes.map(|it| it.compat()).into(),
@@ -264,6 +288,13 @@ where
                 .collect(),
         },
         checkpoint_state_trie_root: checkpoint_state_trie_root.compat(),
+        burn_addr: if cfg!(feature = "cdk_erigon") {
+            // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+            //       Retrieve the actual burn address from `cdk-erigon`.
+            Some(Address::ZERO.compat())
+        } else {
+            None
+        },
     };
     Ok(other_data)
 }

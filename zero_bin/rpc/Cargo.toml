@@ -52,3 +52,9 @@ cdk_erigon = [
     "trace_decoder/cdk_erigon",
     "zero_bin_common/cdk_erigon",
 ]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "prover/polygon_pos",
+    "trace_decoder/polygon_pos",
+    "zero_bin_common/polygon_pos",
+]

@@ -51,6 +51,14 @@ cdk_erigon = [
     "rpc/cdk_erigon",
     "zero_bin_common/cdk_erigon"
 ]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "ops/polygon_pos",
+    "proof_gen/polygon_pos",
+    "prover/polygon_pos",
+    "rpc/polygon_pos",
+    "zero_bin_common/polygon_pos",
+]
 
 [build-dependencies]
 cargo_metadata = { workspace = true }
