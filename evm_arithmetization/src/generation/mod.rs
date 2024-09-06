@@ -99,7 +99,7 @@ pub struct GenerationInputs {
     /// hashes.
     pub block_hashes: BlockHashes,
 
-    /// The the global exit root along with the l1blockhash to write to the GER
+    /// The global exit root along with the l1blockhash to write to the GER
     /// manager.
     ///
     /// This is specific to `cdk-erigon`.
