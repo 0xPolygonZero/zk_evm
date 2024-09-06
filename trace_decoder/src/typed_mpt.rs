@@ -273,7 +273,6 @@ pub trait StateTrie {
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
-    fn contains_address(&self, address: Address) -> bool;
     fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
@@ -334,11 +333,6 @@ impl StateTrie for StateMpt {
             TrieKey::from_address(address),
         )
     }
-    fn contains_address(&self, address: Address) -> bool {
-        self.typed
-            .as_hashed_partial_trie()
-            .contains(TrieKey::from_address(address).into_nibbles())
-    }
     fn mask(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
             self.typed.as_hashed_partial_trie(),
@@ -392,9 +386,6 @@ impl StateTrie for StateSmt {
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
         self.address2state.remove(&address);
         Ok(None)
-    }
-    fn contains_address(&self, address: Address) -> bool {
-        self.address2state.contains_key(&address)
     }
     fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let _ = address;
