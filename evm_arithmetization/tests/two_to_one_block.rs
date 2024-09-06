@@ -1,4 +1,5 @@
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
+#![cfg(not(feature = "cdk_erigon"))]
+
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
@@ -6,9 +7,8 @@ use evm_arithmetization::fixed_recursive_verifier::{
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockMetadata, FinalPublicValues, PublicValues, TrieRoots};
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -22,10 +22,6 @@ use plonky2::util::timing::TimingTree;
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
-}
 
 /// Get `GenerationInputs` for a dummy payload, where the block has the given
 /// timestamp.
@@ -77,10 +73,6 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
         state_trie_after.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&updated_beacon_roots_account).to_vec(),
-        )?;
-        state_trie_after.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
         )?;
 
         state_trie_after
