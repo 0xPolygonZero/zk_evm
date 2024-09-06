@@ -9,7 +9,7 @@ use log::Level;
 use plonky2::hash::hash_types::RichField;
 
 use super::linked_list::{
-    AccountsLinkedList, BoundedAccountsLinkedList, BoundedStorageLinkedList, StorageLinkedList,
+    AccountsLinkedList, StorageLinkedList,
 };
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;

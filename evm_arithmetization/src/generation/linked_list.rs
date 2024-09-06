@@ -23,9 +23,7 @@ impl LinkedListType for Cyclic {}
 impl LinkedListType for Bounded {}
 
 pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
-pub(crate) type BoundedAccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE, Bounded>;
 pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
-pub(crate) type BoundedStorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE, Bounded>;
 
 // A linked list implemented using a vector `access_list_mem`.
 // In this representation, the values of nodes are stored in the range

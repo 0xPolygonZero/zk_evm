@@ -1,7 +1,6 @@
 use core::mem::transmute;
 use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
-use std::ops::Bound;
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
@@ -12,7 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::{
-    AccountsLinkedList, LinkedList, StorageLinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE,
+    LinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE,
     STORAGE_LINKED_LIST_NODE_SIZE,
 };
 use super::mpt::load_state_mpt;
@@ -32,7 +31,6 @@ use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
-use crate::testing_utils::init_logger;
 use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, sha2, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProverInputError::*;
 use crate::witness::errors::{ProgramError, ProverInputError};
