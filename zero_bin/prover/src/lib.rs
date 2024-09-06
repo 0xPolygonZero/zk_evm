@@ -25,9 +25,9 @@ use zero_bin_common::fs::generate_block_proof_file_name;
 // order. Initially we put 16, may be a reasonable default. We output proof file
 // when the block batch is finished, so this helps with getting the results
 // sooner.
-const NUMBER_OF_PARALLEL_BLOCK_PROVING: usize = 16;
-static BLOCK_PROVING_PERMIT_POOL: Semaphore =
-    Semaphore::const_new(NUMBER_OF_PARALLEL_BLOCK_PROVING);
+const PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE: usize = 16;
+static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore =
+    Semaphore::const_new(PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE);
 
 #[derive(Debug, Clone)]
 pub struct ProverConfig {
@@ -254,7 +254,7 @@ pub async fn prove(
         let runtime = runtime.clone();
         let block_number = block_prover_input.get_block_number();
 
-        let prove_permit = BLOCK_PROVING_PERMIT_POOL.acquire().await?;
+        let prove_permit = PARALLEL_BLOCK_PROVING_PERMIT_POOL.acquire().await?;
 
         let _abort_handle = task_set.spawn(async move {
             let block_number = block_prover_input.get_block_number();
