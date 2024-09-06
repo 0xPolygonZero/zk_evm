@@ -127,7 +127,7 @@ global start_txns:
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE)
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 
-    #[cfg(not(feature = polygon_pos, cdk_erigon))]
+    #[cfg(feature = eth_mainnet)]
     {
         // If txn_idx == 0, update the beacon_root for Ethereum mainnet.
         %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
@@ -265,7 +265,7 @@ global check_final_state_trie:
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
     PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
 
-    #[cfg(not(feature = polygon_pos, cdk_erigon))]
+    #[cfg(feature = eth_mainnet)]
     {
         %reset_blob_versioned_hashes
     }

@@ -245,7 +245,7 @@ sload_with_addr:
     JUMP
 
 /// Type-3 transactions specific decoding helper macros.
-#[cfg(not(feature = polygon_pos, cdk_erigon))]
+#[cfg(feature = eth_mainnet)]
 {
     %macro decode_and_store_max_fee_per_blob_gas
         // stack: rlp_addr

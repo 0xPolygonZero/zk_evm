@@ -327,12 +327,12 @@ min_stack_len_for_opcode:
     BYTES 0  // 0x46, CHAINID
     BYTES 0  // 0x47, SELFBALANCE
     BYTES 0  // 0x48, BASEFEE
-    #[cfg(not(feature = polygon_pos, cdk_erigon))]
+    #[cfg(feature = eth_mainnet)]
     {
         BYTES 1  // 0x49, BLOBHASH
         BYTES 0  // 0x4a, BLOBBASEFEE 
     }
-    #[cfg(any(feature = polygon_pos, cdk_erigon))]
+    #[cfg(not(feature = eth_mainnet))]
     {
         BYTES 0  // 0x49, BLOBHASH is only active on Ethereum mainnet
         BYTES 0  // 0x4a, BLOBBASEFEE is only active on Ethereum mainnet

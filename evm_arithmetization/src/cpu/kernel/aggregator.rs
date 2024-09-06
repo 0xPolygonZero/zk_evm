@@ -190,9 +190,10 @@ pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Ke
     let mut active_features = HashSet::new();
     if cfg!(feature = "cdk_erigon") {
         active_features.insert("cdk_erigon");
-    }
-    if cfg!(feature = "polygon_pos") {
+    } else if cfg!(feature = "polygon_pos") {
         active_features.insert("polygon_pos");
+    } else {
+        active_features.insert("eth_mainnet");
     }
 
     let parsed_files = files

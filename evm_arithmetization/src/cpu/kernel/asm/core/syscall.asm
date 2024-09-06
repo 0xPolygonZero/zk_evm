@@ -69,12 +69,12 @@ global syscall_jumptable:
     JUMPTABLE sys_chainid
     JUMPTABLE sys_selfbalance
     JUMPTABLE sys_basefee
-    #[cfg(not(feature = polygon_pos, cdk_erigon))]
+    #[cfg(feature = eth_mainnet)]
     {
         JUMPTABLE sys_blobhash
         JUMPTABLE sys_blobbasefee
     }
-    #[cfg(any(feature = polygon_pos, cdk_erigon))]
+    #[cfg(not(feature = eth_mainnet))]
     {
         JUMPTABLE panic // BLOBHASH is only active on Ethereum mainnet
         JUMPTABLE panic // BLOBBASEFEE is only active on Ethereum mainnet

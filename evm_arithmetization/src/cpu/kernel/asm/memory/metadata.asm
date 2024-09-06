@@ -278,7 +278,7 @@ global sys_basefee:
     EXIT_KERNEL
 
 /// Blob-related macros are only available for Ethereum mainnet.
-#[cfg(not(feature = polygon_pos, cdk_erigon))]
+#[cfg(feature = eth_mainnet)]
 {
     global sys_blobhash:
         // stack: kexit_info, index

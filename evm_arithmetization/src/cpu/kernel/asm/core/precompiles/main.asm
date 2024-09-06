@@ -18,12 +18,12 @@ global handle_precompiles:
     DUP1 %eq_const(@BN_ADD)   %jumpi(precompile_bn_add)
     DUP1 %eq_const(@BN_MUL)   %jumpi(precompile_bn_mul)
     DUP1 %eq_const(@SNARKV)   %jumpi(precompile_snarkv)
-    #[cfg(not(feature = polygon_pos, cdk_erigon))]
+    #[cfg(feature = eth_mainnet)]
     {
         DUP1 %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
         %eq_const(@KZG_PEVAL)     %jumpi(precompile_kzg_peval)
     }
-    #[cfg(any(feature = polygon_pos, cdk_erigon))]
+    #[cfg(not(feature = eth_mainnet))]
     {
         %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
     }

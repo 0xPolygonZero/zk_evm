@@ -34,7 +34,7 @@ read_txn_from_memory:
     // stack: rlp_start_addr, retdest
 
     // Only Ethereum mainnet supports Blob-transactions.
-    #[cfg(not(feature = polygon_pos,cdk_erigon))]
+    #[cfg(feature = eth_mainnet)]
     {
         DUP1
         MLOAD_GENERAL
