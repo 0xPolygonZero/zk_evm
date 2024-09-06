@@ -31,7 +31,7 @@
 //! **while deferring all possible subtries to minimise prover load**,
 //! since prover performance is sensitive to the size of the trie.
 //!
-//! [^1]: In our stack, this is (a fork of erigon)[https://github.com/0xPolygonZero/erigon],
+//! [^1]: In our stack, this is [a fork of erigon](https://github.com/0xPolygonZero/erigon),
 //!       which exposes more information over RPC.
 //!
 //! # Non-goals

@@ -128,12 +128,12 @@ pub struct TxnTrace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<U256>,
 
-    /// <code>[hash](hash)([Address])</code> of storages read by the
+    /// <code>[hash](keccak_hash)([Address])</code> of storages read by the
     /// transaction.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub storage_read: BTreeSet<H256>,
 
-    /// <code>[hash](hash)([Address])</code> of storages written by the
+    /// <code>[hash](keccak_hash)([Address])</code> of storages written by the
     /// transaction, with their new value.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub storage_written: BTreeMap<H256, U256>,
