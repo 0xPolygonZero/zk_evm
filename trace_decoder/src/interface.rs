@@ -1,6 +1,6 @@
 //! Public types for this crate.
 //!
-//! These are all in one place because they're about to be heavily refactored.
+//! These are all in one place because they're about to be heavily refactored in [#401](https://github.com/0xPolygonZero/zk_evm/issues/401).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
