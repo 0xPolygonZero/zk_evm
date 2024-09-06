@@ -1,85 +1,57 @@
-//! <div class="warning">
-//! This library is undergoing major refactoring as part of (#275)(https://github.com/0xPolygonZero/zk_evm/issues/275).
-//! Consider all TODOs to be tracked under that issue.
-//! </div>
+//! An _Ethereum Node_[^1] executes _transactions_ in _blocks_.
 //!
-//! Your neighborhood zk-ready [ethereum](https://github.com/0xPolygonZero/erigon)
-//! [node](https://github.com/0xPolygonHermez/cdk-erigon/) emits binary "witnesses"[^1].
+//! Execution mutates two key data structures:
+//! - [The state trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie).
+//! - [The storage tries](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie).
 //!
-//! But [`plonky2`], your prover, wants [`GenerationInputs`].
+//! Ethereum nodes expose information about the transactions over RPC, e.g:
+//! - [The specific changes to the storage tries](TxnTrace::storage_written).
+//! - [Changes to account balance in the state trie](TxnTrace::balance).
 //!
-//! This library helps you get there.
+//! The tries and the transactions can be proved to be correct using a
+//! zero-knowledge prover like [`evm_arithmetization`],
+//! an Ethereum-y frontend for [`plonky2`].
 //!
-//! [^1]: A witness is an attestation of the state of the world, which can be
-//!       proven by a prover.
+//! **Prover perfomance is a high priority.**
 //!
-//! # Non-Goals
-//! - Performance - this won't be the bottleneck in any proving system.
-//! - Robustness - malicious or malformed input may crash this library.
+//! The aformentioned trie structures may have subtries _deferred_.
+//! That is, any node (and its children!) may be replaced by its hash,
+//! while maintaining provability of its contents:
+//! ```text
+//!     A               A
+//!    / \             / \
+//!   B   C     ->    H   C
+//!  / \   \               \
+//! D   E   F               F
+//! ```
+//! (where `H` is the hash of the `D/B\E` subtrie).
 //!
-//! TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-//!                refactor all the docs below
+//! The principle concern of this library is to step through the transactions,
+//! and reproduce the tries that the Ethereum node does,
+//! **while deferring all possible subtries to minimise prover load**,
+//! since prover performance is sensitive to the size of the trie.
 //!
-//! It might not be obvious why we need traces for each txn in order to generate
-//! proofs. While it's true that we could just run all the txns of a block in an
-//! EVM to generate the traces ourselves, there are a few major downsides:
-//! - The client is likely a full node and already has to run the txns in an EVM
-//!   anyways.
-//! - We want this protocol to be as agnostic as possible to the underlying
-//!   chain that we're generating proofs for, and running our own EVM would
-//!   likely cause us to loose this genericness.
+//! [^1]: In our stack, this is (a fork of erigon)[https://github.com/0xPolygonZero/erigon],
+//!       which exposes more information over RPC.
 //!
-//! While it's also true that we run our own zk-EVM (plonky2) to generate
-//! proofs, it's critical that we are able to generate txn proofs in parallel.
-//! Since generating proofs with plonky2 is very slow, this would force us to
-//! sequentialize the entire proof generation process. So in the end, it's ideal
-//! if we can get this information sent to us instead.
-//!
-//! This library generates an Intermediary Representation (IR) of
-//! a block's transactions, given a [BlockTrace] and some additional
-//! data represented by [OtherBlockData].
-//!
-//! It first preprocesses the [BlockTrace] to provide transaction,
-//! withdrawals and tries data that can be directly used to generate an IR.
-//! For each transaction, this library extracts the
-//! necessary data from the processed transaction information to
-//! return the IR.
-//!
-//! The IR is used to generate root proofs, then aggregation proofs and finally
-//! block proofs. Because aggregation proofs require at least two entries, we
-//! pad the vector of IRs thanks to additional dummy payload intermediary
-//! representations whenever necessary.
-//!
-//! ### [Withdrawals](https://ethereum.org/staking/withdrawals) and Padding
-//!
-//! Withdrawals are all proven together in a dummy payload. A dummy payload
-//! corresponds to the IR of a proof with no transaction. They must, however, be
-//! proven last. The padding is therefore carried out as follows: If there are
-//! no transactions in the block, we add two dummy transactions. The withdrawals
-//! -- if any -- are added to the second dummy transaction. If there is only one
-//! transaction in the block, we add one dummy transaction. If
-//! there are withdrawals, the dummy transaction is at the end. Otherwise, it is
-//! added at the start. If there are two or more transactions:
-//! - if there are no withdrawals, no dummy transactions are added
-//! - if there are withdrawals, one dummy transaction is added at the end, with
-//!   all the withdrawals in it.
+//! # Non-goals
+//! - Peformance - this will never be the bottleneck in any proving stack.
+//! - Robustness - this library depends on other libraries that are not robust,
+//!   so may panic at any time.
 
 #![deny(rustdoc::broken_intra_doc_links)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 
-/// The broad overview is as follows:
+/// Over RPC, ethereum nodes expose their tries as a series of binary
+/// [`wire::Instruction`]s in a node-dependant format.
 ///
-/// 1. Ethereum nodes emit a bunch of binary [`wire::Instruction`]s, which are
-///    parsed in [`wire`].
-/// 2. They are passed to one of two "frontends", depending on the node
+/// These are parsed into the relevant trie depending on the node:
 ///    - [`type2`], which contains an [`smt_trie`].
 ///    - [`type1`], which contains an [`mpt_trie`].
-/// 3. The frontend ([`type1::Frontend`] or [`type2::Frontend`]) is passed to
-///    the "backend", which lowers to [`evm_arithmetization::GenerationInputs`].
 ///
-/// Deviations from the specification are signalled with `BUG(spec)` in the
-/// code.
+/// After getting the tries,
+/// we can continue to do the main work of "executing" the transactions.
 const _DEVELOPER_DOCS: () = ();
 
 mod iface;

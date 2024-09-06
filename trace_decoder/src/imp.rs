@@ -30,17 +30,15 @@ use crate::{
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    batch_size: usize,
+    batch_size_hint: usize,
     use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
-    ensure!(batch_size != 0);
-
     let BlockTrace {
         trie_pre_images,
         code_db,
         txn_info,
     } = trace;
-    let (state, storage, mut code) = start(trie_pre_images)?;
+    let (state, storage, mut code) = convert(trie_pre_images)?;
     code.extend(code_db);
 
     let OtherBlockData {
@@ -53,7 +51,8 @@ pub fn entrypoint(
         checkpoint_state_trie_root,
     } = other;
 
-    // TODO(0xaatif): docs for the RPC field say this is gwei already...
+    // TODO(0xaatif): docs for the RPC field say this is gwei already:
+    //                https://docs.rs/alloy/0.3.1/alloy/eips/eip4895/struct.Withdrawal.html#structfield.amount
     //                in any case, this shouldn't be our problem.
     for (_, amt) in &mut withdrawals {
         *amt = eth_to_gwei(*amt)
@@ -62,7 +61,7 @@ pub fn entrypoint(
     let batches = middle(
         state,
         storage,
-        batch(txn_info, batch_size),
+        batch(txn_info, batch_size_hint),
         &mut code,
         b_meta.block_timestamp,
         b_meta.parent_beacon_block_root,
@@ -117,7 +116,13 @@ pub fn entrypoint(
         .collect())
 }
 
-fn start(
+/// The user has either provided us with a [`serde`]-ed
+/// [`HashedPartialTrie`](mpt_trie::partial_trie::HashedPartialTrie),
+/// or a [`wire`](crate::wire)-encoded representation of one.
+///
+/// Turn either of those into our [`typed_mpt`](crate::typed_mpt)
+/// representations.
+fn convert(
     pre_images: BlockTraceTriePreImages,
 ) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
     Ok(match pre_images {
@@ -259,6 +264,10 @@ struct IntraBlockTries<StateTrieT> {
     pub receipt: ReceiptTrie,
 }
 
+/// We have detailed trace information
+///
+/// - `state_trie` is the state at the beginning of the block.
+/// - `storage` are the storage tries at the beginning of the block.
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,

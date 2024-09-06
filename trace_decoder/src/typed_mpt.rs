@@ -9,9 +9,6 @@ use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
-/// Map where keys are [up to 64 nibbles](TrieKey),
-/// and values are [`rlp::Encodable`]/[`rlp::Decodable`].
-///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
 ///
 /// Portions of the trie may be deferred: see [`Self::insert_hash`].
