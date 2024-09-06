@@ -177,7 +177,7 @@ fn test_insert_account() -> Result<()> {
         AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
             .unwrap();
 
-    let Some([addr, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
+    let Some([addr, ptr, ptr_cpy, _]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     // This is the dummy node
@@ -264,7 +264,7 @@ fn test_insert_storage() -> Result<()> {
     let mut list =
         StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
 
-    let Some([inserted_addr, inserted_key, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
+    let Some([inserted_addr, inserted_key, ptr, ptr_cpy, _]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     // This is the dummy node.

@@ -16,9 +16,8 @@ use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use crate::GenerationInputs;
 
