@@ -44,7 +44,7 @@ read_txn_from_memory:
         // stack: rlp_start_addr, retdest
     }
 
-    // At this point, since it's not a type 1, 2 or 3 transaction,
+    // At this point, since it's not a typed transaction,
     // it must be a legacy (aka type 0) transaction.
     %jump(process_type_0_txn)
 
