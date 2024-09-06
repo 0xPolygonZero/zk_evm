@@ -66,9 +66,9 @@ mod type2;
 mod typed_mpt;
 mod wire;
 
-pub use imp::entrypoint;
+pub use core::entrypoint;
 
-mod imp;
+mod core;
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {
