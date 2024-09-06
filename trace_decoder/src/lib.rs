@@ -54,9 +54,9 @@
 /// we can continue to do the main work of "executing" the transactions.
 const _DEVELOPER_DOCS: () = ();
 
-mod iface;
+mod interface;
 
-pub use iface::*;
+pub use interface::*;
 
 mod type1;
 // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
