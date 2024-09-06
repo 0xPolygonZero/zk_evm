@@ -2,9 +2,9 @@ use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
     mem,
-    ops::Range,
 };
 
+use alloy::primitives::address;
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
@@ -30,15 +30,17 @@ use crate::{
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    batch_size_hint: usize,
+    batch_size: usize,
     use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
+    ensure!(batch_size != 0);
+
     let BlockTrace {
         trie_pre_images,
         code_db,
         txn_info,
     } = trace;
-    let (state, storage, mut code) = convert(trie_pre_images)?;
+    let (state, storage, mut code) = start(trie_pre_images)?;
     code.extend(code_db);
 
     let OtherBlockData {
@@ -61,7 +63,7 @@ pub fn entrypoint(
     let batches = middle(
         state,
         storage,
-        batch(txn_info, batch_size_hint),
+        batch(txn_info, batch_size),
         &mut code,
         b_meta.block_timestamp,
         b_meta.parent_beacon_block_root,
@@ -122,7 +124,7 @@ pub fn entrypoint(
 ///
 /// Turn either of those into our [`typed_mpt`](crate::typed_mpt)
 /// representations.
-fn convert(
+fn start(
     pre_images: BlockTraceTriePreImages,
 ) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
     Ok(match pre_images {
@@ -264,26 +266,24 @@ struct IntraBlockTries<StateTrieT> {
     pub receipt: ReceiptTrie,
 }
 
-/// We have detailed trace information
-///
-/// - `state_trie` is the state at the beginning of the block.
-/// - `storage` are the storage tries at the beginning of the block.
+/// Does the main work mentioned in the [module documentation](mod@self).
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
     // storage at the beginning of the block
-    mut storage: BTreeMap<H256, StorageTrie>,
+    mut storage_tries: BTreeMap<H256, StorageTrie>,
     // None represents a dummy transaction that should not increment the transaction index
     // all batches SHOULD not be empty
     batches: Vec<Vec<Option<TxnInfo>>>,
     code: &mut Hash2Code,
     block_timestamp: U256,
     parent_beacon_block_root: H256,
+    // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
-        let storage = storage.entry(haddr).or_insert({
+        let storage = storage_tries.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
             it.insert_hash(TrieKey::default(), acct.storage_root)
                 .expect("empty trie insert cannot fail");
@@ -301,11 +301,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
     let mut out = vec![];
 
-    let mut curr_txn_ix = 0; // incremented for non-dummy transactions
+    let mut txn_ix = 0; // incremented for non-dummy transactions
     let mut loop_ix = 0; // always incremented
     let loop_len = batches.iter().flatten().count();
     for batch in batches {
-        let batch_first_txn_ix = curr_txn_ix; // GOTCHA: if there are no transactions in this batch
+        let batch_first_txn_ix = txn_ix; // GOTCHA: if there are no transactions in this batch
         let mut batch_gas_used = 0;
         let mut batch_byte_code = vec![];
         let mut batch_contract_code = BTreeSet::from([vec![]]); // always include empty code
@@ -314,18 +314,19 @@ fn middle<StateTrieT: StateTrie + Clone>(
             state: state_trie.clone(),
             transaction: transaction_trie.clone(),
             receipt: receipt_trie.clone(),
-            storage: storage.clone(),
+            storage: storage_tries.clone(),
         };
+
         // We want to trim the TrieInputs above,
         // but won't know the bounds until after the loop below,
         // so store that information here.
         let mut storage_masks = BTreeMap::<_, BTreeSet<TrieKey>>::new();
         let mut state_mask = BTreeSet::new();
 
-        if curr_txn_ix == 0 {
+        if txn_ix == 0 {
             cancun_hook(
                 block_timestamp,
-                &mut storage,
+                &mut storage_tries,
                 &mut storage_masks,
                 parent_beacon_block_root,
                 &mut state_mask,
@@ -334,7 +335,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
         }
 
         for txn in batch {
-            let increment_txn_ix = txn.is_some();
+            let do_increment_txn_ix = txn.is_some();
             let TxnInfo {
                 traces,
                 meta:
@@ -344,11 +345,12 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         gas_used: txn_gas_used,
                     },
             } = txn.unwrap_or_default();
+
             if let Ok(nonempty) = nunny::Vec::new(byte_code) {
                 batch_byte_code.push(nonempty.clone());
-                transaction_trie.insert(curr_txn_ix, nonempty.into())?;
+                transaction_trie.insert(txn_ix, nonempty.into())?;
                 receipt_trie.insert(
-                    curr_txn_ix,
+                    txn_ix,
                     map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                 )?;
             }
@@ -357,7 +359,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
             for (
                 addr,
-                empty,
+                just_access,
                 TxnTrace {
                     balance,
                     nonce,
@@ -366,10 +368,14 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     code_usage,
                     self_destructed,
                 },
-            ) in traces
-                .into_iter()
-                .map(|(addr, trc)| (addr, trc == TxnTrace::default(), trc))
-            {
+            ) in traces.into_iter().map(|(addr, trc)| {
+                (
+                    addr,
+                    // This is our fork of Erigon's way of letting us know
+                    trc == TxnTrace::default(),
+                    trc,
+                )
+            }) {
                 // - created and failed
                 //   - access the state trie, no change to storage trie
                 // - created and self destructed
@@ -380,15 +386,15 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
-                let commit = match born {
-                    false => !empty,
+                let do_writes = match born {
+                    false => !just_access,
                     true => {
                         let (_, _, receipt) = evm_arithmetization::generation::mpt::decode_receipt(
                             &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                         )
                         .map_err(|e| anyhow!("{e:?}"))
                         .context("couldn't decode receipt")?;
-                        receipt.status && !empty
+                        receipt.status && !just_access
                     } // if txn failed, don't commit changes to trie
                 };
 
@@ -401,7 +407,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
                 );
 
-                if commit {
+                if do_writes {
                     acct.balance = balance.unwrap_or(acct.balance);
                     acct.nonce = nonce.unwrap_or(acct.nonce);
                     acct.code_hash = code_usage
@@ -422,8 +428,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
                     if !storage_written.is_empty() {
                         let storage = match born {
-                            true => storage.entry(keccak_hash::keccak(addr)).or_default(),
-                            false => storage
+                            true => storage_tries.entry(keccak_hash::keccak(addr)).or_default(),
+                            false => storage_tries
                                 .get_mut(&keccak_hash::keccak(addr))
                                 .context(format!("missing storage trie for address {addr:x}"))?,
                         };
@@ -445,25 +451,27 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 }
 
                 if self_destructed {
-                    storage.remove(&keccak_hash::keccak(addr));
+                    storage_tries.remove(&keccak_hash::keccak(addr));
                     state_mask.extend(state_trie.reporting_remove(addr)?)
                 }
 
-                let is_precompile =
-                    PRECOMPILE_ADDRESS_RANGE.contains(&U256::from_big_endian(addr.as_bytes()));
+                let precompiled_addresses = address!("0000000000000000000000000000000000000001")
+                    ..address!("000000000000000000000000000000000000000a");
 
                 // Trie witnesses will only include accessed precompile accounts as hash
                 // nodes if the transaction calling them reverted. If this is the case, we
                 // shouldn't include them in this transaction's `state_accesses` to allow the
                 // decoder to build a minimal state trie without hitting any hash node.
 
-                if !is_precompile || state_trie.get_by_address(addr).is_some() {
+                if !precompiled_addresses.contains(&addr.compat())
+                    || state_trie.get_by_address(addr).is_some()
+                {
                     state_mask.insert(TrieKey::from_address(addr));
                 }
             }
 
-            if increment_txn_ix {
-                curr_txn_ix += 1;
+            if do_increment_txn_ix {
+                txn_ix += 1;
             }
             loop_ix += 1;
         } // txn in batch
@@ -493,8 +501,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
             },
             before: {
                 before.state.mask(state_mask)?;
-                before.receipt.mask(batch_first_txn_ix..curr_txn_ix)?;
-                before.transaction.mask(batch_first_txn_ix..curr_txn_ix)?;
+                before.receipt.mask(batch_first_txn_ix..txn_ix)?;
+                before.transaction.mask(batch_first_txn_ix..txn_ix)?;
 
                 let keep = storage_masks
                     .keys()
@@ -569,9 +577,6 @@ fn cancun_hook<StateTrieT: StateTrie + Clone>(
         .expect("insert must succeed with the same key as a successful `get`");
     Ok(())
 }
-
-// TODO(0xaatif): is this _meant_ to exclude the final member?
-const PRECOMPILE_ADDRESS_RANGE: Range<U256> = U256([1, 0, 0, 0])..U256([10, 0, 0, 0]);
 
 fn eth_to_gwei(eth: U256) -> U256 {
     // 1 ether = 10^9 gwei.
