@@ -9,7 +9,11 @@ use super::assembler::{assemble, Kernel};
 use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
-pub const NUMBER_KERNEL_FILES: usize = 159;
+pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "cdk_erigon") {
+    159
+} else {
+    158
+};
 
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
@@ -172,7 +176,8 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/account_code.asm"),
     include_str!("asm/balance.asm"),
     include_str!("asm/bloom_filter.asm"),
-    include_str!("asm/global_exit_root.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/cdk_pre_execution.asm"),
 ];
 
 pub static KERNEL: Lazy<Kernel> = Lazy::new(combined_kernel);

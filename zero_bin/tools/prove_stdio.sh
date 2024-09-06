@@ -61,6 +61,8 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export MEMORY_CIRCUIT_SIZE="18..22"
         export MEMORY_BEFORE_CIRCUIT_SIZE="16..20"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..20"
+        # TODO(Robin): update Poseidon ranges here and below once Kernel ASM supports Poseidon ops
+        export POSEIDON_CIRCUIT_SIZE="4..8"
     elif [[ $INPUT_FILE == *"witness_b3_b6"* ]]; then
       # These sizes are configured specifically for custom blocks 3 to 6. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b3_b6.json"
@@ -73,6 +75,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export MEMORY_CIRCUIT_SIZE="17..22"
         export MEMORY_BEFORE_CIRCUIT_SIZE="17..18"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
+        export POSEIDON_CIRCUIT_SIZE="4..8"
     else
         export ARITHMETIC_CIRCUIT_SIZE="16..21"
         export BYTE_PACKING_CIRCUIT_SIZE="8..21"
@@ -83,6 +86,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export MEMORY_CIRCUIT_SIZE="17..24"
         export MEMORY_BEFORE_CIRCUIT_SIZE="16..23"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
+        export POSEIDON_CIRCUIT_SIZE="4..8"
     fi
 fi
 

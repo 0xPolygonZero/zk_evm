@@ -11,10 +11,8 @@ use mpt_trie::{
 };
 
 pub use crate::cpu::kernel::cancun_constants::*;
-pub use crate::cpu::kernel::constants::global_exit_root::{
-    GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS,
-};
-use crate::{generation::mpt::AccountRlp, util::h2u};
+pub use crate::cpu::kernel::constants::global_exit_root::*;
+use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -90,15 +88,8 @@ pub fn preinitialized_state_and_storage_tries(
         beacon_roots_account_nibbles(),
         rlp::encode(&BEACON_ROOTS_ACCOUNT).to_vec(),
     )?;
-    state_trie.insert(
-        ger_account_nibbles(),
-        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-    )?;
 
-    let storage_tries = vec![
-        (BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, Node::Empty.into()),
-        (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty.into()),
-    ];
+    let storage_tries = vec![(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, Node::Empty.into())];
 
     Ok((state_trie, storage_tries))
 }
@@ -108,27 +99,66 @@ pub fn beacon_roots_account_nibbles() -> Nibbles {
     Nibbles::from_bytes_be(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED.as_bytes()).unwrap()
 }
 
-/// Returns the `Nibbles` corresponding to the beacon roots contract account.
+/// Returns the `Nibbles` corresponding to the GER manager account.
 pub fn ger_account_nibbles() -> Nibbles {
-    Nibbles::from_bytes_be(&GLOBAL_EXIT_ROOT_ADDRESS_HASHED).unwrap()
+    Nibbles::from_bytes_be(GLOBAL_EXIT_ROOT_ADDRESS_HASHED.as_bytes()).unwrap()
 }
 
 pub fn update_ger_account_storage(
     storage_trie: &mut HashedPartialTrie,
-    root: H256,
-    timestamp: U256,
+    ger_data: Option<(H256, H256)>,
 ) -> anyhow::Result<()> {
+    if let Some((root, l1blockhash)) = ger_data {
+        let mut arr = [0; 64];
+        arr[0..32].copy_from_slice(&root.0);
+        U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
+        let slot = keccak(arr);
+        insert_storage(storage_trie, slot.into_uint(), h2u(l1blockhash))?
+    }
+
+    Ok(())
+}
+
+/// Returns the `Nibbles` corresponding to the 5ca1ab1e contract account.
+pub fn scalable_account_nibbles() -> Nibbles {
+    Nibbles::from_bytes_be(ADDRESS_SCALABLE_L2_ADDRESS_HASHED.as_bytes()).unwrap()
+}
+
+/// Note: This *will* overwrite the timestamp stored at the contract address.
+pub fn update_scalable_account_storage(
+    storage_trie: &mut HashedPartialTrie,
+    block: &BlockMetadata,
+    initial_trie_hash: H256,
+) -> anyhow::Result<()> {
+    insert_storage(
+        storage_trie,
+        U256::from(LAST_BLOCK_STORAGE_POS.1),
+        block.block_number,
+    )?;
+    insert_storage(
+        storage_trie,
+        U256::from(TIMESTAMP_STORAGE_POS.1),
+        block.block_timestamp,
+    )?;
+
     let mut arr = [0; 64];
-    arr[0..32].copy_from_slice(&root.0);
-    U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
+    (block.block_number - U256::one()).to_big_endian(&mut arr[0..32]);
+    U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = keccak(arr);
-    insert_storage(storage_trie, slot.into_uint(), timestamp)
+    insert_storage(storage_trie, slot.into_uint(), h2u(initial_trie_hash))
 }
 
 pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
     AccountRlp {
         storage_root: storage_trie.hash(),
         ..GLOBAL_EXIT_ROOT_ACCOUNT
+    }
+}
+
+pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
+    AccountRlp {
+        storage_root: storage_trie.hash(),
+        ..Default::default()
     }
 }
 

@@ -2070,6 +2070,7 @@ dependencies = [
  "serde-big-array",
  "serde_json",
  "sha2",
+ "smt_trie",
  "starky",
  "static_assertions",
  "thiserror",
