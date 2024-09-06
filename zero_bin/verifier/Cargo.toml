@@ -13,12 +13,24 @@ dotenvy = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
-proof_gen = { workspace = true }
 
 # Local dependencies
-zero_bin_common = { path = "../common" }
+proof_gen = { workspace = true }
+zero_bin_common = { workspace = true }
 
 [build-dependencies]
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
 anyhow = { workspace = true }
+
+
+[features]
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "proof_gen/eth_mainnet",
+    "zero_bin_common/eth_mainnet",
+]
+cdk_erigon = [
+    "proof_gen/cdk_erigon",
+    "zero_bin_common/cdk_erigon",
+]

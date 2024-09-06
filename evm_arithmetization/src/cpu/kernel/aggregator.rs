@@ -13,8 +13,11 @@ pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     157
 } else if cfg!(feature = "cdk_erigon") {
     156
-} else {
+} else if cfg!(feature = "polygon_pos") {
     155
+} else {
+    // unreachable
+    0
 };
 
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
