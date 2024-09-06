@@ -11,7 +11,7 @@ build = "../common/build.rs"
 
 [dependencies]
 __compat_primitive_types = { workspace = true }
-alloy.workspace = true
+alloy = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 evm_arithmetization = { workspace = true }

@@ -22,7 +22,7 @@ proof_gen = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 futures = { workspace = true }
-alloy.workspace = true
+alloy = { workspace = true }
 axum = { workspace = true }
 toml = { workspace = true }
 
@@ -35,7 +35,11 @@ zero_bin_common = { workspace = true }
 
 [features]
 default = []
-cdk_erigon = ["prover/cdk_erigon", "evm_arithmetization/cdk_erigon", "rpc/cdk_erigon"]
+cdk_erigon = [
+    "prover/cdk_erigon",
+    "evm_arithmetization/cdk_erigon",
+    "rpc/cdk_erigon",
+]
 
 [build-dependencies]
 cargo_metadata = { workspace = true }
