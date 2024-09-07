@@ -146,7 +146,14 @@ global start_txns:
 global txn_loop:
     // If the prover has no more txns for us to process, halt.
     PROVER_INPUT(end_of_txns)
-    %jumpi(execute_withdrawals)
+    #[cfg(feature = eth_mainnet)]
+    {
+        %jumpi(execute_withdrawals)
+    }
+    #[cfg(not(feature = eth_mainnet))]
+    {
+        %jumpi(perform_final_checks)
+    }
 
     // Call route_txn. When we return, we will process the txn receipt.
     PUSH txn_loop_after
@@ -171,9 +178,12 @@ global txn_loop_after:
     // stack: new_cum_gas, txn_counter, num_nibbles, new_txn_number
     %jump(txn_loop)
 
-global execute_withdrawals:
-    // stack: cum_gas, txn_counter, num_nibbles, txn_nb
-    %withdrawals
+#[cfg(feature = eth_mainnet)]
+{
+    global execute_withdrawals:
+        // stack: cum_gas, txn_counter, num_nibbles, txn_nb
+        %withdrawals
+}
 
 global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
