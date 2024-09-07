@@ -31,6 +31,7 @@ Below is a simplified view of the dependency graph, including the proving system
 TODO: Update mermaid chard with `smt_trie` once type-2 is plugged in.
 -->
 ```mermaid
+%%{init: {'theme':'dark'}}%%
 flowchart LR
     subgraph ps [proving systems]
     A1{{plonky2}}
