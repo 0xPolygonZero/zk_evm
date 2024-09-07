@@ -237,11 +237,19 @@ where
                     .compat(),
                 block_gaslimit: target_block.header.gas_limit.into(),
                 block_chain_id: chain_id.into(),
-                block_base_fee: target_block
-                    .header
-                    .base_fee_per_gas
-                    .context("target block is missing field `base_fee_per_gas`")?
-                    .into(),
+                block_base_fee: if !cfg!(feature = "cdk_erigon") {
+                    target_block
+                        .header
+                        .base_fee_per_gas
+                        .context("target block is missing field `base_fee_per_gas`")?
+                        .into()
+                } else {
+                    target_block
+                        .header
+                        .base_fee_per_gas
+                        .unwrap_or_default() // `baseFee` may be disabled to enable 0 price calls (EIP-1559)
+                        .into()
+                },
                 block_gas_used: target_block.header.gas_used.into(),
                 block_bloom: target_block.header.logs_bloom.compat(),
                 parent_beacon_block_root: if cfg!(feature = "eth_mainnet") {
