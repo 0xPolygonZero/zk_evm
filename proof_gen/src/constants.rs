@@ -22,3 +22,6 @@ pub(crate) const DEFAULT_MEMORY_RANGE: Range<usize> = 17..30;
 pub(crate) const DEFAULT_MEMORY_BEFORE_RANGE: Range<usize> = 8..20;
 /// Default range to be used for the `MemoryAfterStark` table.
 pub(crate) const DEFAULT_MEMORY_AFTER_RANGE: Range<usize> = 16..30;
+#[cfg(feature = "cdk_erigon")]
+/// Default range to be used for the `PoseidonStark` table.
+pub(crate) const DEFAULT_POSEIDON_RANGE: Range<usize> = 4..25;

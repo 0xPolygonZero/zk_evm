@@ -3,8 +3,11 @@
 ///
 /// *NOTE*: This will panic if one of the provided timestamps is zero.
 
+/// Pre-stack: (empty)
+/// Post-stack: (empty)
 global set_beacon_root:
-    PUSH set_global_exit_roots
+    // stack: (empty)
+    PUSH txn_loop
     %timestamp
     // stack: timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH

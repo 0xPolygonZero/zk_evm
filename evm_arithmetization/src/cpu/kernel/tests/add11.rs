@@ -1,3 +1,5 @@
+#![cfg(not(feature = "cdk_erigon"))]
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -16,9 +18,8 @@ use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use crate::GenerationInputs;
 
@@ -149,12 +150,6 @@ fn test_add11_yml() {
             )
             .unwrap();
         expected_state_trie_after
-            .insert(
-                ger_account_nibbles(),
-                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
     };
     let receipt_0 = LegacyReceiptRlp {
         status: true,
@@ -185,7 +180,7 @@ fn test_add11_yml() {
         signed_txns: vec![txn.to_vec()],
         burn_addr: None,
         withdrawals: vec![],
-        global_exit_roots: vec![],
+        ger_data: None,
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),
@@ -331,12 +326,6 @@ fn test_add11_yml_with_exception() {
             )
             .unwrap();
         expected_state_trie_after
-            .insert(
-                ger_account_nibbles(),
-                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -368,7 +357,7 @@ fn test_add11_yml_with_exception() {
         signed_txns: vec![txn.to_vec()],
         burn_addr: None,
         withdrawals: vec![],
-        global_exit_roots: vec![],
+        ger_data: None,
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),

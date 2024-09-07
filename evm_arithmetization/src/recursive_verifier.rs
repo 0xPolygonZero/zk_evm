@@ -380,10 +380,12 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         ),
     ];
 
-    // This contains the `block_beneficiary`, `block_random`, `block_base_fee`,
-    // `block_blob_gas_used`, `block_excess_blob_gas`, `parent_beacon_block_root`
-    // as well as `cur_hash`.
-    let block_fields_arrays: [(GlobalMetadata, &[Target]); 7] = [
+    // This contains the `block_beneficiary`, `block_random`, `block_base_fee`, and
+    // `cur_hash`, as well as the additional `block_blob_gas_used`,
+    // `block_excess_blob_gas`, `parent_beacon_block_root` when compiling with
+    // `eth_mainnet` feature flag.
+    const LENGTH: usize = if cfg!(feature = "eth_mainnet") { 7 } else { 4 };
+    let block_fields_arrays: [(GlobalMetadata, &[Target]); LENGTH] = [
         (
             GlobalMetadata::BlockBeneficiary,
             &public_values.block_metadata.block_beneficiary,
@@ -396,14 +398,17 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
             GlobalMetadata::BlockBaseFee,
             &public_values.block_metadata.block_base_fee,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             &public_values.block_metadata.block_blob_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             &public_values.block_metadata.block_excess_blob_gas,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             &public_values.block_metadata.parent_beacon_block_root,
@@ -1064,31 +1069,34 @@ where
         block_metadata_target.block_gas_used,
         u256_to_u32(block_metadata.block_gas_used)?,
     );
-    // BlobGasUsed fits in 2 limbs
-    let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;
-    witness.set_target(
-        block_metadata_target.block_blob_gas_used[0],
-        blob_gas_used.0,
-    );
-    witness.set_target(
-        block_metadata_target.block_blob_gas_used[1],
-        blob_gas_used.1,
-    );
-    // ExcessBlobGas fits in 2 limbs
-    let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
-    witness.set_target(
-        block_metadata_target.block_excess_blob_gas[0],
-        excess_blob_gas.0,
-    );
-    witness.set_target(
-        block_metadata_target.block_excess_blob_gas[1],
-        excess_blob_gas.1,
-    );
+    #[cfg(feature = "eth_mainnet")]
+    {
+        // BlobGasUsed fits in 2 limbs
+        let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;
+        witness.set_target(
+            block_metadata_target.block_blob_gas_used[0],
+            blob_gas_used.0,
+        );
+        witness.set_target(
+            block_metadata_target.block_blob_gas_used[1],
+            blob_gas_used.1,
+        );
+        // ExcessBlobGas fits in 2 limbs
+        let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
+        witness.set_target(
+            block_metadata_target.block_excess_blob_gas[0],
+            excess_blob_gas.0,
+        );
+        witness.set_target(
+            block_metadata_target.block_excess_blob_gas[1],
+            excess_blob_gas.1,
+        );
 
-    witness.set_target_arr(
-        &block_metadata_target.parent_beacon_block_root,
-        &h256_limbs(block_metadata.parent_beacon_block_root),
-    );
+        witness.set_target_arr(
+            &block_metadata_target.parent_beacon_block_root,
+            &h256_limbs(block_metadata.parent_beacon_block_root),
+        );
+    }
 
     let mut block_bloom_limbs = [F::ZERO; 64];
     for (i, limbs) in block_bloom_limbs.chunks_exact_mut(8).enumerate() {

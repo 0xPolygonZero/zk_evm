@@ -186,6 +186,8 @@ impl ProverStateManager {
             circuit!(6),
             circuit!(7),
             circuit!(8),
+            #[cfg(feature = "cdk_erigon")]
+            circuit!(9),
         ])
     }
 

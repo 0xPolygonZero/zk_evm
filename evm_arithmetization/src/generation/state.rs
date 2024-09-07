@@ -22,6 +22,8 @@ use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+#[cfg(feature = "cdk_erigon")]
+use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -146,6 +148,11 @@ pub(crate) trait State<F: RichField> {
             .traces
             .keccak_sponge_ops
             .push(op);
+    }
+
+    #[cfg(feature = "cdk_erigon")]
+    fn push_poseidon(&mut self, op: PoseidonOp<F>) {
+        self.get_mut_generation_state().traces.poseidon_ops.push(op);
     }
 
     /// Returns the content of a the `KernelGeneral` segment of a `State`.
@@ -403,7 +410,7 @@ impl<F: RichField> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
-        let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
+        let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
         let bignum_modmul_result_limbs = Vec::new();
 
         let mut state = Self {
@@ -415,7 +422,6 @@ impl<F: RichField> GenerationState<F> {
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
-            ger_prover_inputs,
             state_key_to_address: HashMap::new(),
             bignum_modmul_result_limbs,
             trie_root_ptrs: TrieRootPtrs {
@@ -424,6 +430,7 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
+            ger_prover_inputs,
         };
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
@@ -741,15 +748,12 @@ pub(crate) fn all_withdrawals_prover_inputs_reversed(withdrawals: &[(Address, U2
     withdrawal_prover_inputs
 }
 
-/// Global exit roots prover input array is of the form `[N, timestamp1,
-/// root1,..., timestampN, rootN]`. Returns the reversed array.
-pub(crate) fn all_ger_prover_inputs_reversed(global_exit_roots: &[(U256, H256)]) -> Vec<U256> {
-    let mut ger_prover_inputs = vec![global_exit_roots.len().into()];
-    ger_prover_inputs.extend(
-        global_exit_roots
-            .iter()
-            .flat_map(|ger| [ger.0, ger.1.into_uint()]),
-    );
-    ger_prover_inputs.reverse();
-    ger_prover_inputs
+/// Global exit root prover input tuple containing the global exit root and its
+/// associated l1blockhash.
+pub(crate) fn all_ger_prover_inputs(ger_data: Option<(H256, H256)>) -> Vec<U256> {
+    if ger_data.is_none() {
+        return vec![U256::MAX];
+    }
+    let (root, l1blockhash) = ger_data.unwrap();
+    vec![root.into_uint(), l1blockhash.into_uint()]
 }

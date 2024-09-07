@@ -40,6 +40,10 @@ pub(crate) enum Operation {
     BinaryArithmetic(arithmetic::BinaryOperator),
     TernaryArithmetic(arithmetic::TernaryOperator),
     KeccakGeneral,
+    #[cfg(feature = "cdk_erigon")]
+    Poseidon,
+    #[cfg(feature = "cdk_erigon")]
+    PoseidonGeneral,
     ProverInput,
     Pop,
     Jump,
@@ -160,6 +164,94 @@ pub(crate) fn generate_keccak_general<F: RichField, T: Transition<F>>(
 
     state.log_debug(format!("Hashing {:?}", input));
     keccak_sponge_log(state, base_address, input);
+
+    state.push_memory(log_in1);
+    state.push_cpu(row);
+    Ok(())
+}
+
+#[cfg(feature = "cdk_erigon")]
+/// Pops 3 elements `x,y,z` from the stack, and returns `Poseidon(x || y ||
+/// z)[0..4]`, where values are split into 64-bit limbs, and `z` is used as the
+/// capacity. Limbs are range-checked to be in canonical form in the
+/// PoseidonStark.
+pub(crate) fn generate_poseidon<F: RichField, T: Transition<F>>(
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    use crate::poseidon::poseidon_stark::{PoseidonOp, PoseidonSimpleOp};
+
+    let generation_state = state.get_mut_generation_state();
+    let [(x, _), (y, log_in1), (z, log_in2)] =
+        stack_pop_with_log_and_fill::<3, _>(generation_state, &mut row)?;
+    let arr = [
+        x.0[0], x.0[1], x.0[2], x.0[3], y.0[0], y.0[1], y.0[2], y.0[3], z.0[0], z.0[1], z.0[2],
+        z.0[3],
+    ]
+    .map(F::from_canonical_u64);
+    let hash = F::poseidon(arr);
+    let hash = U256(std::array::from_fn(|i| hash[i].to_canonical_u64()));
+    log::debug!("Poseidon hashing {:?} -> {}", arr, hash);
+    push_no_write(generation_state, hash);
+
+    state.push_poseidon(PoseidonOp::PoseidonSimpleOp(PoseidonSimpleOp(arr)));
+
+    state.push_memory(log_in1);
+    state.push_memory(log_in2);
+    state.push_cpu(row);
+    Ok(())
+}
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    use smt_trie::{code::poseidon_hash_padded_byte_vec, utils::hashout2u};
+
+    use crate::{
+        cpu::membus::NUM_CHANNELS,
+        poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp},
+    };
+
+    let clock = state.get_clock();
+    let generation_state = state.get_mut_generation_state();
+    let [(addr, _), (len, log_in1)] =
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+    let len = u256_to_usize(len)?;
+
+    let base_address = MemoryAddress::new_bundle(addr)?;
+    let input = (0..len)
+        .map(|i| {
+            let address = MemoryAddress {
+                virt: base_address.virt.saturating_add(i),
+                ..base_address
+            };
+            let val = generation_state.memory.get_with_init(address);
+            generation_state.traces.memory_ops.push(MemoryOp::new(
+                MemoryChannel::Code,
+                clock,
+                address,
+                MemoryOpKind::Read,
+                val.0[0].into(),
+            ));
+
+            val.0[0] as u8
+        })
+        .collect_vec();
+
+    let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
+        base_address,
+        timestamp: clock * NUM_CHANNELS,
+        input: input.clone(),
+        len: input.len(),
+    });
+
+    let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
+
+    push_no_write(generation_state, hash);
+
+    state.push_poseidon(poseidon_op);
 
     state.push_memory(log_in1);
     state.push_cpu(row);

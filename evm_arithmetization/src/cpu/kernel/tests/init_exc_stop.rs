@@ -1,33 +1,26 @@
 use std::collections::HashMap;
 
 use ethereum_types::U256;
-use keccak_hash::keccak;
-use keccak_hash::H256;
-use mpt_trie::partial_trie::HashedPartialTrie;
-use mpt_trie::partial_trie::PartialTrie;
+use keccak_hash::{keccak, H256};
+use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
-use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::interpreter::Interpreter;
-use crate::generation::state::State;
-use crate::generation::TrieInputs;
-use crate::generation::NUM_EXTRA_CYCLES_AFTER;
-use crate::generation::NUM_EXTRA_CYCLES_BEFORE;
+use crate::cpu::kernel::{aggregator::KERNEL, interpreter::Interpreter};
+use crate::generation::{
+    state::State, TrieInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
+};
 use crate::memory::segments::Segment;
-use crate::proof::BlockMetadata;
-use crate::proof::TrieRoots;
-use crate::testing_utils::beacon_roots_account_nibbles;
-use crate::testing_utils::beacon_roots_contract_from_storage;
-use crate::testing_utils::ger_account_nibbles;
-use crate::testing_utils::init_logger;
-use crate::testing_utils::preinitialized_state_and_storage_tries;
-use crate::testing_utils::update_beacon_roots_account_storage;
-use crate::testing_utils::GLOBAL_EXIT_ROOT_ACCOUNT;
-use crate::witness::memory::MemoryAddress;
-use crate::witness::state::RegistersState;
-use crate::{proof::BlockHashes, GenerationInputs, Node};
+use crate::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+};
+use crate::witness::{memory::MemoryAddress, state::RegistersState};
+use crate::{
+    proof::{BlockHashes, BlockMetadata, TrieRoots},
+    GenerationInputs, Node,
+};
 
 enum RegistersIdx {
     ProgramCounter = 0,
@@ -74,12 +67,6 @@ fn test_init_exc_stop() {
             )
             .unwrap();
         expected_state_trie_after
-            .insert(
-                ger_account_nibbles(),
-                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
     };
 
     let mut contract_code = HashMap::new();
@@ -113,7 +100,7 @@ fn test_init_exc_stop() {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
-        global_exit_roots: vec![],
+        ger_data: None,
     };
     let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["init"];
