@@ -145,19 +145,21 @@ logs_bloom_end:
     // stack: byte_index, byte_bit_index
     PUSH @SEGMENT_TXN_BLOOM
     %build_kernel_address
+    // stack: byte_addr, byte_bit_index
     PUSH 1
     DUP3
     // stack: byte_bit_index, 1, byte_addr, byte_bit_index
     PUSH 7 SUB
     SHL
+    // stack: one_shifted_by_index, byte_addr, byte_bit_index
     // Updates the current txn bloom filter.
-    SWAP2 POP DUP1
+    DUP2
     MLOAD_GENERAL
-    // stack: old_bloom_byte, byte_addr, one_shifted_by_index
-    DUP3 OR
-    // stack: new_bloom_byte, byte_addr, one_shifted_by_index
+    // stack: old_bloom_byte, one_shifted_by_index, byte_addr, byte_bit_index
+    OR
+    // stack: new_bloom_byte, byte_addr, byte_bit_index
     MSTORE_GENERAL
-    // stack: one_shifted_by_index
+    // stack: byte_bit_index
     POP
     // stack: empty
 %endmacro
