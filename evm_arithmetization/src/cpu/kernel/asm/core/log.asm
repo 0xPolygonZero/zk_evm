@@ -102,9 +102,10 @@ global log_n_entry:
     %mload_global_metadata(@GLOBAL_METADATA_LOGS_LEN)
     %mload_global_metadata(@GLOBAL_METADATA_LOGS_DATA_LEN)
     // stack: log_ptr, logs_len, address, num_topics, topics, data_len, data_offset, retdest
-    DUP1 DUP3
-    // stack: log_ptr, logs_len, log_ptr, logs_len, address, num_topics, topics, data_len, data_offset, retdest
-    %mstore_kernel(@SEGMENT_LOGS)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS)
+    DUP3
+    // stack: logs_len, addr, log_ptr, logs_len, address, num_topics, topics, data_len, data_offset, retdest
+    MSTORE_GENERAL
     // stack: log_ptr, logs_len, address, num_topics, topics, data_len, data_offset, retdest
     SWAP1 %increment
     %mstore_global_metadata(@GLOBAL_METADATA_LOGS_LEN)
@@ -112,15 +113,17 @@ global log_n_entry:
     %increment
     // stack: addr_ptr, address, num_topics, topics, data_len, data_offset, retdest
     // Store the address.
-    DUP2 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP3
+    MSTORE_GENERAL
     %increment
     // stack: num_topics_ptr, address, num_topics, topics, data_len, data_offset, retdest
     SWAP1 POP
     // stack: num_topics_ptr, num_topics, topics, data_len, data_offset, retdest
     // Store num_topics.
-    DUP2 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP3
+    MSTORE_GENERAL
     %increment
     // stack: topics_ptr, num_topics, topics, data_len, data_offset, retdest
     DUP2
@@ -129,32 +132,36 @@ global log_n_entry:
     %jumpi(log_after_topics)
     // stack: topics_ptr, num_topics, topics, data_len, data_offset, retdest
     // Store the first topic.
-    DUP3 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP4
+    MSTORE_GENERAL
     %increment
     %stack (curr_topic_ptr, num_topics, topic1) -> (curr_topic_ptr, num_topics)
     DUP2 %eq_const(1)
     %jumpi(log_after_topics)
     // stack: curr_topic_ptr, num_topics, remaining_topics, data_len, data_offset, retdest
     // Store the second topic.
-    DUP3 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP4
+    MSTORE_GENERAL
     %increment
     %stack (curr_topic_ptr, num_topics, topic2) -> (curr_topic_ptr, num_topics)
     DUP2 %eq_const(2)
     %jumpi(log_after_topics)
     // stack: curr_topic_ptr, num_topics, remaining_topics, data_len, data_offset, retdest
     // Store the third topic.
-    DUP3 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP4
+    MSTORE_GENERAL
     %increment
     %stack (curr_topic_ptr, num_topics, topic3) -> (curr_topic_ptr, num_topics)
     DUP2 %eq_const(3)
     %jumpi(log_after_topics)
     // stack: curr_topic_ptr, num_topics, remaining_topic, data_len, data_offset, retdest
     // Store the fourth topic.
-    DUP3 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP4
+    MSTORE_GENERAL
     %increment
     %stack (data_len_ptr, num_topics, topic4) -> (data_len_ptr, num_topics)
     DUP2 %eq_const(4)
@@ -180,10 +187,10 @@ log_after_topics:
     // The address is encoded with 1+20 bytes.
     %add_const(21)
     // stack: log_payload_len, data_len_ptr, num_topics, data_len, data_offset, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_LOGS_DATA_LEN)
-    DUP2 SWAP1
-    // stack: log_ptr, log_payload_len, log_payload_len, data_len_ptr, num_topics, data_len, data_offset, retdest
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    %mload_global_metadata(@GLOBAL_METADATA_LOGS_DATA_LEN) %build_kernel_address(@SEGMENT_LOGS_DATA)
+    // stack: addr, log_payload_len, data_len_ptr, num_topics, data_len, data_offset, retdest
+    DUP2
+    MSTORE_GENERAL
     // stack: log_payload_len, data_len_ptr, num_topics, data_len, data_offset, retdest
     %rlp_list_len
     // stack: rlp_log_len, data_len_ptr, num_topics, data_len, data_offset, retdest
@@ -194,8 +201,10 @@ log_after_topics:
     %mstore_global_metadata(@GLOBAL_METADATA_LOGS_PAYLOAD_LEN)
     // stack: data_len_ptr, num_topics, data_len, data_offset, retdest
     // Store data_len.
-    DUP3 DUP2
-    %mstore_kernel(@SEGMENT_LOGS_DATA)
+    DUP1 %build_kernel_address(@SEGMENT_LOGS_DATA)
+    DUP4
+    // stack: data_len, addr, data_len_ptr, num_topics, data_len, data_offset, retdest
+    MSTORE_GENERAL
     %increment
     // stack: data_ptr, num_topics, data_len, data_offset, retdest
     SWAP1 POP
@@ -238,35 +247,43 @@ store_log_data_loop_end:
     JUMP
 
 rlp_data_len:
-    // stack: data_len, data_ptr, retdest
-    DUP1 ISZERO %jumpi(data_single_byte) // data will be encoded with a single byte
-    DUP1 PUSH 1 EQ %jumpi(one_byte_data) // data is encoded with either 1 or 2 bytes
+    // stack: data_ptr, data_len, retdest
+    DUP2 ISZERO %jumpi(data_single_byte) // data will be encoded with a single byte
+    DUP2 PUSH 1 EQ %jumpi(one_byte_data) // data is encoded with either 1 or 2 bytes
     // If we are here, data_len >= 2, and we can use rlp_list_len to determine the encoding length
+    // stack: data_ptr, data_len, retdest
+    POP
     %rlp_list_len
-    // stack: rlp_data_len, data_ptr, retdest
-    SWAP1 POP SWAP1
+    // stack: rlp_data_len, retdest
+    SWAP1
     JUMP
 
 data_single_byte:
-    // stack: data_len, data_ptr, retdest
+    // stack: data_ptr, data_len, retdest
     %pop2
     PUSH 1
     SWAP1
     JUMP
 
+return_data_len:
+    // stack: data_len=1, retdest
+    SWAP1
+    JUMP
+
 one_byte_data:
-    // stack: data_len, data_ptr, retdest
-    DUP2
+    // stack: data_ptr, data_len, retdest
     %mload_current(@SEGMENT_MAIN_MEMORY)
-    // stack: data_byte, data_len, data_ptr, retdest
-    %lt_const(0x80) %jumpi(data_single_byte) // special byte that only requires one byte to be encoded
-    %pop2
+    // stack: data_byte, data_len, retdest
+    %lt_const(0x80) %jumpi(return_data_len) // special byte that only requires one byte to be encoded
+    POP
     PUSH 2 SWAP1
     JUMP
 
+// Convenience macro to call rlp_data_len and return where we left off.
+// *NOTE*: It takes reversed inputs.
 %macro rlp_data_len
     // stack: data_len, data_ptr
-    %stack (data_len, data_ptr) -> (data_len, data_ptr, %%after)
+    %stack (data_len, data_ptr) -> (data_ptr, data_len, %%after)
     %jump(rlp_data_len)
 %%after:
 %endmacro

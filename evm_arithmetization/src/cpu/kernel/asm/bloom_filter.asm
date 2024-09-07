@@ -55,7 +55,7 @@ logs_bloom_loop:
     // Add address to bloom filter.
     %increment
     // stack: addr_ptr, i, logs_len, retdest
-    PUSH @SEGMENT_LOGS_DATA %build_kernel_address
+    %build_kernel_address(@SEGMENT_LOGS_DATA)
     DUP1
     MLOAD_GENERAL
     // stack: addr, full_addr_ptr, i, logs_len, retdest

@@ -462,6 +462,13 @@
     // stack: addr (ctx == 0)
 %endmacro
 
+%macro build_kernel_address(seg)
+    // stack: off
+    PUSH $seg
+    ADD
+    // stack: addr (ctx == 0)
+%endmacro
+
 %macro build_address_with_ctx(seg, off)
     // stack: ctx
     PUSH $seg
