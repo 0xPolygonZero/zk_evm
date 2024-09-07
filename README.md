@@ -28,7 +28,7 @@ EVM block proofs.
 Below is a simplified view of the dependency graph, including the proving system backends and the application layer defined within [zero-bin](https://github.com/0xPolygonZero/zero-bin).
 
 <!---
-TODO: Update mermaid chard with `smt_trie` once type-2 is plugged in.
+TODO: Update mermaid chart with `smt_trie` once type-2 is plugged in.
 -->
 ```mermaid
 %%{init: {'theme':'dark'}}%%
