@@ -18,13 +18,15 @@ use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 use zero_bin_common::fs::generate_block_proof_file_name;
 
-// All the proving tasks run in parallel. For the big block intervals,
-// this leads to a common situation where the very distant future blocks are
-// being proved first. So we create a pool of permits to limit the number of
-// parallel proving block tasks, and they are retrieved in block increasing
-// order. Initially we put 16, may be a reasonable default. We output proof file
-// when the block batch is finished, so this helps with getting the results
-// sooner.
+// All proving tasks are executed concurrently, which can cause issues for large
+// block intervals, where distant future blocks may be proven first.
+//
+// We then create a pool to limit the number of parallel proving block
+// tasks, retrieving new blocks in increasing order when some block proofs are
+// complete.
+//
+// While proving a block interval, we will output proofs corresponding to block
+// batches as soon as they are generated.
 const PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE: usize = 16;
 static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore =
     Semaphore::const_new(PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE);
