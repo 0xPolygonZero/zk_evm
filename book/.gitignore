@@ -1,1 +1,6 @@
 book
+
+# Mermaid initialization files
+# Obtained with `mdbook-mermaid install book`.
+mermaid-init.js
+mermaid.min.js
