@@ -4194,6 +4194,7 @@ name = "rpc"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-compat",
  "anyhow",
  "cargo_metadata",
  "clap",

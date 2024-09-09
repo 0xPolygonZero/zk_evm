@@ -12,6 +12,7 @@ build = "../common/build.rs"
 [dependencies]
 __compat_primitive_types = { workspace = true }
 alloy = { workspace = true }
+alloy-compat = "0.1.0"
 anyhow = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }

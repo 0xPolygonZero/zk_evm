@@ -64,8 +64,8 @@ pub fn update_beacon_roots_account_storage(
     timestamp: U256,
     parent_root: H256,
 ) -> anyhow::Result<()> {
-    let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.1;
-    let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.1;
+    let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.value;
+    let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
 
     insert_storage(storage_trie, timestamp_idx, timestamp)?;
     insert_storage(storage_trie, root_idx, h2u(parent_root))

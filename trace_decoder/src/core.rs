@@ -11,7 +11,7 @@ use ethereum_types::{Address, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::TrieRoots,
-    testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH_VALUE},
+    testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH},
     GenerationInputs,
 };
 use itertools::Itertools as _;
@@ -541,9 +541,8 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     trim_state: &mut BTreeSet<TrieKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()> {
-    let history_buffer_length = U256::from(HISTORY_BUFFER_LENGTH_VALUE);
-    let history_timestamp = block_timestamp % history_buffer_length;
-    let history_timestamp_next = history_timestamp + history_buffer_length;
+    let history_timestamp = block_timestamp % HISTORY_BUFFER_LENGTH.value;
+    let history_timestamp_next = history_timestamp + HISTORY_BUFFER_LENGTH.value;
     let beacon_storage = storage
         .get_mut(&keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS))
         .context("missing beacon contract storage trie")?;

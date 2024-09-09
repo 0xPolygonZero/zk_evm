@@ -18,6 +18,13 @@ pub(crate) mod journal_entry;
 pub(crate) mod trie_type;
 pub(crate) mod txn_fields;
 
+/// A named constant.
+/// Prefer this over `(name, value)` tuples.
+pub struct Named<'a, T> {
+    pub name: &'a str,
+    pub value: T,
+}
+
 /// Constants that are accessible to our kernel assembly code.
 pub(crate) fn evm_constants() -> HashMap<String, U256> {
     let mut c = HashMap::new();
@@ -71,8 +78,8 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
         U256::from_big_endian(&cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.1),
     );
     c.insert(
-        cancun_constants::HISTORY_BUFFER_LENGTH.0.into(),
-        cancun_constants::HISTORY_BUFFER_LENGTH.1.into(),
+        cancun_constants::HISTORY_BUFFER_LENGTH.name.into(),
+        cancun_constants::HISTORY_BUFFER_LENGTH.value,
     );
 
     c.insert(
@@ -424,9 +431,10 @@ pub mod cancun_constants {
     // Beacon constants
     ///////////////////
 
-    pub const HISTORY_BUFFER_LENGTH_VALUE: u64 = 8191;
-    pub const HISTORY_BUFFER_LENGTH: (&str, u64) =
-        ("HISTORY_BUFFER_LENGTH", HISTORY_BUFFER_LENGTH_VALUE);
+    pub const HISTORY_BUFFER_LENGTH: Named<U256> = Named {
+        name: "HISTORY_BUFFER_LENGTH",
+        value: U256([8191, 0, 0, 0]),
+    };
 
     pub const BEACON_ROOTS_CONTRACT_ADDRESS: Address =
         H160(hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"));
