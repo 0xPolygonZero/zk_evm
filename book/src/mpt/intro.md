@@ -3,7 +3,7 @@
 The *EVM World state* is a representation of the different accounts at a
 particular time, as well as the last processed transactions together
 with their receipts. The world state is represented using *Merkle
-Patricia Tries* (MPTs) [@@yellowpaper App. D], and there are three
+Patricia Tries* (MPTs, see [Yellowpaper App. D](@@yellowpaper)), and there are three
 different tries: the state trie, the transaction trie and the receipt
 trie.
 
@@ -17,10 +17,10 @@ inserting new nodes or deleting existing nodes.
 An MPT is composed of five different nodes: branch, extension, leaf,
 empty and digest nodes. Branch and leaf nodes might contain a payload
 whose format depends on the particular trie. The nodes are encoded,
-primarily using RLP encoding and Hex-prefix encoding (see @@yellowpaper
-App. B and C, respectively). The resulting encoding is then hashed,
-following a strategy similar to that of normal Merkle trees, to generate
-the trie hashes.
+primarily using RLP encoding and Hex-prefix encoding (see [Yellowpaper
+App. B and C](@@yellowpaper), respectively). The resulting encoding is
+then hashed, following a strategy similar to that of normal Merkle trees,
+to generate the trie hashes.
 
 Insertion and deletion is performed in the same way as other MPTs
 implementations. The only difference is for inserting extension nodes
