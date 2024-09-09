@@ -22,3 +22,7 @@ serde = { workspace = true, features = ["derive", "rc"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+bitvec.workspace = true
+quickcheck = "1.0.3"

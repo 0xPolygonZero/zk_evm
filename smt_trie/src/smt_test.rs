@@ -1,6 +1,8 @@
 use ethereum_types::U256;
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, Sample};
 use plonky2::hash::hash_types::HashOut;
+use quickcheck::Arbitrary;
 use rand::seq::SliceRandom;
 use rand::{random, thread_rng, Rng};
 
@@ -12,6 +14,127 @@ use crate::{
     db::MemoryDb,
     smt::{hash_serialize, Key, Smt, F},
 };
+
+quickcheck::quickcheck! {
+    fn quickcheck(phs: Vec<(Bits, ArbitraryHashout)>, kvs: Vec<(Key, ArbitraryU256)>) -> () {
+        do_quickcheck(phs, kvs)
+    }
+}
+
+#[test]
+#[should_panic = "called `Option::unwrap()` on a `None` value"]
+fn panic() {
+    let mut smt = Smt::<MemoryDb>::default();
+    smt.set_hash(Bits::default(), cvt_hashout((0, 0, 0, 0)));
+    smt.set(cvt_key((0, 0, 0, 0)), U256::zero())
+}
+
+#[test]
+#[should_panic = "Tried to insert a hash node in a non-empty node."]
+fn panic2() {
+    let mut smt = Smt::<MemoryDb>::default();
+
+    let mut path = Bits::default();
+    path.push_bit(false);
+    smt.set_hash(path, cvt_hashout((0, 0, 0, 0)));
+
+    smt.set_hash(Bits::default(), cvt_hashout((0, 0, 0, 0)));
+}
+
+impl Arbitrary for Key {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        cvt_key(Arbitrary::arbitrary(g))
+    }
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        let Self([GoldilocksField(a), GoldilocksField(b), GoldilocksField(c), GoldilocksField(d)]) =
+            *self;
+        Box::new((a, b, c, d).shrink().map(cvt_key))
+    }
+}
+
+fn cvt_key((a, b, c, d): (u64, u64, u64, u64)) -> Key {
+    Key([
+        GoldilocksField(a),
+        GoldilocksField(b),
+        GoldilocksField(c),
+        GoldilocksField(d),
+    ])
+}
+
+impl Arbitrary for Bits {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        cvt_bits(Arbitrary::arbitrary(g))
+    }
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        let mut this = *self;
+        let mut cvt = vec![];
+        while this.count != 0 {
+            cvt.push(this.pop_next_bit())
+        }
+        Box::new(cvt.shrink().map(cvt_bits))
+    }
+}
+
+fn cvt_bits(src: Vec<bool>) -> Bits {
+    let mut this = Bits::default();
+    for bit in src.into_iter().take(256) {
+        this.push_bit(bit)
+    }
+    this
+}
+
+#[derive(Debug, Clone)]
+struct ArbitraryU256(U256);
+
+impl Arbitrary for ArbitraryU256 {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self(cvt_u256(Arbitrary::arbitrary(g)))
+    }
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        let U256([a, b, c, d]) = self.0;
+        Box::new((a, b, c, d).shrink().map(cvt_u256).map(Self))
+    }
+}
+
+fn cvt_u256((a, b, c, d): (u64, u64, u64, u64)) -> U256 {
+    U256([a, b, c, d])
+}
+#[derive(Debug, Clone)]
+struct ArbitraryHashout(HashOut<GoldilocksField>);
+
+impl Arbitrary for ArbitraryHashout {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self(cvt_hashout(Arbitrary::arbitrary(g)))
+    }
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        let HashOut {
+            elements:
+                [GoldilocksField(a), GoldilocksField(b), GoldilocksField(c), GoldilocksField(d)],
+        } = self.0;
+        Box::new((a, b, c, d).shrink().map(cvt_hashout).map(Self))
+    }
+}
+
+fn cvt_hashout((a, b, c, d): (u64, u64, u64, u64)) -> HashOut<GoldilocksField> {
+    HashOut {
+        elements: [
+            GoldilocksField(a),
+            GoldilocksField(b),
+            GoldilocksField(c),
+            GoldilocksField(d),
+        ],
+    }
+}
+
+fn do_quickcheck(phs: Vec<(Bits, ArbitraryHashout)>, kvs: Vec<(Key, ArbitraryU256)>) {
+    let mut smt = Smt::<MemoryDb>::default();
+    for (path, ArbitraryHashout(hash)) in phs {
+        smt.set_hash(path, hash);
+    }
+    for (k, ArbitraryU256(v)) in kvs {
+        smt.set(k, v);
+    }
+}
 
 #[test]
 fn test_add_and_rem() {
