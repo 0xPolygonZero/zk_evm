@@ -13,7 +13,7 @@
 //!
 //! **Prover perfomance is a high priority.**
 //!
-//! The aformentioned trie structures may have subtries _deferred_.
+//! The aformentioned trie structures may have subtries _indirected_.
 //! That is, any node (and its children!) may be replaced by its hash,
 //! while maintaining provability of its contents:
 //! ```text
@@ -26,15 +26,16 @@
 //! (where `H` is the hash of the `D/B\E` subtrie).
 //!
 //! The principle concern of this library is to step through the transactions,
-//! and reproduce the tries that the Ethereum node does,
-//! **while deferring all possible subtries to minimise prover load**,
-//! since prover performance is sensitive to the size of the trie.
+//! and reproduce the _intermediate tries_,
+//! while indirecting all possible subtries to minimise prover load
+//! (since prover performance is sensitive to the size of the trie).
+//! The prover can therefore prove each batch of transactions independently.
 //!
 //! [^1]: In our stack, this is [a fork of erigon](https://github.com/0xPolygonZero/erigon),
 //!       which exposes more information over RPC.
 //!
 //! # Non-goals
-//! - Peformance - this will never be the bottleneck in any proving stack.
+//! - Performance - this will never be the bottleneck in any proving stack.
 //! - Robustness - this library depends on other libraries that are not robust,
 //!   so may panic at any time.
 

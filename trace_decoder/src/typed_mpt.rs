@@ -11,7 +11,7 @@ use u4::{AsNibbles, U4};
 
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
 ///
-/// Portions of the trie may be deferred: see [`Self::insert_hash`].
+/// Portions of the trie may be indirected: see [`Self::insert_hash`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TypedMpt<T> {
     inner: HashedPartialTrie,
@@ -201,7 +201,7 @@ impl TransactionTrie {
     pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    /// Defer (hash) parts of the trie that aren't in `txn_ixs`.
+    /// Indirect (hash) parts of the trie that aren't in `txn_ixs`.
     pub fn mask(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
@@ -246,7 +246,7 @@ impl ReceiptTrie {
     pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    /// Defer (hash) parts of the trie that aren't in `txn_ixs`.
+    /// Indirect (hash) parts of the trie that aren't in `txn_ixs`.
     pub fn mask(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
@@ -322,7 +322,7 @@ impl StateTrie for StateMpt {
         #[expect(deprecated)]
         self.insert_by_hashed_address(keccak_hash::keccak(address), account)
     }
-    /// Insert a deferred part of the trie
+    /// Insert an indirected part of the trie
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
         self.typed.insert_hash(key, hash)
     }
@@ -370,7 +370,7 @@ impl From<StateMpt> for HashedPartialTrie {
 
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
-    deferred: BTreeMap<TrieKey, H256>,
+    indirected: BTreeMap<TrieKey, H256>,
 }
 
 impl StateTrie for StateSmt {
@@ -382,7 +382,7 @@ impl StateTrie for StateSmt {
         Ok(self.address2state.insert(address, account))
     }
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.deferred.insert(key, hash);
+        self.indirected.insert(key, hash);
         Ok(())
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
@@ -440,7 +440,7 @@ impl StorageTrie {
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
     }
-    /// Defer (hash) the parts of the trie that aren't in `paths`.
+    /// Indirect (hash) the parts of the trie that aren't in `paths`.
     pub fn mask(&mut self, paths: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,

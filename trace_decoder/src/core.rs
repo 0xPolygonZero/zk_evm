@@ -324,7 +324,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
         let mut state_mask = BTreeSet::new();
 
         if txn_ix == 0 {
-            cancun_hook(
+            do_beacon_hook(
                 block_timestamp,
                 &mut storage_tries,
                 &mut storage_masks,
@@ -533,7 +533,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
 ///
 /// This is cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
-fn cancun_hook<StateTrieT: StateTrie + Clone>(
+fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
