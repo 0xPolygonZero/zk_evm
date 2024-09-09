@@ -500,3 +500,82 @@ fn node_deletion_resulted_in_a_branch_collapse(
     // collapse.
     branch_collapse_occurred.then(|| mpt_trie::utils::IntoTrieKey::into_key(new_path.iter()))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::array;
+
+    use itertools::Itertools as _;
+    use quickcheck::Arbitrary;
+
+    use super::*;
+
+    quickcheck::quickcheck! {
+        fn quickcheck(
+            kvs: Vec<(TrieKey, Vec<u8>)>,
+            mask_kvs: Vec<(TrieKey, Vec<u8>)>,
+            khs: Vec<(TrieKey, ArbitraryHash)>
+        ) -> () {
+            do_quickcheck(kvs, mask_kvs, khs)
+        }
+    }
+
+    fn do_quickcheck(
+        kvs: Vec<(TrieKey, Vec<u8>)>,
+        mask_kvs: Vec<(TrieKey, Vec<u8>)>,
+        khs: Vec<(TrieKey, ArbitraryHash)>,
+    ) {
+        let mut mpt = HashedPartialTrie::default();
+        let mask = mask_kvs
+            .iter()
+            .map(|(k, _)| k.into_nibbles())
+            .collect::<Vec<_>>();
+        for (k, v) in kvs.into_iter().chain(mask_kvs) {
+            let _ = mpt.insert(k.into_nibbles(), v);
+        }
+        for (k, ArbitraryHash(h)) in khs {
+            let _ = mpt.insert(k.into_nibbles(), h);
+        }
+        let root = mpt.hash();
+        if let Ok(sub) = mpt_trie::trie_subsets::create_trie_subset(&mpt, mask) {
+            assert_eq!(sub.hash(), root)
+        }
+    }
+
+    impl Arbitrary for TrieKey {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            Self(Arbitrary::arbitrary(g))
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            let Self(comps) = *self;
+            Box::new(comps.shrink().map(Self))
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct ArbitraryHash(H256);
+    impl ArbitraryHash {
+        pub fn new((a, b, c, d): (u64, u64, u64, u64)) -> Self {
+            let mut iter = [a, b, c, d].into_iter().flat_map(u64::to_ne_bytes);
+            let h = H256(array::from_fn(|_| iter.next().unwrap()));
+            assert_eq!(iter.count(), 0);
+            Self(h)
+        }
+    }
+    impl Arbitrary for ArbitraryHash {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            Self::new(Arbitrary::arbitrary(g))
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            let Self(H256(bytes)) = self;
+            let (a, b, c, d) = bytes
+                .chunks_exact(8)
+                .map(|it| u64::from_ne_bytes(it.try_into().unwrap()))
+                .collect_tuple()
+                .unwrap();
+            Box::new((a, b, c, d).shrink().map(Self::new))
+        }
+    }
+}

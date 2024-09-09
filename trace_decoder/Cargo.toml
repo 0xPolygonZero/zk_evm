@@ -18,7 +18,7 @@ bitvec = { workspace = true }
 bytes = { workspace = true }
 ciborium = { workspace = true }
 ciborium-io = { workspace = true }
-copyvec = "0.2.0"
+copyvec = { version = "0.2.0", features = ["quickcheck"] }
 either = { workspace = true }
 enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }
@@ -34,7 +34,7 @@ serde = { workspace = true }
 stackstack = "0.3.0"
 strum = { version = "0.26.3", features = ["derive"] }
 thiserror = { workspace = true }
-u4 = { workspace = true }
+u4 = { workspace = true, features = ["quickcheck"] }
 winnow = { workspace = true }
 
 # Local dependencies
@@ -56,20 +56,15 @@ plonky2_maybe_rayon = { workspace = true }
 pretty_assertions = "1.4.0"
 pretty_env_logger = { workspace = true }
 prover = { workspace = true }
+quickcheck = "1.0.3"
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 
 
 [features]
 default = ["eth_mainnet"]
-eth_mainnet = [
-    "evm_arithmetization/eth_mainnet",
-    "prover/eth_mainnet",
-]
-cdk_erigon = [
-    "evm_arithmetization/cdk_erigon",
-    "prover/cdk_erigon",
-]
+eth_mainnet = ["evm_arithmetization/eth_mainnet", "prover/eth_mainnet"]
+cdk_erigon = ["evm_arithmetization/cdk_erigon", "prover/cdk_erigon"]
 
 [[bench]]
 name = "block_processing"
