@@ -1,5 +1,6 @@
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -13,6 +14,8 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::generation::MemBeforeValues;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory_continuation::memory_continuation_stark::mem_before_values_to_rows;
+#[cfg(feature = "cdk_erigon")]
+use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
 
@@ -25,10 +28,12 @@ pub(crate) struct TraceCheckpoint {
     pub(self) keccak_sponge_len: usize,
     pub(self) logic_len: usize,
     pub(self) memory_len: usize,
+    #[cfg(feature = "cdk_erigon")]
+    pub(self) poseidon_len: usize,
 }
 
 #[derive(Debug)]
-pub(crate) struct Traces<T: Copy> {
+pub(crate) struct Traces<T: Copy + Field> {
     pub(crate) arithmetic_ops: Vec<arithmetic::Operation>,
     pub(crate) byte_packing_ops: Vec<BytePackingOp>,
     pub(crate) cpu: Vec<CpuColumnsView<T>>,
@@ -36,9 +41,11 @@ pub(crate) struct Traces<T: Copy> {
     pub(crate) memory_ops: Vec<MemoryOp>,
     pub(crate) keccak_inputs: Vec<([u64; keccak::keccak_stark::NUM_INPUTS], usize)>,
     pub(crate) keccak_sponge_ops: Vec<KeccakSpongeOp>,
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) poseidon_ops: Vec<PoseidonOp<T>>,
 }
 
-impl<T: Copy> Traces<T> {
+impl<T: Copy + Field> Traces<T> {
     pub(crate) const fn new() -> Self {
         Traces {
             arithmetic_ops: vec![],
@@ -48,6 +55,8 @@ impl<T: Copy> Traces<T> {
             memory_ops: vec![],
             keccak_inputs: vec![],
             keccak_sponge_ops: vec![],
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_ops: vec![],
         }
     }
 
@@ -84,6 +93,8 @@ impl<T: Copy> Traces<T> {
             // This is technically a lower-bound, as we may fill gaps,
             // but this gives a relatively good estimate.
             memory_len: self.memory_ops.len(),
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_len: self.poseidon_ops.len(),
         }
     }
 
@@ -97,6 +108,8 @@ impl<T: Copy> Traces<T> {
             keccak_sponge_len: self.keccak_sponge_ops.len(),
             logic_len: self.logic_ops.len(),
             memory_len: self.memory_ops.len(),
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_len: self.poseidon_ops.len(),
         }
     }
 
@@ -109,6 +122,8 @@ impl<T: Copy> Traces<T> {
             .truncate(checkpoint.keccak_sponge_len);
         self.logic_ops.truncate(checkpoint.logic_len);
         self.memory_ops.truncate(checkpoint.memory_len);
+        #[cfg(feature = "cdk_erigon")]
+        self.poseidon_ops.truncate(checkpoint.poseidon_len);
     }
 
     pub(crate) fn mem_ops_since(&self, checkpoint: TraceCheckpoint) -> &[MemoryOp] {
@@ -140,16 +155,18 @@ impl<T: Copy> Traces<T> {
             memory_ops,
             keccak_inputs,
             keccak_sponge_ops,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_ops,
         } = self;
 
         let arithmetic_trace = timed!(
             timing,
-            "generate arithmetic trace",
+            "generate Arithmetic trace",
             all_stark.arithmetic_stark.generate_trace(arithmetic_ops)
         );
         let byte_packing_trace = timed!(
             timing,
-            "generate byte packing trace",
+            "generate BytePacking trace",
             all_stark
                 .byte_packing_stark
                 .generate_trace(byte_packing_ops, cap_elements, timing)
@@ -165,21 +182,21 @@ impl<T: Copy> Traces<T> {
         );
         let keccak_sponge_trace = timed!(
             timing,
-            "generate Keccak sponge trace",
+            "generate KeccakSponge trace",
             all_stark
                 .keccak_sponge_stark
                 .generate_trace(keccak_sponge_ops, cap_elements, timing)
         );
         let logic_trace = timed!(
             timing,
-            "generate logic trace",
+            "generate Logic trace",
             all_stark
                 .logic_stark
                 .generate_trace(logic_ops, cap_elements, timing)
         );
         let (memory_trace, final_values, unpadded_memory_length) = timed!(
             timing,
-            "generate memory trace",
+            "generate Memory trace",
             all_stark.memory_stark.generate_trace(
                 memory_ops,
                 mem_before_values,
@@ -187,21 +204,31 @@ impl<T: Copy> Traces<T> {
                 timing
             )
         );
+
         trace_lengths.memory_len = unpadded_memory_length;
 
         let mem_before_trace = timed!(
             timing,
-            "generate mem_before trace",
+            "generate MemBefore trace",
             all_stark
                 .mem_before_stark
                 .generate_trace(mem_before_values_to_rows(mem_before_values))
         );
         let mem_after_trace = timed!(
             timing,
-            "generate mem_after trace",
+            "generate MemAfter trace",
             all_stark
                 .mem_after_stark
                 .generate_trace(final_values.clone())
+        );
+
+        #[cfg(feature = "cdk_erigon")]
+        let poseidon_trace = timed!(
+            timing,
+            "generate Poseidon trace",
+            all_stark
+                .poseidon_stark
+                .generate_trace(poseidon_ops, cap_elements, timing)
         );
 
         log::info!(
@@ -221,11 +248,13 @@ impl<T: Copy> Traces<T> {
             memory_trace,
             mem_before_trace,
             mem_after_trace,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_trace,
         ]
     }
 }
 
-impl<T: Copy> Default for Traces<T> {
+impl<T: Copy + Field> Default for Traces<T> {
     fn default() -> Self {
         Self::new()
     }

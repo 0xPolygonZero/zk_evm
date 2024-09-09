@@ -14,26 +14,41 @@ anyhow = { workspace = true }
 async-stream = { workspace = true }
 cargo_metadata = { workspace = true }
 clap = { workspace = true }
-evm_arithmetization = { workspace = true }
 futures = { workspace = true }
 lru = { workspace = true }
 once_cell = { workspace = true }
 plonky2 = { workspace = true }
-proof_gen = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-trace_decoder = { workspace = true }
 tracing = { workspace = true }
 vergen = { workspace = true }
 
 directories = "5.0.1"
 
+# Local dependencies
+evm_arithmetization = { workspace = true }
+proof_gen = { workspace = true }
+trace_decoder = { workspace = true }
+
 [build-dependencies]
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
 anyhow = { workspace = true }
+
+[features]
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "evm_arithmetization/eth_mainnet",
+    "proof_gen/eth_mainnet",
+    "trace_decoder/eth_mainnet",
+]
+cdk_erigon = [
+    "evm_arithmetization/cdk_erigon",
+    "proof_gen/cdk_erigon",
+    "trace_decoder/cdk_erigon",
+]
 
 [lints]
 workspace = true

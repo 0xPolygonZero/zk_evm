@@ -14,15 +14,12 @@ __compat_primitive_types = { workspace = true }
 alloy = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
-evm_arithmetization = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
-mpt_trie = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
-trace_decoder = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
@@ -30,8 +27,11 @@ itertools = { workspace = true }
 
 # Local dependencies
 compat = { workspace = true }
-zero_bin_common = { workspace = true }
+evm_arithmetization = { workspace = true }
+mpt_trie = { workspace = true }
 prover = { workspace = true }
+trace_decoder = { workspace = true }
+zero_bin_common = { workspace = true }
 
 [build-dependencies]
 cargo_metadata = { workspace = true }
@@ -39,4 +39,16 @@ vergen = { workspace = true }
 anyhow = { workspace = true }
 
 [features]
-cdk_erigon = []
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "evm_arithmetization/eth_mainnet",
+    "prover/eth_mainnet",
+    "trace_decoder/eth_mainnet",
+    "zero_bin_common/eth_mainnet",
+]
+cdk_erigon = [
+    "evm_arithmetization/cdk_erigon",
+    "prover/cdk_erigon",
+    "trace_decoder/cdk_erigon",
+    "zero_bin_common/cdk_erigon",
+]

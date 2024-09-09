@@ -11,7 +11,7 @@ use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
@@ -22,7 +22,7 @@ use crate::generation::debug_inputs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
-    all_ger_prover_inputs_reversed, all_withdrawals_prover_inputs_reversed, GenerationState,
+    all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
     GenerationStateCheckpoint,
 };
 use crate::generation::{state::State, GenerationInputs};
@@ -44,7 +44,7 @@ use crate::{arithmetic, keccak, logic};
 /// Halt interpreter execution whenever a jump to this offset is done.
 const DEFAULT_HALT_OFFSET: usize = 0xdeadbeef;
 
-pub(crate) struct Interpreter<F: Field> {
+pub(crate) struct Interpreter<F: RichField> {
     /// The interpreter holds a `GenerationState` to keep track of the memory
     /// and registers.
     pub(crate) generation_state: GenerationState<F>,
@@ -68,7 +68,7 @@ pub(crate) struct Interpreter<F: Field> {
 
 /// Simulates the CPU execution from `state` until the program counter reaches
 /// `final_label` in the current context.
-pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
+pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     final_label: &str,
     state: &GenerationState<F>,
 ) -> Option<HashMap<usize, Vec<usize>>> {
@@ -118,7 +118,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) next_txn_index: usize,
 }
 
-pub(crate) fn set_registers_and_run<F: Field>(
+pub(crate) fn set_registers_and_run<F: RichField>(
     registers: RegistersState,
     interpreter: &mut Interpreter<F>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
@@ -148,7 +148,7 @@ pub(crate) fn set_registers_and_run<F: Field>(
     interpreter.run()
 }
 
-impl<F: Field> Interpreter<F> {
+impl<F: RichField> Interpreter<F> {
     /// Returns an instance of `Interpreter` given `GenerationInputs`, and
     /// assuming we are initializing with the `KERNEL` code.
     pub(crate) fn new_with_generation_inputs(
@@ -256,17 +256,13 @@ impl<F: Field> Interpreter<F> {
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
-        let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
+        let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
         self.generation_state.rlp_prover_inputs = rlp_prover_inputs;
         self.generation_state.withdrawal_prover_inputs = withdrawal_prover_inputs;
         self.generation_state.ger_prover_inputs = ger_prover_inputs;
 
         // Set `GlobalMetadata` values.
         let metadata = &inputs.block_metadata;
-        #[cfg(feature = "cdk_erigon")]
-        let burn_addr = inputs
-            .burn_addr
-            .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0));
         let global_metadata_to_set = [
             (
                 GlobalMetadata::BlockBeneficiary,
@@ -287,14 +283,17 @@ impl<F: Field> Interpreter<F> {
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 metadata.block_blob_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 metadata.block_excess_blob_gas,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(metadata.parent_beacon_block_root),
@@ -333,7 +332,12 @@ impl<F: Field> Interpreter<F> {
             (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
             (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
             #[cfg(feature = "cdk_erigon")]
-            (GlobalMetadata::BurnAddr, burn_addr),
+            (
+                GlobalMetadata::BurnAddr,
+                inputs
+                    .burn_addr
+                    .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0)),
+            ),
         ];
 
         self.set_global_metadata_multi_fields(&global_metadata_to_set);
@@ -410,20 +414,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log)?;
-
-        #[cfg(debug_assertions)]
-        {
-            println!("Opcode count:");
-            for i in 0..0x100 {
-                if self.opcode_count[i] > 0 {
-                    println!("{}: {}", get_mnemonic(i as u8), self.opcode_count[i])
-                }
-            }
-            println!("Total: {}", self.opcode_count.into_iter().sum::<usize>());
-        }
-
-        Ok((final_registers, final_mem))
+        self.run_cpu(self.max_cpu_len_log)
     }
 
     /// Returns the max number of CPU cycles.
@@ -511,7 +502,7 @@ impl<F: Field> Interpreter<F> {
     }
 }
 
-impl<F: Field> State<F> for Interpreter<F> {
+impl<F: RichField> State<F> for Interpreter<F> {
     /// Returns a `GenerationStateCheckpoint` to save the current registers and
     /// reset memory operations to the empty vector.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint {
@@ -704,7 +695,7 @@ impl<F: Field> State<F> for Interpreter<F> {
     }
 }
 
-impl<F: Field> Transition<F> for Interpreter<F> {
+impl<F: RichField> Transition<F> for Interpreter<F> {
     fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
         if self.is_jumpdest_analysis && !self.generation_state.registers.is_kernel {
             self.add_jumpdest_offset(dst);
@@ -743,203 +734,6 @@ impl<F: Field> Transition<F> for Interpreter<F> {
         self.generation_state.registers.check_overflow = false;
 
         Ok(())
-    }
-}
-
-#[cfg(debug_assertions)]
-fn get_mnemonic(opcode: u8) -> &'static str {
-    match opcode {
-        0x00 => "STOP",
-        0x01 => "ADD",
-        0x02 => "MUL",
-        0x03 => "SUB",
-        0x04 => "DIV",
-        0x05 => "SDIV",
-        0x06 => "MOD",
-        0x07 => "SMOD",
-        0x08 => "ADDMOD",
-        0x09 => "MULMOD",
-        0x0a => "EXP",
-        0x0b => "SIGNEXTEND",
-        0x0c => "ADDFP254",
-        0x0d => "MULFP254",
-        0x0e => "SUBFP254",
-        0x0f => "SUBMOD",
-        0x10 => "LT",
-        0x11 => "GT",
-        0x12 => "SLT",
-        0x13 => "SGT",
-        0x14 => "EQ",
-        0x15 => "ISZERO",
-        0x16 => "AND",
-        0x17 => "OR",
-        0x18 => "XOR",
-        0x19 => "NOT",
-        0x1a => "BYTE",
-        0x1b => "SHL",
-        0x1c => "SHR",
-        0x1d => "SAR",
-        0x20 => "KECCAK256",
-        0x21 => "KECCAK_GENERAL",
-        0x30 => "ADDRESS",
-        0x31 => "BALANCE",
-        0x32 => "ORIGIN",
-        0x33 => "CALLER",
-        0x34 => "CALLVALUE",
-        0x35 => "CALLDATALOAD",
-        0x36 => "CALLDATASIZE",
-        0x37 => "CALLDATACOPY",
-        0x38 => "CODESIZE",
-        0x39 => "CODECOPY",
-        0x3a => "GASPRICE",
-        0x3b => "EXTCODESIZE",
-        0x3c => "EXTCODECOPY",
-        0x3d => "RETURNDATASIZE",
-        0x3e => "RETURNDATACOPY",
-        0x3f => "EXTCODEHASH",
-        0x40 => "BLOCKHASH",
-        0x41 => "COINBASE",
-        0x42 => "TIMESTAMP",
-        0x43 => "NUMBER",
-        0x44 => "DIFFICULTY",
-        0x45 => "GASLIMIT",
-        0x46 => "CHAINID",
-        0x48 => "BASEFEE",
-        0x4a => "BLOBBASEFEE",
-        0x50 => "POP",
-        0x51 => "MLOAD",
-        0x52 => "MSTORE",
-        0x53 => "MSTORE8",
-        0x54 => "SLOAD",
-        0x55 => "SSTORE",
-        0x56 => "JUMP",
-        0x57 => "JUMPI",
-        0x58 => "GETPC",
-        0x59 => "MSIZE",
-        0x5a => "GAS",
-        0x5b => "JUMPDEST",
-        0x5e => "MCOPY",
-        0x5f => "PUSH0",
-        0x60 => "PUSH1",
-        0x61 => "PUSH2",
-        0x62 => "PUSH3",
-        0x63 => "PUSH4",
-        0x64 => "PUSH5",
-        0x65 => "PUSH6",
-        0x66 => "PUSH7",
-        0x67 => "PUSH8",
-        0x68 => "PUSH9",
-        0x69 => "PUSH10",
-        0x6a => "PUSH11",
-        0x6b => "PUSH12",
-        0x6c => "PUSH13",
-        0x6d => "PUSH14",
-        0x6e => "PUSH15",
-        0x6f => "PUSH16",
-        0x70 => "PUSH17",
-        0x71 => "PUSH18",
-        0x72 => "PUSH19",
-        0x73 => "PUSH20",
-        0x74 => "PUSH21",
-        0x75 => "PUSH22",
-        0x76 => "PUSH23",
-        0x77 => "PUSH24",
-        0x78 => "PUSH25",
-        0x79 => "PUSH26",
-        0x7a => "PUSH27",
-        0x7b => "PUSH28",
-        0x7c => "PUSH29",
-        0x7d => "PUSH30",
-        0x7e => "PUSH31",
-        0x7f => "PUSH32",
-        0x80 => "DUP1",
-        0x81 => "DUP2",
-        0x82 => "DUP3",
-        0x83 => "DUP4",
-        0x84 => "DUP5",
-        0x85 => "DUP6",
-        0x86 => "DUP7",
-        0x87 => "DUP8",
-        0x88 => "DUP9",
-        0x89 => "DUP10",
-        0x8a => "DUP11",
-        0x8b => "DUP12",
-        0x8c => "DUP13",
-        0x8d => "DUP14",
-        0x8e => "DUP15",
-        0x8f => "DUP16",
-        0x90 => "SWAP1",
-        0x91 => "SWAP2",
-        0x92 => "SWAP3",
-        0x93 => "SWAP4",
-        0x94 => "SWAP5",
-        0x95 => "SWAP6",
-        0x96 => "SWAP7",
-        0x97 => "SWAP8",
-        0x98 => "SWAP9",
-        0x99 => "SWAP10",
-        0x9a => "SWAP11",
-        0x9b => "SWAP12",
-        0x9c => "SWAP13",
-        0x9d => "SWAP14",
-        0x9e => "SWAP15",
-        0x9f => "SWAP16",
-        0xa0 => "LOG0",
-        0xa1 => "LOG1",
-        0xa2 => "LOG2",
-        0xa3 => "LOG3",
-        0xa4 => "LOG4",
-        0xa5 => "PANIC",
-        0xc0 => "MSTORE_32BYTES_1",
-        0xc1 => "MSTORE_32BYTES_2",
-        0xc2 => "MSTORE_32BYTES_3",
-        0xc3 => "MSTORE_32BYTES_4",
-        0xc4 => "MSTORE_32BYTES_5",
-        0xc5 => "MSTORE_32BYTES_6",
-        0xc6 => "MSTORE_32BYTES_7",
-        0xc7 => "MSTORE_32BYTES_8",
-        0xc8 => "MSTORE_32BYTES_9",
-        0xc9 => "MSTORE_32BYTES_10",
-        0xca => "MSTORE_32BYTES_11",
-        0xcb => "MSTORE_32BYTES_12",
-        0xcc => "MSTORE_32BYTES_13",
-        0xcd => "MSTORE_32BYTES_14",
-        0xce => "MSTORE_32BYTES_15",
-        0xcf => "MSTORE_32BYTES_16",
-        0xd0 => "MSTORE_32BYTES_17",
-        0xd1 => "MSTORE_32BYTES_18",
-        0xd2 => "MSTORE_32BYTES_19",
-        0xd3 => "MSTORE_32BYTES_20",
-        0xd4 => "MSTORE_32BYTES_21",
-        0xd5 => "MSTORE_32BYTES_22",
-        0xd6 => "MSTORE_32BYTES_23",
-        0xd7 => "MSTORE_32BYTES_24",
-        0xd8 => "MSTORE_32BYTES_25",
-        0xd9 => "MSTORE_32BYTES_26",
-        0xda => "MSTORE_32BYTES_27",
-        0xdb => "MSTORE_32BYTES_28",
-        0xdc => "MSTORE_32BYTES_29",
-        0xdd => "MSTORE_32BYTES_30",
-        0xde => "MSTORE_32BYTES_31",
-        0xdf => "MSTORE_32BYTES_32",
-        0xee => "PROVER_INPUT",
-        0xf0 => "CREATE",
-        0xf1 => "CALL",
-        0xf2 => "CALLCODE",
-        0xf3 => "RETURN",
-        0xf4 => "DELEGATECALL",
-        0xf5 => "CREATE2",
-        0xf6 => "GET_CONTEXT",
-        0xf7 => "SET_CONTEXT",
-        0xf8 => "MLOAD_32BYTES",
-        0xf9 => "EXIT_KERNEL",
-        0xfa => "STATICCALL",
-        0xfb => "MLOAD_GENERAL",
-        0xfc => "MSTORE_GENERAL",
-        0xfd => "REVERT",
-        0xfe => "INVALID",
-        0xff => "SELFDESTRUCT",
-        _ => panic!("Unrecognized opcode {opcode}"),
     }
 }
 

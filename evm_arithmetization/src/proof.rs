@@ -968,59 +968,45 @@ impl BurnAddrTarget {
         }
     }
 
+    #[cfg(feature = "cdk_erigon")]
     /// Connects the burn address in `ba0` to the burn address in `ba1`.
-    /// This is a no-op if `cdk_erigon` feature is not activated.  
-    ///  
-    /// This will panic if the `cdk_erigon` is activated and not both
-    /// `BurnAddrTarget`s are `BurnAddr` variants.
     pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         ba0: Self,
         ba1: Self,
     ) {
-        // There only are targets to connect if there is a burn address, i.e. when the
-        // `cdk_erigon` feature is active.
-        if cfg!(feature = "cdk_erigon") == true {
-            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of
-            // type `BurnAddr`.
-            match (ba0, ba1) {
-                (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
-                    for i in 0..BurnAddrTarget::get_size() {
-                        builder.connect(a0[i], a1[i]);
-                    }
+        match (ba0, ba1) {
+            (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
+                for i in 0..BurnAddrTarget::get_size() {
+                    builder.connect(a0[i], a1[i]);
                 }
-                _ => panic!("We should have already set an address (or U256::MAX) before."),
             }
+            _ => panic!("We should have already set an address (or U256::MAX) before."),
         }
     }
 
+    #[cfg(feature = "cdk_erigon")]
     /// If `condition`, asserts that `ba0 == ba1`.
-    /// This is a no-op if `cdk_erigon` feature is not activated.  
-    ///  
-    /// This will panic if the `cdk_erigon` is activated and not both
-    /// `BurnAddrTarget` are `BurnAddr` variants.
     pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         condition: BoolTarget,
         ba0: Self,
         ba1: Self,
     ) {
-        if cfg!(feature = "cdk_erigon") {
-            match (ba0, ba1) {
-                (
-                    BurnAddrTarget::BurnAddr(addr_targets_0),
-                    BurnAddrTarget::BurnAddr(addr_targets_1),
-                ) => {
-                    for i in 0..BurnAddrTarget::get_size() {
-                        builder.conditional_assert_eq(
-                            condition.target,
-                            addr_targets_0[i],
-                            addr_targets_1[i],
-                        )
-                    }
+        match (ba0, ba1) {
+            (
+                BurnAddrTarget::BurnAddr(addr_targets_0),
+                BurnAddrTarget::BurnAddr(addr_targets_1),
+            ) => {
+                for i in 0..BurnAddrTarget::get_size() {
+                    builder.conditional_assert_eq(
+                        condition.target,
+                        addr_targets_0[i],
+                        addr_targets_1[i],
+                    )
                 }
-                _ => panic!("There should be an address set in cdk_erigon."),
             }
+            _ => panic!("There should be an address set in cdk_erigon."),
         }
     }
 }

@@ -91,7 +91,9 @@ fn parse_conditional_block(item: Pair<Rule>, active_features: &HashSet<&str>) ->
         features_string: &str,
         group_rule: FeatureGroupRule,
     ) -> bool {
-        let features = features_string.split(",");
+        let features = features_string
+            .split(&[',', ' ']) // allows for both `foo,bar` and `foo, bar` in ASM
+            .filter(|s| !s.is_empty());
 
         match group_rule {
             FeatureGroupRule::Not => {

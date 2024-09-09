@@ -97,7 +97,7 @@ pub fn entrypoint(
                 },
                 signed_txns: byte_code.into_iter().map(Into::into).collect(),
                 withdrawals,
-                global_exit_roots: vec![],
+                ger_data: None,
                 tries: TrieInputs {
                     state_trie: state.into(),
                     transactions_trie: transaction.into(),

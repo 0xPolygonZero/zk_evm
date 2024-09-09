@@ -8,7 +8,6 @@ use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -77,8 +76,7 @@ pub struct GenerationInputs {
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
-    /// Global exit roots pairs `(timestamp, root)`.
-    pub global_exit_roots: Vec<(U256, H256)>,
+
     pub tries: TrieInputs,
     /// Expected trie roots after the transactions are executed.
     pub trie_roots_after: TrieRoots,
@@ -99,6 +97,12 @@ pub struct GenerationInputs {
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
     pub block_hashes: BlockHashes,
+
+    /// The global exit root along with the l1blockhash to write to the GER
+    /// manager.
+    ///
+    /// This is specific to `cdk-erigon`.
+    pub ger_data: Option<(H256, H256)>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
@@ -230,10 +234,6 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 ) {
     let metadata = &inputs.block_metadata;
     let trie_roots_after = &inputs.trie_roots_after;
-    #[cfg(feature = "cdk_erigon")]
-    let burn_addr = inputs
-        .burn_addr
-        .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0));
     let fields = [
         (
             GlobalMetadata::BlockBeneficiary,
@@ -254,14 +254,17 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             h2u(inputs.block_hashes.cur_hash),
         ),
         (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             metadata.block_blob_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             metadata.block_excess_blob_gas,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             h2u(metadata.parent_beacon_block_root),
@@ -300,7 +303,12 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
         (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
         #[cfg(feature = "cdk_erigon")]
-        (GlobalMetadata::BurnAddr, burn_addr),
+        (
+            GlobalMetadata::BurnAddr,
+            inputs
+                .burn_addr
+                .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0)),
+        ),
     ];
 
     let channel = MemoryChannel::GeneralPurpose(0);
@@ -547,7 +555,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values))
 }
 
-fn simulate_cpu<F: Field>(
+fn simulate_cpu<F: RichField>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {

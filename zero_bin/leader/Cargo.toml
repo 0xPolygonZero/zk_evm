@@ -18,7 +18,6 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 dotenvy = { workspace = true }
 tokio = { workspace = true }
-proof_gen = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 futures = { workspace = true }
@@ -27,18 +26,30 @@ axum = { workspace = true }
 toml = { workspace = true }
 
 # Local dependencies
+evm_arithmetization = { workspace = true }
 ops = { workspace = true }
+proof_gen = { workspace = true }
 prover = { workspace = true }
 rpc = { workspace = true }
-evm_arithmetization = { workspace = true }
 zero_bin_common = { workspace = true }
 
 [features]
-default = []
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "evm_arithmetization/eth_mainnet",
+    "ops/eth_mainnet",
+    "proof_gen/eth_mainnet",
+    "prover/eth_mainnet",
+    "rpc/eth_mainnet",
+    "zero_bin_common/eth_mainnet",
+]
 cdk_erigon = [
-    "prover/cdk_erigon",
     "evm_arithmetization/cdk_erigon",
+    "ops/cdk_erigon",
+    "proof_gen/cdk_erigon",
+    "prover/cdk_erigon",
     "rpc/cdk_erigon",
+    "zero_bin_common/cdk_erigon",
 ]
 
 [build-dependencies]
