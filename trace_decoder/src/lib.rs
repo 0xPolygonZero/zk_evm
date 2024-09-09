@@ -57,6 +57,8 @@ const _DEVELOPER_DOCS: () = ();
 mod interface;
 
 pub use interface::*;
+pub use type1::frontend;
+pub use wire::parse;
 
 mod type1;
 // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275

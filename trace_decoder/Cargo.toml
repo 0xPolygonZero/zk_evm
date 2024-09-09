@@ -77,3 +77,7 @@ harness = false
 [[test]]
 name = "simulate-execution"
 harness = false
+
+[[test]]
+name = "check-subsets"
+harness = false
