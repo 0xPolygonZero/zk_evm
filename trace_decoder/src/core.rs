@@ -466,7 +466,10 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 if !precompiled_addresses.contains(&addr.compat()) {
                     // TODO(0xaatif): this looks like an optimization,
                     //                but if it's omitted, the tests fail...
-                    state_mask.insert(TrieKey::from_address(addr));
+                    if std::env::var_os("SKIP_MASK_PRECOMPILED").is_some_and(|it| it == "true") {
+                    } else {
+                        state_mask.insert(TrieKey::from_address(addr));
+                    }
                 }
             }
 
