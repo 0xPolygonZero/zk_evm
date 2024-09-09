@@ -6,7 +6,6 @@ use std::{
 };
 
 use alloy::hex;
-use anyhow::anyhow;
 use directories::ProjectDirs;
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use once_cell::sync::Lazy;
