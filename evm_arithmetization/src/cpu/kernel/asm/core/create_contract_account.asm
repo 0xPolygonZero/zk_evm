@@ -5,7 +5,7 @@
     // stack: address
     DUP1 %insert_touched_addresses
     DUP1 %append_created_contracts
-    DUP1 %mpt_read_state_trie
+    DUP1 %read_state_trie
     // stack: existing_account_ptr, address
     // If the account doesn't exist, there's no need to check its balance or nonce,
     // so we can skip ahead, setting existing_balance = existing_account_ptr = 0.
@@ -49,7 +49,7 @@
     // stack: address, account_ptr
     %addr_to_state_key
     // stack: state_key, account_ptr
-    %mpt_insert_state_trie
+    %insert_state_trie
     // stack: (empty)
     PUSH 0 // success
     %jump(%%end)

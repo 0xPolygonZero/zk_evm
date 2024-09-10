@@ -251,7 +251,7 @@ create_too_deep:
 global set_codehash:
     // stack: addr, codehash, retdest
     DUP1 %insert_touched_addresses
-    DUP1 %mpt_read_state_trie
+    DUP1 %read_state_trie
     // stack: account_ptr, addr, codehash, retdest
     %add_const(3)
     // stack: codehash_ptr, addr, codehash, retdest

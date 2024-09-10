@@ -12,6 +12,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
+use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
@@ -72,6 +73,7 @@ pub struct GenerationInputs<F: RichField> {
     /// `None`, then the base fee is directly burnt.
     ///
     /// Note: this is only used  when feature `cdk_erigon` is activated.
+    #[cfg(feature = "cdk_erigon")]
     pub burn_addr: Option<Address>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
@@ -105,6 +107,7 @@ pub struct GenerationInputs<F: RichField> {
     /// manager.
     ///
     /// This is specific to `cdk-erigon`.
+    #[cfg(feature = "cdk_erigon")]
     pub ger_data: Option<(H256, H256)>,
 }
 
@@ -113,6 +116,9 @@ pub struct GenerationInputs<F: RichField> {
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(bound = "")]
 pub struct TrimmedGenerationInputs<F: RichField> {
+    #[cfg(feature = "cdk_erigon")]
+    pub tries: TrieInputs,
+    #[cfg(not(feature = "cdk_erigon"))]
     pub trimmed_tries: TrimmedTrieInputs,
     /// The index of the first transaction in this payload being proven within
     /// its block.
@@ -158,11 +164,14 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     pub block_hashes: BlockHashes,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
+    #[cfg(feature = "cdk_erigon")]
+    pub state_smt: Vec<U256>,
+    #[cfg(not(feature = "cdk_erigon"))]
     pub state_trie: HashedPartialTrie,
 
     /// A partial version of the transaction trie prior to these transactions.
@@ -178,9 +187,34 @@ pub struct TrieInputs {
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
+    #[cfg(not(feature = "cdk_erigon"))]
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
+impl Default for TrieInputs {
+    #[cfg(not(feature = "cdk_erigon"))]
+    fn default() -> Self {
+        Self {
+            state_trie: HashedPartialTrie::from(Node::Empty),
+            transactions_trie: HashedPartialTrie::from(Node::Empty),
+            receipts_trie: HashedPartialTrie::from(Node::Empty),
+            storage_tries: vec![],
+        }
+    }
+
+    #[cfg(feature = "cdk_erigon")]
+    fn default() -> Self {
+        Self {
+            // First 2 zeros are for the default empty node.
+            // The next 2 are for the current empty state trie root.
+            state_smt: vec![U256::zero(); 4],
+            transactions_trie: Default::default(),
+            receipts_trie: Default::default(),
+        }
+    }
+}
+
+#[cfg(not(feature = "cdk_erigon"))]
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrimmedTrieInputs {
     /// A partial version of the state trie prior to these transactions. It
@@ -194,6 +228,7 @@ pub struct TrimmedTrieInputs {
 }
 
 impl TrieInputs {
+    #[cfg(not(feature = "cdk_erigon"))]
     pub(crate) fn trim(&self) -> TrimmedTrieInputs {
         TrimmedTrieInputs {
             state_trie: self.state_trie.clone(),
@@ -213,13 +248,19 @@ impl<F: RichField> GenerationInputs<F> {
             .collect();
 
         TrimmedGenerationInputs {
+            #[cfg(not(feature = "cdk_erigon"))]
             trimmed_tries: self.tries.trim(),
+            #[cfg(feature = "cdk_erigon")]
+            tries: self.tries.clone(),
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
             txn_hashes,
             trie_roots_before: TrieRoots {
+                #[cfg(not(feature = "cdk_erigon"))]
                 state_root: self.tries.state_trie.hash(),
+                #[cfg(feature = "cdk_erigon")]
+                state_root: H256::from_uint(&hash_serialize_u256(&self.tries.state_smt)),
                 transactions_root: self.tries.transactions_trie.hash(),
                 receipts_root: self.tries.receipts_trie.hash(),
             },
@@ -400,12 +441,16 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 
 pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
     log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
+    #[cfg(not(feature = "cdk_erigon"))]
     log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    #[cfg(feature = "cdk_erigon")]
+    log::debug!("Input state_smt: {:?}", &inputs.tries.state_smt);
     log::debug!(
         "Input transactions_trie: {:?}",
         &inputs.tries.transactions_trie
     );
     log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
+    #[cfg(not(feature = "cdk_erigon"))]
     log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }

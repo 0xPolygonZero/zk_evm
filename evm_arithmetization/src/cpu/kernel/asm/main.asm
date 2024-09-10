@@ -224,9 +224,8 @@ global check_state_trie:
 
     %set_initial_tries
 
-    PUSH @INITIAL_RLP_ADDR
-    // stack: rlp_start, trie_data_len
-    %mpt_hash_state_trie
+    // stack: trie_data_len
+    %hash_state_trie
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
@@ -241,9 +240,8 @@ global check_state_trie:
     PUSH 1
 global check_final_state_trie:
     %set_final_tries
-    PUSH @INITIAL_RLP_ADDR
-    // stack: rlp_start, dummy_trie_len
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
+    // stack: dummy_trie_len
+    %hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
     // We don't need the trie data length here.
     POP
 
@@ -279,4 +277,18 @@ global check_final_state_trie:
     {
         %reset_blob_versioned_hashes
     }
+%endmacro
+
+%macro hash_state_trie
+    // stack: rlp_start, trie_data_len
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        PUSH @INITIAL_RLP_ADDR
+        %mpt_hash_state_trie
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %smt_hash_state
+    }
+    // stack: new_trie_data_len
 %endmacro

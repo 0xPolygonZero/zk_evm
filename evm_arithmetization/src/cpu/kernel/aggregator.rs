@@ -10,9 +10,11 @@ use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
+    158
+} else if cfg!(feature = "cdk_erigon") {
+    162
+} else if cfg!(feature = "polygon_pos") {
     157
-} else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
-    154
 } else {
     // unreachable
     0
@@ -146,6 +148,19 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/mpt/storage/storage_read.asm"),
     include_str!("asm/mpt/storage/storage_write.asm"),
     include_str!("asm/mpt/util.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/delete.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/hash.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/insert.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/keys.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/read.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/utils.asm"),
+    include_str!("asm/trie_common.asm"),
     include_str!("asm/rlp/decode.asm"),
     include_str!("asm/rlp/encode.asm"),
     include_str!("asm/rlp/encode_rlp_scalar.asm"),

@@ -108,7 +108,7 @@ global create_scalable_l2_account:
     // stack: new_account_ptr, retdest
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     // stack: key, new_account_ptr, retdest
-    %jump(mpt_insert_state_trie)
+    %jump(insert_state_trie)
 
 %macro write_scalable_storage
     // stack: slot, value

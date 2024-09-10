@@ -21,7 +21,7 @@ evm_arithmetization = { workspace = true }
 zk_evm_common = { workspace = true }
 
 [features]
-default = ["eth_mainnet"]
+default = ["cdk_erigon"]
 eth_mainnet = [
     "evm_arithmetization/eth_mainnet"
 ]

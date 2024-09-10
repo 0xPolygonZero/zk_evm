@@ -61,7 +61,7 @@ vergen = { workspace = true }
 
 
 [features]
-default = ["eth_mainnet"]
+default = ["cdk_erigon"]
 eth_mainnet = ["evm_arithmetization/eth_mainnet", "proof_gen/eth_mainnet"]
 cdk_erigon = ["evm_arithmetization/cdk_erigon", "proof_gen/cdk_erigon"]
 polygon_pos = ["evm_arithmetization/polygon_pos", "proof_gen/polygon_pos"]

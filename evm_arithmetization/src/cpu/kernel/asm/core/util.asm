@@ -57,13 +57,13 @@
 // Returns 1 if the account is non-existent, 0 otherwise.
 %macro is_non_existent
     // stack: addr
-    %mpt_read_state_trie ISZERO
+    %read_state_trie ISZERO
 %endmacro
 
 // Returns 1 if the account is empty, 0 otherwise.
 %macro is_empty
     // stack: addr
-    %mpt_read_state_trie
+    %read_state_trie
     // stack: account_ptr
     DUP1 ISZERO %jumpi(%%false)
     // stack: account_ptr

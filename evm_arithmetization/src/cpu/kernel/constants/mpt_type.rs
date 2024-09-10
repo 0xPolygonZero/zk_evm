@@ -5,7 +5,7 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 use crate::Node;
 
 #[derive(Copy, Clone, Debug)]
-pub(crate) enum PartialTrieType {
+pub(crate) enum PartialMptType {
     Empty = 0,
     Hash = 1,
     Branch = 2,
@@ -13,7 +13,7 @@ pub(crate) enum PartialTrieType {
     Leaf = 4,
 }
 
-impl PartialTrieType {
+impl PartialMptType {
     pub(crate) const COUNT: usize = 5;
 
     pub(crate) fn of(trie: &HashedPartialTrie) -> Self {

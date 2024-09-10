@@ -9,12 +9,14 @@ use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
+use smt_trie::code::hash_bytecode_u256;
 
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
+#[cfg(not(feature = "cdk_erigon"))]
 use super::TrimmedTrieInputs;
-use crate::cpu::kernel::constants::trie_type::PartialTrieType;
+use crate::cpu::kernel::constants::mpt_type::PartialMptType;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -25,8 +27,11 @@ use crate::Node;
 pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,
+    #[cfg(not(feature = "cdk_erigon"))]
     pub storage_root: H256,
-    pub code_hash: H256,
+    #[cfg(feature = "cdk_erigon")]
+    pub code_length: U256,
+    pub code_hash: U256,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -37,12 +42,23 @@ pub struct TrieRootPtrs {
 }
 
 impl Default for AccountRlp {
+    #[cfg(not(feature = "cdk_erigon"))]
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
             code_hash: keccak([]),
+        }
+    }
+
+    #[cfg(feature = "cdk_erigon")]
+    fn default() -> Self {
+        Self {
+            nonce: U256::zero(),
+            balance: U256::zero(),
+            code_hash: hash_bytecode_u256(vec![]),
+            code_length: U256::zero(),
         }
     }
 }
@@ -154,7 +170,7 @@ where
     F: Fn(&[u8]) -> Result<Vec<U256>, ProgramError>,
 {
     let node_ptr = trie_data.len();
-    let type_of_trie = PartialTrieType::of(trie) as u32;
+    let type_of_trie = PartialMptType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
     }
@@ -222,6 +238,7 @@ where
     }
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
 fn load_state_trie(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -230,7 +247,7 @@ fn load_state_trie(
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<usize, ProgramError> {
     let node_ptr = trie_data.len();
-    let type_of_trie = PartialTrieType::of(trie) as u32;
+    let type_of_trie = PartialMptType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
     }
@@ -330,6 +347,7 @@ fn load_state_trie(
     }
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -538,6 +556,7 @@ type TriePtrsLinkedLists = (
     Vec<Option<U256>>,
 );
 
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
@@ -590,6 +609,14 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     ))
 }
 
+#[cfg(feature = "cdk_erigon")]
+pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
+    trie_inputs: &TrieInputs,
+) -> Result<TriePtrsLinkedLists, ProgramError> {
+    unimplemented!()
+}
+
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,

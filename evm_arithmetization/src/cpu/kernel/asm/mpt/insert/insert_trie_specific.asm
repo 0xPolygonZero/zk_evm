@@ -1,20 +1,5 @@
 // Insertion logic specific to a particular trie.
 
-// Mutate the state trie, inserting the given key-value pair.
-// Pre stack: key, value_ptr, retdest
-// Post stack: (empty)
-// TODO: Have this take an address and do %mpt_insert_state_trie? To match mpt_read_state_trie.
-global mpt_insert_state_trie:
-    // stack: key, value_ptr, retdest
-    %insert_account_with_overwrite
-    JUMP
-
-%macro mpt_insert_state_trie
-    %stack (key, value_ptr) -> (key, value_ptr, %%after)
-    %jump(mpt_insert_state_trie)
-%%after:
-%endmacro
-
 // Insert a node in the transaction trie. The payload
 // must be pointing to the rlp encoded txn
 // Pre stack: key, txn_rlp_ptr, redest
@@ -24,7 +9,7 @@ global mpt_insert_txn_trie:
     %stack (key, num_nibbles, txn_rlp_ptr)
         -> (num_nibbles, key, txn_rlp_ptr, mpt_insert_txn_trie_save)
     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_ROOT)
-    // stack: txn_trie_root_ptr, num_nibbles, key, txn_rlp_ptr, mpt_insert_state_trie_save, retdest
+    // stack: txn_trie_root_ptr, num_nibbles, key, txn_rlp_ptr, mpt_insert_txn_trie_save, retdest
     %jump(mpt_insert)
 
 mpt_insert_txn_trie_save:

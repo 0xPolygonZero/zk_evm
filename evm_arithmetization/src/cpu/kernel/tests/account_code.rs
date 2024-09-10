@@ -147,12 +147,7 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
     let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
-    let trie_inputs = TrieInputs {
-        state_trie: HashedPartialTrie::from(Node::Empty),
-        transactions_trie: HashedPartialTrie::from(Node::Empty),
-        receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries: vec![],
-    };
+    let trie_inputs = TrieInputs::default();
 
     initialize_mpts(interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);

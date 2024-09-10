@@ -8,7 +8,7 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::constants::trie_type::PartialTrieType;
+use crate::cpu::kernel::constants::mpt_type::PartialMptType;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
@@ -66,7 +66,7 @@ fn load_all_mpts_leaf() -> Result<()> {
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    let type_leaf = U256::from(PartialTrieType::Leaf as u32);
+    let type_leaf = U256::from(PartialMptType::Leaf as u32);
     assert_eq!(
         interpreter.get_trie_data(),
         vec![
@@ -86,7 +86,7 @@ fn load_all_mpts_leaf() -> Result<()> {
             13.into(), // pointer to storage trie root
             test_account_1().code_hash.into_uint(),
             // These last two elements encode the storage trie, which is a hash node.
-            (PartialTrieType::Hash as u32).into(),
+            (PartialMptType::Hash as u32).into(),
             test_account_1().storage_root.into_uint(),
         ]
     );
@@ -118,7 +118,7 @@ fn load_all_mpts_hash() -> Result<()> {
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    let type_hash = U256::from(PartialTrieType::Hash as u32);
+    let type_hash = U256::from(PartialMptType::Hash as u32);
     assert_eq!(
         interpreter.get_trie_data(),
         vec![0.into(), type_hash, hash.into_uint(),]
@@ -156,7 +156,7 @@ fn load_all_mpts_empty_branch() -> Result<()> {
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    let type_branch = U256::from(PartialTrieType::Branch as u32);
+    let type_branch = U256::from(PartialMptType::Branch as u32);
     assert_eq!(
         interpreter.get_trie_data(),
         vec![
@@ -208,8 +208,8 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    let type_extension = U256::from(PartialTrieType::Extension as u32);
-    let type_leaf = U256::from(PartialTrieType::Leaf as u32);
+    let type_extension = U256::from(PartialMptType::Extension as u32);
+    let type_leaf = U256::from(PartialMptType::Leaf as u32);
     assert_eq!(
         interpreter.get_trie_data(),
         vec![
@@ -233,7 +233,7 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
             17.into(), // pointer to storage trie root
             test_account_1().code_hash.into_uint(),
             // These last two elements encode the storage trie, which is a hash node.
-            (PartialTrieType::Hash as u32).into(),
+            (PartialMptType::Hash as u32).into(),
             test_account_1().storage_root.into_uint(),
         ]
     );
@@ -262,7 +262,7 @@ fn load_mpt_txn_trie() -> Result<()> {
 
     let mut expected_trie_data = vec![
         0.into(),
-        U256::from(PartialTrieType::Leaf as u32),
+        U256::from(PartialMptType::Leaf as u32),
         2.into(),
         128.into(), // Nibble
         5.into(),   // value_ptr

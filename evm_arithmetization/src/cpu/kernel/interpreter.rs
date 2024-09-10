@@ -13,13 +13,15 @@ use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
+use smt_trie::smt::hash_serialize_u256;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
-use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
+use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
+use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
@@ -315,9 +317,15 @@ impl<F: RichField> Interpreter<F> {
                 GlobalMetadata::TxnNumberAfter,
                 inputs.txn_number_before + inputs.signed_txns.len(),
             ),
+            #[cfg(not(feature = "cdk_erigon"))]
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
                 h2u(tries.state_trie.hash()),
+            ),
+            #[cfg(feature = "cdk_erigon")]
+            (
+                GlobalMetadata::StateTrieRootDigestBefore,
+                hash_serialize_u256(&tries.state_smt),
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,
