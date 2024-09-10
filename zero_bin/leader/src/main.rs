@@ -1,5 +1,5 @@
+use std::env;
 use std::sync::Arc;
-use std::{env};
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
@@ -10,13 +10,13 @@ use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use prover::ProverConfig;
-use tracing::{info};
+use tracing::info;
+use zero_bin_common::env::load_dotenvy_vars_if_present;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
-
 };
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
-use zero_bin_common::env::load_dotenvy_vars_if_present;
+
 use crate::client::{client_main, LeaderConfig};
 
 mod cli;

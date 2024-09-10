@@ -13,7 +13,6 @@ members = [
   "zero_bin/ops",
   "zero_bin/prover",
   "zero_bin/rpc",
-  "zero_bin/trie_diff",
   "zero_bin/verifier",
   "zero_bin/worker",
 ]
