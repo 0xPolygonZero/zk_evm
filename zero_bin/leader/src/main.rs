@@ -1,6 +1,5 @@
 use std::env;
 use std::sync::Arc;
-use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
@@ -8,10 +7,10 @@ use cli::Command;
 use client::RpcParams;
 use ops::register;
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
 use prover::ProverConfig;
 use tracing::info;
 use zero_bin_common::env::load_dotenvy_vars_if_present;
+use zero_bin_common::fs::get_previous_proof;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
@@ -23,18 +22,6 @@ mod cli;
 mod client;
 mod http;
 mod stdio;
-
-fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
-    if path.is_none() {
-        return Ok(None);
-    }
-
-    let path = path.unwrap();
-    let file = File::open(path)?;
-    let des = &mut serde_json::Deserializer::from_reader(&file);
-    let proof: GeneratedBlockProof = serde_path_to_error::deserialize(des)?;
-    Ok(Some(proof))
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
