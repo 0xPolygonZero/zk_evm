@@ -33,24 +33,22 @@ directories = "5.0.1"
 # Local dependencies
 evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
-trace_decoder = { workspace = true }
 
 [build-dependencies]
+anyhow = { workspace = true }
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
-anyhow = { workspace = true }
+
 
 [features]
 default = ["eth_mainnet"]
 eth_mainnet = [
     "evm_arithmetization/eth_mainnet",
     "proof_gen/eth_mainnet",
-    "trace_decoder/eth_mainnet",
 ]
 cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
     "proof_gen/cdk_erigon",
-    "trace_decoder/cdk_erigon",
 ]
 
 [lints]
