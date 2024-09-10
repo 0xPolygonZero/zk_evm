@@ -53,6 +53,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: built-mdbook
+          path: ./book/book
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
