@@ -9,8 +9,7 @@ use anyhow::{Context, Result};
 use evm_arithmetization::SegmentDataIterator;
 use futures::StreamExt;
 use futures::{
-    future, future::BoxFuture, stream::FuturesOrdered, stream::FuturesUnordered, FutureExt,
-    TryFutureExt, TryStreamExt,
+    future, future::BoxFuture, stream::FuturesUnordered, FutureExt, TryFutureExt, TryStreamExt,
 };
 use num_traits::ToPrimitive as _;
 use paladin::directive::{Directive, IndexedStream};
@@ -86,11 +85,9 @@ impl BlockProverInput {
             save_inputs_on_error,
         };
 
-        // Segment the batches, prove segments, and aggregate the segment proofs.
-        let vec_segment_agg_proofs: FuturesOrdered<_> = block_generation_inputs
+        let vec_segment_agg_proofs: FuturesUnordered<_> = block_generation_inputs
             .iter()
-            .enumerate()
-            .map(|(_, txn_batch)| {
+            .map(|txn_batch| {
                 let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
                     txn_batch,
                     Some(max_cpu_len_log),
@@ -102,13 +99,22 @@ impl BlockProverInput {
             })
             .collect();
 
-        // Collect results of segment proofs and prepare for batch aggregation
-        let batch_proof_futs = vec_segment_agg_proofs.map(|segment_proofs| {
-            let x = segment_proofs.unwrap();
-            Directive::fold(IndexedStream::new(x), &seg_agg_ops)
-                .run(&proof_runtime.block_proof_runtime)
-                .map(move |e| e.map(|p| (proof_gen::proof_types::BatchAggregatableProof::from(p))))
-        });
+        // Await all the futures concurrently
+        let vec_segment_agg_proofs: Vec<_> = vec_segment_agg_proofs.collect().await;
+
+        let batch_proof_futs: FuturesUnordered<_> = vec_segment_agg_proofs
+            .into_iter()
+            .enumerate()
+            .map(|(idx, result)| {
+                // todo - check how to handle the unwrap
+                let res = result.unwrap();
+                Directive::fold(IndexedStream::new(res), &seg_agg_ops)
+                    .run(&proof_runtime.block_proof_runtime)
+                    .map(move |e| {
+                        e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
+                    })
+            })
+            .collect();
 
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
