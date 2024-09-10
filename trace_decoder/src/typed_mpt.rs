@@ -271,6 +271,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
+/// TODO(0xaatif): document this after refactoring is done https://github.com/0xPolygonZero/zk_evm/issues/275
 pub trait StateTrie {
     fn insert_by_address(
         &mut self,

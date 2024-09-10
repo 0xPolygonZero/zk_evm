@@ -30,6 +30,8 @@ once_cell = { workspace = true }
 paladin-core = { workspace = true }
 plonky2 = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
+regex = "1.5.4"
+rlp = {workspace = true}
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

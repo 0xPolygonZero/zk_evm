@@ -37,7 +37,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
+use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
@@ -1889,8 +1889,7 @@ where
         let mut proofs = vec![];
 
         for segment_run in segment_iterator {
-            let (_, mut next_data) =
-                segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
+            let (_, mut next_data) = segment_run?;
             let proof = self.prove_segment(
                 all_stark,
                 config,

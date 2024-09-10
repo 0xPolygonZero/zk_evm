@@ -69,6 +69,8 @@ pub use core::entrypoint;
 
 mod core;
 
+/// Implementation of the observer for the trace decoder.
+pub mod observer;
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {
     use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};
