@@ -1,0 +1,337 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Stack handling - The Polygon Zero zkEVM Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../../../index.html">Introduction</a></li><li class="chapter-item expanded "><a href="../framework/intro.html"><strong aria-hidden="true">1.</strong> STARK framework</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../framework/field.html"><strong aria-hidden="true">1.1.</strong> Field</a></li><li class="chapter-item expanded "><a href="../framework/cost_model.html"><strong aria-hidden="true">1.2.</strong> Cost model</a></li><li class="chapter-item expanded "><a href="../framework/ctls.html"><strong aria-hidden="true">1.3.</strong> Cross-Table Lookups</a></li><li class="chapter-item expanded "><a href="../framework/range_check.html"><strong aria-hidden="true">1.4.</strong> Range-Checks</a></li></ol></li><li class="chapter-item expanded "><a href="../tables/intro.html"><strong aria-hidden="true">2.</strong> Tables</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tables/cpu.html"><strong aria-hidden="true">2.1.</strong> CPU</a></li><li class="chapter-item expanded "><a href="../tables/arithmetic.html"><strong aria-hidden="true">2.2.</strong> Arithmetic</a></li><li class="chapter-item expanded "><a href="../tables/byte_packing.html"><strong aria-hidden="true">2.3.</strong> BytePacking</a></li><li class="chapter-item expanded "><a href="../tables/keccak.html"><strong aria-hidden="true">2.4.</strong> Keccak</a></li><li class="chapter-item expanded "><a href="../tables/keccak_sponge.html"><strong aria-hidden="true">2.5.</strong> KeccakSponge</a></li><li class="chapter-item expanded "><a href="../tables/logic.html"><strong aria-hidden="true">2.6.</strong> Logic</a></li><li class="chapter-item expanded "><a href="../tables/memory.html"><strong aria-hidden="true">2.7.</strong> Memory</a></li><li class="chapter-item expanded "><a href="../tables/mem_continuations.html"><strong aria-hidden="true">2.8.</strong> MemBefore & MemAfter</a></li></ol></li><li class="chapter-item expanded "><a href="../mpt/intro.html"><strong aria-hidden="true">3.</strong> Merkle Patricia Tries</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../mpt/memory_format.html"><strong aria-hidden="true">3.1.</strong> Memory format</a></li><li class="chapter-item expanded "><a href="../mpt/prover_input_format.html"><strong aria-hidden="true">3.2.</strong> Prover input format</a></li><li class="chapter-item expanded "><a href="../mpt/encoding_hashing.html"><strong aria-hidden="true">3.3.</strong> Encoding and hashing</a></li><li class="chapter-item expanded "><a href="../mpt/linked_lists.html"><strong aria-hidden="true">3.4.</strong> Linked lists</a></li></ol></li><li class="chapter-item expanded "><a href="../cpu_execution/intro.html"><strong aria-hidden="true">4.</strong> CPU Execution</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../cpu_execution/kernel.html"><strong aria-hidden="true">4.1.</strong> Kernel</a></li><li class="chapter-item expanded "><a href="../cpu_execution/opcodes_syscalls.html"><strong aria-hidden="true">4.2.</strong> Opcodes & Syscalls</a></li><li class="chapter-item expanded "><a href="../cpu_execution/privileged_instructions.html"><strong aria-hidden="true">4.3.</strong> Privileged Instructions</a></li><li class="chapter-item expanded "><a href="../cpu_execution/stack_handling.html" class="active"><strong aria-hidden="true">4.4.</strong> Stack handling</a></li><li class="chapter-item expanded "><a href="../cpu_execution/gas_handling.html"><strong aria-hidden="true">4.5.</strong> Gas handling</a></li><li class="chapter-item expanded "><a href="../cpu_execution/exceptions.html"><strong aria-hidden="true">4.6.</strong> Exceptions</a></li></ol></li><li class="chapter-item expanded "><a href="../bibliography.html">Bibliography</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The Polygon Zero zkEVM Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
+<h2 id="stack-handling"><a class="header" href="#stack-handling">Stack handling</a></h2>
+<h3 id="top-of-the-stack"><a class="header" href="#top-of-the-stack">Top of the stack</a></h3>
+<p>The majority of memory operations involve the stack. The stack is a
+segment in memory, and stack operations (popping or pushing) use the
+memory channels. Every CPU instruction performs between 0 and 3 pops,
+and may push at most once. However, for efficiency purposes, we hold the
+top of the stack in the first memory channel
+<code>current_row.mem_channels[0]</code>, only writing it in memory if necessary.</p>
+<h4 id="top-reading-and-writing"><a class="header" href="#top-reading-and-writing">Top reading and writing</a></h4>
+<p>When a CPU instruction modifies the stack, it must update the top of the
+stack accordingly. There are three cases.</p>
+<ul>
+<li>
+<p><strong>The instruction pops and pushes:</strong> The new top of the stack is
+stored in <code>next_row.mem_channels[0]</code>; it may be computed by the
+instruction, or it could be read from memory. In either case, the
+instruction is responsible for setting <code>next_row.mem_channels[0]</code>'s
+flags and address columns correctly. After use, the previous top of
+the stack is discarded and doesn't need to be written in memory.</p>
+</li>
+<li>
+<p><strong>The instruction pushes, but doesn't pop:</strong> The new top of the
+stack is stored in <code>next_row.mem_channels[0]</code>; it may be computed by
+the instruction, or it could be read from memory. In either case,
+the instruction is responsible for setting
+<code>next_row.mem_channels[0]</code>'s flags and address columns correctly. If
+the stack wasn't empty (<code>current_row.stack_len &gt; 0</code>), the
+instruction performs a memory read in
+<code>current_row.partial_ channel</code>. <code>current_row.partial_channel</code> shares
+its values with <code>current_ row.mem_channels[0]</code> (which holds the
+current top of the stack). If the stack was empty,
+<code>current_row.partial_channel</code> is disabled.</p>
+</li>
+<li>
+<p><strong>The instruction pops, but doesn't push:</strong> After use, the current
+top of the stack is discarded and doesn't need to be written in
+memory. If the stack isn't empty now
+(<code>current_row.stack_len &gt; num_pops</code>), the new top of the stack is
+set in <code>next_row.mem_channels[0]</code> with a memory read from the stack
+segment. If the stack is now empty, <code>next_row.mem_channels[0]</code> is
+disabled.</p>
+</li>
+</ul>
+<p>In the last two cases, there is an edge case if <code>current_row.stack_len</code>
+is equal to a <code>special_len</code>. For a strictly pushing instruction, this
+happens if the stack is empty, and <code>special_len = 0</code>. For a strictly
+popping instruction, this happens if the next stack is empty, i.e. if
+all remaining elements are popped, and <code>special_len = num_pops</code>. Note
+that we do not need to check for values below <code>num_pops</code>, since this
+would be a stack underflow exception which is handled separately. The
+edge case is detected with the compound flag
+<span class="katex-display"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.2222em;"></span><span class="mord text"><span class="mord texttt">1 - not_special_len * stack_inv_aux,</span></span></span></span></span></span> where
+<span class="katex-display"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.2222em;"></span><span class="mord text"><span class="mord texttt">not_special_len = current_row - special_len</span></span></span></span></span></span></p>
+<p>and <code>stack_inv_aux</code> is constrained to be the modular inverse of
+<code>not_special_ len</code> if it's non-zero, or 0 otherwise. The flag is 1 if
+<code>stack_len</code> is equal to <code>special_len</code>, and 0 otherwise.</p>
+<p>This logic can be found in code in the <code>eval_packed_one</code> function of
+<a href="https://github.com/0xPolygonZero/plonky2/blob/main/evm/src/cpu/stack.rs">stack.rs</a>.
+The function multiplies all of the stack constraints with the degree 1
+filter associated with the current instruction.</p>
+<h4 id="operation-flag-merging"><a class="header" href="#operation-flag-merging">Operation flag merging</a></h4>
+<p>To reduce the total number of columns, many operation flags are merged
+together (e.g. <code>DUP</code> and <code>SWAP</code>) and are distinguished with the binary
+decomposition of their opcodes. The filter for a merged operation is now
+of degree 2: for example, <code>is_swap = dup_swap * opcode_bits[4]</code> since
+the 4th bit is set to 1 for a <code>SWAP</code> and 0 for a <code>DUP</code>. If the two
+instructions have different stack behaviors, this can be a problem:
+<code>eval_packed_one</code>'s constraints are already of degree 3 and it can't
+support degree 2 filters.</p>
+<p>When this happens, stack constraints are defined manually in the
+operation's dedicated file (e.g. <code>dup_swap.rs</code>). Implementation details
+vary case-by-case and can be found in the files.</p>
+<h3 id="stack-length-checking"><a class="header" href="#stack-length-checking">Stack length checking</a></h3>
+<p>The CPU must make sure that the stack length never goes below zero and,
+in user mode, never grows beyond the maximum stack size. When this
+happens, an honest prover should trigger the corresponding exception. If
+a malicious prover doesn't trigger the exception, constraints must fail
+the proof.</p>
+<h4 id="stack-underflow"><a class="header" href="#stack-underflow">Stack underflow</a></h4>
+<p>There is no explicit constraint checking for stack underflow. An
+underflow happens when the CPU tries to pop the empty stack, which would
+perform a memory read at virtual address <code>-1</code>. Such a read cannot
+succeed: in Memory, the range-check argument requires the gap between
+two consecutive addresses to be lower than the length of the Memory
+trace. Since the prime of the Plonky2 field is 64-bit long, this would
+require a Memory trace longer than <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span></span></span></span>.</p>
+<h4 id="stack-overflow"><a class="header" href="#stack-overflow">Stack overflow</a></h4>
+<p>An instruction can only push at most once, meaning that an overflow
+occurs whenever the stack length is exactly one more than the maximum
+stack size (<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1024</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>) in user mode. To constrain this, the column
+<code>stack_len_bounds_aux</code> contains:</p>
+<ul>
+<li>
+<p>the modular inverse of <code>stack_len - 1025</code> if we're in user mode and
+<code>stack_len </code><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mrel"><span class="mrel"><span class="mord vbox"><span class="thinbox"><span class="rlap"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="inner"><span class="mord"><span class="mrel"></span></span></span><span class="fix"></span></span></span></span></span><span class="mrel">=</span></span></span></span></span><code> 1025</code>,</p>
+</li>
+<li>
+<p>0 if <code>stack_len = 1025</code> or if we're in kernel mode.</p>
+</li>
+</ul>
+<p>Then overflow can be checked with the flag
+<span class="katex-display"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7896em;vertical-align:-0.0951em;"></span><span class="mord text"><span class="mord texttt">(1 - is_kernel_mode) - stack_len * stack_len_bounds_aux</span></span><span class="mord">.</span></span></span></span></span>
+The flag is 1 if <code>stack_len = 1025</code> and we're in user mode, and 0
+otherwise.</p>
+<p>Because <code>stack_len_bounds_aux</code> is a shared general column, we only check
+this constraint after an instruction that can actually trigger an
+overflow, i.e. a pushing, non-popping instruction.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../cpu_execution/privileged_instructions.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../cpu_execution/gas_handling.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../cpu_execution/privileged_instructions.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../cpu_execution/gas_handling.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../mermaid.min.js"></script>
+        <script src="../mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>
