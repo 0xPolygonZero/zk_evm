@@ -23,12 +23,17 @@
 - changed-files:
   - any-glob-to-any-file: zero_bin/**
 
-# Add 'specs' label to any changes within 'docs' folder.
+# Add 'specs' label to any changes within 'docs' or `book` folder.
 'specs':
 - changed-files:
-  - any-glob-to-any-file: docs/**
+  - any-glob-to-any-file: ['docs/**', 'book/**']
 
 # Add 'crate: common' label to any changes within 'common' folder.
 'crate: common':
   - changed-files:
       - any-glob-to-any-file: common/**
+
+# Add 'ci' label to any changes within '.github' folder.
+'ci':
+  - changed-files:
+      - any-glob-to-any-file: .github/**
