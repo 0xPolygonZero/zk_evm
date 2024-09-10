@@ -42,8 +42,7 @@ jobs:
           path: ./book/book
 
   deploy:
-   # TODO: Revert before merge
-   # if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     needs: build
     steps:
