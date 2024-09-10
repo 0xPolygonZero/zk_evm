@@ -20,7 +20,11 @@ create-missing = true
 [preprocessor.bib]
 bibliography = "bibliography.bib"
 
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
 [output.html]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [output.html.print]
 # Disable page break

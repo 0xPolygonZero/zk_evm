@@ -58,7 +58,7 @@ impl<T> TypedMpt<T> {
         let bytes = self.inner.get(key.into_nibbles())?;
         Some(rlp::decode(bytes).expect(Self::PANIC_MSG))
     }
-    fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
+    const fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
     }
     fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
@@ -198,7 +198,7 @@ impl TransactionTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
+    pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
 }
@@ -224,7 +224,7 @@ impl ReceiptTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
+    pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
 }
@@ -259,7 +259,7 @@ impl StateMpt {
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
+    pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
     pub fn root(&self) -> H256 {
@@ -392,7 +392,7 @@ impl StorageTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
-    pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
+    pub const fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.untyped
     }
 

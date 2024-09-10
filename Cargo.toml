@@ -111,19 +111,19 @@ vergen = { version = "9.0.0", features = ["build", "rustc"] }
 winnow = "0.6.13"
 
 # local dependencies
-evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0" }
+evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0", default-features = false }
 mpt_trie = { path = "mpt_trie", version = "0.4.1" }
-proof_gen = { path = "proof_gen", version = "0.4.0" }
+proof_gen = { path = "proof_gen", version = "0.4.0", default-features = false }
 smt_trie = { path = "smt_trie", version = "0.1.1" }
-trace_decoder = { path = "trace_decoder", version = "0.6.0" }
+trace_decoder = { path = "trace_decoder", version = "0.6.0", default-features = false }
 zk_evm_common = { path = "common", version = "0.1.0" }
 zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 
 # zero-bin related dependencies
-ops = { path = "zero_bin/ops" }
-prover = { path = "zero_bin/prover" }
-rpc = { path = "zero_bin/rpc" }
-zero_bin_common = { path = "zero_bin/common" }
+ops = { path = "zero_bin/ops", default-features = false }
+prover = { path = "zero_bin/prover", default-features = false }
+rpc = { path = "zero_bin/rpc", default-features = false }
+zero_bin_common = { path = "zero_bin/common", default-features = false }
 
 # plonky2-related dependencies
 plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }

@@ -17,9 +17,8 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use evm_arithmetization::Node;
 use hex_literal::hex;
@@ -148,10 +147,6 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         beacon_roots_account_nibbles(),
         rlp::encode(&beacon_roots_account).to_vec(),
     )?;
-    expected_state_trie_after.insert(
-        ger_account_nibbles(),
-        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-    )?;
 
     let receipt_0 = LegacyReceiptRlp {
         status: false,
@@ -186,7 +181,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         checkpoint_state_trie_root: H256(hex!(
             "fe07ff6d1ab215df17884b89112ccf2373597285a56c5902150313ad1a53ee57"
         )),
-        global_exit_roots: vec![],
+        ger_data: None,
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

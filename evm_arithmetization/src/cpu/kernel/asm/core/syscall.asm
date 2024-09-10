@@ -69,8 +69,16 @@ global syscall_jumptable:
     JUMPTABLE sys_chainid
     JUMPTABLE sys_selfbalance
     JUMPTABLE sys_basefee
-    JUMPTABLE sys_blobhash
-    JUMPTABLE sys_blobbasefee
+    #[cfg(feature = eth_mainnet)]
+    {
+        JUMPTABLE sys_blobhash
+        JUMPTABLE sys_blobbasefee
+    }
+    #[cfg(not(feature = eth_mainnet))]
+    {
+        JUMPTABLE panic // BLOBHASH is only active on Ethereum mainnet
+        JUMPTABLE panic // BLOBBASEFEE is only active on Ethereum mainnet
+    }
     %rep 5
         JUMPTABLE panic // 0x4b-0x4f are invalid opcodes
     %endrep

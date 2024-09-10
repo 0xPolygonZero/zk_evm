@@ -1,3 +1,5 @@
+#![cfg(feature = "eth_mainnet")]
+
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
@@ -8,9 +10,8 @@ use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::StarkConfig;
@@ -152,12 +153,6 @@ fn get_generation_inputs() -> GenerationInputs {
             )
             .unwrap();
         expected_state_trie_after
-            .insert(
-                ger_account_nibbles(),
-                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -189,7 +184,7 @@ fn get_generation_inputs() -> GenerationInputs {
         signed_txns: vec![txn.to_vec()],
         burn_addr: None,
         withdrawals: vec![],
-        global_exit_roots: vec![],
+        ger_data: None,
         tries: tries_before,
         trie_roots_after,
         contract_code,

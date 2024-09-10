@@ -11,13 +11,26 @@ categories.workspace = true
 [dependencies]
 paladin-core = { workspace = true }
 serde = { workspace = true }
-evm_arithmetization = { workspace = true }
-proof_gen = { workspace = true }
 tracing = { workspace = true }
-trace_decoder = { workspace = true }
 keccak-hash = { workspace = true }
 
-zero_bin_common = { path = "../common" }
+# Local dependencies
+evm_arithmetization = { workspace = true }
+proof_gen = { workspace = true }
+trace_decoder = { workspace = true }
+zero_bin_common = { workspace = true }
 
 [features]
-default = []
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "evm_arithmetization/eth_mainnet",
+    "proof_gen/eth_mainnet",
+    "trace_decoder/eth_mainnet",
+    "zero_bin_common/eth_mainnet",
+]
+cdk_erigon = [
+    "evm_arithmetization/cdk_erigon",
+    "proof_gen/cdk_erigon",
+    "trace_decoder/cdk_erigon",
+    "zero_bin_common/cdk_erigon",
+]

@@ -40,9 +40,8 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
-        log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
-    }
+    features_check(&inputs);
+
     // Sanity check on the provided config
     assert_eq!(DEFAULT_CAP_LEN, 1 << config.fri_config.cap_height);
 
@@ -246,9 +245,9 @@ where
         prove_single_table(
             &all_stark.arithmetic_stark,
             config,
-            &trace_poly_values[Table::Arithmetic as usize],
-            &trace_commitments[Table::Arithmetic as usize],
-            &ctl_data_per_table[Table::Arithmetic as usize],
+            &trace_poly_values[*Table::Arithmetic],
+            &trace_commitments[*Table::Arithmetic],
+            &ctl_data_per_table[*Table::Arithmetic],
             ctl_challenges,
             challenger,
             timing,
@@ -261,9 +260,9 @@ where
         prove_single_table(
             &all_stark.byte_packing_stark,
             config,
-            &trace_poly_values[Table::BytePacking as usize],
-            &trace_commitments[Table::BytePacking as usize],
-            &ctl_data_per_table[Table::BytePacking as usize],
+            &trace_poly_values[*Table::BytePacking],
+            &trace_commitments[*Table::BytePacking],
+            &ctl_data_per_table[*Table::BytePacking],
             ctl_challenges,
             challenger,
             timing,
@@ -276,9 +275,9 @@ where
         prove_single_table(
             &all_stark.cpu_stark,
             config,
-            &trace_poly_values[Table::Cpu as usize],
-            &trace_commitments[Table::Cpu as usize],
-            &ctl_data_per_table[Table::Cpu as usize],
+            &trace_poly_values[*Table::Cpu],
+            &trace_commitments[*Table::Cpu],
+            &ctl_data_per_table[*Table::Cpu],
             ctl_challenges,
             challenger,
             timing,
@@ -291,9 +290,9 @@ where
         prove_single_table(
             &all_stark.keccak_stark,
             config,
-            &trace_poly_values[Table::Keccak as usize],
-            &trace_commitments[Table::Keccak as usize],
-            &ctl_data_per_table[Table::Keccak as usize],
+            &trace_poly_values[*Table::Keccak],
+            &trace_commitments[*Table::Keccak],
+            &ctl_data_per_table[*Table::Keccak],
             ctl_challenges,
             challenger,
             timing,
@@ -306,9 +305,9 @@ where
         prove_single_table(
             &all_stark.keccak_sponge_stark,
             config,
-            &trace_poly_values[Table::KeccakSponge as usize],
-            &trace_commitments[Table::KeccakSponge as usize],
-            &ctl_data_per_table[Table::KeccakSponge as usize],
+            &trace_poly_values[*Table::KeccakSponge],
+            &trace_commitments[*Table::KeccakSponge],
+            &ctl_data_per_table[*Table::KeccakSponge],
             ctl_challenges,
             challenger,
             timing,
@@ -321,9 +320,9 @@ where
         prove_single_table(
             &all_stark.logic_stark,
             config,
-            &trace_poly_values[Table::Logic as usize],
-            &trace_commitments[Table::Logic as usize],
-            &ctl_data_per_table[Table::Logic as usize],
+            &trace_poly_values[*Table::Logic],
+            &trace_commitments[*Table::Logic],
+            &ctl_data_per_table[*Table::Logic],
             ctl_challenges,
             challenger,
             timing,
@@ -336,9 +335,9 @@ where
         prove_single_table(
             &all_stark.memory_stark,
             config,
-            &trace_poly_values[Table::Memory as usize],
-            &trace_commitments[Table::Memory as usize],
-            &ctl_data_per_table[Table::Memory as usize],
+            &trace_poly_values[*Table::Memory],
+            &trace_commitments[*Table::Memory],
+            &ctl_data_per_table[*Table::Memory],
             ctl_challenges,
             challenger,
             timing,
@@ -351,9 +350,9 @@ where
         prove_single_table(
             &all_stark.mem_before_stark,
             config,
-            &trace_poly_values[Table::MemBefore as usize],
-            &trace_commitments[Table::MemBefore as usize],
-            &ctl_data_per_table[Table::MemBefore as usize],
+            &trace_poly_values[*Table::MemBefore],
+            &trace_commitments[*Table::MemBefore],
+            &ctl_data_per_table[*Table::MemBefore],
             ctl_challenges,
             challenger,
             timing,
@@ -366,9 +365,25 @@ where
         prove_single_table(
             &all_stark.mem_after_stark,
             config,
-            &trace_poly_values[Table::MemAfter as usize],
-            &trace_commitments[Table::MemAfter as usize],
-            &ctl_data_per_table[Table::MemAfter as usize],
+            &trace_poly_values[*Table::MemAfter],
+            &trace_commitments[*Table::MemAfter],
+            &ctl_data_per_table[*Table::MemAfter],
+            ctl_challenges,
+            challenger,
+            timing,
+            abort_signal.clone(),
+        )?
+    );
+    #[cfg(feature = "cdk_erigon")]
+    let (poseidon_proof, _) = timed!(
+        timing,
+        "prove poseidon STARK",
+        prove_single_table(
+            &all_stark.poseidon_stark,
+            config,
+            &trace_poly_values[*Table::Poseidon],
+            &trace_commitments[*Table::Poseidon],
+            &ctl_data_per_table[*Table::Poseidon],
             ctl_challenges,
             challenger,
             timing,
@@ -387,6 +402,8 @@ where
             memory_proof,
             mem_before_proof,
             mem_after_proof,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_proof,
         ],
         mem_before_cap,
         mem_after_cap,
@@ -455,6 +472,20 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
+/// Sanity checks on the consistency between this proof payload and the feature
+/// flags being used.
+pub(crate) fn features_check(inputs: &TrimmedGenerationInputs) {
+    if cfg!(feature = "polygon_pos") || cfg!(feature = "cdk_erigon") {
+        assert!(inputs.block_metadata.parent_beacon_block_root.is_zero());
+        assert!(inputs.block_metadata.block_blob_gas_used.is_zero());
+        assert!(inputs.block_metadata.block_excess_blob_gas.is_zero());
+    }
+
+    if !cfg!(feature = "cdk_erigon") {
+        assert!(inputs.burn_addr.is_none());
+    }
+}
+
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
@@ -470,9 +501,8 @@ pub mod testing {
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
     pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
-        if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
-            log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
-        }
+        features_check(&inputs.clone().trim());
+
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["init"];
         let mut interpreter: Interpreter<F> =
@@ -527,6 +557,8 @@ pub mod testing {
     where
         F: RichField,
     {
+        features_check(&inputs.clone().trim());
+
         for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
             if let Err(e) = segment {
                 return Err(anyhow::format_err!(e));
