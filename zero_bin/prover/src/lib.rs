@@ -6,8 +6,14 @@ use std::sync::Arc;
 
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
-use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
+use evm_arithmetization::SegmentDataIterator;
+use futures::StreamExt;
+use futures::{
+    future, future::BoxFuture, stream::FuturesOrdered, stream::FuturesUnordered, FutureExt,
+    TryFutureExt, TryStreamExt,
+};
 use num_traits::ToPrimitive as _;
+use paladin::directive::{Directive, IndexedStream};
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -47,9 +53,6 @@ impl BlockProverInput {
         prover_config: Arc<ProverConfig>,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
-        use evm_arithmetization::SegmentDataIterator;
-        use futures::{stream::FuturesUnordered, FutureExt};
-        use paladin::directive::{Directive, IndexedStream};
 
         let ProverConfig {
             max_cpu_len_log,
@@ -83,25 +86,29 @@ impl BlockProverInput {
             save_inputs_on_error,
         };
 
-        // Segment the batches, prove segments and aggregate them to resulting batch
-        // proofs.
-        let batch_proof_futs: FuturesUnordered<_> = block_generation_inputs
+        // Segment the batches, prove segments, and aggregate the segment proofs.
+        let vec_segment_agg_proofs: FuturesOrdered<_> = block_generation_inputs
             .iter()
             .enumerate()
-            .map(|(idx, txn_batch)| {
+            .map(|(_, txn_batch)| {
                 let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
                     txn_batch,
                     Some(max_cpu_len_log),
                 );
 
+                // Map over the indexed stream with the given seg_prove_ops operation.
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
-                    .fold(&seg_agg_ops)
                     .run(&proof_runtime.segment_proof_runtime)
-                    .map(move |e| {
-                        e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
-                    })
             })
             .collect();
+
+        // Collect results of segment proofs and prepare for batch aggregation
+        let batch_proof_futs = vec_segment_agg_proofs.map(|segment_proofs| {
+            let x = segment_proofs.unwrap();
+            Directive::fold(IndexedStream::new(x), &seg_agg_ops)
+                .run(&proof_runtime.block_proof_runtime)
+                .map(move |e| e.map(|p| (proof_gen::proof_types::BatchAggregatableProof::from(p))))
+        });
 
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
@@ -142,7 +149,6 @@ impl BlockProverInput {
     ) -> Result<GeneratedBlockProof> {
         use std::iter::repeat;
 
-        use futures::future;
         use paladin::directive::{Directive, IndexedStream};
 
         let ProverConfig {
@@ -177,7 +183,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(&proof_runtime.segment_proof_runtime)
+            .run(&proof_runtime.block_proof_runtime)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;
