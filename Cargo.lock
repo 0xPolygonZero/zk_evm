@@ -2859,7 +2859,6 @@ dependencies = [
  "axum",
  "cargo_metadata",
  "clap",
- "dotenvy",
  "evm_arithmetization",
  "futures",
  "ops",
@@ -5213,6 +5212,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "trie_diff"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cargo_metadata",
+ "clap",
+ "compat",
+ "evm_arithmetization",
+ "futures",
+ "hex",
+ "itertools 0.13.0",
+ "mpt_trie",
+ "primitive-types 0.12.2",
+ "prover",
+ "tokio",
+ "trace_decoder",
+ "tracing",
+ "tracing-subscriber",
+ "vergen",
+ "zero_bin_common",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5813,6 +5835,7 @@ dependencies = [
  "cargo_metadata",
  "clap",
  "directories",
+ "dotenvy",
  "evm_arithmetization",
  "futures",
  "lru",
@@ -5825,6 +5848,7 @@ dependencies = [
  "tokio",
  "trace_decoder",
  "tracing",
+ "tracing-subscriber",
  "vergen",
 ]
 
