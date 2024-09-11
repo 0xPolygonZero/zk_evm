@@ -20,6 +20,7 @@ use mpt_trie::{
     trie_ops::TrieOpError,
     utils::{IntoTrieKey as _, TriePath},
 };
+use zk_evm_common::gwei_to_wei;
 
 use crate::{
     hash,
@@ -442,7 +443,7 @@ fn add_withdrawals_to_txns(
 ) -> anyhow::Result<()> {
     // Scale withdrawals amounts.
     for (_addr, amt) in withdrawals.iter_mut() {
-        *amt = eth_to_gwei(*amt)
+        *amt = gwei_to_wei(*amt)
     }
 
     let withdrawals_with_hashed_addrs_iter = || {
@@ -690,11 +691,6 @@ fn create_trie_subset_wrapped(
         accesses.into_iter().map(TrieKey::into_nibbles),
     )
     .context(format!("missing keys when creating {}", trie_type))
-}
-
-fn eth_to_gwei(eth: U256) -> U256 {
-    // 1 ether = 10^9 gwei.
-    eth * U256::from(10).pow(9.into())
 }
 
 // This is just `rlp(0)`.

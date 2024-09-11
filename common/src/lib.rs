@@ -1,4 +1,4 @@
-use ethereum_types::H256;
+use ethereum_types::{H256, U256};
 
 /// The hash value of an account empty EVM code.
 /// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
@@ -14,6 +14,26 @@ pub const EMPTY_TRIE_HASH: H256 = H256([
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
 
+/// Converts an amount in `ETH` to `wei` units.
+pub fn eth_to_wei(eth: U256) -> U256 {
+    // 1 ether = 10^18 wei.
+    eth * U256::from(10).pow(18.into())
+}
+
+/// Converts an amount in `gwei` to `wei` units.
+/// This also works for converting `ETH` to `gwei`.
+pub fn gwei_to_wei(eth: U256) -> U256 {
+    // 1 ether = 10^9 gwei = 10^18 wei.
+    eth * U256::from(10).pow(9.into())
+}
+
+#[test]
+fn test_eth_conversion() {
+    assert_eq!(
+        eth_to_wei(U256::one()),
+        gwei_to_wei(gwei_to_wei(U256::one()))
+    );
+}
 #[test]
 fn test_empty_code_hash() {
     assert_eq!(EMPTY_CODE_HASH, keccak_hash::keccak([]));
