@@ -11,7 +11,7 @@ use u4::{AsNibbles, U4};
 
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
 ///
-/// Portions of the trie may be indirected: see [`Self::insert_hash`].
+/// Portions of the trie may be _hashed out_: see [`Self::insert_hash`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TypedMpt<T> {
     inner: HashedPartialTrie,
@@ -28,6 +28,8 @@ impl<T> TypedMpt<T> {
         }
     }
     /// Insert a node which represents an out-of-band sub-trie.
+    ///
+    /// See [module documentation](super) for more.
     fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
         self.inner.insert(key.into_nibbles(), hash)?;
         Ok(())
@@ -201,8 +203,8 @@ impl TransactionTrie {
     pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    /// Indirect (hash) parts of the trie that aren't in `txn_ixs`.
-    pub fn mask(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+    /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
+    pub fn intersect(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
             txn_ixs
@@ -246,8 +248,8 @@ impl ReceiptTrie {
     pub const fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    /// Indirect (hash) parts of the trie that aren't in `txn_ixs`.
-    pub fn mask(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+    /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
+    pub fn intersect(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
             txn_ixs
@@ -273,7 +275,7 @@ pub trait StateTrie {
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
-    fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+    fn intersect(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
 }
@@ -322,7 +324,7 @@ impl StateTrie for StateMpt {
         #[expect(deprecated)]
         self.insert_by_hashed_address(keccak_hash::keccak(address), account)
     }
-    /// Insert an indirected part of the trie
+    /// Insert an _hashed out_ part of the trie
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
         self.typed.insert_hash(key, hash)
     }
@@ -338,7 +340,7 @@ impl StateTrie for StateMpt {
             TrieKey::from_address(address),
         )
     }
-    fn mask(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    fn intersect(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
             self.typed.as_hashed_partial_trie(),
             addresses.into_iter().map(TrieKey::into_nibbles),
@@ -370,7 +372,7 @@ impl From<StateMpt> for HashedPartialTrie {
 
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
-    indirected: BTreeMap<TrieKey, H256>,
+    hashed_out: BTreeMap<TrieKey, H256>,
 }
 
 impl StateTrie for StateSmt {
@@ -382,7 +384,7 @@ impl StateTrie for StateSmt {
         Ok(self.address2state.insert(address, account))
     }
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.indirected.insert(key, hash);
+        self.hashed_out.insert(key, hash);
         Ok(())
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
@@ -392,7 +394,7 @@ impl StateTrie for StateSmt {
         self.address2state.remove(&address);
         Ok(None)
     }
-    fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    fn intersect(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
     }
@@ -440,8 +442,8 @@ impl StorageTrie {
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
     }
-    /// Indirect (hash) the parts of the trie that aren't in `paths`.
-    pub fn mask(&mut self, paths: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    /// _Hash out_ the parts of the trie that aren't in `paths`.
+    pub fn intersect(&mut self, paths: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
             paths.into_iter().map(TrieKey::into_nibbles),

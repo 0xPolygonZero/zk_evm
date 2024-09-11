@@ -13,9 +13,10 @@
 //!
 //! **Prover perfomance is a high priority.**
 //!
-//! The aformentioned trie structures may have subtries _indirected_.
+//! The aformentioned trie structures may have subtries _hashed out_.
 //! That is, any node (and its children!) may be replaced by its hash,
 //! while maintaining provability of its contents:
+//!
 //! ```text
 //!     A               A
 //!    / \             / \
@@ -25,9 +26,9 @@
 //! ```
 //! (where `H` is the hash of the `D/B\E` subtrie).
 //!
-//! The principle concern of this library is to step through the transactions,
+//! The principle concern of this module is to step through the transactions,
 //! and reproduce the _intermediate tries_,
-//! while indirecting all possible subtries to minimise prover load
+//! while hashing out all possible subtries to minimise prover load
 //! (since prover performance is sensitive to the size of the trie).
 //! The prover can therefore prove each batch of transactions independently.
 //!

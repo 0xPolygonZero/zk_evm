@@ -26,7 +26,7 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-/// TODO(0xaatif): doc
+/// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
@@ -53,9 +53,7 @@ pub fn entrypoint(
         checkpoint_state_trie_root,
     } = other;
 
-    // TODO(0xaatif): docs for the RPC field say this is gwei already:
-    //                https://docs.rs/alloy/0.3.1/alloy/eips/eip4895/struct.Withdrawal.html#structfield.amount
-    //                in any case, this shouldn't be our problem.
+    // BUG?(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/618
     for (_, amt) in &mut withdrawals {
         *amt = eth_to_gwei(*amt)
     }
@@ -128,7 +126,8 @@ fn start(
     pre_images: BlockTraceTriePreImages,
 ) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
     Ok(match pre_images {
-        // TODO(0xaatif): refactor our convoluted input types
+        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
+        //                refactor our convoluted input types
         BlockTraceTriePreImages::Separate(SeparateTriePreImages {
             state: SeparateTriePreImage::Direct(state),
             storage: SeparateStorageTriesPreImage::MultipleTries(storage),
@@ -205,7 +204,8 @@ fn batch(txns: Vec<TxnInfo>, batch_size_hint: usize) -> Vec<Vec<Option<TxnInfo>>
             .into_iter()
             .map(FromIterator::from_iter)
             .collect(),
-        // not enough batches at `hint`, but enough real transactions
+        // not enough batches at `hint`, but enough real transactions,
+        // so just split them in half
         (2.., ..2) => {
             let second = txns.split_off(txns.len() / 2);
             vec![txns, second]
@@ -317,7 +317,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
             storage: storage_tries.clone(),
         };
 
-        // We want to trim the TrieInputs above,
+        // We want to perform intersections the TrieInputs above,
         // but won't know the bounds until after the loop below,
         // so store that information here.
         let mut storage_masks = BTreeMap::<_, BTreeSet<TrieKey>>::new();
@@ -464,10 +464,13 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     ..address!("000000000000000000000000000000000000000a");
 
                 if !precompiled_addresses.contains(&addr.compat()) {
-                    // TODO(0xaatif): this looks like an optimization,
-                    //                but if it's omitted, the tests fail...
+                    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
+                    //                masking like this SHOULD be a space-saving optimization,
+                    //                BUT if it's omitted, we actually get state root mismatches
                     state_mask.insert(TrieKey::from_address(addr));
-                }
+                } // else we don't even need to include them,
+                  // because nodes will only emit a precompiled address if
+                  // the transaction calling them reverted.
             }
 
             if do_increment_txn_ix {
@@ -500,9 +503,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 false => vec![],
             },
             before: {
-                before.state.mask(state_mask)?;
-                before.receipt.mask(batch_first_txn_ix..txn_ix)?;
-                before.transaction.mask(batch_first_txn_ix..txn_ix)?;
+                before.state.intersect(state_mask)?;
+                before.receipt.intersect(batch_first_txn_ix..txn_ix)?;
+                before.transaction.intersect(batch_first_txn_ix..txn_ix)?;
 
                 let keep = storage_masks
                     .keys()
@@ -512,7 +515,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
                 for (addr, mask) in storage_masks {
                     if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.mask(mask)?
+                        it.intersect(mask)?
                     } // else self_destructed
                 }
                 before
