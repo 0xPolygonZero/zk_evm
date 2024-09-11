@@ -26,7 +26,7 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-/// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+/// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
@@ -266,7 +266,7 @@ struct IntraBlockTries<StateTrieT> {
     pub receipt: ReceiptTrie,
 }
 
-/// Does the main work mentioned in the [module documentation](mod@self).
+/// Does the main work mentioned in the [module documentation](super).
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
@@ -403,9 +403,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         false => true,
                     };
 
-                let trim_storage = storage_masks.entry(addr).or_default();
+                let storage_mask = storage_masks.entry(addr).or_default();
 
-                trim_storage.extend(
+                storage_mask.extend(
                     storage_written
                         .keys()
                         .chain(&storage_read)
@@ -443,7 +443,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                             let slot = TrieKey::from_hash(keccak_hash::keccak(k));
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => trim_storage.extend(storage.reporting_remove(slot)?),
+                                true => storage_mask.extend(storage.reporting_remove(slot)?),
                                 false => {
                                     storage.insert(slot, rlp::encode(&v).to_vec())?;
                                 }
