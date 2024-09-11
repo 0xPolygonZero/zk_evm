@@ -949,7 +949,7 @@ remove_all_slots_end:
     // stack: next_hash_node_ptr
 %endmacro
 
-// Skip over the the first three words (number of nibbles and jeys)
+// Skip over the the first three words (number of nibbles and keys)
 // and load the hash from memory.
 %macro get_hash
     // stack: hash_node_ptr

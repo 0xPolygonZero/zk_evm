@@ -23,7 +23,6 @@ fn test_account(balance: U256) -> AccountRlp {
 
 #[test]
 fn test_balance() -> Result<()> {
-    init_logger();
     let mut rng = thread_rng();
     let balance = U256(rng.gen());
     let account = test_account(balance);

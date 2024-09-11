@@ -79,7 +79,6 @@ fn mpt_insert_leaf_leaf_key_extends_insert_key() -> Result<()> {
 
 #[test]
 fn mpt_insert_branch_replacing_empty_child() -> Result<()> {
-    init_logger();
     let children = core::array::from_fn(|_| Node::Empty.into());
     let state_trie = Node::Branch {
         children,

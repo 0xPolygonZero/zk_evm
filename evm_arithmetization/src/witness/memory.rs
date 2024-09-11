@@ -202,11 +202,6 @@ impl MemoryState {
     /// need a specific behaviour here, since the values can be stored either in
     /// `preinitialized_segments` or in the memory itself.
     pub(crate) fn get_preinit_memory(&self, segment: Segment) -> Vec<Option<U256>> {
-        assert!(
-            segment == Segment::AccountsLinkedList
-                || segment == Segment::StorageLinkedList
-                || segment == Segment::TrieData
-        );
         assert!(PREINITIALIZED_SEGMENTS_INDICES.contains(&segment.unscale()));
         let len = self
             .preinitialized_segments

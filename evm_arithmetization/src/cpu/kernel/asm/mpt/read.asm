@@ -24,8 +24,8 @@ global mpt_read_state_trie:
 // - the key, as a U256
 // - return destination
 //
-// This function returns a pointer to to the value, or 0 if the key is not found. If the key
-// is a leaf, it return a pointer to a pointer.
+// This function returns a pointer to the value, or 0 if the key is not found. If the key
+// is a leaf, it returns a pointer to a pointer.
 global mpt_read:
     // stack: node_ptr, num_nibbles, key, retdest
     DUP1
