@@ -2075,6 +2075,7 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "tiny-keccak",
+ "zk_evm_common",
  "zk_evm_proc_macro",
 ]
 
@@ -2876,6 +2877,7 @@ dependencies = [
  "tracing-subscriber",
  "vergen",
  "zero_bin_common",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -3305,6 +3307,7 @@ dependencies = [
  "trace_decoder",
  "tracing",
  "zero_bin_common",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -3849,6 +3852,7 @@ dependencies = [
  "paste",
  "plonky2",
  "serde",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -3893,6 +3897,7 @@ dependencies = [
  "trace_decoder",
  "tracing",
  "zero_bin_common",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -4179,6 +4184,7 @@ dependencies = [
  "url",
  "vergen",
  "zero_bin_common",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -5390,6 +5396,7 @@ dependencies = [
  "tracing-subscriber",
  "vergen",
  "zero_bin_common",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -5826,6 +5833,7 @@ dependencies = [
  "trace_decoder",
  "tracing",
  "vergen",
+ "zk_evm_common",
 ]
 
 [[package]]

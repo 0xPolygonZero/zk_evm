@@ -17,6 +17,7 @@ serde_path_to_error = { workspace = true }
 # Local dependencies
 proof_gen = { workspace = true }
 zero_bin_common = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [build-dependencies]
 cargo_metadata = { workspace = true }

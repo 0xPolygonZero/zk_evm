@@ -134,17 +134,7 @@
 //!     assert!(verifier_state.verify(block_proof.intern).is_ok());
 //! ```
 
-#[cfg(any(
-    all(feature = "cdk_erigon", feature = "polygon_pos"),
-    all(feature = "cdk_erigon", feature = "eth_mainnet"),
-    all(feature = "polygon_pos", feature = "eth_mainnet"),
-    not(any(
-        feature = "cdk_erigon",
-        feature = "eth_mainnet",
-        feature = "polygon_pos"
-    ))
-))]
-compile_error!("One and only one of the feature chains `cdk_erigon`, `polygon_pos` or `eth_mainnet` must be selected");
+zk_evm_common::check_chain_features!();
 
 pub(crate) mod constants;
 pub mod proof_gen;

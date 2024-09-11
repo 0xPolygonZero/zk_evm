@@ -32,6 +32,7 @@ mpt_trie = { workspace = true }
 prover = { workspace = true }
 trace_decoder = { workspace = true }
 zero_bin_common = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [build-dependencies]
 cargo_metadata = { workspace = true }

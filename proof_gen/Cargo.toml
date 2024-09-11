@@ -18,6 +18,7 @@ hashbrown = { workspace = true }
 
 # Local dependencies
 evm_arithmetization = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [features]
 default = ["eth_mainnet"]

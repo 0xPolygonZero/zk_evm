@@ -29,6 +29,7 @@ evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
 zero_bin_common = { workspace = true }
+zk_evm_common = { workspace = true }
 
 
 [features]

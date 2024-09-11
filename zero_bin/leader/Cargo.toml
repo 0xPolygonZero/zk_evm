@@ -32,6 +32,7 @@ proof_gen = { workspace = true }
 prover = { workspace = true }
 rpc = { workspace = true }
 zero_bin_common = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [features]
 default = ["eth_mainnet"]
