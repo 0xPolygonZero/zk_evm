@@ -14,7 +14,7 @@ pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 
 pub(crate) trait LinkedListType {}
 #[derive(Clone)]
-/// A linked list that starts from the first node after the special node and iterates for ever.
+/// A linked list that starts from the first node after the special node and iterates forever.
 pub(crate) struct Cyclic;
 #[derive(Clone)]
 /// A linked list that starts from the special node and iterates until the last node.

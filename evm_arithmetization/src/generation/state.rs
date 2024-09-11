@@ -379,7 +379,7 @@ pub struct GenerationState<F: RichField> {
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
-    /// Each entry contains the pait (key, ptr) where key is the (hashed) key
+    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
     pub(crate) accounts: BTreeMap<U256, usize>,
