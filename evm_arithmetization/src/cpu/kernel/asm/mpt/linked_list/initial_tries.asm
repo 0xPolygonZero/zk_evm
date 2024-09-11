@@ -1,11 +1,11 @@
 
 global set_initial_state_trie:
-    PUSH set_inital_state_trie_after
+    PUSH set_initial_state_trie_after
     %first_initial_slot // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %first_initial_account // Skip the first node.
     %jump(insert_all_initial_accounts)
-set_inital_state_trie_after:
+set_initial_state_trie_after:
     //stack: new_state_root
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     JUMP
@@ -17,9 +17,9 @@ set_inital_state_trie_after:
 %%after:
 %endmacro
 
-// Given a pointer `root_ptr` to the root of a trie, insert all the inital accounts in
+// Given a pointer `root_ptr` to the root of a trie, insert all the initial accounts in
 // the accounts_linked_list starting at `account_ptr_ptr` as well as the
-// respective inital storage slots in `storage_ptr_ptr`.
+// respective initial storage slots in `storage_ptr_ptr`.
 // Pre stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr. // shouldn't change
 global insert_all_initial_accounts:
@@ -53,7 +53,7 @@ after_mpt_read:
     // stack: account_ptr, trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP1 SWAP2
     // stack: trie_account_ptr_ptr, account_ptr, account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    %mstore_trie_data // The trie's account points to the linked list inital account
+    %mstore_trie_data // The trie's account points to the linked list initial account
     // stack: account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %add_const(2)
     // stack: storage_root_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -85,7 +85,7 @@ global insert_all_initial_slots:
     DUP2
     MLOAD_GENERAL
     DUP2
-    EQ // Check that the node addres is the same as `addr`
+    EQ // Check that the node address is the same as `addr`
     DUP3
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
     SUB
