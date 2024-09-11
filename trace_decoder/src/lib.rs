@@ -1,4 +1,4 @@
-//! An _Ethereum Node_[^1] executes _transactions_ in _blocks_.
+//! An _Ethereum Node_ executes _transactions_ in _blocks_.
 //!
 //! Execution mutates two key data structures:
 //! - [The state trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie).
@@ -30,9 +30,6 @@
 //! while indirecting all possible subtries to minimise prover load
 //! (since prover performance is sensitive to the size of the trie).
 //! The prover can therefore prove each batch of transactions independently.
-//!
-//! [^1]: In our stack, this is [a fork of erigon](https://github.com/0xPolygonZero/erigon),
-//!       which exposes more information over RPC.
 //!
 //! # Non-goals
 //! - Performance - this will never be the bottleneck in any proving stack.
