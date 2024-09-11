@@ -14,6 +14,8 @@ pub const EMPTY_TRIE_HASH: H256 = H256([
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
 
+pub const NETWORK_ERR_MSG: &str = "One and only one of the feature chains `cdk_erigon`, `polygon_pos` or `eth_mainnet` must be selected";
+
 #[test]
 fn test_empty_code_hash() {
     assert_eq!(EMPTY_CODE_HASH, keccak_hash::keccak([]));
