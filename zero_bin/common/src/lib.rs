@@ -1,11 +1,12 @@
-#[cfg_attr(
-    not(any(feature = "polygon_pos", feature = "cdk_erigon")),
-    cfg(feature = "eth_mainnet")
-)]
 #[cfg(any(
     all(feature = "cdk_erigon", feature = "polygon_pos"),
     all(feature = "cdk_erigon", feature = "eth_mainnet"),
     all(feature = "polygon_pos", feature = "eth_mainnet"),
+    not(any(
+        feature = "cdk_erigon",
+        feature = "eth_mainnet",
+        feature = "polygon_pos"
+    ))
 ))]
 compile_error!("Only a single network feature should be enabled at a time!");
 pub mod block_interval;
