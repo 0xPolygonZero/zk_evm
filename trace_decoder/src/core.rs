@@ -317,7 +317,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
             storage: storage_tries.clone(),
         };
 
-        // We want to perform intersections the TrieInputs above,
+        // We want to perform mask the TrieInputs above,
         // but won't know the bounds until after the loop below,
         // so store that information here.
         let mut storage_masks = BTreeMap::<_, BTreeSet<TrieKey>>::new();
@@ -503,9 +503,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 false => vec![],
             },
             before: {
-                before.state.intersect(state_mask)?;
-                before.receipt.intersect(batch_first_txn_ix..txn_ix)?;
-                before.transaction.intersect(batch_first_txn_ix..txn_ix)?;
+                before.state.mask(state_mask)?;
+                before.receipt.mask(batch_first_txn_ix..txn_ix)?;
+                before.transaction.mask(batch_first_txn_ix..txn_ix)?;
 
                 let keep = storage_masks
                     .keys()
@@ -515,8 +515,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
                 for (addr, mask) in storage_masks {
                     if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.intersect(mask)?
-                    } // else self_destructed
+                        it.mask(mask)?
+                    } // else must have self-destructed
                 }
                 before
             },
