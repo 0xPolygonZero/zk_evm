@@ -27,6 +27,7 @@ global handle_precompiles:
     {
         %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
     }
+    // TODO: Add support of EIP-7712 for Polygon Pos, https://github.com/0xPolygonZero/zk_evm/issues/265
     // stack: retdest
     JUMP
 
