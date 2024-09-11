@@ -15,7 +15,6 @@ use crate::cpu::kernel::tests::mpt::{
 use crate::generation::mpt::AccountRlp;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
-use crate::testing_utils::init_logger;
 use crate::util::h2u;
 use crate::Node;
 

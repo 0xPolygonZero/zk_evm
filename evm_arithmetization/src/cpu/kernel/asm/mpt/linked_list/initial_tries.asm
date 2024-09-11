@@ -1,13 +1,18 @@
 
 global set_initial_state_trie:
+    %get_trie_data_size
     PUSH set_initial_state_trie_after
     %first_initial_slot // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %first_initial_account // Skip the first node.
     %jump(insert_all_initial_accounts)
 set_initial_state_trie_after:
-    //stack: new_state_root
+    //stack: new_state_root, trie_data_size
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    %get_trie_data_size
+    SUB
+global debug_cuanta_mas_trie_data:
+    SWAP1
     JUMP
 
 %macro set_initial_state_trie
@@ -91,7 +96,8 @@ global insert_all_initial_slots:
     SUB
     MUL
     %jumpi(insert_next_slot)
-    // The addr has changed, meaning that we've inserted all slots for addr
+    // The addr has changed, meaning that we've inserted all slots for addr,
+    // or we reached the end of the initial storage linked list.
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     %stack (addr, storage_ptr_ptr, root_ptr, retdest) -> (retdest, storage_ptr_ptr, root_ptr)
     JUMP

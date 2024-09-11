@@ -8,7 +8,6 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::prepare_interpreter;
 use crate::generation::mpt::AccountRlp;
-use crate::testing_utils::init_logger;
 use crate::Node;
 
 // Test account with a given code hash.
