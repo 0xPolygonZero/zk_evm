@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use crate::{
     cpu::kernel::{constants::INITIAL_RLP_ADDR, interpreter::Interpreter},
@@ -9,9 +9,10 @@ use crate::{
 mod parse_type_0_txn;
 mod parse_type_1_txn;
 mod parse_type_2_txn;
+#[cfg(feature = "eth_mainnet")]
 mod parse_type_3_txn;
 
-pub(crate) fn prepare_interpreter_for_txn_parsing<F: Field>(
+pub(crate) fn prepare_interpreter_for_txn_parsing<F: RichField>(
     interpreter: &mut Interpreter<F>,
     entry_point: usize,
     exit_point: usize,

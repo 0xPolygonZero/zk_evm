@@ -125,7 +125,7 @@ impl BatchAggregatableProof {
         }
     }
 
-    pub(crate) fn is_agg(&self) -> bool {
+    pub(crate) const fn is_agg(&self) -> bool {
         match self {
             BatchAggregatableProof::Segment(_) => false,
             BatchAggregatableProof::Txn(_) => false,
@@ -133,7 +133,7 @@ impl BatchAggregatableProof {
         }
     }
 
-    pub(crate) fn intern(&self) -> &PlonkyProofIntern {
+    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
         match self {
             BatchAggregatableProof::Segment(info) => &info.intern,
             BatchAggregatableProof::Txn(info) => &info.intern,

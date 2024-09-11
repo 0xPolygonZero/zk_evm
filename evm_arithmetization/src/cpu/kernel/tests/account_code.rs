@@ -7,7 +7,7 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -25,7 +25,7 @@ use crate::util::h2u;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 
-pub(crate) fn initialize_mpts<F: Field>(
+pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: &TrieInputs,
 ) {
@@ -132,7 +132,7 @@ pub(crate) fn initialize_mpts<F: Field>(
 
 // Stolen from `tests/mpt/insert.rs`
 // Prepare the interpreter by inserting the account in the state trie.
-pub(crate) fn prepare_interpreter<F: Field>(
+pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter: &mut Interpreter<F>,
     address: Address,
     account: &AccountRlp,
@@ -380,7 +380,7 @@ fn test_extcodecopy() -> Result<()> {
 /// Prepare the interpreter for storage tests by inserting all necessary
 /// accounts in the state trie, adding the code we want to context 1 and
 /// switching the context.
-fn prepare_interpreter_all_accounts<F: Field>(
+fn prepare_interpreter_all_accounts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: TrieInputs,
     addr: [u8; 20],

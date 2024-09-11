@@ -28,6 +28,7 @@ const fn u256_from_set_index_ranges<const N: usize>(ranges: &[RangeInclusive<u8>
     U256(res_limbs)
 }
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_index_ranges(&[
     0x30..=0x30, // ADDRESS
     0x32..=0x34, // ORIGIN, CALLER, CALLVALUE
@@ -38,6 +39,20 @@ pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_inde
     0x41..=0x48, /* COINBASE, TIMESTAMP, NUMBER, DIFFICULTY, GASLIMIT, CHAINID, SELFBALANCE,
                   * BASEFEE */
     0x4a..=0x4a, // BLOBBASEFEE
+    0x58..=0x5a, // PC, MSIZE, GAS
+    0x5f..=0x8f, // PUSH*, DUP*
+]);
+
+#[cfg(not(feature = "eth_mainnet"))]
+pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_index_ranges(&[
+    0x30..=0x30, // ADDRESS
+    0x32..=0x34, // ORIGIN, CALLER, CALLVALUE
+    0x36..=0x36, // CALLDATASIZE
+    0x38..=0x38, // CODESIZE
+    0x3a..=0x3a, // GASPRICE
+    0x3d..=0x3d, // RETURNDATASIZE
+    0x41..=0x48, /* COINBASE, TIMESTAMP, NUMBER, DIFFICULTY, GASLIMIT, CHAINID, SELFBALANCE,
+                  * BASEFEE */
     0x58..=0x5a, // PC, MSIZE, GAS
     0x5f..=0x8f, // PUSH*, DUP*
 ]);

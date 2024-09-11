@@ -283,8 +283,14 @@ pub fn delete_all() -> anyhow::Result<()> {
             let file_path = entry.path();
 
             if file_path.is_file()
-                && (file_path.starts_with("prover_state")
-                    || file_path.starts_with("verifier_state"))
+                && (entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("prover_state")
+                    || entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with("verifier_state"))
             {
                 // Delete all circuit files.
                 fs::remove_file(file_path)?;

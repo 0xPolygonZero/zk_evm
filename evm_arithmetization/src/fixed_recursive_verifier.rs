@@ -46,7 +46,7 @@ use crate::proof::{
     PublicValuesTarget, RegistersDataTarget, TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN,
     TARGET_HASH_SIZE,
 };
-use crate::prover::{check_abort_signal, prove};
+use crate::prover::{check_abort_signal, features_check, prove};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_final_public_values_public_input,
     add_virtual_public_values_public_input, get_memory_extra_looking_sum_circuit,
@@ -54,8 +54,6 @@ use crate::recursive_verifier::{
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
 use crate::util::h256_limbs;
-#[cfg(feature = "cdk_erigon")]
-use crate::util::u256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
@@ -751,14 +749,22 @@ where
         let mem_before = RecursiveCircuitsForTable::new(
             Table::MemBefore,
             &all_stark.mem_before_stark,
-            degree_bits_ranges[Table::MemBefore as usize].clone(),
+            degree_bits_ranges[*Table::MemBefore].clone(),
             &all_stark.cross_table_lookups,
             stark_config,
         );
         let mem_after = RecursiveCircuitsForTable::new(
             Table::MemAfter,
             &all_stark.mem_after_stark,
-            degree_bits_ranges[Table::MemAfter as usize].clone(),
+            degree_bits_ranges[*Table::MemAfter].clone(),
+            &all_stark.cross_table_lookups,
+            stark_config,
+        );
+        #[cfg(feature = "cdk_erigon")]
+        let poseidon = RecursiveCircuitsForTable::new(
+            Table::Poseidon,
+            &all_stark.poseidon_stark,
+            degree_bits_ranges[*Table::Poseidon].clone(),
             &all_stark.cross_table_lookups,
             stark_config,
         );
@@ -773,6 +779,8 @@ where
             memory,
             mem_before,
             mem_after,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon,
         ];
         let root = Self::create_segment_circuit(&by_table, stark_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
@@ -1034,18 +1042,21 @@ where
         );
 
         // Connect the burn address targets.
-        BurnAddrTarget::conditional_assert_eq(
-            &mut builder,
-            is_not_dummy,
-            lhs_pv.burn_addr,
-            rhs_pv.burn_addr.clone(),
-        );
-        BurnAddrTarget::conditional_assert_eq(
-            &mut builder,
-            is_not_dummy,
-            public_values.burn_addr.clone(),
-            rhs_pv.burn_addr,
-        );
+        #[cfg(feature = "cdk_erigon")]
+        {
+            BurnAddrTarget::conditional_assert_eq(
+                &mut builder,
+                is_not_dummy,
+                lhs_pv.burn_addr,
+                rhs_pv.burn_addr.clone(),
+            );
+            BurnAddrTarget::conditional_assert_eq(
+                &mut builder,
+                is_not_dummy,
+                public_values.burn_addr.clone(),
+                rhs_pv.burn_addr,
+            );
+        }
 
         BlockMetadataTarget::conditional_assert_eq(
             &mut builder,
@@ -1184,16 +1195,19 @@ where
         );
 
         // Connect the burn address targets.
-        BurnAddrTarget::connect(
-            &mut builder,
-            lhs_pv.burn_addr.clone(),
-            rhs_pv.burn_addr.clone(),
-        );
-        BurnAddrTarget::connect(
-            &mut builder,
-            public_values.burn_addr.clone(),
-            rhs_pv.burn_addr.clone(),
-        );
+        #[cfg(feature = "cdk_erigon")]
+        {
+            BurnAddrTarget::connect(
+                &mut builder,
+                lhs_pv.burn_addr.clone(),
+                rhs_pv.burn_addr.clone(),
+            );
+            BurnAddrTarget::connect(
+                &mut builder,
+                public_values.burn_addr.clone(),
+                rhs_pv.burn_addr.clone(),
+            );
+        }
 
         Self::connect_extra_public_values(
             &mut builder,
@@ -1368,16 +1382,19 @@ where
         );
 
         // Connect the burn address targets.
-        BurnAddrTarget::connect(
-            &mut builder,
-            parent_pv.burn_addr.clone(),
-            agg_pv.burn_addr.clone(),
-        );
-        BurnAddrTarget::connect(
-            &mut builder,
-            public_values.burn_addr.clone(),
-            agg_pv.burn_addr.clone(),
-        );
+        #[cfg(feature = "cdk_erigon")]
+        {
+            BurnAddrTarget::connect(
+                &mut builder,
+                parent_pv.burn_addr.clone(),
+                agg_pv.burn_addr.clone(),
+            );
+            BurnAddrTarget::connect(
+                &mut builder,
+                public_values.burn_addr.clone(),
+                agg_pv.burn_addr.clone(),
+            );
+        }
 
         // Make connections between block proofs, and check initial and final block
         // values.
@@ -1806,9 +1823,8 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
-        if generation_inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
-            log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
-        }
+        features_check(&generation_inputs);
+
         let all_proof = prove::<F, C, D>(
             all_stark,
             config,
@@ -1882,6 +1898,8 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
+        features_check(&generation_inputs.clone().trim());
+
         let segment_iterator =
             SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
 
@@ -2337,7 +2355,7 @@ where
             {
                 let burn_addr_keys =
                     TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + burn_addr_offset;
-                for (key, &value) in burn_addr_keys.zip_eq(&u256_limbs(
+                for (key, &value) in burn_addr_keys.zip_eq(&crate::util::u256_limbs(
                     public_values
                         .burn_addr
                         .expect("We should have a burn addr when cdk_erigon is activated"),

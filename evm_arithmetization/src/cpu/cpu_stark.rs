@@ -462,6 +462,87 @@ pub(crate) fn ctl_filter_set_context<F: Field>() -> Filter<F> {
     )
 }
 
+#[cfg(feature = "cdk_erigon")]
+/// Returns the `TableWithColumns` for the CPU rows calling POSEIDON.
+pub(crate) fn ctl_poseidon_simple_op<F: Field>() -> TableWithColumns<F> {
+    // When executing POSEIDON, the GP memory channels are used as follows:
+    // GP channel 0: stack[-1] = x
+    // GP channel 1: stack[-2] = y
+    // GP channel 2: stack[-3] = z
+    // Such that we can compute `POSEIDON(x || y || z)`.
+    let mut columns = Vec::new();
+    for channel in 0..3 {
+        for i in 0..VALUE_LIMBS / 2 {
+            columns.push(Column::linear_combination([
+                (COL_MAP.mem_channels[channel].value[2 * i], F::ONE),
+                (
+                    COL_MAP.mem_channels[channel].value[2 * i + 1],
+                    F::from_canonical_u64(1 << 32),
+                ),
+            ]));
+        }
+    }
+    columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
+    TableWithColumns::new(*Table::Cpu, columns, ctl_poseidon_simple_filter())
+}
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) fn ctl_poseidon_general_input<F: Field>() -> TableWithColumns<F> {
+    // When executing POSEIDON_GENERAL, the GP memory channels are used as follows:
+    // GP channel 0: stack[-1] = addr (context, segment, virt)
+    // GP channel 1: stack[-2] = len
+    let (context, segment, virt) = get_addr(&COL_MAP, 0);
+    let context = Column::single(context);
+    let segment: Column<F> = Column::single(segment);
+    let virt = Column::single(virt);
+    let len = Column::single(COL_MAP.mem_channels[1].value[0]);
+
+    let num_channels = F::from_canonical_usize(NUM_CHANNELS);
+    let timestamp = Column::linear_combination([(COL_MAP.clock, num_channels)]);
+
+    TableWithColumns::new(
+        *Table::Cpu,
+        vec![context, segment, virt, len, timestamp],
+        ctl_poseidon_general_filter(),
+    )
+}
+
+#[cfg(feature = "cdk_erigon")]
+/// CTL filter for the `POSEIDON` operation.
+/// POSEIDON is differentiated from POSEIDON_GENERAL by its first bit set to 0.
+pub(crate) fn ctl_poseidon_simple_filter<F: Field>() -> Filter<F> {
+    Filter::new(
+        vec![(
+            Column::single(COL_MAP.op.poseidon),
+            Column::linear_combination_with_constant([(COL_MAP.opcode_bits[0], -F::ONE)], F::ONE),
+        )],
+        vec![],
+    )
+}
+
+#[cfg(feature = "cdk_erigon")]
+/// CTL filter for the `POSEIDON_GENERAL` operation.
+/// POSEIDON_GENERAL is differentiated from POSEIDON by its first bit set to 1.
+pub(crate) fn ctl_poseidon_general_filter<F: Field>() -> Filter<F> {
+    Filter::new(
+        vec![(
+            Column::single(COL_MAP.op.poseidon),
+            Column::single(COL_MAP.opcode_bits[0]),
+        )],
+        vec![],
+    )
+}
+
+#[cfg(feature = "cdk_erigon")]
+/// Returns the `TableWithColumns` for the CPU rows calling POSEIDON_GENERAL.
+pub(crate) fn ctl_poseidon_general_output<F: Field>() -> TableWithColumns<F> {
+    let mut columns = Vec::new();
+    columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
+    let num_channels = F::from_canonical_usize(NUM_CHANNELS);
+    columns.push(Column::linear_combination([(COL_MAP.clock, num_channels)]));
+    TableWithColumns::new(*Table::Cpu, columns, ctl_poseidon_general_filter())
+}
+
 /// Disable the specified memory channels.
 /// Since channel 0 contains the top of the stack and is handled specially,
 /// channels to disable are 1, 2 or both. All cases can be expressed as a vec.

@@ -1,6 +1,7 @@
 use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::util::{mem_read_gp_with_log_and_fill, stack_pop_with_log_and_fill};
 use crate::cpu::columns::CpuColumnsView;
@@ -22,7 +23,7 @@ use crate::{arithmetic, logic};
 
 pub(crate) const EXC_STOP_CODE: u8 = 6;
 
-pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
+pub(crate) fn read_code_memory<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
 ) -> u8 {
@@ -90,6 +91,10 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x1d, _) => Ok(Operation::Syscall(opcode, 2, false)), // SAR
         (0x20, _) => Ok(Operation::Syscall(opcode, 2, false)), // KECCAK256
         (0x21, true) => Ok(Operation::KeccakGeneral),
+        #[cfg(feature = "cdk_erigon")]
+        (0x22, true) => Ok(Operation::Poseidon),
+        #[cfg(feature = "cdk_erigon")]
+        (0x23, true) => Ok(Operation::PoseidonGeneral),
         (0x30, _) => Ok(Operation::Syscall(opcode, 0, true)), // ADDRESS
         (0x31, _) => Ok(Operation::Syscall(opcode, 1, false)), // BALANCE
         (0x32, _) => Ok(Operation::Syscall(opcode, 0, true)), // ORIGIN
@@ -115,7 +120,9 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x46, _) => Ok(Operation::Syscall(opcode, 0, true)), // CHAINID
         (0x47, _) => Ok(Operation::Syscall(opcode, 0, true)), // SELFBALANCE
         (0x48, _) => Ok(Operation::Syscall(opcode, 0, true)), // BASEFEE
+        #[cfg(feature = "eth_mainnet")]
         (0x49, _) => Ok(Operation::Syscall(opcode, 1, false)), // BLOBHASH
+        #[cfg(feature = "eth_mainnet")]
         (0x4a, _) => Ok(Operation::Syscall(opcode, 0, true)), // BLOBBASEFEE
         (0x50, _) => Ok(Operation::Pop),
         (0x51, _) => Ok(Operation::Syscall(opcode, 1, false)), // MLOAD
@@ -187,6 +194,8 @@ pub(crate) fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>)
         Operation::BinaryArithmetic(_) => &mut flags.binary_op,
         Operation::TernaryArithmetic(_) => &mut flags.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => &mut flags.jumpdest_keccak_general,
+        #[cfg(feature = "cdk_erigon")]
+        Operation::Poseidon | Operation::PoseidonGeneral => &mut flags.poseidon,
         Operation::ProverInput | Operation::Push(1..) => &mut flags.push_prover_input,
         Operation::Jump | Operation::Jumpi => &mut flags.jumps,
         Operation::Pc | Operation::Push(0) => &mut flags.pc_push0,
@@ -219,6 +228,8 @@ pub(crate) const fn get_op_special_length(op: Operation) -> Option<usize> {
         Operation::BinaryArithmetic(_) => STACK_BEHAVIORS.binary_op,
         Operation::TernaryArithmetic(_) => STACK_BEHAVIORS.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => STACK_BEHAVIORS.jumpdest_keccak_general,
+        #[cfg(feature = "cdk_erigon")]
+        Operation::Poseidon | Operation::PoseidonGeneral => STACK_BEHAVIORS.poseidon,
         Operation::Jump => JUMP_OP,
         Operation::Jumpi => JUMPI_OP,
         Operation::GetContext | Operation::SetContext => None,
@@ -258,6 +269,8 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
         Operation::BinaryArithmetic(_) => MIGHT_OVERFLOW.binary_op,
         Operation::TernaryArithmetic(_) => MIGHT_OVERFLOW.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => MIGHT_OVERFLOW.jumpdest_keccak_general,
+        #[cfg(feature = "cdk_erigon")]
+        Operation::Poseidon | Operation::PoseidonGeneral => MIGHT_OVERFLOW.poseidon,
         Operation::Jump | Operation::Jumpi => MIGHT_OVERFLOW.jumps,
         Operation::Pc | Operation::Push(0) => MIGHT_OVERFLOW.pc_push0,
         Operation::GetContext | Operation::SetContext => MIGHT_OVERFLOW.context_op,
@@ -267,7 +280,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
@@ -298,7 +311,7 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 
-pub(crate) trait Transition<F: Field>: State<F>
+pub(crate) trait Transition<F: RichField>: State<F>
 where
     Self: Sized,
 {
@@ -504,6 +517,10 @@ where
             Operation::BinaryArithmetic(op) => generate_binary_arithmetic_op(op, self, row),
             Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, self, row),
             Operation::KeccakGeneral => generate_keccak_general(self, row),
+            #[cfg(feature = "cdk_erigon")]
+            Operation::Poseidon => generate_poseidon(self, row),
+            #[cfg(feature = "cdk_erigon")]
+            Operation::PoseidonGeneral => generate_poseidon_general(self, row),
             Operation::ProverInput => generate_prover_input(self, row),
             Operation::Pop => generate_pop(self, row),
             Operation::Jump => self.generate_jump(row),

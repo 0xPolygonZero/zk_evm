@@ -610,7 +610,7 @@ fn process_txn_info(
             .collect(),
         block_metadata: other_data.b_data.b_meta.clone(),
         block_hashes: other_data.b_data.b_hashes.clone(),
-        global_exit_roots: vec![],
+        ger_data: None,
     };
 
     // After processing a transaction, we update the remaining accumulators

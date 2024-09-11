@@ -95,7 +95,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 
     /// View of the column for context pruning.
     /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn context_pruning(&self) -> &CpuContextPruningView<T> {
+    pub(crate) const fn context_pruning(&self) -> &CpuContextPruningView<T> {
         unsafe { &self.context_pruning }
     }
 

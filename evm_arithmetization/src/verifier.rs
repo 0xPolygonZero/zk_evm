@@ -141,6 +141,8 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         memory_stark,
         mem_before_stark,
         mem_after_stark,
+        #[cfg(feature = "cdk_erigon")]
+        poseidon_stark,
         cross_table_lookups,
     } = all_stark;
 
@@ -156,74 +158,83 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 
     verify_stark_proof_with_challenges(
         arithmetic_stark,
-        &stark_proofs[Table::Arithmetic as usize].proof,
-        &stark_challenges[Table::Arithmetic as usize],
-        Some(&ctl_vars_per_table[Table::Arithmetic as usize]),
+        &stark_proofs[*Table::Arithmetic].proof,
+        &stark_challenges[*Table::Arithmetic],
+        Some(&ctl_vars_per_table[*Table::Arithmetic]),
         &[],
         config,
     )?;
 
     verify_stark_proof_with_challenges(
         byte_packing_stark,
-        &stark_proofs[Table::BytePacking as usize].proof,
-        &stark_challenges[Table::BytePacking as usize],
-        Some(&ctl_vars_per_table[Table::BytePacking as usize]),
+        &stark_proofs[*Table::BytePacking].proof,
+        &stark_challenges[*Table::BytePacking],
+        Some(&ctl_vars_per_table[*Table::BytePacking]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         cpu_stark,
-        &stark_proofs[Table::Cpu as usize].proof,
-        &stark_challenges[Table::Cpu as usize],
-        Some(&ctl_vars_per_table[Table::Cpu as usize]),
+        &stark_proofs[*Table::Cpu].proof,
+        &stark_challenges[*Table::Cpu],
+        Some(&ctl_vars_per_table[*Table::Cpu]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         keccak_stark,
-        &stark_proofs[Table::Keccak as usize].proof,
-        &stark_challenges[Table::Keccak as usize],
-        Some(&ctl_vars_per_table[Table::Keccak as usize]),
+        &stark_proofs[*Table::Keccak].proof,
+        &stark_challenges[*Table::Keccak],
+        Some(&ctl_vars_per_table[*Table::Keccak]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         keccak_sponge_stark,
-        &stark_proofs[Table::KeccakSponge as usize].proof,
-        &stark_challenges[Table::KeccakSponge as usize],
-        Some(&ctl_vars_per_table[Table::KeccakSponge as usize]),
+        &stark_proofs[*Table::KeccakSponge].proof,
+        &stark_challenges[*Table::KeccakSponge],
+        Some(&ctl_vars_per_table[*Table::KeccakSponge]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         logic_stark,
-        &stark_proofs[Table::Logic as usize].proof,
-        &stark_challenges[Table::Logic as usize],
-        Some(&ctl_vars_per_table[Table::Logic as usize]),
+        &stark_proofs[*Table::Logic].proof,
+        &stark_challenges[*Table::Logic],
+        Some(&ctl_vars_per_table[*Table::Logic]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         memory_stark,
-        &stark_proofs[Table::Memory as usize].proof,
-        &stark_challenges[Table::Memory as usize],
-        Some(&ctl_vars_per_table[Table::Memory as usize]),
+        &stark_proofs[*Table::Memory].proof,
+        &stark_challenges[*Table::Memory],
+        Some(&ctl_vars_per_table[*Table::Memory]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         mem_before_stark,
-        &stark_proofs[Table::MemBefore as usize].proof,
-        &stark_challenges[Table::MemBefore as usize],
-        Some(&ctl_vars_per_table[Table::MemBefore as usize]),
+        &stark_proofs[*Table::MemBefore].proof,
+        &stark_challenges[*Table::MemBefore],
+        Some(&ctl_vars_per_table[*Table::MemBefore]),
         &[],
         config,
     )?;
     verify_stark_proof_with_challenges(
         mem_after_stark,
-        &stark_proofs[Table::MemAfter as usize].proof,
-        &stark_challenges[Table::MemAfter as usize],
-        Some(&ctl_vars_per_table[Table::MemAfter as usize]),
+        &stark_proofs[*Table::MemAfter].proof,
+        &stark_challenges[*Table::MemAfter],
+        Some(&ctl_vars_per_table[*Table::MemAfter]),
+        &[],
+        config,
+    )?;
+    #[cfg(feature = "cdk_erigon")]
+    verify_stark_proof_with_challenges(
+        poseidon_stark,
+        &stark_proofs[*Table::Poseidon].proof,
+        &stark_challenges[*Table::Poseidon],
+        Some(&ctl_vars_per_table[*Table::Poseidon]),
         &[],
         config,
     )?;
@@ -240,7 +251,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
     let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
 
     // Memory
-    extra_looking_sums[Table::Memory as usize] = (0..config.num_challenges)
+    extra_looking_sums[*Table::Memory] = (0..config.num_challenges)
         .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
         .collect_vec();
 
@@ -309,6 +320,7 @@ where
             GlobalMetadata::BlockBaseFee,
             public_values.block_metadata.block_base_fee,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             h2u(public_values.block_metadata.parent_beacon_block_root),
@@ -321,10 +333,12 @@ where
             GlobalMetadata::BlockGasUsed,
             public_values.block_metadata.block_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             public_values.block_metadata.block_blob_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             public_values.block_metadata.block_excess_blob_gas,
@@ -494,6 +508,13 @@ pub(crate) mod debug_utils {
                 GlobalMetadata::BlockBeneficiary,
                 U256::from_big_endian(&public_values.block_metadata.block_beneficiary.0),
             ),
+            #[cfg(feature = "cdk_erigon")]
+            (
+                GlobalMetadata::BurnAddr,
+                public_values
+                    .burn_addr
+                    .expect("There should be an address set in cdk_erigon."),
+            ),
             (
                 GlobalMetadata::BlockTimestamp,
                 public_values.block_metadata.block_timestamp,
@@ -530,14 +551,17 @@ pub(crate) mod debug_utils {
                 GlobalMetadata::BlockGasUsed,
                 public_values.block_metadata.block_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 public_values.block_metadata.block_blob_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 public_values.block_metadata.block_excess_blob_gas,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(public_values.block_metadata.parent_beacon_block_root),

@@ -368,17 +368,6 @@ store_initial_slots_end:
     JUMP
 
 
-%macro insert_slot
-    %stack (addr_key, key, ptr) -> (addr_key, key, ptr, %%after)
-    %jump(insert_slot)
-%%after:
-    // stack: value_ptr
-%endmacro
-
-%macro insert_slot_no_return
-    %insert_slot
-%endmacro
-
 // Multiplies the value at the top of the stack, denoted by ptr/5, by 5
 // and aborts if ptr/5 >= (mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE] - @SEGMENT_STORAGE_LINKED_LIST)/5.
 // This way, @SEGMENT_STORAGE_LINKED_LIST + 5*ptr/5 must be pointing to the beginning of a node.
@@ -554,18 +543,18 @@ slot_found_write_value:
 
 /// Inserts the pair (address_key, storage_key) and payload pointer into the linked list if it is not already present,
 /// or modifies its payload if it was already present.
-/// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
+/// Returns `value` if the storage key was inserted, `old_value` if it was already present.
 global insert_slot:
-    // stack: addr_key, key, payload_ptr, retdest
+    // stack: addr_key, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
-    // stack: pred_ptr/5, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr/5, addr_key, key, value, retdest
     %get_valid_slot_ptr
 
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
     MLOAD_GENERAL
     DUP1
-    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, key, value, retdest
     DUP4 
     GT
     DUP3 %eq_const(@SEGMENT_STORAGE_LINKED_LIST)
@@ -574,25 +563,25 @@ global insert_slot:
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // we need to insert a new node.
     %jumpi(insert_new_slot)
-    // stack: pred_addr_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_addr_key, pred_ptr, addr_key, key, value, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
     %assert_eq
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
     %increment
     MLOAD_GENERAL
-    // stack: pred_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP1 DUP5
     GT
     %jumpi(insert_new_slot)
-    // stack: pred_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP4
     // We know that key <= pred_key. It must hold that pred_key == key.
     %assert_eq
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(@STORAGE_NEXT_NODE_PTR)
@@ -603,34 +592,34 @@ global insert_slot:
 
 slot_found_write:
     // The slot was already in the list
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
-    // Load the the payload pointer and access counter
+    // stack: pred_ptr, addr_key, key, value, retdest
+    // Load the old value
     %add_const(2)
     DUP1
     MLOAD_GENERAL
-    // stack: orig_payload_ptr, pred_ptr + 2, addr_key, key, payload_ptr, retdest
+    // stack: old_value, pred_ptr + 2, addr_key, key, value, retdest
     SWAP1
     DUP5
-    MSTORE_GENERAL // Store the new payload
-    %stack (orig_payload_ptr, addr_key, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
+    MSTORE_GENERAL // Store the new value
+    %stack (old_value, addr_key, key, value, retdest) -> (retdest, old_value)
     JUMP
 insert_new_slot:
-    // stack: pred_addr or pred_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_addr or pred_key, pred_ptr, addr_key, key, value, retdest
     POP
     // get the value of the next address
     %add_const(@STORAGE_NEXT_NODE_PTR)
-    // stack: next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_ptr_ptr, addr_key, key, value, retdest
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     DUP2
     MLOAD_GENERAL
-    // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     // Check that this is not a deleted node
     DUP1
     %eq_const(@U256_MAX)
     %assert_zero
     DUP1
     MLOAD_GENERAL
-    // stack: next_addr_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_addr_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1
     DUP6
     // Here, (addr_key > pred_addr_key) || (pred_ptr == @SEGMENT_ACCOUNTS_LINKED_LIST).
@@ -638,77 +627,77 @@ insert_new_slot:
     LT
     %jumpi(next_node_ok)
     // If addr_key <= next_addr_key, then it addr must be equal to next_addr
-    // stack: next_addr_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_addr_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP5
     %assert_eq
-    // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1
     %increment
     MLOAD_GENERAL
-    // stack: next_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1 // This is added just to have the correct stack in next_node_ok
     DUP7
     // The next key must be strictly larger
     %assert_lt
 next_node_ok:
-    // stack: next_addr or next_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_addr or next_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     POP
-    // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     SWAP2
     DUP2
-    // stack: new_ptr, next_ptr_ptr, new_ptr, next_ptr, addr_key, key, payload_ptr, retdest
+    // stack: new_ptr, next_ptr_ptr, new_ptr, next_ptr, addr_key, key, value, retdest
     MSTORE_GENERAL
-    // stack: new_ptr, next_ptr, addr_key, key, payload_ptr, retdest
+    // stack: new_ptr, next_ptr, addr_key, key, value, retdest
     // Write the address in the new node
     DUP1
     DUP4
     MSTORE_GENERAL
-    // stack: new_ptr, next_ptr, addr_key, key, payload_ptr, retdest
+    // stack: new_ptr, next_ptr, addr_key, key, value, retdest
     // Write the key in the new node
     %increment
     DUP1
     DUP5
     MSTORE_GENERAL
-    // stack: new_ptr + 1, next_ptr, addr_key, key, payload_ptr, retdest
-    // Store payload_ptr
+    // stack: new_ptr + 1, next_ptr, addr_key, key, value, retdest
+    // Store value
     %increment
     DUP1
     DUP6
     MSTORE_GENERAL
 
-    // stack: new_ptr + 2, next_ptr, addr_key, key, payload_ptr, retdest
-    // Store the copy of payload_ptr
+    // stack: new_ptr + 2, next_ptr, addr_key, key, value, retdest
+    // Store the copy of value
     %increment
     DUP1
     DUP6
     %clone_slot
     MSTORE_GENERAL
-    // stack: new_ptr + 3, next_ptr, addr_key, key, payload_ptr, retdest
+    // stack: new_ptr + 3, next_ptr, addr_key, key, value, retdest
     %increment
     DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, addr_key, key, payload_ptr, retdest
+    // stack: new_next_ptr, new_next_ptr, next_ptr, addr_key, key, value, retdest
     SWAP2
     MSTORE_GENERAL
-    // stack: new_next_ptr, addr_key, key, payload_ptr, retdest
+    // stack: new_next_ptr, addr_key, key, value, retdest
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
-    // stack: addr_key, key, payload_ptr, retdest
-    %stack (addr_key, key, payload_ptr, retdest) -> (retdest, payload_ptr)
+    // stack: addr_key, key, value, retdest
+    %stack (addr_key, key, value, retdest) -> (retdest, value)
     JUMP
 
 /// Searches the pair (address_key, storage_key) in the storage the linked list.
-/// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
+/// Returns `value` if the storage key was inserted, `old_value` if it was already present.
 global search_slot:
-    // stack: addr_key, key, payload_ptr, retdest
+    // stack: addr_key, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
-    // stack: pred_ptr/5, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr/5, addr_key, key, value, retdest
     %get_valid_slot_ptr
 
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
     MLOAD_GENERAL
     DUP1
-    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, key, value, retdest
     DUP4 
     GT
     DUP3 %eq_const(@SEGMENT_STORAGE_LINKED_LIST)
@@ -717,25 +706,25 @@ global search_slot:
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // the slot was not found
     %jumpi(slot_not_found)
-    // stack: pred_addr_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_addr_key, pred_ptr, addr_key, key, value, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
     %assert_eq
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
     %increment
     MLOAD_GENERAL
-    // stack: pred_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP1 DUP5
     GT
     %jumpi(slot_not_found)
-    // stack: pred_key, pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP4
     // We know that key <= pred_key. It must hold that pred_key == key.
     %assert_eq
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, key, value, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(@STORAGE_NEXT_NODE_PTR)
@@ -744,19 +733,19 @@ global search_slot:
     // The storage key is not in the list.
     PANIC
 slot_not_found:    
-    // stack: pred_addr_or_pred_key, pred_ptr, addr_key, key, payload_ptr, retdest
-    %stack (pred_addr_or_pred_key, pred_ptr, addr_key, key, payload_ptr, retdest)
-        -> (retdest, payload_ptr)
+    // stack: pred_addr_or_pred_key, pred_ptr, addr_key, key, value, retdest
+    %stack (pred_addr_or_pred_key, pred_ptr, addr_key, key, value, retdest)
+        -> (retdest, value)
     JUMP
 
 slot_found_no_write:
     // The slot was already in the list
-    // stack: pred_ptr, addr_key, key, payload_ptr, retdest
-    // Load the the payload pointer and access counter
+    // stack: pred_ptr, addr_key, key, value, retdest
+    // Load the old value
     %add_const(2)
     MLOAD_GENERAL
-    // stack: orig_value, addr_key, key, payload_ptr, retdest
-    %stack (orig_value, addr_key, key, payload_ptr, retdest) -> (retdest, orig_value)
+    // stack: old_value, addr_key, key, value, retdest
+    %stack (old_value, addr_key, key, value, retdest) -> (retdest, old_value)
     JUMP
 
 %macro search_slot
@@ -764,7 +753,7 @@ slot_found_no_write:
     %stack (state_key, storage_key, ptr) -> (state_key, storage_key, ptr, %%after)
     %jump(search_slot)
 %%after:
-    // stack: ptr
+    // stack: value
 %endmacro
 
 %macro remove_slot
@@ -874,20 +863,30 @@ remove_all_slots_end:
 %macro read_storage_linked_list
     // stack: slot
     %slot_to_storage_key
+    %stack (storage_key) -> (storage_key, 0, %%after)
     %address
     %addr_to_state_key
-    %stack (addr_key, key) -> (addr_key, key, 0, %%after)
+    // stack: addr_key, storage_key, 0, %%after
     %jump(search_slot)
 %%after:
-    // stack: slot_ptr
+    // stack: slot_value
 %endmacro
 
 %macro read_storage_linked_list_w_addr
     // stack: slot, address
     %slot_to_storage_key
-    SWAP1
+    %stack (storage_key, address) -> (address, storage_key, 0, %%after)
     %addr_to_state_key
-    %stack (addr_key, key) -> (addr_key, key, 0, %%after)
+    // stack: addr_key, storage_key, 0, %%after
+    %jump(search_slot)
+%%after:
+    // stack: slot_value
+%endmacro
+
+%macro read_storage_linked_list_w_state_key
+    // stack: slot, state_key
+    %slot_to_storage_key
+    %stack (storage_key, state_key) -> (state_key, storage_key, 0, %%after)
     %jump(search_slot)
 %%after:
     // stack: slot_ptr
