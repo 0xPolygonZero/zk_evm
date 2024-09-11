@@ -112,6 +112,7 @@ pub fn into_txn_proof_gen_ir(
 }
 
 /// Includes additional state and storage updates for pre-block execution.
+#[allow(unused)]
 fn pre_block_execution(
     trie_state: &mut PartialTrieState<impl StateTrie>,
     delta_out: &mut TrieDeltaApplicationOutput,

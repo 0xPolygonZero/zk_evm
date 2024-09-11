@@ -8,7 +8,7 @@
         feature = "polygon_pos"
     ))
 ))]
-compile_error!("Only a single network feature should be enabled at a time!");
+compile_error!("One and only one of the feature chains `cdk_erigon`, `polygon_pos` or `eth_mainnet` must be selected");
 
 use std::env;
 use std::fs::File;
