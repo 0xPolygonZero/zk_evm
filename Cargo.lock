@@ -2075,6 +2075,7 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "tiny-keccak",
+ "zk_evm_common",
  "zk_evm_proc_macro",
 ]
 
