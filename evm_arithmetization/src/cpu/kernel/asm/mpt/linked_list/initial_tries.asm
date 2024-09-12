@@ -1,18 +1,13 @@
 
 global set_initial_state_trie:
-    %get_trie_data_size
     PUSH set_initial_state_trie_after
     %first_initial_slot // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %first_initial_account // Skip the first node.
     %jump(insert_all_initial_accounts)
 set_initial_state_trie_after:
-    //stack: new_state_root, trie_data_size
+    //stack: new_state_root
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    %get_trie_data_size
-    SUB
-global debug_cuanta_mas_trie_data:
-    SWAP1
     JUMP
 
 %macro set_initial_state_trie
@@ -26,7 +21,7 @@ global debug_cuanta_mas_trie_data:
 // the accounts_linked_list starting at `account_ptr_ptr` as well as the
 // respective initial storage slots in `storage_ptr_ptr`.
 // Pre stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
-// Post stack: new_root_ptr. // shouldn't change
+// Post stack: new_root_ptr. // The value of new_root_ptr shouldn't change
 global insert_all_initial_accounts:
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     SWAP2
@@ -42,6 +37,7 @@ global insert_all_initial_accounts:
     DUP2
     PUSH 64
     DUP6
+    // stack: root_ptr, nibbles, key, after_mpt_read, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %jump(mpt_read)
 after_mpt_read:
     //stack: trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -114,15 +110,19 @@ insert_next_slot:
     // If the value is 0, then payload_ptr = 0, and we don't need to insert a value in the `TrieData` segment.
     DUP1 ISZERO %jumpi(insert_with_payload_ptr)
     %get_trie_data_size // payload_ptr
-    SWAP1 %append_to_trie_data // append the value to the trie data segment
-insert_with_payload_ptr:
-    %stack (payload_ptr, key, addr, storage_ptr_ptr, root_ptr) -> (root_ptr, 64, key, payload_ptr, after_insert_slot, storage_ptr_ptr, addr)
-    %jump(mpt_insert)
-after_insert_slot:
-    // stack: root_ptr', storage_ptr_ptr, addr, retdest
     SWAP1
+    %append_to_trie_data // append the value to the trie data segment
+insert_with_payload_ptr:
+    %stack
+        (payload_ptr, key, addr, storage_ptr_ptr, root_ptr) -> 
+        (root_ptr, 64, key, after_insert_slot, payload_ptr, storage_ptr_ptr, addr, root_ptr)
+    %jump(mpt_read)
+after_insert_slot:
+    // stack: slot_ptr_ptr, payload_ptr, storage_ptr_ptr, addr, root_ptr, retdest
+    %mstore_trie_data
+    // stack: storage_ptr_ptr, addr, root_ptr, retdest
     %next_initial_slot
-    // stack: storage_ptr_ptr', root_ptr', addr
-    %stack (storage_ptr_ptr_p, root_ptr_p, addr) -> (addr, storage_ptr_ptr_p, root_ptr_p)
+    // stack: storage_ptr_ptr', addr, root_ptr, retdest
+    SWAP1
     %jump(insert_all_initial_slots)
 

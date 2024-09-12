@@ -220,18 +220,14 @@ global check_state_trie:
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
 
     PROVER_INPUT(trie_ptr::trie_data_size)
-global debug_setting_the_trie_data_size:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     // stack: trie_data_len
     %set_initial_state_trie
-    // stack: delta_trie_data_len, trie_data_len
-global debug_la_delta:
-    POP
+    // stack: trie_data_len
 
     PUSH @INITIAL_RLP_ADDR
     // stack: rlp_start, trie_data_len
-global debug_trie_data_len:
     %mpt_hash_state_trie
 
     // stack: init_state_hash, trie_data_len
@@ -239,8 +235,7 @@ global debug_trie_data_len:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
     %assert_eq
     // Check that the stored trie data length is correct.
-    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
-global debug_me_equivoque_en_el_trie_data_size:
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
     %assert_eq
 
     // We set a dummy value as an initial trie data length,

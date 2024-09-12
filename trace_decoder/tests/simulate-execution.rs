@@ -6,7 +6,6 @@ mod common;
 
 use anyhow::Context as _;
 use common::{cases, Case};
-use evm_arithmetization::testing_utils::init_logger;
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
 
@@ -24,19 +23,16 @@ fn main() -> anyhow::Result<()> {
                 format!("error in `trace_decoder` for {name} at batch size {batch_size}"),
             )?;
             for (ix, gi) in gen_inputs.into_iter().enumerate() {
-                if ix == 0 && batch_size == 1 && name == "b19807080_main" {
-                    trials.push(Trial::test(
-                        format!("{name}@{batch_size}/{ix}"),
-                        move || {
-                            init_logger();
-                            evm_arithmetization::prover::testing::simulate_execution_all_segments::<
+                trials.push(Trial::test(
+                    format!("{name}@{batch_size}/{ix}"),
+                    move || {
+                        evm_arithmetization::prover::testing::simulate_execution_all_segments::<
                             GoldilocksField,
                         >(gi, 19)
                         .map_err(|e| format!("{e:?}"))?; // get the full error chain
-                            Ok(())
-                        },
-                    ))
-                }
+                        Ok(())
+                    },
+                ))
             }
         }
     }
