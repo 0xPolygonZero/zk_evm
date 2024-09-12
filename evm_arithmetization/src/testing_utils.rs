@@ -2,7 +2,7 @@
 //! unit and integration tests.
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::{
@@ -12,7 +12,9 @@ use mpt_trie::{
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u};
+use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs};
+use crate::generation::TrieInputs;
+use crate::proof::TrieRoots;
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -166,4 +168,77 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
 pub fn eth_to_wei(eth: U256) -> U256 {
     // 1 ether = 10^18 wei.
     eth * U256::from(10).pow(18.into())
+}
+
+/// Get `GenerationInputs` for a dummy payload, where the block has the given
+/// timestamp.
+pub fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs> {
+    let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+    let block_metadata = BlockMetadata {
+        block_beneficiary: Address::from(beneficiary),
+        block_timestamp: timestamp.into(),
+        block_number: 1.into(),
+        block_difficulty: 0x020000.into(),
+        block_random: H256::from_uint(&0x020000.into()),
+        block_gaslimit: 0xff112233u32.into(),
+        block_chain_id: 1.into(),
+        block_base_fee: 0xa.into(),
+        ..Default::default()
+    };
+
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let checkpoint_state_trie_root = state_trie_before.hash();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_metadata.block_timestamp,
+        block_metadata.parent_beacon_block_root,
+    )?;
+    let updated_beacon_roots_account =
+        beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+    if !is_first_payload {
+        // This isn't the first dummy payload being processed. We need to update the
+        // initial state trie to account for the update on the beacon roots contract.
+        state_trie_before.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&updated_beacon_roots_account).to_vec(),
+        )?;
+        storage_tries[0].1 = beacon_roots_account_storage;
+    }
+
+    let tries_before = TrieInputs {
+        state_trie: state_trie_before,
+        storage_tries,
+        ..Default::default()
+    };
+
+    let expected_state_trie_after: HashedPartialTrie = {
+        let mut state_trie_after = HashedPartialTrie::from(crate::Node::Empty);
+        state_trie_after.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&updated_beacon_roots_account).to_vec(),
+        )?;
+
+        state_trie_after
+    };
+
+    let trie_roots_after = TrieRoots {
+        state_root: expected_state_trie_after.hash(),
+        transactions_root: tries_before.transactions_trie.hash(),
+        receipts_root: tries_before.receipts_trie.hash(),
+    };
+
+    let inputs = GenerationInputs {
+        tries: tries_before.clone(),
+        burn_addr: None,
+        trie_roots_after,
+        checkpoint_state_trie_root,
+        block_metadata,
+        ..Default::default()
+    };
+
+    Ok(inputs)
 }

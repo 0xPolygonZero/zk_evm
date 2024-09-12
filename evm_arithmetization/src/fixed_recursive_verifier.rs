@@ -35,7 +35,9 @@ use starky::lookup::{get_grand_product_challenge_set_target, GrandProductChallen
 use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
@@ -117,11 +119,11 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    proof_with_pis: [ProofWithPublicInputsTarget<D>; NUM_TABLES],
+    proof_with_pis: [Option<ProofWithPublicInputsTarget<D>>; NUM_TABLES],
     /// For each table, various inner circuits may be used depending on the
     /// initial table size. This target holds the index of the circuit
     /// (within `final_circuits()`) that was used.
-    index_verifier_data: [Target; NUM_TABLES],
+    index_verifier_data: [Option<Target>; NUM_TABLES],
     /// Public inputs containing public values.
     public_values: PublicValuesTarget,
     /// Public inputs used for cyclic verification. These aren't actually used
@@ -142,12 +144,27 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<()> {
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
+
+        // Serialize proof_with_pis, adding a flag for None values
         for proof in &self.proof_with_pis {
-            buffer.write_target_proof_with_public_inputs(proof)?;
+            if let Some(proof) = proof {
+                buffer.write_u8(1)?;  // Indicate that this proof is Some
+                buffer.write_target_proof_with_public_inputs(proof)?;
+            } else {
+                buffer.write_u8(0)?;  // Indicate that this proof is None
+            }
         }
-        for index in self.index_verifier_data {
-            buffer.write_target(index)?;
+
+        // Serialize index_verifier_data, adding a flag for None values
+        for index in &self.index_verifier_data {
+            if let Some(index) = index {
+                buffer.write_u8(1)?;  // Indicate that this index is Some
+                buffer.write_target(*index)?;
+            } else {
+                buffer.write_u8(0)?;  // Indicate that this index is None
+            }
         }
+
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         Ok(())
@@ -159,14 +176,29 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Self> {
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
+
+        // Deserialize proof_with_pis with a flag for None values
         let mut proof_with_pis = Vec::with_capacity(NUM_TABLES);
         for _ in 0..NUM_TABLES {
-            proof_with_pis.push(buffer.read_target_proof_with_public_inputs()?);
+            let flag = buffer.read_u8()?;  // Read the flag
+            if flag == 1 {
+                proof_with_pis.push(Some(buffer.read_target_proof_with_public_inputs()?));
+            } else {
+                proof_with_pis.push(None);  // No proof for this table
+            }
         }
+
+        // Deserialize index_verifier_data with a flag for None values
         let mut index_verifier_data = Vec::with_capacity(NUM_TABLES);
         for _ in 0..NUM_TABLES {
-            index_verifier_data.push(buffer.read_target()?);
+            let flag = buffer.read_u8()?;  // Read the flag
+            if flag == 1 {
+                index_verifier_data.push(Some(buffer.read_target()?));
+            } else {
+                index_verifier_data.push(None);  // No index for this table
+            }
         }
+
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
 
@@ -782,7 +814,7 @@ where
             #[cfg(feature = "cdk_erigon")]
             poseidon,
         ];
-        let root = Self::create_segment_circuit(&by_table, stark_config);
+        let root = Self::create_segment_circuit(&by_table, stark_config, true);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let txn_aggregation =
             Self::create_txn_aggregation_circuit(&segment_aggregation, stark_config);
@@ -823,28 +855,43 @@ where
     fn create_segment_circuit(
         by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         stark_config: &StarkConfig,
+        enable_keccak_tables: bool,
     ) -> RootCircuitData<F, C, D> {
-        let inner_common_data: [_; NUM_TABLES] =
-            core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
+        let inner_common_data: [_; NUM_TABLES] = core::array::from_fn(|i| {
+            skip_keccak_if_disabled(i, enable_keccak_tables, None, || Some(&by_table[i].final_circuits()[0].common))
+        });
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
-        let recursive_proofs =
-            core::array::from_fn(|i| builder.add_virtual_proof_with_pis(inner_common_data[i]));
-        let pis: [_; NUM_TABLES] = core::array::from_fn(|i| {
-            PublicInputs::<Target, <C::Hasher as AlgebraicHasher<F>>::AlgebraicPermutation>::from_vec(
-                &recursive_proofs[i].public_inputs,
-                stark_config,
-            )
+        let recursive_proofs: [_; NUM_TABLES] = core::array::from_fn(|i| {
+            skip_keccak_if_disabled(i, enable_keccak_tables, None, || Some(builder.add_virtual_proof_with_pis(inner_common_data[i].unwrap())))
         });
-        let index_verifier_data = core::array::from_fn(|_i| builder.add_virtual_target());
+
+        let pis: [_; NUM_TABLES] = core::array::from_fn(|i| {
+            if let Some(recursive_proof) = &recursive_proofs[i] {
+                Some(PublicInputs::<
+                    Target,
+                    <C::Hasher as AlgebraicHasher<F>>::AlgebraicPermutation,
+                >::from_vec(
+                    &recursive_proof.public_inputs, stark_config
+                ))
+            } else {
+                None // Skip Keccak tables
+            }
+        });
+
+        let index_verifier_data: [_; NUM_TABLES] = core::array::from_fn(|i| {
+            skip_keccak_if_disabled(i, enable_keccak_tables, None, || Some(builder.add_virtual_target()))
+        });
 
         let mut challenger = RecursiveChallenger::<F, C::Hasher, D>::new(&mut builder);
-        for pi in &pis {
-            for h in &pi.trace_cap {
-                challenger.observe_elements(h);
+        for maybe_pi in &pis {
+            if let Some(pi) = maybe_pi {
+                for h in &pi.trace_cap {
+                    challenger.observe_elements(h);
+                }
             }
         }
 
@@ -855,36 +902,39 @@ where
             &mut challenger,
             stark_config.num_challenges,
         );
+
         // Check that the correct CTL challenges are used in every proof.
-        for pi in &pis {
-            for i in 0..stark_config.num_challenges {
-                builder.connect(
-                    ctl_challenges.challenges[i].beta,
-                    pi.ctl_challenges.challenges[i].beta,
-                );
-                builder.connect(
-                    ctl_challenges.challenges[i].gamma,
-                    pi.ctl_challenges.challenges[i].gamma,
-                );
+        for maybe_pi in &pis {
+            if let Some(pi) = maybe_pi {
+                for i in 0..stark_config.num_challenges {
+                    builder.connect(
+                        ctl_challenges.challenges[i].beta,
+                        pi.ctl_challenges.challenges[i].beta,
+                    );
+                    builder.connect(
+                        ctl_challenges.challenges[i].gamma,
+                        pi.ctl_challenges.challenges[i].gamma,
+                    );
+                }
             }
         }
 
-        let state = challenger.compact(&mut builder);
-        for (&before, &s) in zip_eq(state.as_ref(), pis[0].challenger_state_before.as_ref()) {
-            builder.connect(before, s);
-        }
-        // Check that the challenger state is consistent between proofs.
-        for i in 1..NUM_TABLES {
-            for (&before, &after) in zip_eq(
-                pis[i].challenger_state_before.as_ref(),
-                pis[i - 1].challenger_state_after.as_ref(),
+        // Initialize the state with the compacted challenger state
+        let mut prev_state = challenger.compact(&mut builder);
+
+        // Loop over the proofs and connect states
+        for current_pi in pis.iter().flatten() {
+            for (&before, &s) in zip_eq(
+                prev_state.as_ref(),
+                current_pi.challenger_state_before.as_ref(),
             ) {
-                builder.connect(before, after);
+                builder.connect(before, s);
             }
+            prev_state = current_pi.challenger_state_after.clone();
         }
 
-        // Extra sums to add to the looked last value.
-        // Only necessary for the Memory values.
+        // Extra sums to add to the looked last value. Only necessary for the Memory
+        // values.
         let mut extra_looking_sums =
             vec![vec![builder.zero(); stark_config.num_challenges]; NUM_TABLES];
 
@@ -899,61 +949,75 @@ where
             })
             .collect_vec();
 
-        // Verify the CTL checks.
-        verify_cross_table_lookups_circuit::<F, D, NUM_TABLES>(
+        // Verify the CTL checks
+        let ctl_zs_first: [_; NUM_TABLES] = pis.map(|p| {
+            p.as_ref()
+                .map_or_else(|| vec![], |pi| pi.ctl_zs_first.clone())
+        });
+
+        // Now call the `verify_cross_table_lookups_circuit` function
+        verify_cross_table_lookups_circuit(
             &mut builder,
             all_cross_table_lookups(),
-            pis.map(|p| p.ctl_zs_first),
+            ctl_zs_first,
             Some(&extra_looking_sums),
             stark_config,
         );
 
         for (i, table_circuits) in by_table.iter().enumerate() {
-            let final_circuits = table_circuits.final_circuits();
-            for final_circuit in &final_circuits {
-                assert_eq!(
-                    &final_circuit.common, inner_common_data[i],
-                    "common_data mismatch"
+            if let Some(common_data) = inner_common_data[i] {
+                let final_circuits = table_circuits.final_circuits();
+                for final_circuit in &final_circuits {
+                    assert_eq!(&final_circuit.common, common_data, "common_data mismatch");
+                }
+                let mut possible_vks = final_circuits
+                    .into_iter()
+                    .map(|c| builder.constant_verifier_data(&c.verifier_only))
+                    .collect_vec();
+                // random_access_verifier_data expects a vector whose length is a power of two.
+                // To satisfy this, we will just add some duplicates of the first VK.
+                while !possible_vks.len().is_power_of_two() {
+                    possible_vks.push(possible_vks[0].clone());
+                }
+                let inner_verifier_data = builder
+                    .random_access_verifier_data(index_verifier_data[i].unwrap(), possible_vks);
+
+                builder.verify_proof::<C>(
+                    &recursive_proofs[i].as_ref().unwrap(),
+                    &inner_verifier_data,
+                    common_data,
                 );
             }
-            let mut possible_vks = final_circuits
-                .into_iter()
-                .map(|c| builder.constant_verifier_data(&c.verifier_only))
-                .collect_vec();
-            // random_access_verifier_data expects a vector whose length is a power of two.
-            // To satisfy this, we will just add some duplicates of the first VK.
-            while !possible_vks.len().is_power_of_two() {
-                possible_vks.push(possible_vks[0].clone());
-            }
-            let inner_verifier_data =
-                builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
-
-            builder.verify_proof::<C>(
-                &recursive_proofs[i],
-                &inner_verifier_data,
-                inner_common_data[i],
-            );
         }
 
-        let merkle_before =
-            MemCapTarget::from_public_inputs(&recursive_proofs[*Table::MemBefore].public_inputs);
-        let merkle_after =
-            MemCapTarget::from_public_inputs(&recursive_proofs[*Table::MemAfter].public_inputs);
-        // Connect Memory before and after the execution with
-        // the public values.
+        let merkle_before = MemCapTarget::from_public_inputs(
+            &recursive_proofs[*Table::MemBefore]
+                .as_ref()
+                .unwrap()
+                .public_inputs,
+        );
+        let merkle_after = MemCapTarget::from_public_inputs(
+            &recursive_proofs[*Table::MemAfter]
+                .as_ref()
+                .unwrap()
+                .public_inputs,
+        );
+
+        // Connect Memory before and after the execution with the public values.
         MemCapTarget::connect(
             &mut builder,
             public_values.mem_before.clone(),
             merkle_before,
         );
         MemCapTarget::connect(&mut builder, public_values.mem_after.clone(), merkle_after);
+
         // We want EVM root proofs to have the exact same structure as aggregation
         // proofs, so we add public inputs for cyclic verification, even though
         // they'll be ignored.
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         builder.add_gate(
-            ConstantGate::new(inner_common_data[0].config.num_constants),
+            ConstantGate::new(inner_common_data[0].unwrap().config.num_constants),
             vec![],
         );
 
@@ -1856,10 +1920,10 @@ where
                 .position(|&size| size == original_degree_bits)
                 .unwrap();
             root_inputs.set_target(
-                self.root.index_verifier_data[table],
+                self.root.index_verifier_data[table].unwrap(),
                 F::from_canonical_usize(index_verifier_data),
             );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table].clone().unwrap(), &shrunk_proof);
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -1996,10 +2060,10 @@ where
             let shrunk_proof =
                 table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
             root_inputs.set_target(
-                self.root.index_verifier_data[table],
+                self.root.index_verifier_data[table].unwrap(),
                 F::from_canonical_u8(*index_verifier_data),
             );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table].clone().unwrap(), &shrunk_proof);
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -2640,6 +2704,20 @@ where
         agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
     }
 }
+
+fn skip_keccak_if_disabled<T>(
+    index: usize,
+    enable_keccak_tables: bool,
+    default_value: T,
+    f: impl FnOnce() -> T,
+) -> T {
+    if !enable_keccak_tables && KECCAK_TABLES_INDICES.contains(&index) {
+        default_value
+    } else {
+        f()
+    }
+}
+
 /// A map between initial degree sizes and their associated shrinking recursion
 /// circuits.
 #[derive(Eq, PartialEq, Debug)]

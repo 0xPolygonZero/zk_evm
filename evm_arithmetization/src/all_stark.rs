@@ -105,6 +105,10 @@ pub enum Table {
     Poseidon = 9,
 }
 
+/// Indices of Keccak Tables
+pub const KECCAK_TABLES_INDICES: [usize; 2] =
+    [Table::Keccak as usize, Table::KeccakSponge as usize];
+
 impl Deref for Table {
     type Target = TableIdx;
 
