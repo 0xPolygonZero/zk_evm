@@ -3032,3 +3032,50 @@ where
     circuit.verifier_only.circuit_digest.elements.len()
         + (1 << circuit.common.config.fri_config.cap_height) * NUM_HASH_OUT_ELTS
 }
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::plonk::config::PoseidonGoldilocksConfig;
+
+    use super::*;
+    use crate::testing_utils::{dummy_payload, init_logger};
+
+    type F = GoldilocksField;
+    const D: usize = 2;
+    type C = PoseidonGoldilocksConfig;
+
+    #[test]
+    #[ignore]
+    fn test_root_proof_generation() -> anyhow::Result<()> {
+        init_logger();
+
+        let all_stark = AllStark::<F, D>::default();
+        let config = StarkConfig::standard_fast_config();
+
+        let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+            &all_stark,
+            &[
+                16..17,
+                8..9,
+                12..13,
+                9..10,
+                8..9,
+                6..7,
+                17..18,
+                17..18,
+                7..8,
+            ],
+            &config,
+        );
+        let dummy = dummy_payload(100, true)?;
+
+        let timing = &mut TimingTree::new(&format!("Blockproof"), log::Level::Info);
+        let dummy_proof =
+            all_circuits.prove_all_segments(&all_stark, &config, dummy, 20, timing, None)?;
+        all_circuits.verify_root(dummy_proof[0].proof_with_pis.clone())?;
+        timing.print();
+
+        Ok(())
+    }
+}
