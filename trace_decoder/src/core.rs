@@ -23,8 +23,8 @@ use zk_evm_common::gwei_to_wei;
 use crate::{
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
-    TxnInfo, TxnMeta, TxnTrace,
+    Field, OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage,
+    SeparateTriePreImages, TxnInfo, TxnMeta, TxnTrace,
 };
 
 /// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -32,7 +32,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-) -> anyhow::Result<Vec<GenerationInputs>> {
+) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     ensure!(batch_size_hint != 0);
 
     let BlockTrace {
@@ -51,6 +51,7 @@ pub fn entrypoint(
                 mut withdrawals,
             },
         checkpoint_state_trie_root,
+        checkpoint_consolidated_hash,
         burn_addr,
     } = other;
 
@@ -86,7 +87,7 @@ pub fn entrypoint(
                      },
                  after,
                  withdrawals,
-             }| GenerationInputs {
+             }| GenerationInputs::<Field> {
                 txn_number_before: first_txn_ix.into(),
                 gas_used_before: running_gas_used.into(),
                 gas_used_after: {
@@ -104,6 +105,7 @@ pub fn entrypoint(
                 },
                 trie_roots_after: after,
                 checkpoint_state_trie_root,
+                checkpoint_consolidated_hash,
                 contract_code: contract_code
                     .into_iter()
                     .map(|it| (keccak_hash::keccak(&it), it))

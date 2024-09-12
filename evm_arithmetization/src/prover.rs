@@ -31,7 +31,7 @@ use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
-    inputs: TrimmedGenerationInputs,
+    inputs: TrimmedGenerationInputs<F>,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -72,7 +72,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    public_values: &mut PublicValues,
+    public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<AllProof<F, C, D>>
@@ -474,7 +474,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 
 /// Sanity checks on the consistency between this proof payload and the feature
 /// flags being used.
-pub(crate) fn features_check(inputs: &TrimmedGenerationInputs) {
+pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) {
     if !cfg!(feature = "eth_mainnet") {
         assert!(inputs.block_metadata.parent_beacon_block_root.is_zero());
         assert!(inputs.block_metadata.block_blob_gas_used.is_zero());
@@ -500,7 +500,7 @@ pub mod testing {
 
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
-    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
+    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs<F>) -> Result<()> {
         features_check(&inputs.clone().trim());
 
         let initial_stack = vec![];
@@ -520,7 +520,7 @@ pub mod testing {
     pub fn prove_all_segments<F, C, const D: usize>(
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
-        inputs: GenerationInputs,
+        inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
@@ -551,7 +551,7 @@ pub mod testing {
     }
 
     pub fn simulate_execution_all_segments<F>(
-        inputs: GenerationInputs,
+        inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
     ) -> Result<()>
     where

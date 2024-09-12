@@ -69,7 +69,7 @@ where
 {
     pub is_dummy: bool,
     pub proof_with_pis: ProofWithPublicInputs<F, C, D>,
-    pub public_values: PublicValues,
+    pub public_values: PublicValues<F>,
 }
 
 /// Contains all recursive circuits used in the system. For each STARK and each
@@ -1347,9 +1347,6 @@ where
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
         let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
 
-        // Connect block hashes
-        Self::connect_block_hashes(&mut builder, &parent_block_proof, &agg_root_proof);
-
         let parent_pv = PublicValuesTarget::from_public_inputs(&parent_block_proof.public_inputs);
         let agg_pv = PublicValuesTarget::from_public_inputs(&agg_root_proof.public_inputs);
 
@@ -1555,7 +1552,7 @@ where
         // This also enforces that the initial state trie root that will be stored in
         // these `FinalPublicValues` actually matches the known checkpoint state trie
         // root.
-        final_pv.connect_parent(&mut builder, &parent_pv);
+        final_pv.connect_parent::<F, C, D>(&mut builder, &parent_pv);
 
         let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_only);
 
@@ -1672,13 +1669,11 @@ where
     /// Connect the 256 block hashes between two blocks
     fn connect_block_hashes(
         builder: &mut CircuitBuilder<F, D>,
-        lhs: &ProofWithPublicInputsTarget<D>,
-        rhs: &ProofWithPublicInputsTarget<D>,
+        lhs_public_values: &PublicValuesTarget,
+        rhs_public_values: &PublicValuesTarget,
     ) {
-        let lhs_public_values = PublicValuesTarget::from_public_inputs(&lhs.public_inputs);
-        let rhs_public_values = PublicValuesTarget::from_public_inputs(&rhs.public_inputs);
         for i in 0..255 {
-            for j in 0..8 {
+            for j in 0..TARGET_HASH_SIZE {
                 builder.connect(
                     lhs_public_values.block_hashes.prev_hashes[8 * (i + 1) + j],
                     rhs_public_values.block_hashes.prev_hashes[8 * i + j],
@@ -1687,7 +1682,7 @@ where
         }
         let expected_hash = lhs_public_values.block_hashes.cur_hash;
         let prev_block_hash = &rhs_public_values.block_hashes.prev_hashes[255 * 8..256 * 8];
-        for i in 0..expected_hash.len() {
+        for i in 0..TARGET_HASH_SIZE {
             builder.connect(expected_hash[i], prev_block_hash[i]);
         }
     }
@@ -1736,6 +1731,9 @@ where
         // Check that the checkpoint block has the predetermined state trie root in
         // `ExtraBlockData`.
         Self::connect_checkpoint_block(builder, rhs, has_not_parent_block);
+
+        // Connect block hashes
+        Self::connect_block_hashes(builder, lhs, rhs);
     }
 
     fn connect_checkpoint_block(
@@ -1754,6 +1752,18 @@ where
             let mut constr = builder.sub(limb0, limb1);
             constr = builder.mul(has_not_parent_block, constr);
             builder.assert_zero(constr);
+        }
+
+        let consolidated_hash = builder
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(x.block_hashes.prev_hashes.to_vec())
+            .elements;
+
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.conditional_assert_eq(
+                has_not_parent_block,
+                x.extra_block_data.checkpoint_consolidated_hash[i],
+                consolidated_hash[i],
+            )
         }
     }
 
@@ -1818,7 +1828,7 @@ where
         &self,
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
-        generation_inputs: TrimmedGenerationInputs,
+        generation_inputs: TrimmedGenerationInputs<F>,
         segment_data: &mut GenerationSegmentData,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
@@ -1893,7 +1903,7 @@ where
         &self,
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
-        generation_inputs: GenerationInputs,
+        generation_inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
@@ -1985,7 +1995,7 @@ where
         all_proof: AllProof<F, C, D>,
         table_circuits: &[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES],
         abort_signal: Option<Arc<AtomicBool>>,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues<F>)> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
@@ -2106,6 +2116,9 @@ where
                 checkpoint_state_trie_root: lhs_public_values
                     .extra_block_data
                     .checkpoint_state_trie_root,
+                checkpoint_consolidated_hash: lhs_public_values
+                    .extra_block_data
+                    .checkpoint_consolidated_hash,
                 txn_number_before: lhs_public_values.extra_block_data.txn_number_before,
                 txn_number_after: real_public_values.extra_block_data.txn_number_after,
                 gas_used_before: lhs_public_values.extra_block_data.gas_used_before,
@@ -2175,11 +2188,11 @@ where
         &self,
         lhs_is_agg: bool,
         lhs_proof: &ProofWithPublicInputs<F, C, D>,
-        lhs_public_values: PublicValues,
+        lhs_public_values: PublicValues<F>,
         rhs_is_agg: bool,
         rhs_proof: &ProofWithPublicInputs<F, C, D>,
-        rhs_public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+        rhs_public_values: PublicValues<F>,
+    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues<F>)> {
         let mut txn_inputs = PartialWitness::new();
 
         Self::set_dummy_if_necessary(
@@ -2290,8 +2303,8 @@ where
         &self,
         opt_parent_block_proof: Option<&ProofWithPublicInputs<F, C, D>>,
         agg_root_proof: &ProofWithPublicInputs<F, C, D>,
-        public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+        public_values: PublicValues<F>,
+    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues<F>)> {
         let mut block_inputs = PartialWitness::new();
 
         block_inputs.set_bool_target(
@@ -2387,14 +2400,14 @@ where
                         + TrieRootsTarget::SIZE * 2
                         + BlockMetadataTarget::SIZE
                         + BlockHashesTarget::SIZE
-                        - 8;
-
+                        - 16;
             for i in 0..public_values.block_hashes.prev_hashes.len() - 1 {
                 let targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[i]);
                 for j in 0..8 {
                     nonzero_pis.insert(block_hashes_keys.start + 8 * (i + 1) + j, targets[j]);
                 }
             }
+
             let block_hashes_current_start = burn_addr_offset
                 + TrieRootsTarget::SIZE * 2
                 + BlockMetadataTarget::SIZE
@@ -2474,11 +2487,15 @@ where
     /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
     /// associated [`FinalPublicValues`]. Only the proof with public inputs is
     /// necessary for a verifier to assert correctness of the computation.
+    #[allow(clippy::type_complexity)]
     pub fn prove_block_wrapper(
         &self,
         block_proof: &ProofWithPublicInputs<F, C, D>,
-        public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, FinalPublicValues)> {
+        public_values: PublicValues<F>,
+    ) -> anyhow::Result<(
+        ProofWithPublicInputs<F, C, D>,
+        FinalPublicValues<F, C::InnerHasher>,
+    )> {
         let mut block_wrapper_inputs = PartialWitness::new();
 
         block_wrapper_inputs

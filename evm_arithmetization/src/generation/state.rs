@@ -334,7 +334,7 @@ pub(crate) trait State<F: RichField> {
 
 #[derive(Debug, Default)]
 pub struct GenerationState<F: RichField> {
-    pub(crate) inputs: TrimmedGenerationInputs,
+    pub(crate) inputs: TrimmedGenerationInputs<F>,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
@@ -404,7 +404,10 @@ impl<F: RichField> GenerationState<F> {
         trie_roots_ptrs
     }
 
-    pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
+    pub(crate) fn new(
+        inputs: &GenerationInputs<F>,
+        kernel_code: &[u8],
+    ) -> Result<Self, ProgramError> {
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
@@ -437,7 +440,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     pub(crate) fn new_with_segment_data(
-        trimmed_inputs: &TrimmedGenerationInputs,
+        trimmed_inputs: &TrimmedGenerationInputs<F>,
         segment_data: &GenerationSegmentData,
     ) -> Result<Self, ProgramError> {
         let mut state = Self {

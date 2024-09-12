@@ -35,6 +35,7 @@ pub mod circuit;
 pub mod cli;
 pub mod persistence;
 
+// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
 pub(crate) type Config = PoseidonGoldilocksConfig;
 pub(crate) type Field = GoldilocksField;
 pub(crate) const SIZE: usize = 2;
@@ -195,7 +196,7 @@ impl ProverStateManager {
     /// and finally aggregating them to a final transaction proof.
     fn segment_proof_on_demand(
         &self,
-        input: TrimmedGenerationInputs,
+        input: TrimmedGenerationInputs<Field>,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let config = StarkConfig::standard_fast_config();
@@ -224,7 +225,7 @@ impl ProverStateManager {
     /// circuit.
     fn segment_proof_monolithic(
         &self,
-        input: TrimmedGenerationInputs,
+        input: TrimmedGenerationInputs<Field>,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let p_out = p_state().state.prove_segment(
@@ -256,7 +257,7 @@ impl ProverStateManager {
     ///   needed.
     pub fn generate_segment_proof(
         &self,
-        input: (TrimmedGenerationInputs, GenerationSegmentData),
+        input: (TrimmedGenerationInputs<Field>, GenerationSegmentData),
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let (generation_inputs, mut segment_data) = input;
 

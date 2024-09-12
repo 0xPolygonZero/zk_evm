@@ -4,7 +4,7 @@ use std::sync::Arc;
 use alloy::primitives::B256;
 use alloy::providers::Provider;
 use alloy::rpc::types::eth::BlockId;
-use alloy::rpc::types::{BlockNumberOrTag, BlockTransactionsKind};
+use alloy::rpc::types::BlockNumberOrTag;
 use alloy::transports::Transport;
 use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
@@ -90,16 +90,6 @@ where
         .unwrap_or(params.start_block - 1);
     check_previous_proof_and_checkpoint(checkpoint_block_number, &None, params.start_block)?;
 
-    // Grab interval checkpoint block state trie
-    let checkpoint_state_trie_root = cached_provider
-        .get_block(
-            BlockId::Number(checkpoint_block_number.into()),
-            BlockTransactionsKind::Hashes,
-        )
-        .await?
-        .header
-        .state_root;
-
     let block_interval = BlockInterval::Range(params.start_block..params.end_block + 1);
     let mut block_prover_inputs = Vec::new();
     let mut block_interval: BlockIntervalStream = block_interval.into_bounded_stream()?;
@@ -110,7 +100,7 @@ where
         let result = rpc::block_prover_input(
             cached_provider.clone(),
             block_id,
-            checkpoint_state_trie_root,
+            checkpoint_block_number,
             params.rpc_type,
         )
         .await?;

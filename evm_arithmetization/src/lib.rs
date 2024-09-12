@@ -234,4 +234,4 @@ pub use starky::config::StarkConfig;
 
 /// Returned type from a `SegmentDataIterator`, needed to prove all segments in
 /// a transaction batch.
-pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), SegmentError>;
+pub type AllData<F> = Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), SegmentError>;
