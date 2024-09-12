@@ -161,9 +161,3 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
         ..Default::default()
     }
 }
-
-/// Converts an amount in `ETH` to `wei` units.
-pub fn eth_to_wei(eth: U256) -> U256 {
-    // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
-}

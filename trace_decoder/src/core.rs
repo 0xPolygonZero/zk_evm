@@ -18,6 +18,7 @@ use itertools::Itertools as _;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
+use zk_evm_common::gwei_to_wei;
 
 use crate::{
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
@@ -53,9 +54,8 @@ pub fn entrypoint(
         checkpoint_state_trie_root,
     } = other;
 
-    // BUG?(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/618
     for (_, amt) in &mut withdrawals {
-        *amt = eth_to_gwei(*amt)
+        *amt = gwei_to_wei(*amt)
     }
 
     let batches = middle(
@@ -583,11 +583,6 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
         //                Add an entry API
         .expect("insert must succeed with the same key as a successful `get`");
     Ok(())
-}
-
-fn eth_to_gwei(eth: U256) -> U256 {
-    // 1 ether = 10^9 gwei.
-    eth * U256::from(10).pow(9.into())
 }
 
 fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
