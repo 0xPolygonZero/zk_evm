@@ -1,19 +1,18 @@
 zk_evm_common::check_chain_features!();
 
+use std::env;
 use std::sync::Arc;
-use std::{env, io};
-use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
 use client::RpcParams;
-use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
 use prover::ProverConfig;
-use tracing::{info, warn};
+use tracing::info;
+use zero_bin_common::env::load_dotenvy_vars_if_present;
+use zero_bin_common::fs::get_previous_proof;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
@@ -24,26 +23,13 @@ use crate::client::{client_main, LeaderConfig};
 mod cli;
 mod client;
 mod http;
-mod init;
 mod stdio;
-
-fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
-    if path.is_none() {
-        return Ok(None);
-    }
-
-    let path = path.unwrap();
-    let file = File::open(path)?;
-    let des = &mut serde_json::Deserializer::from_reader(&file);
-    let proof: GeneratedBlockProof = serde_path_to_error::deserialize(des)?;
-    Ok(Some(proof))
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
     set_circuit_cache_dir_env_if_not_set()?;
-    init::tracing();
+    zero_bin_common::tracing::init();
 
     let args: Vec<String> = env::args().collect();
 
@@ -128,16 +114,4 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Attempt to load in the local `.env` if present and set any environment
-/// variables specified inside of it.
-///
-/// To keep things simple, any IO error we will treat as the file not existing
-/// and continue moving on without the `env` variables set.
-fn load_dotenvy_vars_if_present() {
-    match dotenv() {
-        Ok(_) | Err(dotenvy::Error::Io(io::Error { .. })) => (),
-        Err(e) => warn!("Found local `.env` file but was unable to parse it! (err: {e})",),
-    }
 }

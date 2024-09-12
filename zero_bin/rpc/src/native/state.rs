@@ -1,12 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use alloy::primitives::Bytes;
 use alloy::{
     primitives::{keccak256, Address, StorageKey, B256},
     providers::Provider,
     rpc::types::eth::{Block, BlockTransactionsKind, EIP1186AccountProofResponse},
     transports::Transport,
 };
+use alloy_compat::Compat;
 use anyhow::Context as _;
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
@@ -15,8 +17,6 @@ use trace_decoder::{
     SeparateTriePreImages, TxnInfo,
 };
 use zero_bin_common::provider::CachedProvider;
-
-use crate::Compat;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(
@@ -99,13 +99,12 @@ fn insert_beacon_roots_update(
         BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH,
     };
 
-    let timestamp = block.header.timestamp;
+    let timestamp = U256::from(block.header.timestamp);
 
-    const MODULUS: u64 = HISTORY_BUFFER_LENGTH.1;
-
-    let keys = HashSet::from_iter([
-        U256::from(timestamp % MODULUS).into(), // timestamp_idx
-        U256::from((timestamp % MODULUS) + MODULUS).into(), // root_idx
+    let chunk = HISTORY_BUFFER_LENGTH.value.compat();
+    let keys = HashSet::from([
+        (timestamp % chunk).into(),           // timestamp_idx
+        ((timestamp % chunk) + chunk).into(), // root_idx
     ]);
     state_access.insert(BEACON_ROOTS_CONTRACT_STATE_KEY.1.into(), keys);
 
@@ -134,7 +133,7 @@ where
 
     // Insert account proofs
     for (address, proof) in account_proofs.into_iter() {
-        state.insert_proof(proof.account_proof.compat());
+        state.insert_proof(conv_vec_bytes(proof.account_proof));
 
         let storage_mpt =
             storage_proofs
@@ -144,22 +143,26 @@ where
                     Default::default(),
                 ));
         for proof in proof.storage_proof {
-            storage_mpt.insert_proof(proof.proof.compat());
+            storage_mpt.insert_proof(conv_vec_bytes(proof.proof));
         }
     }
 
     // Insert short node variants from next proofs
     for (address, proof) in next_account_proofs.into_iter() {
-        state.insert_short_node_variants_from_proof(proof.account_proof.compat());
+        state.insert_short_node_variants_from_proof(conv_vec_bytes(proof.account_proof));
 
         if let Some(storage_mpt) = storage_proofs.get_mut(&keccak256(address)) {
             for proof in proof.storage_proof {
-                storage_mpt.insert_short_node_variants_from_proof(proof.proof.compat());
+                storage_mpt.insert_short_node_variants_from_proof(conv_vec_bytes(proof.proof));
             }
         }
     }
 
     Ok((state, storage_proofs))
+}
+
+fn conv_vec_bytes(bytes: Vec<Bytes>) -> Vec<Vec<u8>> {
+    bytes.into_iter().map(|bytes| bytes.to_vec()).collect()
 }
 
 /// Fetches the proof data for the given accounts and associated storage keys.

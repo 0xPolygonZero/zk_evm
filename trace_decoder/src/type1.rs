@@ -97,11 +97,11 @@ fn visit(
                             match code {
                                 Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
                                 Some(Either::Right(Code { code })) => {
-                                    let hash = crate::hash(&code);
+                                    let hash = keccak_hash::keccak(&code);
                                     frontend.code.insert(code);
                                     hash
                                 }
-                                None => crate::hash([]),
+                                None => keccak_hash::keccak([]),
                             }
                         },
                     };

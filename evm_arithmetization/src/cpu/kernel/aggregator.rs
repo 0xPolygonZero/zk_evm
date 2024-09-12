@@ -12,9 +12,9 @@ use crate::cpu::kernel::parser::parse;
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     157
 } else if cfg!(feature = "cdk_erigon") {
-    156
-} else if cfg!(feature = "polygon_pos") {
     155
+} else if cfg!(feature = "polygon_pos") {
+    154
 } else {
     // unreachable
     0
@@ -54,6 +54,7 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/log.asm"),
     include_str!("asm/core/selfdestruct_list.asm"),
     include_str!("asm/core/touched_addresses.asm"),
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/core/withdrawals.asm"),
     include_str!("asm/core/precompiles/main.asm"),
     include_str!("asm/core/precompiles/ecrec.asm"),

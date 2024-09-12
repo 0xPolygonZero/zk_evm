@@ -2,11 +2,13 @@ zk_evm_common::check_chain_features!();
 pub mod block_interval;
 
 pub mod debug_utils;
+pub mod env;
 pub mod fs;
 pub mod parsing;
 pub mod pre_checks;
 pub mod prover_state;
 pub mod provider;
+pub mod tracing;
 pub mod version;
 
 /// Size of the channel used to send block prover inputs to the per block
