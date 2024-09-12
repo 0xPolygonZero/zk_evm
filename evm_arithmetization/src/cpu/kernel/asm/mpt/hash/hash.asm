@@ -293,4 +293,3 @@ encode_node_leaf_after_encode_value:
     %stack (rlp_prefix_start_pos, rlp_len, cur_len, retdest)
         -> (retdest, rlp_prefix_start_pos, rlp_len, cur_len)
     JUMP
-    

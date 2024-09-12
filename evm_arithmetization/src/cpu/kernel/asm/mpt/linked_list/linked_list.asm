@@ -38,6 +38,11 @@
 /// the accounts, storing a pointer to the copied account in the node.
 /// Computes the length of `SEGMENT_ACCOUNTS_LINKED_LIST` and 
 /// stores it in `GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE`.
+/// It also checks that the next node address is current address + 4
+/// and that all keys are strictly increasing.
+/// NOTE: It may be more efficient to check that the next node addres != U256_MAX
+/// (i.e. node was not deleted) and ensure that no node with repeated key
+/// is ever read.
 global store_initial_accounts:
     // stack: retdest
     PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
@@ -45,15 +50,24 @@ global store_initial_accounts:
     ADD
     // stack: cur_len, retdest
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    // stack: current_node_ptr, cur_len, retdest
+    DUP1
+    MLOAD_GENERAL
+    // stack: current_addr_key, current_node_ptr, cur_len', retdest
+    %assert_eq_const(@U256_MAX)
+    DUP1
     %next_account
+    // stack: next_node_ptr, current_node_ptr, cur_len', retdest
+    DUP1
+    SWAP2
+    %next_initial_account
+    %assert_eq(store_initial_accounts_end) // next_node_ptr ==  current_node_ptr + node_size
+    // stack: next_node_ptr, cur_len', retdest
+    
 loop_store_initial_accounts:
     // stack: current_node_ptr, cur_len, retdest
     %get_trie_data_size
-    DUP2
-    MLOAD_GENERAL
-    // stack: current_addr_key, cpy_ptr, current_node_ptr, cur_len, retdest
-    %eq_const(@U256_MAX)
-    %jumpi(store_initial_accounts_end)
+    // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
     %increment
     MLOAD_GENERAL
@@ -76,6 +90,7 @@ loop_store_initial_accounts:
     %mload_trie_data // code_hash
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, cur_len, retdest
+    // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
     %add_const(2)
     SWAP1
@@ -84,12 +99,32 @@ loop_store_initial_accounts:
     SWAP1 PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE 
     ADD
     SWAP1
-    // stack: current_node_ptr, cur_len', retdest
+    // Check next node ptr validity and strict keys monotonicity
+    DUP1
+    MLOAD_GENERAL
+    // stack: current_addr_key, current_node_ptr, cur_len', retdest
+    SWAP1
+    DUP1
     %next_account
+    // stack: next_node_ptr, current_node_ptr, current_addr_key, cur_len', retdest
+    DUP1
+    SWAP2
+    %next_initial_account
+    %assert_eq(store_initial_accounts_end_pop_key) // next_node_ptr ==  current_node_ptr + node_size
+    // stack: next_node_ptr, current_addr_key, cur_len', retdest
+    SWAP1
+    DUP2
+    MLOAD_GENERAL
+    %assert_gt // next_addr_key > current_addr_key
+    // stack: next_node_ptr, cur_len', retdest
     %jump(loop_store_initial_accounts)
 
+store_initial_accounts_end_pop_key:
+    // stack: next_node_ptr, current_addr_key, cur_len', retdest
+    SWAP1 POP
 store_initial_accounts_end:
-    %pop2
+    // stack: next_node_ptr, cur_len', retdest
+    %assert_eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
     // stack: cur_len, retdest
     DUP1
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
@@ -326,6 +361,11 @@ global remove_account:
 /// the accounts, storing a pointer to the copied account in the node.
 /// Computes the length of `SEGMENT_STORAGE_LINKED_LIST` and 
 /// checks against `GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE`.
+/// It also checks that the next node address is current address + 5
+/// and that all keys are strictly increasing.
+/// NOTE: It may be more efficient to check that the next node addres != U256_MAX
+/// (i.e. node was not deleted) and ensure that no node with repeated key
+/// is ever read.
 global store_initial_slots:
     // stack: retdest
     PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
@@ -333,15 +373,23 @@ global store_initial_slots:
     ADD
     // stack: cur_len, retdest
     PUSH @SEGMENT_STORAGE_LINKED_LIST
-    %next_slot
-
-loop_store_initial_slots:
-    // stack: current_node_ptr, cur_len, retdest
     DUP1
     MLOAD_GENERAL
     // stack: current_addr_key, current_node_ptr, cur_len, retdest
-    %eq_const(@U256_MAX)
-    %jumpi(store_initial_slots_end)
+    %assert_eq_const(@U256_MAX)
+
+    // stack: current_node_ptr, cur_len', retdest
+    DUP1
+    %next_slot
+    // stack: next_node_ptr, current_node_ptr, cur_len, retdest
+    DUP1
+    SWAP2
+    %next_initial_slot
+    %assert_eq(store_initial_slots_end) // next_node_ptr == current_node_ptr + node_size
+    // stack: next_node_ptr, cur_len', retdest
+ 
+loop_store_initial_slots:
+    // stack: current_node_ptr, cur_len, retdest
     DUP1
     %add_const(2)
     MLOAD_GENERAL
@@ -355,12 +403,61 @@ loop_store_initial_slots:
     SWAP1 PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
     ADD
     SWAP1
-    // stack: current_node_ptr, cur_len', retdest
+    // Check correctness of next node ptr and stric key monotonicity.
+    DUP1
+    MLOAD_GENERAL
+    // stack: current_addr_key, current_node_ptr, cur_len', retdest
+    SWAP1
+    DUP1
+    %increment
+    MLOAD_GENERAL
+    // stack: current_slot_key, current_node_ptr, current_addr_key, cur_len', retdest
+    SWAP1
+    DUP1
     %next_slot
+    // stack: next_node_ptr, current_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    DUP1
+    SWAP2
+    %next_initial_slot
+    %assert_eq(store_initial_slots_end_pop_keys) // next_node_ptr == current_node_ptr + node_size
+    // stack: next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    DUP1
+    DUP1
+    %increment
+    MLOAD_GENERAL
+    // stack: next_node_slot_key, next_node_ptr, next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    SWAP1
+    MLOAD_GENERAL
+    // stack: next_node_addr_key, next_node_slot_key, next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    SWAP3
+    LT
+    // stack: current_slot_key > next_node_slot_key, next_node_ptr, next_node_addr_key, current_addr_key, cur_len', retdest
+    SWAP2
+    SWAP1
+    SWAP3
+    // stack: current_addr_key, next_node_addr_key, current_slot_key > next_node_slot_key, next_node_ptr, cur_len', retdest
+    DUP2
+    DUP2
+    EQ
+    // stack: current_addr_key == next_node_addr_key, current_addr_key, next_node_addr_key, current_slot_key > next_node_slot_key, next_node_ptr, cur_len', retdest
+    SWAP1
+    SWAP3
+global_debug_el_or:
+    MUL // AND
+    // stack  current_slot_key > next_node_slot_key AND current_addr_key == next_node_addr_key, next_node_addr_key, current_addr_key, next_node_ptr, cur_len', retdest
+    SWAP2
+    LT
+    ADD // OR
+    %assert_nonzero
     %jump(loop_store_initial_slots)
 
+store_initial_slots_end_pop_keys:
+    SWAP1 POP SWAP1 POP
+
 store_initial_slots_end:
-    POP
+    // stack: next_node_ptr, cur_len', retdest
+    %assert_eq_const(@SEGMENT_STORAGE_LINKED_LIST)
+    
     // stack: cur_len, retdest
     DUP1
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
