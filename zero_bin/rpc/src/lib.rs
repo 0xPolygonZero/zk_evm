@@ -9,8 +9,9 @@ use alloy::{
 use anyhow::{anyhow, Context as _};
 use clap::ValueEnum;
 use compat::Compat;
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+use evm_arithmetization::proof::{consolidate_hashes, BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
+use proof_gen::types::{Field, Hasher};
 use prover::BlockProverInput;
 use serde_json::json;
 use trace_decoder::{BlockLevelData, OtherBlockData};
@@ -37,7 +38,7 @@ pub enum RpcType {
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_id: BlockId,
-    checkpoint_state_trie_root: B256,
+    checkpoint_block_number: u64,
     rpc_type: RpcType,
 ) -> Result<BlockProverInput, anyhow::Error>
 where
@@ -46,10 +47,10 @@ where
 {
     match rpc_type {
         RpcType::Jerigon => {
-            jerigon::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await
+            jerigon::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
         }
         RpcType::Native => {
-            native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await
+            native::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
         }
     }
 }
@@ -63,7 +64,6 @@ where
     TransportT: Transport + Clone,
 {
     use itertools::Itertools;
-
     // For one block, we will fetch 128 previous blocks to get hashes instead of
     // 256. But for two consecutive blocks (odd and even) we would fetch 256
     // previous blocks in total. To overcome this, we add an offset so that we
@@ -198,7 +198,7 @@ where
 async fn fetch_other_block_data<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
-    checkpoint_state_trie_root: B256,
+    checkpoint_block_number: u64,
 ) -> anyhow::Result<OtherBlockData>
 where
     ProviderT: Provider<TransportT>,
@@ -209,7 +209,23 @@ where
         .await?;
     let target_block_number = target_block.header.number;
     let chain_id = cached_provider.get_provider().await?.get_chain_id().await?;
-    let prev_hashes = fetch_previous_block_hashes(cached_provider, target_block_number).await?;
+
+    // Grab interval checkpoint block state trie
+    let checkpoint_state_trie_root = cached_provider
+        .get_block(
+            checkpoint_block_number.into(),
+            BlockTransactionsKind::Hashes,
+        )
+        .await?
+        .header
+        .state_root;
+
+    let prev_hashes =
+        fetch_previous_block_hashes(cached_provider.clone(), target_block_number).await?;
+    let checkpoint_prev_hashes =
+        fetch_previous_block_hashes(cached_provider, checkpoint_block_number + 1) // include the checkpoint block
+            .await?
+            .map(|it| it.compat());
 
     let other_data = OtherBlockData {
         b_data: BlockLevelData {
@@ -264,6 +280,7 @@ where
                 .collect(),
         },
         checkpoint_state_trie_root: checkpoint_state_trie_root.compat(),
+        checkpoint_consolidated_hash: consolidate_hashes::<Hasher, Field>(&checkpoint_prev_hashes),
     };
     Ok(other_data)
 }

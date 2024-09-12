@@ -8,6 +8,7 @@ use plonky2::{
 };
 
 /// The base field on which statements are being proven.
+// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
 pub type Field = GoldilocksField;
 /// The recursive circuit configuration to be used to shrink and aggregate
 /// proofs.

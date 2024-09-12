@@ -1,6 +1,4 @@
-use alloy::{
-    primitives::B256, providers::Provider, rpc::types::eth::BlockId, transports::Transport,
-};
+use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport};
 use anyhow::Context as _;
 use prover::BlockProverInput;
 use serde::Deserialize;
@@ -21,7 +19,7 @@ pub struct ZeroTxResult {
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: std::sync::Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
-    checkpoint_state_trie_root: B256,
+    checkpoint_block_number: u64,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
@@ -46,8 +44,7 @@ where
         .await?;
 
     let other_data =
-        fetch_other_block_data(cached_provider, target_block_id, checkpoint_state_trie_root)
-            .await?;
+        fetch_other_block_data(cached_provider, target_block_id, checkpoint_block_number).await?;
 
     // Assemble
     Ok(BlockProverInput {

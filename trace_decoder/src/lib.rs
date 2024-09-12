@@ -55,6 +55,7 @@ const _DEVELOPER_DOCS: () = ();
 mod interface;
 
 pub use interface::*;
+use plonky2::field::goldilocks_field::GoldilocksField;
 
 mod type1;
 // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -68,6 +69,10 @@ mod wire;
 pub use core::entrypoint;
 
 mod core;
+
+/// The base field on which statements are being proven.
+// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
+pub type Field = GoldilocksField;
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {

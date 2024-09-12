@@ -94,7 +94,7 @@ fn verify_initial_memory<
     C: GenericConfig<D, F = F>,
     const D: usize,
 >(
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
     config: &StarkConfig,
 ) -> Result<()> {
     for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
@@ -271,7 +271,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 /// - block metadata writes,
 /// - trie roots writes.
 pub(crate) fn get_memory_extra_looking_sum<F, const D: usize>(
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
     challenge: GrandProductChallenge<F>,
 ) -> F
 where
@@ -497,7 +497,7 @@ pub(crate) mod debug_utils {
     /// Output all the extra memory rows that don't appear in the CPU trace but
     /// are necessary to correctly check the MemoryStark CTL.
     pub(crate) fn get_memory_extra_looking_values<F, const D: usize>(
-        public_values: &PublicValues,
+        public_values: &PublicValues<F>,
     ) -> Vec<Vec<F>>
     where
         F: RichField + Extendable<D>,

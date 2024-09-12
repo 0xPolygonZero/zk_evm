@@ -8,7 +8,10 @@ use ethereum_types::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use serde::{Deserialize, Serialize};
+
+use crate::Field;
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -169,6 +172,8 @@ pub struct OtherBlockData {
     pub b_data: BlockLevelData,
     /// State trie root hash at the checkpoint.
     pub checkpoint_state_trie_root: H256,
+    /// Consolidated block hashes at the checkpoint.
+    pub checkpoint_consolidated_hash: [Field; NUM_HASH_OUT_ELTS],
 }
 
 /// Data that is specific to a block and is constant for all txns in a given

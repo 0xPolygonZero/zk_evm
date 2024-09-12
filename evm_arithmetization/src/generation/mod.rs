@@ -8,7 +8,7 @@ use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::hash::hash_types::RichField;
+use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
@@ -54,7 +54,8 @@ pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct GenerationInputs {
+#[serde(bound = "")]
+pub struct GenerationInputs<F: RichField> {
     /// The index of the transaction being proven within its block.
     pub txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
@@ -87,6 +88,9 @@ pub struct GenerationInputs {
     /// without requiring proofs for blocks past this checkpoint.
     pub checkpoint_state_trie_root: H256,
 
+    /// Consolidated previous block hashes, at the checkpoint block.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
+
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
     pub contract_code: HashMap<H256, Vec<u8>>,
@@ -108,7 +112,8 @@ pub struct GenerationInputs {
 /// A lighter version of [`GenerationInputs`], which have been trimmed
 /// post pre-initialization processing.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct TrimmedGenerationInputs {
+#[serde(bound = "")]
+pub struct TrimmedGenerationInputs<F: RichField> {
     pub trimmed_tries: TrimmedTrieInputs,
     /// The index of the first transaction in this payload being proven within
     /// its block.
@@ -134,6 +139,9 @@ pub struct TrimmedGenerationInputs {
     /// prover to continue proving blocks from certain checkpoint heights
     /// without requiring proofs for blocks past this checkpoint.
     pub checkpoint_state_trie_root: H256,
+
+    /// Consolidated previous block hashes, at the checkpoint block.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
@@ -194,11 +202,11 @@ impl TrieInputs {
         }
     }
 }
-impl GenerationInputs {
+impl<F: RichField> GenerationInputs<F> {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
-    pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
+    pub(crate) fn trim(&self) -> TrimmedGenerationInputs<F> {
         let txn_hashes = self
             .signed_txns
             .iter()
@@ -218,6 +226,7 @@ impl GenerationInputs {
             },
             trie_roots_after: self.trie_roots_after.clone(),
             checkpoint_state_trie_root: self.checkpoint_state_trie_root,
+            checkpoint_consolidated_hash: self.checkpoint_consolidated_hash,
             contract_code: self.contract_code.clone(),
             burn_addr: self.burn_addr,
             block_metadata: self.block_metadata.clone(),
@@ -228,7 +237,7 @@ impl GenerationInputs {
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
     state: &mut GenerationState<F>,
-    inputs: &TrimmedGenerationInputs,
+    inputs: &TrimmedGenerationInputs<F>,
     registers_before: &RegistersData,
     registers_after: &RegistersData,
 ) {
@@ -390,7 +399,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
-pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
+pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
     log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
     log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
@@ -445,10 +454,11 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
+type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues<F>);
+
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
-    inputs: &TrimmedGenerationInputs,
+    inputs: &TrimmedGenerationInputs<F>,
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
@@ -507,6 +517,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let extra_block_data = ExtraBlockData {
         checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: inputs.checkpoint_consolidated_hash,
         txn_number_before: inputs.txn_number_before,
         txn_number_after,
         gas_used_before: inputs.gas_used_before,

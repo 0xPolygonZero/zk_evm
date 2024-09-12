@@ -154,7 +154,7 @@ impl<F: RichField> Interpreter<F> {
     pub(crate) fn new_with_generation_inputs(
         initial_offset: usize,
         initial_stack: Vec<U256>,
-        inputs: &GenerationInputs,
+        inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
     ) -> Self {
         debug_inputs(inputs);
@@ -216,7 +216,7 @@ impl<F: RichField> Interpreter<F> {
     }
 
     /// Initializes the interpreter state given `GenerationInputs`.
-    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
+    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs<F>) {
         // Initialize registers.
         let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
