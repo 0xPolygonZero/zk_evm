@@ -32,7 +32,6 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-    use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     ensure!(batch_size_hint != 0);
 
@@ -53,6 +52,7 @@ pub fn entrypoint(
             },
         checkpoint_state_trie_root,
         checkpoint_consolidated_hash,
+        burn_addr,
     } = other;
 
     for (_, amt) in &mut withdrawals {
@@ -112,7 +112,7 @@ pub fn entrypoint(
                     .collect(),
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
-                burn_addr: use_burn_addr.then_some(Address::zero()),
+                burn_addr,
             },
         )
         .collect())

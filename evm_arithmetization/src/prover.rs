@@ -475,7 +475,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 /// Sanity checks on the consistency between this proof payload and the feature
 /// flags being used.
 pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) {
-    if cfg!(feature = "polygon_pos") || cfg!(feature = "cdk_erigon") {
+    if !cfg!(feature = "eth_mainnet") {
         assert!(inputs.block_metadata.parent_beacon_block_root.is_zero());
         assert!(inputs.block_metadata.block_blob_gas_used.is_zero());
         assert!(inputs.block_metadata.block_excess_blob_gas.is_zero());

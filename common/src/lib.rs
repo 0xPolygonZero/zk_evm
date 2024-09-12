@@ -14,6 +14,25 @@ pub const EMPTY_TRIE_HASH: H256 = H256([
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
 
+#[macro_export]
+/// A convenience macro to check the feature flags activating chain specific
+/// behaviors. Only one of these flags may be activated at a time.
+macro_rules! check_chain_features {
+    () => {
+        #[cfg(any(
+            all(feature = "cdk_erigon", feature = "polygon_pos"),
+            all(feature = "cdk_erigon", feature = "eth_mainnet"),
+            all(feature = "polygon_pos", feature = "eth_mainnet"),
+            not(any(
+                feature = "cdk_erigon",
+                feature = "eth_mainnet",
+                feature = "polygon_pos"
+            ))
+        ))]
+        compile_error!("One and only one of the feature chains `cdk_erigon`, `polygon_pos` or `eth_mainnet` must be selected");
+    };
+}
+
 /// Converts an amount in `ETH` to `wei` units.
 pub fn eth_to_wei(eth: U256) -> U256 {
     // 1 ether = 10^18 wei.

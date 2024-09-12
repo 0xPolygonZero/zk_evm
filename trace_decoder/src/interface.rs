@@ -174,6 +174,10 @@ pub struct OtherBlockData {
     pub checkpoint_state_trie_root: H256,
     /// Consolidated block hashes at the checkpoint.
     pub checkpoint_consolidated_hash: [Field; NUM_HASH_OUT_ELTS],
+    /// Address where the burnt fees are stored.
+    ///
+    /// Only used if the `cfg_erigon` feature is activated.
+    pub burn_addr: Option<Address>,
 }
 
 /// Data that is specific to a block and is constant for all txns in a given

@@ -41,6 +41,8 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 
+zk_evm_common::check_chain_features!();
+
 /// Over RPC, ethereum nodes expose their tries as a series of binary
 /// [`wire::Instruction`]s in a node-dependant format.
 ///

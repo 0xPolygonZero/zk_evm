@@ -34,6 +34,7 @@ proof_gen = { workspace = true }
 prover = { workspace = true }
 trace_decoder = { workspace = true }
 zero_bin_common = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
@@ -55,4 +56,10 @@ cdk_erigon = [
     "prover/cdk_erigon",
     "trace_decoder/cdk_erigon",
     "zero_bin_common/cdk_erigon",
+]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "prover/polygon_pos",
+    "trace_decoder/polygon_pos",
+    "zero_bin_common/polygon_pos",
 ]

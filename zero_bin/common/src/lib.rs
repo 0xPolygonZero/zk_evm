@@ -1,3 +1,5 @@
+zk_evm_common::check_chain_features!();
+
 pub mod block_interval;
 pub mod debug_utils;
 pub mod env;

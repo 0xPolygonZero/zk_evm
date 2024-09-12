@@ -1,3 +1,5 @@
+zk_evm_common::check_chain_features!();
+
 use std::time::Instant;
 
 use evm_arithmetization::generation::TrimmedGenerationInputs;

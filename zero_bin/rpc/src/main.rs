@@ -167,12 +167,10 @@ impl Cli {
                                 block_number
                             ))?;
 
-                        let use_burn_addr = cfg!(feature = "cdk_erigon");
                         let generation_inputs = trace_decoder::entrypoint(
                             block_prover_input.block_trace,
                             block_prover_input.other_data,
                             batch_size,
-                            use_burn_addr,
                         )?;
 
                         if let Some(index) = tx_info.transaction_index {

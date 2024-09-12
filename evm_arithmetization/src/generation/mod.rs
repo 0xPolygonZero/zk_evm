@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
-use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use log::log_enabled;
@@ -73,7 +72,7 @@ pub struct GenerationInputs<F: RichField> {
     /// `None`, then the base fee is directly burnt.
     ///
     /// Note: this is only used  when feature `cdk_erigon` is activated.
-    pub burn_addr: Option<H160>,
+    pub burn_addr: Option<Address>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
@@ -152,7 +151,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// Address where the burnt fees are stored. Only used if the `cfg_erigon`
     /// feature is activated.
-    pub burn_addr: Option<H160>,
+    pub burn_addr: Option<Address>,
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
