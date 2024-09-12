@@ -64,8 +64,8 @@ pub fn update_beacon_roots_account_storage(
     timestamp: U256,
     parent_root: H256,
 ) -> anyhow::Result<()> {
-    let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.1;
-    let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.1;
+    let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.value;
+    let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
 
     insert_storage(storage_trie, timestamp_idx, timestamp)?;
     insert_storage(storage_trie, root_idx, h2u(parent_root))
@@ -160,10 +160,4 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
         storage_root: storage_trie.hash(),
         ..Default::default()
     }
-}
-
-/// Converts an amount in `ETH` to `wei` units.
-pub fn eth_to_wei(eth: U256) -> U256 {
-    // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
 }

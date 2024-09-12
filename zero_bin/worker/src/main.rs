@@ -9,9 +9,7 @@ use zero_bin_common::prover_state::{
     cli::CliProverStateConfig,
     persistence::{set_circuit_cache_dir_env_if_not_set, CIRCUIT_VERSION},
 };
-use zero_bin_common::version;
-
-mod init;
+use zero_bin_common::{tracing, version};
 
 // TODO: https://github.com/0xPolygonZero/zk_evm/issues/302
 //       this should probably be removed.
@@ -40,7 +38,7 @@ async fn main() -> Result<()> {
     }
 
     dotenv().ok();
-    init::tracing();
+    tracing::init();
     set_circuit_cache_dir_env_if_not_set()?;
     let args = Cli::parse();
 
