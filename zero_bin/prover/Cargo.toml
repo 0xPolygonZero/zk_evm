@@ -9,9 +9,9 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-alloy.workspace = true
+alloy = { workspace = true }
 anyhow = { workspace = true }
-clap = {workspace = true, features = ["derive", "string"] }
+clap = { workspace = true, features = ["derive", "string"] }
 futures = { workspace = true }
 num-traits = { workspace = true }
 ops = { workspace = true }
