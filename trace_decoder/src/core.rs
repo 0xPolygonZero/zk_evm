@@ -66,6 +66,7 @@ pub fn entrypoint(
         b_meta.block_timestamp,
         b_meta.parent_beacon_block_root,
         withdrawals,
+        |_ignore| {},
     )?;
 
     let mut running_gas_used = 0;
@@ -266,6 +267,7 @@ struct IntraBlockTries<StateTrieT> {
     pub receipt: ReceiptTrie,
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Does the main work mentioned in the [module documentation](super).
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
@@ -280,6 +282,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
     parent_beacon_block_root: H256,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
+    // called with the untrimmed tries after each batch
+    mut observer: impl FnMut(&IntraBlockTries<StateTrieT>),
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
@@ -503,6 +507,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 false => vec![],
             },
             before: {
+                observer(&before);
                 before.state.mask(state_mask)?;
                 before.receipt.mask(batch_first_txn_ix..txn_ix)?;
                 before.transaction.mask(batch_first_txn_ix..txn_ix)?;
@@ -640,5 +645,25 @@ impl FromIterator<Vec<u8>> for Hash2Code {
         let mut this = Self::new();
         this.extend(iter);
         this
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn discuss() {
+        let _ignore_result = middle(
+            StateMpt::default(),
+            BTreeMap::new(),
+            vec![],
+            &mut Hash2Code::new(),
+            U256::zero(),
+            H256::zero(),
+            vec![],
+            |IntraBlockTries { state, .. }| {
+                let _serialized_state = serde_json::to_string(state.as_hashed_partial_trie());
+            },
+        );
     }
 }
