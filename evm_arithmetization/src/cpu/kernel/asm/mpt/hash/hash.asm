@@ -34,7 +34,7 @@ mpt_hash_hash_rlp:
     %jump(mstore_unpacking)
 mpt_hash_hash_rlp_after_unpacking:
     // stack: result_addr, result_len, new_len, retdest
-    POP PUSH @INITIAL_RLP_ADDR // ctx == virt == 0
+    POP PUSH @INITIAL_RLP_ADDR // ctx == 0, virt == 1
     // stack: result_addr, result_len, new_len, retdest
     KECCAK_GENERAL
     // stack: hash, new_len, retdest
