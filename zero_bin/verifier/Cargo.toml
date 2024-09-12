@@ -6,22 +6,22 @@ edition = "2021"
 build = "../common/build.rs"
 
 [dependencies]
-clap = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-dotenvy = { workspace = true }
 anyhow = { workspace = true }
+clap = { workspace = true }
+dotenvy = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # Local dependencies
 proof_gen = { workspace = true }
 zero_bin_common = { workspace = true }
 
 [build-dependencies]
+anyhow = { workspace = true }
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
-anyhow = { workspace = true }
 
 
 [features]
