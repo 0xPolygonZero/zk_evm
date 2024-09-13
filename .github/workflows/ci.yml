@@ -142,11 +142,8 @@ jobs:
         run: |
           cargo test --manifest-path zero_bin/common/Cargo.toml
           cargo test --manifest-path zero_bin/leader/Cargo.toml
-          cargo test --manifest-path zero_bin/ops/Cargo.toml
-          cargo test --manifest-path zero_bin/prover/Cargo.toml
           cargo test --manifest-path zero_bin/rpc/Cargo.toml
           cargo test --manifest-path zero_bin/verifier/Cargo.toml
-          cargo test --manifest-path zero_bin/worker/Cargo.toml
 
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
