@@ -54,7 +54,7 @@ glob = "0.3.1"
 libtest-mimic = "0.7.3"
 plonky2_maybe_rayon = { workspace = true }
 pretty_assertions = "1.4.0"
-zero_bin_common = { workspace = true }
+zero_bin_common = { workspace = true, features = ["eth_mainnet"] }
 pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
