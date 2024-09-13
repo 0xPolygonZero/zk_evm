@@ -40,6 +40,9 @@ proof_gen = { workspace = true }
 zk_evm_common = { workspace = true }
 trace_decoder = { workspace = true }
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.5.4"
+
 
 [build-dependencies]
 anyhow = { workspace = true }

@@ -5738,22 +5738,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "worker"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cargo_metadata",
- "clap",
- "dotenvy",
- "jemallocator",
- "paladin-core",
- "tokio",
- "tracing-subscriber",
- "vergen",
- "zero_bin_common",
-]
-
-[[package]]
 name = "wyz"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5815,6 +5799,7 @@ dependencies = [
  "dotenvy",
  "evm_arithmetization",
  "futures",
+ "jemallocator",
  "keccak-hash 0.10.0",
  "lru",
  "num-traits",

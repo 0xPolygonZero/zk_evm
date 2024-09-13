@@ -12,7 +12,6 @@ members = [
   "zero_bin/leader",
   "zero_bin/rpc",
   "zero_bin/verifier",
-  "zero_bin/worker",
 ]
 resolver = "2"
 
