@@ -340,38 +340,6 @@ impl<F: RichField> GenerationState<F> {
             "insert_slot" | "search_slot" => self.run_next_insert_slot(input_fn),
             "remove_slot" => self.run_next_remove_slot(),
             "remove_address_slots" => self.run_next_remove_address_slots(),
-            "accounts_linked_list_len" => {
-                let len = self
-                    .memory
-                    .preinitialized_segments
-                    .get(&Segment::AccountsLinkedList)
-                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
-                    .content
-                    .len()
-                    .max(
-                        self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
-                            .content
-                            .len(),
-                    );
-
-                Ok((Segment::AccountsLinkedList as usize + len).into())
-            }
-            "storage_linked_list_len" => {
-                let len = self
-                    .memory
-                    .preinitialized_segments
-                    .get(&Segment::StorageLinkedList)
-                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
-                    .content
-                    .len()
-                    .max(
-                        self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
-                            .content
-                            .len(),
-                    );
-
-                Ok((Segment::StorageLinkedList as usize + len).into())
-            }
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -521,13 +489,13 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (&pred_addr, &pred_ptr) = self
-            .accounts
+            .accounts_pointers
             .range(..=addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
-            self.accounts.insert(
+            self.accounts_pointers.insert(
                 addr,
                 u256_to_usize(
                     self.memory
@@ -548,12 +516,12 @@ impl<F: RichField> GenerationState<F> {
         let key = stack_peek(self, 1)?;
 
         let (&(pred_addr, pred_slot_key), &pred_ptr) =
-            self.storage.range(..=(addr, key)).next_back().unwrap_or((
+            self.storage_pointers.range(..=(addr, key)).next_back().unwrap_or((
                 &(U256::MAX, U256::zero()),
                 &(Segment::StorageLinkedList as usize),
             ));
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
-            self.storage.insert(
+            self.storage_pointers.insert(
                 (addr, key),
                 u256_to_usize(
                     self.memory
@@ -573,11 +541,11 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &ptr) = self
-            .accounts
+            .accounts_pointers
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        self.accounts
+        self.accounts_pointers
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -592,11 +560,11 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
 
-        let (_, &ptr) = self.storage.range(..(addr, key)).next_back().unwrap_or((
+        let (_, &ptr) = self.storage_pointers.range(..(addr, key)).next_back().unwrap_or((
             &(U256::MAX, U256::zero()),
             &(Segment::StorageLinkedList as usize),
         ));
-        self.storage
+        self.storage_pointers
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -613,7 +581,7 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &pred_ptr) = self
-            .storage
+            .storage_pointers
             .range(..(addr, U256::zero()))
             .next_back()
             .unwrap_or((
