@@ -7,15 +7,14 @@ use anyhow::Result;
 use clap::Parser;
 use cli::Command;
 use client::RpcParams;
-use ops::register;
 use paladin::runtime::Runtime;
 use prover::ProverConfig;
 use tracing::info;
 use zero_bin_common::env::load_dotenvy_vars_if_present;
-use zero_bin_common::fs::get_previous_proof;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
+use zero_bin_common::{fs::get_previous_proof, ops::register};
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
 use crate::client::{client_main, LeaderConfig};

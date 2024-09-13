@@ -2861,7 +2861,6 @@ dependencies = [
  "clap",
  "evm_arithmetization",
  "futures",
- "ops",
  "paladin-core",
  "proof_gen",
  "prover",
@@ -3291,20 +3290,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "ops"
-version = "0.1.0"
-dependencies = [
- "evm_arithmetization",
- "keccak-hash 0.10.0",
- "paladin-core",
- "proof_gen",
- "serde",
- "tracing",
- "zero_bin_common",
- "zk_evm_common",
 ]
 
 [[package]]
@@ -3890,7 +3875,6 @@ dependencies = [
  "evm_arithmetization",
  "futures",
  "num-traits",
- "ops",
  "paladin-core",
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5788,7 +5772,6 @@ dependencies = [
  "clap",
  "dotenvy",
  "jemallocator",
- "ops",
  "paladin-core",
  "tokio",
  "tracing-subscriber",
@@ -5858,8 +5841,10 @@ dependencies = [
  "dotenvy",
  "evm_arithmetization",
  "futures",
+ "keccak-hash 0.10.0",
  "lru",
  "once_cell",
+ "paladin-core",
  "plonky2",
  "proof_gen",
  "serde",

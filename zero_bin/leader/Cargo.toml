@@ -26,7 +26,6 @@ tracing-subscriber = { workspace = true }
 
 # Local dependencies
 evm_arithmetization = { workspace = true }
-ops = { workspace = true }
 proof_gen = { workspace = true }
 prover = { workspace = true }
 rpc = { workspace = true }
@@ -37,7 +36,6 @@ zk_evm_common = { workspace = true }
 default = ["eth_mainnet"]
 eth_mainnet = [
     "evm_arithmetization/eth_mainnet",
-    "ops/eth_mainnet",
     "proof_gen/eth_mainnet",
     "prover/eth_mainnet",
     "rpc/eth_mainnet",
@@ -45,7 +43,6 @@ eth_mainnet = [
 ]
 cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
-    "ops/cdk_erigon",
     "proof_gen/cdk_erigon",
     "prover/cdk_erigon",
     "rpc/cdk_erigon",
@@ -53,7 +50,6 @@ cdk_erigon = [
 ]
 polygon_pos = [
     "evm_arithmetization/polygon_pos",
-    "ops/polygon_pos",
     "proof_gen/polygon_pos",
     "prover/polygon_pos",
     "rpc/polygon_pos",

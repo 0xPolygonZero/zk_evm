@@ -19,6 +19,7 @@ use tokio::sync::{oneshot, Semaphore};
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 use zero_bin_common::fs::generate_block_proof_file_name;
+use zero_bin_common::ops;
 
 // All proving tasks are executed concurrently, which can cause issues for large
 // block intervals, where distant future blocks may be proven first.

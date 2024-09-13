@@ -18,7 +18,6 @@ clap = { workspace = true }
 tokio = { workspace = true }
 
 # Local dependencies
-ops = { workspace = true }
 zero_bin_common = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -31,15 +30,6 @@ anyhow = { workspace = true }
 
 [features]
 default = ["eth_mainnet"]
-eth_mainnet = [
-    "ops/eth_mainnet",
-    "zero_bin_common/eth_mainnet",
-]
-cdk_erigon = [
-    "ops/cdk_erigon",
-    "zero_bin_common/cdk_erigon",
-]
-polygon_pos = [
-    "ops/polygon_pos",
-    "zero_bin_common/polygon_pos",
-]
+eth_mainnet = ["zero_bin_common/eth_mainnet"]
+cdk_erigon = ["zero_bin_common/cdk_erigon"]
+polygon_pos = ["zero_bin_common/polygon_pos"]

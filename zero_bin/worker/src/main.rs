@@ -3,13 +3,12 @@ use std::env;
 use anyhow::Result;
 use clap::Parser;
 use dotenvy::dotenv;
-use ops::register;
 use paladin::runtime::WorkerRuntime;
 use zero_bin_common::prover_state::{
     cli::CliProverStateConfig,
     persistence::{set_circuit_cache_dir_env_if_not_set, CIRCUIT_VERSION},
 };
-use zero_bin_common::{tracing, version};
+use zero_bin_common::{ops::register, tracing, version};
 
 // TODO: https://github.com/0xPolygonZero/zk_evm/issues/302
 //       this should probably be removed.

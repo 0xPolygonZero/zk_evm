@@ -19,7 +19,8 @@ use proof_gen::{
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use tracing::{event, info_span, Level};
-use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
+
+use crate::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
 
@@ -40,7 +41,7 @@ impl Operation for SegmentProof {
         let segment_index = all_data.1.segment_index();
         let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
         let proof = if self.save_inputs_on_error {
-            zero_bin_common::prover_state::p_manager()
+            crate::prover_state::p_manager()
                 .generate_segment_proof(all_data)
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
@@ -59,7 +60,7 @@ impl Operation for SegmentProof {
                     FatalError::from_anyhow(err, FatalStrategy::Terminate)
                 })?
         } else {
-            zero_bin_common::prover_state::p_manager()
+            crate::prover_state::p_manager()
                 .generate_segment_proof(all_data)
                 .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?
         };

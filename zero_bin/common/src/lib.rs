@@ -4,6 +4,7 @@ pub mod block_interval;
 pub mod debug_utils;
 pub mod env;
 pub mod fs;
+pub mod ops;
 pub mod parsing;
 pub mod pre_checks;
 pub mod prover_state;

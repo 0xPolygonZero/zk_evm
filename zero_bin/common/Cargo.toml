@@ -1,6 +1,6 @@
 [package]
 name = "zero_bin_common"
-authors = ["Polygon Zero <zbrown@polygon.technology>"]
+authors = ["Polygon Zero"]
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -27,13 +27,15 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vergen = { workspace = true }
-
+keccak-hash = { workspace = true }
+paladin-core = { workspace = true }
 directories = "5.0.1"
 
 # Local dependencies
 evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
 zk_evm_common = { workspace = true }
+
 
 [build-dependencies]
 anyhow = { workspace = true }
@@ -43,18 +45,9 @@ vergen = { workspace = true }
 
 [features]
 default = ["eth_mainnet"]
-eth_mainnet = [
-    "evm_arithmetization/eth_mainnet",
-    "proof_gen/eth_mainnet",
-]
-cdk_erigon = [
-    "evm_arithmetization/cdk_erigon",
-    "proof_gen/cdk_erigon",
-]
-polygon_pos = [
-    "evm_arithmetization/polygon_pos",
-    "proof_gen/polygon_pos",
-]
+eth_mainnet = ["evm_arithmetization/eth_mainnet", "proof_gen/eth_mainnet"]
+cdk_erigon = ["evm_arithmetization/cdk_erigon", "proof_gen/cdk_erigon"]
+polygon_pos = ["evm_arithmetization/polygon_pos", "proof_gen/polygon_pos"]
 
 [lints]
 workspace = true
