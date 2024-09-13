@@ -9,7 +9,6 @@ members = [
   "smt_trie",
   "trace_decoder",
   "zero_bin/common",
-  "zero_bin/leader",
 ]
 resolver = "2"
 

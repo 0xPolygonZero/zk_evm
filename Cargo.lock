@@ -2851,31 +2851,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
-name = "leader"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "anyhow",
- "axum",
- "cargo_metadata",
- "clap",
- "evm_arithmetization",
- "futures",
- "paladin-core",
- "proof_gen",
- "serde",
- "serde_json",
- "serde_path_to_error",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "vergen",
- "zero_bin_common",
- "zk_evm_common",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5745,6 +5720,7 @@ dependencies = [
  "alloy-compat",
  "anyhow",
  "async-stream",
+ "axum",
  "cargo_metadata",
  "clap",
  "compat",
@@ -5771,6 +5747,7 @@ dependencies = [
  "serde_path_to_error",
  "thiserror",
  "tokio",
+ "toml",
  "tower 0.4.13",
  "trace_decoder",
  "tracing",

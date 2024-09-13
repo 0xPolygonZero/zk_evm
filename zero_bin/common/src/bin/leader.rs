@@ -17,12 +17,14 @@ use zero_bin_common::{
 use zero_bin_common::{fs::get_previous_proof, ops::register};
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
+use self::leader::*;
 use crate::client::{client_main, LeaderConfig};
-
-mod cli;
-mod client;
-mod http;
-mod stdio;
+mod leader {
+    pub mod cli;
+    pub mod client;
+    pub mod http;
+    pub mod stdio;
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
