@@ -92,7 +92,7 @@ pub type SegmentRunResult = Option<Box<(GenerationSegmentData, Option<Generation
 pub struct SegmentError(pub String);
 
 impl<F: RichField> SegmentDataIterator<F> {
-    pub fn new(inputs: &GenerationInputs, max_cpu_len_log: Option<usize>) -> Self {
+    pub fn new(inputs: &GenerationInputs<F>, max_cpu_len_log: Option<usize>) -> Self {
         debug_inputs(inputs);
 
         let interpreter = Interpreter::<F>::new_with_generation_inputs(
@@ -170,7 +170,7 @@ impl<F: RichField> SegmentDataIterator<F> {
 }
 
 impl<F: RichField> Iterator for SegmentDataIterator<F> {
-    type Item = AllData;
+    type Item = AllData<F>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let run = self.generate_next_segment(self.partial_next_data.clone());

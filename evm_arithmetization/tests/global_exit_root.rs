@@ -8,10 +8,8 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    ger_contract_from_storage, init_logger, preinitialized_state_and_storage_tries,
-    scalable_account_nibbles, scalable_contract_from_storage, update_beacon_roots_account_storage,
-    update_ger_account_storage, update_scalable_account_storage,
+    ger_account_nibbles, ger_contract_from_storage, init_logger, scalable_account_nibbles,
+    scalable_contract_from_storage, update_ger_account_storage, update_scalable_account_storage,
     ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
@@ -19,6 +17,8 @@ use evm_arithmetization::{AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 
@@ -40,13 +40,13 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         ..BlockMetadata::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let mut storage_tries = vec![];
     state_trie_before.insert(
         ger_account_nibbles(),
         rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
     )?;
 
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let mut ger_account_storage = HashedPartialTrie::from(Node::Empty);
     let mut scalable_account_storage = HashedPartialTrie::from(Node::Empty);
 
@@ -66,11 +66,6 @@ fn test_global_exit_root() -> anyhow::Result<()> {
 
     let state_trie_after = {
         let mut trie = HashedPartialTrie::from(Node::Empty);
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
-            block_metadata.block_timestamp,
-            block_metadata.parent_beacon_block_root,
-        )?;
         update_ger_account_storage(&mut ger_account_storage, ger_data)?;
         update_scalable_account_storage(
             &mut scalable_account_storage,
@@ -78,15 +73,9 @@ fn test_global_exit_root() -> anyhow::Result<()> {
             state_trie_before.hash(),
         )?;
 
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
         let ger_account = ger_contract_from_storage(&ger_account_storage);
         let scalable_account = scalable_contract_from_storage(&scalable_account_storage);
 
-        trie.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&beacon_roots_account).to_vec(),
-        )?;
         trie.insert(ger_account_nibbles(), rlp::encode(&ger_account).to_vec())?;
         trie.insert(
             scalable_account_nibbles(),
@@ -102,7 +91,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         receipts_root: receipts_trie.hash(),
     };
 
-    let inputs = GenerationInputs {
+    let inputs = GenerationInputs::<F> {
         signed_txns: vec![],
         burn_addr: None,
         withdrawals: vec![],
@@ -116,6 +105,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         trie_roots_after,
         contract_code,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

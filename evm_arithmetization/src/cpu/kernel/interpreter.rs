@@ -156,7 +156,7 @@ impl<F: RichField> Interpreter<F> {
     pub(crate) fn new_with_generation_inputs(
         initial_offset: usize,
         initial_stack: Vec<U256>,
-        inputs: &GenerationInputs,
+        inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
     ) -> Self {
         debug_inputs(inputs);
@@ -218,7 +218,7 @@ impl<F: RichField> Interpreter<F> {
     }
 
     /// Initializes the interpreter state given `GenerationInputs`.
-    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
+    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs<F>) {
         // Initialize registers.
         let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
@@ -273,10 +273,6 @@ impl<F: RichField> Interpreter<F> {
 
         // Set `GlobalMetadata` values.
         let metadata = &inputs.block_metadata;
-        #[cfg(feature = "cdk_erigon")]
-        let burn_addr = inputs
-            .burn_addr
-            .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0));
         let global_metadata_to_set = [
             (
                 GlobalMetadata::BlockBeneficiary,
@@ -297,14 +293,17 @@ impl<F: RichField> Interpreter<F> {
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 metadata.block_blob_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 metadata.block_excess_blob_gas,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(metadata.parent_beacon_block_root),
@@ -343,7 +342,12 @@ impl<F: RichField> Interpreter<F> {
             (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
             (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
             #[cfg(feature = "cdk_erigon")]
-            (GlobalMetadata::BurnAddr, burn_addr),
+            (
+                GlobalMetadata::BurnAddr,
+                inputs
+                    .burn_addr
+                    .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0)),
+            ),
         ];
 
         self.set_global_metadata_multi_fields(&global_metadata_to_set);

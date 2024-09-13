@@ -1010,7 +1010,13 @@
           ]
         ]
       },
-      "checkpoint_state_trie_root": "0xbbd66174555d27c88e285ff4797de401470d8d2486d15513ab36e491e864bca2"
+      "checkpoint_state_trie_root": "0xbbd66174555d27c88e285ff4797de401470d8d2486d15513ab36e491e864bca2",
+      "checkpoint_consolidated_hash": [
+        7715853179812774584,
+        12908177954576181071,
+        11068935829000177885,
+        16446535885506885907
+      ]
     }
   }
 ]

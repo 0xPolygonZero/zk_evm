@@ -1,3 +1,5 @@
+zk_evm_common::check_chain_features!();
+
 pub mod cli;
 
 use std::future::Future;
@@ -13,10 +15,23 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 use zero_bin_common::fs::generate_block_proof_file_name;
+
+// All proving tasks are executed concurrently, which can cause issues for large
+// block intervals, where distant future blocks may be proven first.
+//
+// We then create a pool to limit the number of parallel proving block
+// tasks, retrieving new blocks in increasing order when some block proofs are
+// complete.
+//
+// While proving a block interval, we will output proofs corresponding to block
+// batches as soon as they are generated.
+const PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE: usize = 16;
+static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore =
+    Semaphore::const_new(PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE);
 
 #[derive(Debug, Clone)]
 pub struct ProverConfig {
@@ -60,13 +75,8 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let use_burn_addr = cfg!(feature = "cdk_erigon");
-        let block_generation_inputs = trace_decoder::entrypoint(
-            self.block_trace,
-            self.other_data,
-            batch_size,
-            use_burn_addr,
-        )?;
+        let block_generation_inputs =
+            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
 
         // Create segment proof.
         let seg_prove_ops = ops::SegmentProof {
@@ -155,13 +165,8 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let use_burn_addr = cfg!(feature = "cdk_erigon");
-        let block_generation_inputs = trace_decoder::entrypoint(
-            self.block_trace,
-            self.other_data,
-            batch_size,
-            use_burn_addr,
-        )?;
+        let block_generation_inputs =
+            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
 
         let seg_ops = ops::SegmentProofTestOnly {
             save_inputs_on_error,
@@ -242,6 +247,9 @@ pub async fn prove(
         let previous_block_proof = prev_proof.take();
         let runtime = runtime.clone();
         let block_number = block_prover_input.get_block_number();
+
+        let prove_permit = PARALLEL_BLOCK_PROVING_PERMIT_POOL.acquire().await?;
+
         let _abort_handle = task_set.spawn(async move {
             let block_number = block_prover_input.get_block_number();
             info!("Proving block {block_number}");
@@ -253,6 +261,7 @@ pub async fn prove(
                 prover_config.clone(),
             )
             .then(move |proof| async move {
+                drop(prove_permit);
                 let proof = proof.inspect_err(|e| {
                     error!("failed to generate proof for block {block_number}, error {e:?}")
                 })?;

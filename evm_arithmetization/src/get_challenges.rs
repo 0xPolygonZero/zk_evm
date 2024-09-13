@@ -65,13 +65,16 @@ fn observe_block_metadata<
     challenger.observe_element(basefee.0);
     challenger.observe_element(basefee.1);
     challenger.observe_element(u256_to_u32(block_metadata.block_gas_used)?);
-    let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;
-    challenger.observe_element(blob_gas_used.0);
-    challenger.observe_element(blob_gas_used.1);
-    let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
-    challenger.observe_element(excess_blob_gas.0);
-    challenger.observe_element(excess_blob_gas.1);
-    challenger.observe_elements(&h256_limbs::<F>(block_metadata.parent_beacon_block_root));
+    #[cfg(feature = "eth_mainnet")]
+    {
+        let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;
+        challenger.observe_element(blob_gas_used.0);
+        challenger.observe_element(blob_gas_used.1);
+        let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
+        challenger.observe_element(excess_blob_gas.0);
+        challenger.observe_element(excess_blob_gas.1);
+        challenger.observe_elements(&h256_limbs::<F>(block_metadata.parent_beacon_block_root));
+    }
     for i in 0..8 {
         challenger.observe_elements(&u256_limbs(block_metadata.block_bloom[i]));
     }
@@ -98,9 +101,12 @@ fn observe_block_metadata_target<
     challenger.observe_element(block_metadata.block_chain_id);
     challenger.observe_elements(&block_metadata.block_base_fee);
     challenger.observe_element(block_metadata.block_gas_used);
-    challenger.observe_elements(&block_metadata.block_blob_gas_used);
-    challenger.observe_elements(&block_metadata.block_excess_blob_gas);
-    challenger.observe_elements(&block_metadata.parent_beacon_block_root);
+    #[cfg(feature = "eth_mainnet")]
+    {
+        challenger.observe_elements(&block_metadata.block_blob_gas_used);
+        challenger.observe_elements(&block_metadata.block_excess_blob_gas);
+        challenger.observe_elements(&block_metadata.parent_beacon_block_root);
+    }
     challenger.observe_elements(&block_metadata.block_bloom);
 }
 
@@ -110,9 +116,10 @@ fn observe_extra_block_data<
     const D: usize,
 >(
     challenger: &mut Challenger<F, C::Hasher>,
-    extra_data: &ExtraBlockData,
+    extra_data: &ExtraBlockData<F>,
 ) -> Result<(), ProgramError> {
     challenger.observe_elements(&h256_limbs(extra_data.checkpoint_state_trie_root));
+    challenger.observe_elements(&extra_data.checkpoint_consolidated_hash);
     challenger.observe_element(u256_to_u32(extra_data.txn_number_before)?);
     challenger.observe_element(u256_to_u32(extra_data.txn_number_after)?);
     challenger.observe_element(u256_to_u32(extra_data.gas_used_before)?);
@@ -132,6 +139,7 @@ fn observe_extra_block_data_target<
     C::Hasher: AlgebraicHasher<F>,
 {
     challenger.observe_elements(&extra_data.checkpoint_state_trie_root);
+    challenger.observe_elements(&extra_data.checkpoint_consolidated_hash);
     challenger.observe_element(extra_data.txn_number_before);
     challenger.observe_element(extra_data.txn_number_after);
     challenger.observe_element(extra_data.gas_used_before);
@@ -199,7 +207,7 @@ pub(crate) fn observe_public_values<
     const D: usize,
 >(
     challenger: &mut Challenger<F, C::Hasher>,
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
 ) -> Result<(), ProgramError> {
     observe_trie_roots::<F, C, D>(challenger, &public_values.trie_roots_before);
     observe_trie_roots::<F, C, D>(challenger, &public_values.trie_roots_after);

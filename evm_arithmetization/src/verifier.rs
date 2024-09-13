@@ -94,7 +94,7 @@ fn verify_initial_memory<
     C: GenericConfig<D, F = F>,
     const D: usize,
 >(
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
     config: &StarkConfig,
 ) -> Result<()> {
     for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
@@ -271,7 +271,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 /// - block metadata writes,
 /// - trie roots writes.
 pub(crate) fn get_memory_extra_looking_sum<F, const D: usize>(
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
     challenge: GrandProductChallenge<F>,
 ) -> F
 where
@@ -320,6 +320,7 @@ where
             GlobalMetadata::BlockBaseFee,
             public_values.block_metadata.block_base_fee,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::ParentBeaconBlockRoot,
             h2u(public_values.block_metadata.parent_beacon_block_root),
@@ -332,10 +333,12 @@ where
             GlobalMetadata::BlockGasUsed,
             public_values.block_metadata.block_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockBlobGasUsed,
             public_values.block_metadata.block_blob_gas_used,
         ),
+        #[cfg(feature = "eth_mainnet")]
         (
             GlobalMetadata::BlockExcessBlobGas,
             public_values.block_metadata.block_excess_blob_gas,
@@ -494,7 +497,7 @@ pub(crate) mod debug_utils {
     /// Output all the extra memory rows that don't appear in the CPU trace but
     /// are necessary to correctly check the MemoryStark CTL.
     pub(crate) fn get_memory_extra_looking_values<F, const D: usize>(
-        public_values: &PublicValues,
+        public_values: &PublicValues<F>,
     ) -> Vec<Vec<F>>
     where
         F: RichField + Extendable<D>,
@@ -504,6 +507,13 @@ pub(crate) mod debug_utils {
             (
                 GlobalMetadata::BlockBeneficiary,
                 U256::from_big_endian(&public_values.block_metadata.block_beneficiary.0),
+            ),
+            #[cfg(feature = "cdk_erigon")]
+            (
+                GlobalMetadata::BurnAddr,
+                public_values
+                    .burn_addr
+                    .expect("There should be an address set in cdk_erigon."),
             ),
             (
                 GlobalMetadata::BlockTimestamp,
@@ -541,14 +551,17 @@ pub(crate) mod debug_utils {
                 GlobalMetadata::BlockGasUsed,
                 public_values.block_metadata.block_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockBlobGasUsed,
                 public_values.block_metadata.block_blob_gas_used,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::BlockExcessBlobGas,
                 public_values.block_metadata.block_excess_blob_gas,
             ),
+            #[cfg(feature = "eth_mainnet")]
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
                 h2u(public_values.block_metadata.parent_beacon_block_root),

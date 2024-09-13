@@ -4,6 +4,8 @@ use ethereum_types::U256;
 use keccak_hash::{keccak, H256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
 use crate::cpu::kernel::{aggregator::KERNEL, interpreter::Interpreter};
 use crate::generation::{
@@ -76,7 +78,7 @@ fn test_init_exc_stop() {
         receipts_root: receipts_trie.hash(),
     };
 
-    let inputs = GenerationInputs {
+    let inputs = GenerationInputs::<F> {
         signed_txns: vec![],
         burn_addr: None,
         withdrawals: vec![],
@@ -89,6 +91,7 @@ fn test_init_exc_stop() {
         trie_roots_after,
         contract_code,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

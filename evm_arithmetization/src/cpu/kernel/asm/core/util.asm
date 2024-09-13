@@ -37,8 +37,20 @@
 
 %macro is_precompile
     // stack: addr
-    DUP1 %ge_const(@ECREC) SWAP1 %le_const(@KZG_PEVAL)
-    // stack: addr>=1, addr<=10
+    DUP1 %ge_const(@ECREC)
+    SWAP1
+    // stack: addr, addr>=1
+    #[cfg(feature = eth_mainnet)]
+    {
+        %le_const(@KZG_PEVAL)
+        // stack: addr>=1, addr<=10
+    }
+    // TODO: Update after support of EIP-7712 for Polygon Pos, https://github.com/0xPolygonZero/zk_evm/issues/265
+    #[cfg(not(feature = eth_mainnet))]
+    {
+        %le_const(@BLAKE2_F)
+        // stack: addr>=1, addr<=9
+    }
     MUL // Cheaper than AND
 %endmacro
 

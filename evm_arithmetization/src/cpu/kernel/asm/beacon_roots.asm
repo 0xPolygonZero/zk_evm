@@ -3,16 +3,11 @@
 ///
 /// *NOTE*: This will panic if one of the provided timestamps is zero.
 
+/// Pre-stack: (empty)
+/// Post-stack: (empty)
 global set_beacon_root:
-    #[cfg(feature = cdk_erigon)]
-    {
-        PUSH pre_block_execution
-    }
-    #[cfg(not(feature = cdk_erigon))]
-    {
-        PUSH txn_loop
-    }
-
+    // stack: (empty)
+    PUSH txn_loop
     %timestamp
     // stack: timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH

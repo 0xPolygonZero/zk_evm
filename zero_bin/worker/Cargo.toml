@@ -28,3 +28,18 @@ jemallocator = "0.5.4"
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
 anyhow = { workspace = true }
+
+[features]
+default = ["eth_mainnet"]
+eth_mainnet = [
+    "ops/eth_mainnet",
+    "zero_bin_common/eth_mainnet",
+]
+cdk_erigon = [
+    "ops/cdk_erigon",
+    "zero_bin_common/cdk_erigon",
+]
+polygon_pos = [
+    "ops/polygon_pos",
+    "zero_bin_common/polygon_pos",
+]

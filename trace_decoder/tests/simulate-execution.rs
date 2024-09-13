@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
             other,
         } in cases()?
         {
-            let gen_inputs = trace_decoder::entrypoint(trace, other, batch_size, false).context(
+            let gen_inputs = trace_decoder::entrypoint(trace, other, batch_size).context(
                 format!("error in `trace_decoder` for {name} at batch size {batch_size}"),
             )?;
             for (ix, gi) in gen_inputs.into_iter().enumerate() {

@@ -1,10 +1,10 @@
 # Summary
 
-[Introduction](intro.md)
+[Introduction](../../README.md)
 
 - [STARK framework](framework/intro.md)
-    - [Cost model](framework/cost_model.md)
     - [Field](framework/field.md)
+    - [Cost model](framework/cost_model.md)
     - [Cross-Table Lookups](framework/ctls.md)
     - [Range-Checks](framework/range_check.md)
 - [Tables](tables/intro.md)

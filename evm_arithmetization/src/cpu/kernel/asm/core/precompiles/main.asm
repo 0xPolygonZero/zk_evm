@@ -18,8 +18,16 @@ global handle_precompiles:
     DUP1 %eq_const(@BN_ADD)   %jumpi(precompile_bn_add)
     DUP1 %eq_const(@BN_MUL)   %jumpi(precompile_bn_mul)
     DUP1 %eq_const(@SNARKV)   %jumpi(precompile_snarkv)
-    DUP1 %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
-    %eq_const(@KZG_PEVAL)     %jumpi(precompile_kzg_peval)
+    #[cfg(feature = eth_mainnet)]
+    {
+        DUP1 %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+        %eq_const(@KZG_PEVAL)     %jumpi(precompile_kzg_peval)
+    }
+    #[cfg(not(feature = eth_mainnet))]
+    {
+        %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+    }
+    // TODO: Add support of EIP-7712 for Polygon Pos, https://github.com/0xPolygonZero/zk_evm/issues/265
     // stack: retdest
     JUMP
 

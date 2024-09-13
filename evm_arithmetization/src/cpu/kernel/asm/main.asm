@@ -127,16 +127,33 @@ global start_txns:
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE)
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 
-    // If txn_idx == 0, update the beacon_root and exit roots.
-    %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
-    ISZERO
-    %jumpi(set_beacon_root)
+    #[cfg(feature = eth_mainnet)]
+    {
+        // If txn_idx == 0, update the beacon_root for Ethereum mainnet.
+        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        ISZERO
+        %jumpi(set_beacon_root)
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        // If txn_idx == 0, perform pre-state execution for CDK erigon.
+        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        ISZERO
+        %jumpi(pre_block_execution)
+    }
 
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 global txn_loop:
     // If the prover has no more txns for us to process, halt.
     PROVER_INPUT(end_of_txns)
-    %jumpi(execute_withdrawals)
+    #[cfg(feature = eth_mainnet)]
+    {
+        %jumpi(execute_withdrawals)
+    }
+    #[cfg(not(feature = eth_mainnet))]
+    {
+        %jumpi(perform_final_checks)
+    }
 
     // Call route_txn. When we return, we will process the txn receipt.
     PUSH txn_loop_after
@@ -161,9 +178,12 @@ global txn_loop_after:
     // stack: new_cum_gas, txn_counter, num_nibbles, new_txn_number
     %jump(txn_loop)
 
-global execute_withdrawals:
-    // stack: cum_gas, txn_counter, num_nibbles, txn_nb
-    %withdrawals
+#[cfg(feature = eth_mainnet)]
+{
+    global execute_withdrawals:
+        // stack: cum_gas, txn_counter, num_nibbles, txn_nb
+        %withdrawals
+}
 
 global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
@@ -255,5 +275,8 @@ global check_final_state_trie:
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
     PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
 
-    %reset_blob_versioned_hashes
+    #[cfg(feature = eth_mainnet)]
+    {
+        %reset_blob_versioned_hashes
+    }
 %endmacro
