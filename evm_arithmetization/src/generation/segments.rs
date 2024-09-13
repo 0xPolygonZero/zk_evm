@@ -74,6 +74,8 @@ fn build_segment_data<F: RichField>(
             trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
+            accounts: interpreter.generation_state.accounts_pointers.clone(),
+            storage: interpreter.generation_state.storage_pointers.clone(),
         },
     }
 }
