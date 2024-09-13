@@ -1,6 +1,6 @@
 use paladin::runtime::Runtime;
 
 pub struct ProofRuntime {
-    pub block_proof_runtime: Runtime,
-    pub segment_proof_runtime: Runtime,
+    pub light_proof_runtime: Runtime,
+    pub heavy_proof_runtime: Runtime,
 }

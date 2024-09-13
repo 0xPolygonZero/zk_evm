@@ -38,8 +38,8 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
     Ok(Some(proof))
 }
 
-const SEGMENT_PROOF_ROUTING_KEY: &str = "segment-proof";
-const BLOCK_PROOF_ROUTING_KEY: &str = "block-proof";
+const HEAVY_PROOF_ROUTING_KEY: &str = "heavy-proof";
+const LIGHT_PROOF_ROUTING_KEY: &str = "block-proof";
 const DEFAULT_ROUTING_KEY: &str = paladin::runtime::DEFAULT_ROUTING_KEY;
 
 #[tokio::main]
@@ -61,32 +61,31 @@ async fn main() -> Result<()> {
 
     let args = cli::Cli::parse();
 
-    let mut block_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
-    let mut segment_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
-    if args.worker_run_mode == cli::WorkerRunMode::Split {
-        // If we're running in split mode, we need to set the routing key for the
+    let mut light_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    let mut heavy_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    if args.worker_run_mode == cli::WorkerRunMode::Affinity {
+        // If we're running in affinity mode, we need to set the routing key for the
         // block proof and segment proof.
-        info!("Workers running in split mode");
-        block_proof_routing_key = BLOCK_PROOF_ROUTING_KEY.to_string();
-        segment_proof_routing_key = SEGMENT_PROOF_ROUTING_KEY.to_string();
+        info!("Workers running in affinity mode");
+        light_proof_routing_key = LIGHT_PROOF_ROUTING_KEY.to_string();
+        heavy_proof_routing_key = HEAVY_PROOF_ROUTING_KEY.to_string();
     }
 
-    let mut block_proof_paladin_args = args.paladin.clone();
-    block_proof_paladin_args.task_bus_routing_key = Some(block_proof_routing_key);
+    let mut light_proof_paladin_args = args.paladin.clone();
+    light_proof_paladin_args.task_bus_routing_key = Some(light_proof_routing_key);
 
-    let mut segment_proof_paladin_args = args.paladin.clone();
-    segment_proof_paladin_args.task_bus_routing_key = Some(segment_proof_routing_key);
+    let mut heavy_proof_paladin_args = args.paladin.clone();
+    heavy_proof_paladin_args.task_bus_routing_key = Some(heavy_proof_routing_key);
 
-    let block_proof_runtime = Runtime::from_config(&block_proof_paladin_args, register()).await?;
-    let segment_proof_runtime =
-        Runtime::from_config(&segment_proof_paladin_args, register()).await?;
+    let light_proof_runtime = Runtime::from_config(&light_proof_paladin_args, register()).await?;
+    let heavy_proof_runtime = Runtime::from_config(&heavy_proof_paladin_args, register()).await?;
     if let Command::Clean = args.command {
         return zero_bin_common::prover_state::persistence::delete_all();
     }
 
     let proof_runtime = ProofRuntime {
-        block_proof_runtime,
-        segment_proof_runtime,
+        light_proof_runtime,
+        heavy_proof_runtime,
     };
 
     let proof_runtime = Arc::new(proof_runtime);

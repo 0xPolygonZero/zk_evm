@@ -7,7 +7,6 @@ use std::sync::Arc;
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use evm_arithmetization::SegmentDataIterator;
-use futures::StreamExt;
 use futures::{
     future, future::BoxFuture, stream::FuturesUnordered, FutureExt, TryFutureExt, TryStreamExt,
 };
@@ -98,31 +97,20 @@ impl BlockProverInput {
             save_inputs_on_error,
         };
 
-        let vec_segment_agg_proofs: FuturesUnordered<_> = block_generation_inputs
+        // Segment the batches, prove segments and aggregate them to resulting batch
+        // proofs.
+        let batch_proof_futs: FuturesUnordered<_> = block_generation_inputs
             .iter()
-            .map(|txn_batch| {
+            .enumerate()
+            .map(|(idx, txn_batch)| {
                 let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
                     txn_batch,
                     Some(max_cpu_len_log),
                 );
 
-                // Map over the indexed stream with the given seg_prove_ops operation.
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
-                    .run(&proof_runtime.segment_proof_runtime)
-            })
-            .collect();
-
-        // Await all the futures concurrently
-        let vec_segment_agg_proofs: Vec<_> = vec_segment_agg_proofs.collect().await;
-
-        let batch_proof_futs: FuturesUnordered<_> = vec_segment_agg_proofs
-            .into_iter()
-            .enumerate()
-            .map(|(idx, result)| {
-                // todo - check how to handle the unwrap
-                let res = result.unwrap();
-                Directive::fold(IndexedStream::new(res), &seg_agg_ops)
-                    .run(&proof_runtime.block_proof_runtime)
+                    .fold(&seg_agg_ops)
+                    .run(&proof_runtime.heavy_proof_runtime)
                     .map(move |e| {
                         e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
                     })
@@ -132,7 +120,7 @@ impl BlockProverInput {
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
             Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
-                .run(&proof_runtime.block_proof_runtime)
+                .run(&proof_runtime.light_proof_runtime)
                 .await?;
 
         if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
@@ -149,7 +137,7 @@ impl BlockProverInput {
                     prev,
                     save_inputs_on_error,
                 })
-                .run(&proof_runtime.block_proof_runtime)
+                .run(&proof_runtime.light_proof_runtime)
                 .await?;
 
             info!("Successfully proved block {block_number}");
@@ -202,7 +190,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(&proof_runtime.block_proof_runtime)
+            .run(&proof_runtime.light_proof_runtime)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;

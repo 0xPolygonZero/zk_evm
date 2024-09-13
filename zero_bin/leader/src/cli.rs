@@ -25,15 +25,15 @@ pub(crate) struct Cli {
     #[clap(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
 
-    // Mode to use for worker for setup (split or unified)
-    #[arg(long = "worker-run-mode", help_heading = WORKER_HELP_HEADING, value_enum, default_value = "unified")]
+    // Mode to use for worker for setup (affinity or default)
+    #[arg(long = "worker-run-mode", help_heading = WORKER_HELP_HEADING, value_enum, default_value = "default")]
     pub(crate) worker_run_mode: WorkerRunMode,
 }
 
 #[derive(ValueEnum, Clone, PartialEq, Debug)]
 pub enum WorkerRunMode {
-    Split,
-    Unified,
+    Affinity,
+    Default,
 }
 
 #[derive(Subcommand)]
