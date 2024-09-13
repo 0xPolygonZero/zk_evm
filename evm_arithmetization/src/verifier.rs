@@ -1,5 +1,6 @@
 use anyhow::{ensure, Result};
 use ethereum_types::{BigEndianHash, U256};
+use hashbrown::HashMap;
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -248,12 +249,15 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 
     // Extra sums to add to the looked last value.
     // Only necessary for the Memory values.
-    let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
+    let mut extra_looking_sums: HashMap<usize, Vec<F>> = HashMap::new();
 
     // Memory
-    extra_looking_sums[*Table::Memory] = (0..config.num_challenges)
-        .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
-        .collect_vec();
+    extra_looking_sums.insert(
+        *Table::Memory,
+        (0..config.num_challenges)
+            .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
+            .collect_vec(),
+    );
 
     verify_cross_table_lookups::<F, D, NUM_TABLES>(
         cross_table_lookups,
@@ -261,7 +265,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
             .multi_proof
             .stark_proofs
             .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
-        Some(&extra_looking_sums),
+        &extra_looking_sums,
         config,
     )
 }

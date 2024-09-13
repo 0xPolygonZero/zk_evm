@@ -950,11 +950,10 @@ where
 
         // Extra sums to add to the looked last value. Only necessary for the Memory
         // values.
-        let mut extra_looking_sums =
-            vec![vec![builder.zero(); stark_config.num_challenges]; NUM_TABLES];
+        let mut extra_looking_sums: HashMap<usize, Vec<Target>> = HashMap::new();
 
         // Memory
-        extra_looking_sums[*Table::Memory] = (0..stark_config.num_challenges)
+        let memory_sums = (0..stark_config.num_challenges)
             .map(|c| {
                 get_memory_extra_looking_sum_circuit(
                     &mut builder,
@@ -963,6 +962,7 @@ where
                 )
             })
             .collect_vec();
+        extra_looking_sums.insert(*Table::Memory, memory_sums);
 
         // Verify the CTL checks
         let ctl_zs_first: [_; NUM_TABLES] = pis.map(|p| {
@@ -975,7 +975,7 @@ where
             &mut builder,
             all_cross_table_lookups(),
             ctl_zs_first,
-            Some(&extra_looking_sums),
+            &extra_looking_sums,
             stark_config,
         );
 
