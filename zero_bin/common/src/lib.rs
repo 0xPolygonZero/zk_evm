@@ -10,6 +10,7 @@ pub mod pre_checks;
 pub mod prover;
 pub mod prover_state;
 pub mod provider;
+pub mod rpc;
 pub mod tracing;
 pub mod version;
 

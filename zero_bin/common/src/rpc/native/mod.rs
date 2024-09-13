@@ -9,8 +9,9 @@ use alloy::{
 };
 use futures::try_join;
 use trace_decoder::BlockTrace;
-use zero_bin_common::prover::BlockProverInput;
-use zero_bin_common::provider::CachedProvider;
+
+use crate::prover::BlockProverInput;
+use crate::provider::CachedProvider;
 
 mod state;
 mod txn;

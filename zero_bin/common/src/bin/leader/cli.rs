@@ -4,8 +4,7 @@ use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueHint};
 use zero_bin_common::prover::cli::CliProverConfig;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
-
-use crate::RpcType;
+use zero_bin_common::rpc::RpcType;
 
 /// zero-bin leader config
 #[derive(Parser)]

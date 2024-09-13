@@ -3,10 +3,10 @@ use anyhow::Context as _;
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
-use zero_bin_common::prover::BlockProverInput;
-use zero_bin_common::provider::CachedProvider;
 
 use super::fetch_other_block_data;
+use crate::prover::BlockProverInput;
+use crate::provider::CachedProvider;
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]

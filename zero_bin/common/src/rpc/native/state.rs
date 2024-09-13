@@ -16,7 +16,8 @@ use trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
     SeparateTriePreImages, TxnInfo,
 };
-use zero_bin_common::provider::CachedProvider;
+
+use crate::provider::CachedProvider;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(

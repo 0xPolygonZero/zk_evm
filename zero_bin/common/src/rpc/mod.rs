@@ -18,13 +18,14 @@ use proof_gen::types::{Field, Hasher};
 use serde_json::json;
 use trace_decoder::{BlockLevelData, OtherBlockData};
 use tracing::warn;
-use zero_bin_common::prover::BlockProverInput;
+
+use crate::prover::BlockProverInput;
 
 pub mod jerigon;
 pub mod native;
 pub mod retry;
 
-use zero_bin_common::provider::CachedProvider;
+use crate::provider::CachedProvider;
 
 pub(crate) type PreviousBlockHashes = [FixedBytes<32>; 256];
 
