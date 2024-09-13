@@ -8,7 +8,7 @@ members = [
   "proof_gen",
   "smt_trie",
   "trace_decoder",
-  "zero_bin/common",
+  "zero",
 ]
 resolver = "2"
 
@@ -112,10 +112,7 @@ smt_trie = { path = "smt_trie", version = "0.1.1" }
 trace_decoder = { path = "trace_decoder", version = "0.6.0", default-features = false }
 zk_evm_common = { path = "common", version = "0.1.0" }
 zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
-
-# zero-bin related dependencies
-rpc = { path = "zero_bin/rpc", default-features = false }
-zero_bin_common = { path = "zero_bin/common", default-features = false }
+zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
 plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
