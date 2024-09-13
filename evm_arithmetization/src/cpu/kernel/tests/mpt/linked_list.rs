@@ -684,7 +684,8 @@ fn test_insert_and_delete_storage() -> Result<()> {
                 break;
             }
         } else {
-            let [addr_in_list, key_in_list] = new_addresses[i - 1].map(|x| U256::from(x.0.as_slice()));
+            let [addr_in_list, key_in_list] =
+                new_addresses[i - 1].map(|x| U256::from(x.0.as_slice()));
             assert_eq!(addr, addr_in_list);
             assert_eq!(key, key_in_list);
             assert_eq!(ptr, addr + delta_ptr);
