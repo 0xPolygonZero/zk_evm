@@ -441,7 +441,6 @@ loop_store_initial_slots:
     // stack: current_addr_key == next_node_addr_key, current_addr_key, next_node_addr_key, current_slot_key > next_node_slot_key, next_node_ptr, cur_len', retdest
     SWAP1
     SWAP3
-global_debug_el_or:
     MUL // AND
     // stack  current_slot_key > next_node_slot_key AND current_addr_key == next_node_addr_key, next_node_addr_key, current_addr_key, next_node_ptr, cur_len', retdest
     SWAP2
