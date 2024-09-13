@@ -12,9 +12,9 @@ use mpt_trie::{
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs};
 use crate::generation::TrieInputs;
 use crate::proof::TrieRoots;
+use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"

@@ -89,7 +89,8 @@ where
     /// The EVM root circuit, which aggregates the (shrunk) per-table recursive
     /// proofs.
     pub root: RootCircuitData<F, C, D>,
-    // pub root_no_keccak_tables: RootCircuitData<F, C, D>,
+    /// Same as above but without Keccak and KeccakSponge tables.
+    pub root_no_keccak_tables: RootCircuitData<F, C, D>,
     /// The segment aggregation circuit, which verifies that two segment proofs
     /// that can either be root or aggregation proofs.
     pub segment_aggregation: SegmentAggregationCircuitData<F, C, D>,
@@ -149,20 +150,20 @@ where
         // Serialize proof_with_pis, adding a flag for None values
         for proof in &self.proof_with_pis {
             if let Some(proof) = proof {
-                buffer.write_u8(1)?;  // Indicate that this proof is Some
+                buffer.write_u8(1)?; // Indicate that this proof is Some
                 buffer.write_target_proof_with_public_inputs(proof)?;
             } else {
-                buffer.write_u8(0)?;  // Indicate that this proof is None
+                buffer.write_u8(0)?; // Indicate that this proof is None
             }
         }
 
         // Serialize index_verifier_data, adding a flag for None values
         for index in &self.index_verifier_data {
             if let Some(index) = index {
-                buffer.write_u8(1)?;  // Indicate that this index is Some
+                buffer.write_u8(1)?; // Indicate that this index is Some
                 buffer.write_target(*index)?;
             } else {
-                buffer.write_u8(0)?;  // Indicate that this index is None
+                buffer.write_u8(0)?; // Indicate that this index is None
             }
         }
 
@@ -181,22 +182,22 @@ where
         // Deserialize proof_with_pis with a flag for None values
         let mut proof_with_pis = Vec::with_capacity(NUM_TABLES);
         for _ in 0..NUM_TABLES {
-            let flag = buffer.read_u8()?;  // Read the flag
+            let flag = buffer.read_u8()?; // Read the flag
             if flag == 1 {
                 proof_with_pis.push(Some(buffer.read_target_proof_with_public_inputs()?));
             } else {
-                proof_with_pis.push(None);  // No proof for this table
+                proof_with_pis.push(None); // No proof for this table
             }
         }
 
         // Deserialize index_verifier_data with a flag for None values
         let mut index_verifier_data = Vec::with_capacity(NUM_TABLES);
         for _ in 0..NUM_TABLES {
-            let flag = buffer.read_u8()?;  // Read the flag
+            let flag = buffer.read_u8()?; // Read the flag
             if flag == 1 {
                 index_verifier_data.push(Some(buffer.read_target()?));
             } else {
-                index_verifier_data.push(None);  // No index for this table
+                index_verifier_data.push(None); // No index for this table
             }
         }
 
@@ -600,6 +601,8 @@ where
         let mut buffer = Vec::with_capacity(1 << 34);
         self.root
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+        self.root_no_keccak_tables
+            .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         self.segment_aggregation
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         self.txn_aggregation
@@ -639,6 +642,8 @@ where
     ) -> IoResult<Self> {
         let mut buffer = Buffer::new(bytes);
         let root =
+            RootCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+        let root_no_keccak_tables =
             RootCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         let segment_aggregation = SegmentAggregationCircuitData::from_buffer(
             &mut buffer,
@@ -695,6 +700,7 @@ where
 
         Ok(Self {
             root,
+            root_no_keccak_tables,
             segment_aggregation,
             txn_aggregation,
             block,
@@ -816,6 +822,7 @@ where
             poseidon,
         ];
         let root = Self::create_segment_circuit(&by_table, stark_config, true);
+        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, false);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let txn_aggregation =
             Self::create_txn_aggregation_circuit(&segment_aggregation, stark_config);
@@ -824,6 +831,7 @@ where
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
         Self {
             root,
+            root_no_keccak_tables,
             segment_aggregation,
             txn_aggregation,
             block,
@@ -859,7 +867,9 @@ where
         enable_keccak_tables: bool,
     ) -> RootCircuitData<F, C, D> {
         let inner_common_data: [_; NUM_TABLES] = core::array::from_fn(|i| {
-            skip_keccak_if_disabled(i, enable_keccak_tables, None, || Some(&by_table[i].final_circuits()[0].common))
+            skip_keccak_if_disabled(i, enable_keccak_tables, None, || {
+                Some(&by_table[i].final_circuits()[0].common)
+            })
         });
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
@@ -867,7 +877,9 @@ where
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs: [_; NUM_TABLES] = core::array::from_fn(|i| {
-            skip_keccak_if_disabled(i, enable_keccak_tables, None, || Some(builder.add_virtual_proof_with_pis(inner_common_data[i].unwrap())))
+            skip_keccak_if_disabled(i, enable_keccak_tables, None, || {
+                Some(builder.add_virtual_proof_with_pis(inner_common_data[i].unwrap()))
+            })
         });
 
         let pis: [_; NUM_TABLES] = core::array::from_fn(|i| {
@@ -884,7 +896,9 @@ where
         });
 
         let index_verifier_data: [_; NUM_TABLES] = core::array::from_fn(|i| {
-            skip_keccak_if_disabled(i, enable_keccak_tables, None, || Some(builder.add_virtual_target()))
+            skip_keccak_if_disabled(i, enable_keccak_tables, None, || {
+                Some(builder.add_virtual_target())
+            })
         });
 
         let mut challenger = RecursiveChallenger::<F, C::Hasher, D>::new(&mut builder);
@@ -1924,7 +1938,10 @@ where
                 self.root.index_verifier_data[table].unwrap(),
                 F::from_canonical_usize(index_verifier_data),
             );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table].clone().unwrap(), &shrunk_proof);
+            root_inputs.set_proof_with_pis_target(
+                &self.root.proof_with_pis[table].clone().unwrap(),
+                &shrunk_proof,
+            );
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -2064,7 +2081,10 @@ where
                 self.root.index_verifier_data[table].unwrap(),
                 F::from_canonical_u8(*index_verifier_data),
             );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table].clone().unwrap(), &shrunk_proof);
+            root_inputs.set_proof_with_pis_target(
+                &self.root.proof_with_pis[table].clone().unwrap(),
+                &shrunk_proof,
+            );
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -3056,17 +3076,7 @@ mod tests {
 
         let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
             &all_stark,
-            &[
-                16..17,
-                8..9,
-                9..10,
-                4..9,
-                8..9,
-                4..7,
-                17..18,
-                17..18,
-                7..18,
-            ],
+            &[16..17, 8..9, 9..10, 4..9, 8..9, 4..7, 17..18, 17..18, 7..18],
             &config,
         );
         let dummy = dummy_payload(100, true)?;

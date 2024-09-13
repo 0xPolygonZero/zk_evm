@@ -1,15 +1,11 @@
 #![cfg(feature = "eth_mainnet")]
 
-use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
 };
-use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockMetadata, FinalPublicValues, PublicValues, TrieRoots};
-use evm_arithmetization::testing_utils::{beacon_roots_account_nibbles, beacon_roots_contract_from_storage, dummy_payload, init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage};
-use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
-use hex_literal::hex;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use evm_arithmetization::proof::{FinalPublicValues, PublicValues};
+use evm_arithmetization::testing_utils::{dummy_payload, init_logger};
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, StarkConfig};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
