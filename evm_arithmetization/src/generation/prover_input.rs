@@ -11,8 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::{
-    LinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE,
-    STORAGE_LINKED_LIST_NODE_SIZE,
+    LinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -29,6 +28,7 @@ use crate::generation::prover_input::EvmField::{
 };
 use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
+use crate::generation::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
 use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, sha2, u256_to_u8, u256_to_usize};
@@ -529,11 +529,10 @@ impl<F: RichField> GenerationState<F> {
         if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
             self.accounts.insert(
                 addr,
-                Segment::AccountsLinkedList as usize
-                    + self
-                        .memory
-                        .get_preinit_memory(Segment::AccountsLinkedList)
-                        .len(),
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::AccountsLinkedListNextAvailable),
+                )?,
             );
         }
 
@@ -556,11 +555,10 @@ impl<F: RichField> GenerationState<F> {
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
             self.storage.insert(
                 (addr, key),
-                Segment::StorageLinkedList as usize
-                    + self
-                        .memory
-                        .get_preinit_memory(Segment::StorageLinkedList)
-                        .len(),
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::StorageLinkedListNextAvailable),
+                )?,
             );
         }
         Ok(U256::from(
