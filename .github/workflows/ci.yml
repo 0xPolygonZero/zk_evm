@@ -238,7 +238,7 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings -A incomplete-features
 
       - name: Run cargo clippy (with `cdk_erigon` flag)
-        run: cargo clippy --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
+        run: cargo clippy --package zero_bin_common --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
 
       - name: Rustdoc
         run: cargo doc --all
