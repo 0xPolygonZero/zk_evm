@@ -339,7 +339,7 @@ docker run --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 Start worker process(es). The default paladin runtime is AMQP, so no additional flags are required to enable it.
 
 ```bash
-RUST_LOG=debug cargo r --release --bin worker
+RUST_LOG=debug cargo r --release --package zk_evm_common --bin worker
 ```
 
 ##### Start leader
