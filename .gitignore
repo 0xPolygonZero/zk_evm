@@ -6,3 +6,4 @@
 .vscode
 /**/*.ignoreme
 **/output.log
+/**/*.ipynb

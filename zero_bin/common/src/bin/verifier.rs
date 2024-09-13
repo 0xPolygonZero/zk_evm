@@ -14,8 +14,11 @@ use zero_bin_common::{
     version,
 };
 
-mod cli;
-mod init;
+use self::verifier::*;
+mod verifier {
+    pub mod cli;
+    pub mod init;
+}
 
 fn main() -> Result<()> {
     dotenv().ok();

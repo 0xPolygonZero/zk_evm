@@ -62,14 +62,11 @@ serde_path_to_error = { workspace = true }
 [[bench]]
 name = "block_processing"
 harness = false
-required-features = ["eth_mainnet"]
 
 [[test]]
 name = "consistent-with-header"
 harness = false
-required-features = ["eth_mainnet"]
 
 [[test]]
 name = "simulate-execution"
 harness = false
-required-features = ["eth_mainnet"]

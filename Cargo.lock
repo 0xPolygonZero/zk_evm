@@ -5369,24 +5369,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "verifier"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cargo_metadata",
- "clap",
- "dotenvy",
- "proof_gen",
- "serde_json",
- "serde_path_to_error",
- "tracing",
- "tracing-subscriber",
- "vergen",
- "zero_bin_common",
- "zk_evm_common",
-]
-
-[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
