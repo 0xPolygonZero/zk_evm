@@ -140,7 +140,7 @@ jobs:
 
       - name: Test in zero_bin subdirectory
         run: |
-          cargo test --manifest-path zero_bin/common/Cargo.toml
+          cargo test --manifest-path zero/Cargo.toml
 
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
@@ -238,7 +238,7 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings -A incomplete-features
 
       - name: Run cargo clippy (with `cdk_erigon` flag)
-        run: cargo clippy --package zero_bin_common --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
+        run: cargo clippy --package zero --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
 
       - name: Rustdoc
         run: cargo doc --all
