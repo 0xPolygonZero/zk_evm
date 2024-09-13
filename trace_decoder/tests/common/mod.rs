@@ -5,7 +5,7 @@ use anyhow::{ensure, Context as _};
 use camino::Utf8Path;
 use serde::de::DeserializeOwned;
 use trace_decoder::{BlockTrace, OtherBlockData};
-use zero_bin_common::prover::BlockProverInput;
+use zero::prover::BlockProverInput;
 
 pub fn cases() -> anyhow::Result<Vec<Case>> {
     print!("loading test vectors...");

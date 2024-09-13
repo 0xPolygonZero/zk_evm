@@ -6,7 +6,7 @@ use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tokio::sync::mpsc;
 use tracing::info;
-use zero_bin_common::prover::{self, BlockProverInput, ProverConfig};
+use zero::prover::{self, BlockProverInput, ProverConfig};
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
@@ -23,7 +23,7 @@ pub(crate) async fn stdio_main(
         .collect::<Vec<_>>();
 
     let (block_tx, block_rx) =
-        mpsc::channel::<(BlockProverInput, bool)>(zero_bin_common::BLOCK_CHANNEL_SIZE);
+        mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
 
     let runtime_ = runtime.clone();
     let prover_config_ = prover_config.clone();

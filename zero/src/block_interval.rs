@@ -43,7 +43,7 @@ impl BlockInterval {
     ///
     /// ```rust
     ///    # use alloy::rpc::types::eth::BlockId;
-    ///    # use zero_bin_common::block_interval::BlockInterval;
+    ///    # use zero::block_interval::BlockInterval;
     ///    assert_eq!(BlockInterval::new("0..10").unwrap(), BlockInterval::Range(0..10));
     ///    assert_eq!(BlockInterval::new("0..=10").unwrap(), BlockInterval::Range(0..11));
     ///    assert_eq!(BlockInterval::new("32141").unwrap(), BlockInterval::SingleBlockId(BlockId::Number(32141.into())));

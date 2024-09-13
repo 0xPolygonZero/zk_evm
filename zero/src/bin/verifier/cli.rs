@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, ValueHint};
-use zero_bin_common::prover_state::cli::CliProverStateConfig;
+use zero::prover_state::cli::CliProverStateConfig;
 
 #[derive(Parser)]
 pub(crate) struct Cli {

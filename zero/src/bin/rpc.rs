@@ -11,12 +11,12 @@ use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
-use zero_bin_common::block_interval::BlockIntervalStream;
-use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
-use zero_bin_common::prover::BlockProverInput;
-use zero_bin_common::provider::CachedProvider;
-use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
-use zero_bin_common::{rpc, version};
+use zero::block_interval::BlockIntervalStream;
+use zero::pre_checks::check_previous_proof_and_checkpoint;
+use zero::prover::BlockProverInput;
+use zero::provider::CachedProvider;
+use zero::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
+use zero::{rpc, version};
 
 use self::rpc::{retry::build_http_retry_provider, RpcType};
 

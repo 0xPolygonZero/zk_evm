@@ -8,7 +8,7 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
-use zero_bin_common::prover::{BlockProverInput, ProverConfig};
+use zero::prover::{BlockProverInput, ProverConfig};
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(

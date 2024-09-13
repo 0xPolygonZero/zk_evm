@@ -9,13 +9,13 @@ use cli::Command;
 use client::RpcParams;
 use paladin::runtime::Runtime;
 use tracing::info;
-use zero_bin_common::env::load_dotenvy_vars_if_present;
-use zero_bin_common::prover::ProverConfig;
-use zero_bin_common::{
+use zero::env::load_dotenvy_vars_if_present;
+use zero::prover::ProverConfig;
+use zero::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
-use zero_bin_common::{fs::get_previous_proof, ops::register};
-use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
+use zero::{fs::get_previous_proof, ops::register};
+use zero::{prover_state::persistence::CIRCUIT_VERSION, version};
 
 use self::leader::*;
 use crate::client::{client_main, LeaderConfig};
@@ -30,7 +30,7 @@ mod leader {
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
     set_circuit_cache_dir_env_if_not_set()?;
-    zero_bin_common::tracing::init();
+    zero::tracing::init();
 
     let args: Vec<String> = env::args().collect();
 
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
     let args = cli::Cli::parse();
 
     if let Command::Clean = args.command {
-        return zero_bin_common::prover_state::persistence::delete_all();
+        return zero::prover_state::persistence::delete_all();
     }
 
     let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);

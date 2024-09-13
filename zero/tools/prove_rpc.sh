@@ -110,7 +110,7 @@ fi
 if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --package zero_bin_common --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL  $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL  $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         retVal=$?
@@ -133,7 +133,7 @@ if [[ $8 == "test_only" ]]; then
 else
     # normal run
     echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --package zero_bin_common --bin leader -- --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --package zero --bin leader -- --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         echo -e "Proof generation finished with result: $?"
@@ -161,7 +161,7 @@ if [ "$RUN_VERIFICATION" = true ]; then
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
   echo "Verifying the proof of the latest block in the interval:" $proof_file_name
-  cargo r --release --package zero_bin_common --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
+  cargo r --release --package zero --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
   if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
       echo "$proof_file_name verified successfully!";
