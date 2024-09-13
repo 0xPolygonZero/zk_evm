@@ -10,7 +10,6 @@ members = [
   "trace_decoder",
   "zero_bin/common",
   "zero_bin/leader",
-  "zero_bin/rpc",
 ]
 resolver = "2"
 

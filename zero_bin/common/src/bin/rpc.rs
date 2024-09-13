@@ -9,7 +9,6 @@ use alloy::transports::Transport;
 use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
-use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::block_interval::BlockIntervalStream;
@@ -18,6 +17,11 @@ use zero_bin_common::prover::BlockProverInput;
 use zero_bin_common::provider::CachedProvider;
 use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
+
+use self::rpc::{retry::build_http_retry_provider, RpcType};
+
+#[path = "./rpc/mod.rs"]
+mod rpc;
 
 #[derive(Clone, Debug, Copy)]
 struct FetchParams {

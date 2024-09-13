@@ -9,7 +9,9 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+__compat_primitive_types = { workspace = true }
 alloy = { workspace = true }
+alloy-compat = "0.1.0"
 anyhow = { workspace = true }
 async-stream = { workspace = true }
 cargo_metadata = { workspace = true }
@@ -17,6 +19,8 @@ clap = { workspace = true, features = ["derive", "string"] }
 directories = "5.0.1"
 dotenvy = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
+itertools = { workspace = true }
 keccak-hash = { workspace = true }
 lru = { workspace = true }
 num-traits = { workspace = true }
@@ -30,15 +34,19 @@ serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true, features = ["retry"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+url = { workspace = true }
 vergen = { workspace = true }
 
 # Local dependencies
+compat = { workspace = true }
 evm_arithmetization = { workspace = true }
+mpt_trie = { workspace = true }
 proof_gen = { workspace = true }
-zk_evm_common = { workspace = true }
 trace_decoder = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"

@@ -29,7 +29,7 @@ where
 {
     let (block_trace, other_data) = try_join!(
         process_block_trace(provider.clone(), block_number),
-        crate::fetch_other_block_data(provider.clone(), block_number, checkpoint_block_number)
+        crate::rpc::fetch_other_block_data(provider.clone(), block_number, checkpoint_block_number)
     )?;
 
     Ok(BlockProverInput {
