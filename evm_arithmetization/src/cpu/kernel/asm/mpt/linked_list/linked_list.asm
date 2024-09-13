@@ -90,7 +90,6 @@ loop_store_initial_accounts:
     %mload_trie_data // code_hash
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, cur_len, retdest
-    // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
     %add_const(2)
     SWAP1
@@ -403,7 +402,7 @@ loop_store_initial_slots:
     SWAP1 PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
     ADD
     SWAP1
-    // Check correctness of next node ptr and stric key monotonicity.
+    // Check correctness of next node ptr and strict key monotonicity.
     DUP1
     MLOAD_GENERAL
     // stack: current_addr_key, current_node_ptr, cur_len', retdest
@@ -452,7 +451,8 @@ global_debug_el_or:
     %jump(loop_store_initial_slots)
 
 store_initial_slots_end_pop_keys:
-    SWAP1 POP SWAP1 POP
+    SWAP2
+    %pop2
 
 store_initial_slots_end:
     // stack: next_node_ptr, cur_len', retdest
