@@ -89,6 +89,7 @@ where
     /// The EVM root circuit, which aggregates the (shrunk) per-table recursive
     /// proofs.
     pub root: RootCircuitData<F, C, D>,
+    // pub root_no_keccak_tables: RootCircuitData<F, C, D>,
     /// The segment aggregation circuit, which verifies that two segment proofs
     /// that can either be root or aggregation proofs.
     pub segment_aggregation: SegmentAggregationCircuitData<F, C, D>,
@@ -3058,13 +3059,13 @@ mod tests {
             &[
                 16..17,
                 8..9,
-                12..13,
                 9..10,
+                4..9,
                 8..9,
-                6..7,
+                4..7,
                 17..18,
                 17..18,
-                7..8,
+                7..18,
             ],
             &config,
         );
@@ -3072,7 +3073,7 @@ mod tests {
 
         let timing = &mut TimingTree::new(&format!("Blockproof"), log::Level::Info);
         let dummy_proof =
-            all_circuits.prove_all_segments(&all_stark, &config, dummy, 20, timing, None)?;
+            all_circuits.prove_all_segments(&all_stark, &config, dummy, 9, timing, None)?;
         all_circuits.verify_root(dummy_proof[0].proof_with_pis.clone())?;
         timing.print();
 
