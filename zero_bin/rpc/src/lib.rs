@@ -15,10 +15,10 @@ use compat::Compat;
 use evm_arithmetization::proof::{consolidate_hashes, BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
 use proof_gen::types::{Field, Hasher};
-use prover::BlockProverInput;
 use serde_json::json;
 use trace_decoder::{BlockLevelData, OtherBlockData};
 use tracing::warn;
+use zero_bin_common::prover::BlockProverInput;
 
 pub mod jerigon;
 pub mod native;

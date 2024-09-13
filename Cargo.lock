@@ -2863,7 +2863,6 @@ dependencies = [
  "futures",
  "paladin-core",
  "proof_gen",
- "prover",
  "rpc",
  "serde",
  "serde_json",
@@ -3866,30 +3865,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prover"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "anyhow",
- "clap",
- "evm_arithmetization",
- "futures",
- "num-traits",
- "paladin-core",
- "plonky2",
- "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "proof_gen",
- "ruint",
- "serde",
- "serde_json",
- "tokio",
- "trace_decoder",
- "tracing",
- "zero_bin_common",
- "zk_evm_common",
-]
-
-[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4164,7 +4139,6 @@ dependencies = [
  "mpt_trie",
  "primitive-types 0.12.2",
  "proof_gen",
- "prover",
  "serde",
  "serde_json",
  "tokio",
@@ -5149,7 +5123,6 @@ dependencies = [
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions",
  "pretty_env_logger",
- "prover",
  "rlp",
  "serde",
  "serde_json",
@@ -5160,6 +5133,7 @@ dependencies = [
  "thiserror",
  "u4",
  "winnow",
+ "zero_bin_common",
  "zk_evm_common",
 ]
 
@@ -5843,15 +5817,19 @@ dependencies = [
  "futures",
  "keccak-hash 0.10.0",
  "lru",
+ "num-traits",
  "once_cell",
  "paladin-core",
  "plonky2",
+ "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proof_gen",
+ "ruint",
  "serde",
  "serde_json",
  "serde_path_to_error",
  "thiserror",
  "tokio",
+ "trace_decoder",
  "tracing",
  "tracing-subscriber",
  "vergen",

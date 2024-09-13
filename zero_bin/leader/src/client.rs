@@ -5,12 +5,12 @@ use alloy::transports::http::reqwest::Url;
 use anyhow::{anyhow, Result};
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::{BlockProverInput, ProverConfig};
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tokio::sync::mpsc;
 use tracing::info;
 use zero_bin_common::block_interval::{BlockInterval, BlockIntervalStream};
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
+use zero_bin_common::prover::{self, BlockProverInput, ProverConfig};
 
 #[derive(Debug)]
 pub struct RpcParams {

@@ -8,8 +8,8 @@ use alloy::{
     transports::Transport,
 };
 use futures::try_join;
-use prover::BlockProverInput;
 use trace_decoder::BlockTrace;
+use zero_bin_common::prover::BlockProverInput;
 use zero_bin_common::provider::CachedProvider;
 
 mod state;

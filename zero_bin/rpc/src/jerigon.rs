@@ -1,9 +1,9 @@
 use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport};
 use anyhow::Context as _;
-use prover::BlockProverInput;
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
+use zero_bin_common::prover::BlockProverInput;
 use zero_bin_common::provider::CachedProvider;
 
 use super::fetch_other_block_data;

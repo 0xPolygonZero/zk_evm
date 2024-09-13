@@ -10,7 +10,6 @@ members = [
   "trace_decoder",
   "zero_bin/common",
   "zero_bin/leader",
-  "zero_bin/prover",
   "zero_bin/rpc",
   "zero_bin/verifier",
   "zero_bin/worker",
@@ -119,7 +118,6 @@ zk_evm_common = { path = "common", version = "0.1.0" }
 zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 
 # zero-bin related dependencies
-prover = { path = "zero_bin/prover", default-features = false }
 rpc = { path = "zero_bin/rpc", default-features = false }
 zero_bin_common = { path = "zero_bin/common", default-features = false }
 

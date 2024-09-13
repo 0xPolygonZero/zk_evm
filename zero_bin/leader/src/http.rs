@@ -5,10 +5,10 @@ use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::{BlockProverInput, ProverConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
+use zero_bin_common::prover::{BlockProverInput, ProverConfig};
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(

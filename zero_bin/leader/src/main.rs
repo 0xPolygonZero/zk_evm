@@ -8,9 +8,9 @@ use clap::Parser;
 use cli::Command;
 use client::RpcParams;
 use paladin::runtime::Runtime;
-use prover::ProverConfig;
 use tracing::info;
 use zero_bin_common::env::load_dotenvy_vars_if_present;
+use zero_bin_common::prover::ProverConfig;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };

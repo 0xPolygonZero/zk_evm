@@ -4,9 +4,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::{BlockProverInput, ProverConfig};
 use tokio::sync::mpsc;
 use tracing::info;
+use zero_bin_common::prover::{self, BlockProverInput, ProverConfig};
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(

@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueHint};
-use prover::cli::CliProverConfig;
 use rpc::RpcType;
+use zero_bin_common::prover::cli::CliProverConfig;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
 /// zero-bin leader config

@@ -45,7 +45,7 @@ pub struct CliProverConfig {
     block_batch_size: usize,
 }
 
-impl From<CliProverConfig> for crate::ProverConfig {
+impl From<CliProverConfig> for super::ProverConfig {
     fn from(cli: CliProverConfig) -> Self {
         Self {
             batch_size: cli.batch_size,
