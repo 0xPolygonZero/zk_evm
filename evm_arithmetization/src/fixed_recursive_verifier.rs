@@ -1915,35 +1915,36 @@ where
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-            let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
-            let table_circuits = &self.by_table[table];
-            let shrunk_proof = table_circuits
-                .by_stark_size
-                .get(&original_degree_bits)
-                .ok_or_else(|| {
-                    anyhow!(format!(
-                        "Missing preprocessed circuits for {:?} table with size {}.",
-                        Table::all()[table],
-                        original_degree_bits,
-                    ))
-                })?
-                .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            let index_verifier_data = table_circuits
-                .by_stark_size
-                .keys()
-                .position(|&size| size == original_degree_bits)
-                .unwrap();
-            root_inputs.set_target(
-                self.root.index_verifier_data[table].unwrap(),
-                F::from_canonical_usize(index_verifier_data),
-            );
-            root_inputs.set_proof_with_pis_target(
-                &self.root.proof_with_pis[table].clone().unwrap(),
-                &shrunk_proof,
-            );
+            if let Some(stark_proof) = &all_proof.multi_proof.stark_proofs[table] {
+                let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
+                let table_circuits = &self.by_table[table];
+                let shrunk_proof = table_circuits
+                    .by_stark_size
+                    .get(&original_degree_bits)
+                    .ok_or_else(|| {
+                        anyhow!(format!(
+                            "Missing preprocessed circuits for {:?} table with size {}.",
+                            Table::all()[table],
+                            original_degree_bits,
+                        ))
+                    })?
+                    .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                let index_verifier_data = table_circuits
+                    .by_stark_size
+                    .keys()
+                    .position(|&size| size == original_degree_bits)
+                    .unwrap();
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table].unwrap(),
+                    F::from_canonical_usize(index_verifier_data),
+                );
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table].clone().unwrap(),
+                    &shrunk_proof,
+                );
 
-            check_abort_signal(abort_signal.clone())?;
+                check_abort_signal(abort_signal.clone())?;
+            }
         }
 
         root_inputs.set_verifier_data_target(
