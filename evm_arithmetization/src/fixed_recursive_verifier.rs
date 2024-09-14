@@ -2072,22 +2072,22 @@ where
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            let (table_circuit, index_verifier_data) = &table_circuits[table];
+            if let Some(stark_proof) = &all_proof.multi_proof.stark_proofs[table] {
+                let (table_circuit, index_verifier_data) = &table_circuits[table];
 
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let shrunk_proof =
+                    table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table].unwrap(),
+                    F::from_canonical_u8(*index_verifier_data),
+                );
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table].clone().unwrap(),
+                    &shrunk_proof,
+                );
 
-            let shrunk_proof =
-                table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            root_inputs.set_target(
-                self.root.index_verifier_data[table].unwrap(),
-                F::from_canonical_u8(*index_verifier_data),
-            );
-            root_inputs.set_proof_with_pis_target(
-                &self.root.proof_with_pis[table].clone().unwrap(),
-                &shrunk_proof,
-            );
-
-            check_abort_signal(abort_signal.clone())?;
+                check_abort_signal(abort_signal.clone())?;
+            }
         }
 
         root_inputs.set_verifier_data_target(

@@ -256,7 +256,9 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
         let stark_proofs = &self.multi_proof.stark_proofs;
 
         for proof in stark_proofs {
-            challenger.observe_cap(&proof.proof.trace_cap);
+            if let Some(proof) = proof {
+                challenger.observe_cap(&proof.proof.trace_cap);
+            }
         }
 
         observe_public_values::<F, C, D>(&mut challenger, &self.public_values)?;
@@ -267,12 +269,17 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
         Ok(AllProofChallenges {
             stark_challenges: core::array::from_fn(|i| {
                 challenger.compact();
-                stark_proofs[i].proof.get_challenges(
-                    &mut challenger,
-                    Some(&ctl_challenges),
-                    true,
-                    config,
-                )
+
+                if let Some(stark_proof) = &stark_proofs[i] {
+                    Some(stark_proof.proof.get_challenges(
+                        &mut challenger,
+                        Some(&ctl_challenges),
+                        true,
+                        config,
+                    ))
+                } else {
+                    None
+                }
             }),
             ctl_challenges,
         })
