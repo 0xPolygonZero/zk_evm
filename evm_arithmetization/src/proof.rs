@@ -32,7 +32,7 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
     /// Returns the degree (i.e. the trace length) of each STARK.
-    pub fn degree_bits(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
+    pub fn degree_bits(&self, config: &StarkConfig) -> [Option<usize>; NUM_TABLES] {
         self.multi_proof.recover_degree_bits(config)
     }
 }

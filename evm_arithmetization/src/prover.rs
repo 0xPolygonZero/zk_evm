@@ -210,7 +210,7 @@ where
 }
 
 type ProofWithMemCaps<F, C, H, const D: usize> = (
-    [StarkProofWithMetadata<F, C, D>; NUM_TABLES],
+    [Option<StarkProofWithMetadata<F, C, D>>; NUM_TABLES],
     MerkleCap<F, H>,
     MerkleCap<F, H>,
 );
@@ -393,17 +393,17 @@ where
 
     Ok((
         [
-            arithmetic_proof,
-            byte_packing_proof,
-            cpu_proof,
-            keccak_proof,
-            keccak_sponge_proof,
-            logic_proof,
-            memory_proof,
-            mem_before_proof,
-            mem_after_proof,
+            Some(arithmetic_proof),
+            Some(byte_packing_proof),
+            Some(cpu_proof),
+            Some(keccak_proof),
+            Some(keccak_sponge_proof),
+            Some(logic_proof),
+            Some(memory_proof),
+            Some(mem_before_proof),
+            Some(mem_after_proof),
             #[cfg(feature = "cdk_erigon")]
-            poseidon_proof,
+            Some(poseidon_proof),
         ],
         mem_before_cap,
         mem_after_cap,
