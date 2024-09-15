@@ -105,11 +105,11 @@ pub(crate) fn generate_jumpdest_table(
 
         ensure!(curr_depth <= next_ctx_available, "Structlog is malformed.");
 
-        // ensure!(call_stack.is_empty().not(), "Call stack was empty.");
         while curr_depth < call_stack.len() {
             call_stack.pop();
         }
 
+        ensure!(call_stack.is_empty().not(), "Call stack was empty.");
         let (code_hash, ctx) = call_stack.last().unwrap();
 
         trace!("TX:   {:?}", tx.hash);
@@ -179,6 +179,7 @@ pub(crate) fn generate_jumpdest_table(
                 };
 
                 let contract_address = tx.from.create(tx.nonce);
+                ensure!(callee_addr_to_code_hash.contains_key(&contract_address));
                 let code_hash = callee_addr_to_code_hash[&contract_address];
                 call_stack.push((code_hash, next_ctx_available));
 
@@ -202,26 +203,30 @@ pub(crate) fn generate_jumpdest_table(
                 let offset: usize = offset.to();
                 ensure!(*size < U256::from(usize::MAX));
                 let size: usize = size.to();
+                let memory_size = entry.memory.as_ref().unwrap().len();
                 let salt: [u8; 32] = salt.to_be_bytes();
 
                 ensure!(
-                    size == 0
-                        || (entry.memory.is_some() && entry.memory.as_ref().unwrap().len() >= size),
-                    "No or insufficient memory available for {op}."
+                    entry.memory.is_some() && size <= memory_size,
+                    "No or insufficient memory available for {op}. Contract size is {size} while memory size is {memory_size}."
                 );
                 let memory_raw: &[String] = entry.memory.as_ref().unwrap();
-                let memory: Vec<u8> = memory_raw
+                let memory_parsed: Vec<anyhow::Result<[u8; 32]>> = memory_raw
                     .iter()
-                    .flat_map(|s| {
+                    .map(|s| {
                         let c = s.parse();
-                        // ensure!(c.is_ok(), "No memory.");
+                        ensure!(c.is_ok(), "Parsing memory failed.");
                         let a: U256 = c.unwrap();
                         let d: [u8; 32] = a.to_be_bytes();
-                        d
+                        Ok(d)
                     })
                     .collect();
+                let mem_res: anyhow::Result<Vec<[u8; 32]>> = memory_parsed.into_iter().collect();
+                let memory: Vec<u8> = mem_res?.concat();
+
                 let init_code = &memory[offset..offset + size];
                 let contract_address = tx.from.create2_from_code(salt, init_code);
+                ensure!(callee_addr_to_code_hash.contains_key(&contract_address));
                 let code_hash = callee_addr_to_code_hash[&contract_address];
                 call_stack.push((code_hash, next_ctx_available));
 
@@ -284,15 +289,6 @@ pub(crate) fn generate_jumpdest_table(
                 next_ctx_available += 1;
                 prev_jump = None;
             }
-            // "RETURN" | "REVERT" | "STOP" => {
-            //     ensure!(call_stack.is_empty().not(), "Call stack was empty at {op}.");
-            //     do_pop = true;
-            //     prev_jump = None;
-            // }
-            // "SELFDESTRUCT" => {
-            //     do_pop = true;
-            //     prev_jump = None;
-            // }
             _ => {
                 prev_jump = None;
             }
