@@ -9,28 +9,31 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+keccak-hash = { workspace = true }
 paladin-core = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
-keccak-hash = { workspace = true }
 
 # Local dependencies
 evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
-trace_decoder = { workspace = true }
 zero_bin_common = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [features]
 default = ["eth_mainnet"]
 eth_mainnet = [
     "evm_arithmetization/eth_mainnet",
     "proof_gen/eth_mainnet",
-    "trace_decoder/eth_mainnet",
     "zero_bin_common/eth_mainnet",
 ]
 cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
     "proof_gen/cdk_erigon",
-    "trace_decoder/cdk_erigon",
     "zero_bin_common/cdk_erigon",
+]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "proof_gen/polygon_pos",
+    "zero_bin_common/polygon_pos",
 ]

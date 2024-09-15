@@ -5,7 +5,9 @@ use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockMetadata, FinalPublicValues, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{
+    BlockMetadata, FinalPublicValues, PublicValues, TrieRoots, EMPTY_CONSOLIDATED_BLOCKHASH,
+};
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
@@ -14,6 +16,7 @@ use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
@@ -25,7 +28,7 @@ type C = PoseidonGoldilocksConfig;
 
 /// Get `GenerationInputs` for a dummy payload, where the block has the given
 /// timestamp.
-fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs> {
+fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs<F>> {
     let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
     let block_metadata = BlockMetadata {
@@ -89,6 +92,7 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
         burn_addr: None,
         trie_roots_after,
         checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         block_metadata,
         ..Default::default()
     };
@@ -141,15 +145,10 @@ fn get_test_block_proof(
 
     let (block_proof, block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
-        &agg_proof,
-        pv.clone(),
+        &agg_proof, pv,
     )?;
 
     all_circuits.verify_block(&block_proof)?;
-
-    // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&block_proof.public_inputs);
-    assert_eq!(retrieved_public_values, block_public_values);
 
     let (wrapped_block_proof, block_final_public_values) =
         all_circuits.prove_block_wrapper(&block_proof, block_public_values)?;

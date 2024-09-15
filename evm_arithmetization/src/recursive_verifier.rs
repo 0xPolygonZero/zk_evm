@@ -14,7 +14,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, Hasher};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
@@ -639,12 +639,18 @@ pub(crate) fn add_virtual_final_public_values_public_input<
 >(
     builder: &mut CircuitBuilder<F, D>,
 ) -> FinalPublicValuesTarget {
-    let state_trie_root_before = builder.add_virtual_public_input_arr();
-    let state_trie_root_after = builder.add_virtual_public_input_arr();
+    let chain_id = builder.add_virtual_public_input();
+    let checkpoint_state_trie_root = builder.add_virtual_public_input_arr();
+    let new_state_trie_root = builder.add_virtual_public_input_arr();
+    let checkpoint_consolidated_hash = builder.add_virtual_public_input_arr();
+    let new_consolidated_hash = builder.add_virtual_public_input_arr();
 
     FinalPublicValuesTarget {
-        state_trie_root_before,
-        state_trie_root_after,
+        chain_id,
+        checkpoint_state_trie_root,
+        new_state_trie_root,
+        checkpoint_consolidated_hash,
+        new_consolidated_hash,
     }
 }
 
@@ -766,6 +772,7 @@ pub(crate) fn add_virtual_extra_block_data_public_input<
     builder: &mut CircuitBuilder<F, D>,
 ) -> ExtraBlockDataTarget {
     let checkpoint_state_trie_root = builder.add_virtual_public_input_arr();
+    let checkpoint_consolidated_hash = builder.add_virtual_public_input_arr();
     let txn_number_before = builder.add_virtual_public_input();
     let txn_number_after = builder.add_virtual_public_input();
     let gas_used_before = builder.add_virtual_public_input();
@@ -773,6 +780,7 @@ pub(crate) fn add_virtual_extra_block_data_public_input<
 
     ExtraBlockDataTarget {
         checkpoint_state_trie_root,
+        checkpoint_consolidated_hash,
         txn_number_before,
         txn_number_after,
         gas_used_before,
@@ -803,7 +811,7 @@ pub(crate) fn add_virtual_registers_data_public_input<
     }
 }
 
-pub(crate) fn debug_public_values(public_values: &PublicValues) {
+pub(crate) fn debug_public_values<F: RichField>(public_values: &PublicValues<F>) {
     log::debug!("Public Values:");
     log::debug!(
         "  Trie Roots Before: {:?}",
@@ -818,7 +826,7 @@ pub(crate) fn debug_public_values(public_values: &PublicValues) {
 pub fn set_public_value_targets<F, W, const D: usize>(
     witness: &mut W,
     public_values_target: &PublicValuesTarget,
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
 ) -> Result<(), ProgramError>
 where
     F: RichField + Extendable<D>,
@@ -884,47 +892,57 @@ where
     Ok(())
 }
 
-pub fn set_final_public_value_targets<F, W, const D: usize>(
+pub fn set_final_public_value_targets<F, H, W, const D: usize>(
     witness: &mut W,
     public_values_target: &FinalPublicValuesTarget,
-    public_values: &FinalPublicValues,
+    public_values: &FinalPublicValues<F, H>,
 ) -> Result<(), ProgramError>
 where
     F: RichField + Extendable<D>,
+    H: Hasher<F>,
     W: Witness<F>,
 {
+    witness.set_target(
+        public_values_target.chain_id,
+        F::from_canonical_u64(public_values.chain_id.low_u64()),
+    );
+
     for (i, limb) in public_values
-        .state_trie_root_before
+        .checkpoint_state_trie_root
         .into_uint()
         .0
         .into_iter()
         .enumerate()
     {
         witness.set_target(
-            public_values_target.state_trie_root_before[2 * i],
+            public_values_target.checkpoint_state_trie_root[2 * i],
             F::from_canonical_u32(limb as u32),
         );
         witness.set_target(
-            public_values_target.state_trie_root_before[2 * i + 1],
+            public_values_target.checkpoint_state_trie_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
         );
     }
 
     for (i, limb) in public_values
-        .state_trie_root_after
+        .new_state_trie_root
         .into_uint()
         .0
         .into_iter()
         .enumerate()
     {
         witness.set_target(
-            public_values_target.state_trie_root_after[2 * i],
+            public_values_target.new_state_trie_root[2 * i],
             F::from_canonical_u32(limb as u32),
         );
         witness.set_target(
-            public_values_target.state_trie_root_after[2 * i + 1],
+            public_values_target.new_state_trie_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
         );
+    }
+
+    for (i, limb) in public_values.new_consolidated_hash.iter().enumerate() {
+        witness.set_target(public_values_target.new_consolidated_hash[i], *limb);
     }
 
     Ok(())
@@ -1111,7 +1129,7 @@ pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
 pub(crate) fn set_extra_public_values_target<F, W, const D: usize>(
     witness: &mut W,
     ed_target: &ExtraBlockDataTarget,
-    ed: &ExtraBlockData,
+    ed: &ExtraBlockData<F>,
 ) -> Result<(), ProgramError>
 where
     F: RichField + Extendable<D>,
@@ -1120,6 +1138,10 @@ where
     witness.set_target_arr(
         &ed_target.checkpoint_state_trie_root,
         &h256_limbs::<F>(ed.checkpoint_state_trie_root),
+    );
+    witness.set_target_arr(
+        &ed_target.checkpoint_consolidated_hash,
+        &ed.checkpoint_consolidated_hash,
     );
     witness.set_target(
         ed_target.txn_number_before,

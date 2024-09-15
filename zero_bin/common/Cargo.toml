@@ -14,6 +14,7 @@ anyhow = { workspace = true }
 async-stream = { workspace = true }
 cargo_metadata = { workspace = true }
 clap = { workspace = true }
+dotenvy = { workspace = true }
 futures = { workspace = true }
 lru = { workspace = true }
 once_cell = { workspace = true }
@@ -21,9 +22,11 @@ paladin-core = { workspace = true }
 plonky2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 vergen = { workspace = true }
 
 directories = "5.0.1"
@@ -31,24 +34,27 @@ directories = "5.0.1"
 # Local dependencies
 evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
-trace_decoder = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [build-dependencies]
+anyhow = { workspace = true }
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
-anyhow = { workspace = true }
+
 
 [features]
 default = ["eth_mainnet"]
 eth_mainnet = [
     "evm_arithmetization/eth_mainnet",
     "proof_gen/eth_mainnet",
-    "trace_decoder/eth_mainnet",
 ]
 cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
     "proof_gen/cdk_erigon",
-    "trace_decoder/cdk_erigon",
+]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "proof_gen/polygon_pos",
 ]
 
 [lints]

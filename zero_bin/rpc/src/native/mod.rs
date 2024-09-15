@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use alloy::{
-    primitives::B256,
     providers::Provider,
     rpc::types::eth::{BlockId, BlockTransactionsKind},
     transports::Transport,
@@ -22,7 +21,7 @@ type CodeDb = BTreeSet<Vec<u8>>;
 pub async fn block_prover_input<ProviderT, TransportT>(
     provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
-    checkpoint_state_trie_root: B256,
+    checkpoint_block_number: u64,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
@@ -30,7 +29,7 @@ where
 {
     let (block_trace, other_data) = try_join!(
         process_block_trace(provider.clone(), block_number),
-        crate::fetch_other_block_data(provider.clone(), block_number, checkpoint_state_trie_root,)
+        crate::fetch_other_block_data(provider.clone(), block_number, checkpoint_block_number)
     )?;
 
     Ok(BlockProverInput {

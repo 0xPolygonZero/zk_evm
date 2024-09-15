@@ -26,6 +26,8 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
 type F = GoldilocksField;
 
@@ -50,7 +52,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     simulate_execution::<F>(inputs).unwrap();
 }
 
-fn prepare_setup() -> anyhow::Result<GenerationInputs> {
+fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let sender = hex!("8943545177806ED17B9F23F0a21ee5948eCaa776");
     let to = hex!("159271B89fea49aF29DFaf8b4eCE7D042D5d6f07");
 
@@ -181,6 +183,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         checkpoint_state_trie_root: H256(hex!(
             "fe07ff6d1ab215df17884b89112ccf2373597285a56c5902150313ad1a53ee57"
         )),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         ger_data: None,
         block_metadata,
         txn_number_before: 0.into(),
