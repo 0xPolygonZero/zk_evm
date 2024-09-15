@@ -199,9 +199,9 @@ pub(crate) fn generate_jumpdest_table(
                 let [_value, offset, size, salt, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                ensure!(*offset < U256::from(usize::MAX));
+                ensure!(*offset <= U256::from(usize::MAX));
                 let offset: usize = offset.to();
-                ensure!(*size < U256::from(usize::MAX));
+                ensure!(*size <= U256::from(usize::MAX));
                 let size: usize = size.to();
                 let memory_size = entry.memory.as_ref().unwrap().len();
                 let salt: [u8; 32] = salt.to_be_bytes();
@@ -246,7 +246,8 @@ pub(crate) fn generate_jumpdest_table(
                 let [counter, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                let jump_target = counter.to::<u64>();
+                ensure!(*counter <= U256::from(u64::MAX), "Operand for {op} caused overflow.");
+                let jump_target: u64 = counter.to();
 
                 prev_jump = Some(jump_target);
             }
@@ -260,10 +261,11 @@ pub(crate) fn generate_jumpdest_table(
                     "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
                     evm_stack.len()
                 );
-                let [pc, condition, ..] = evm_stack[..] else {
+                let [counter, condition, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                let jump_target = pc.to::<u64>();
+                ensure!(*counter <= U256::from(u64::MAX), "Operand for {op} caused overflow.");
+                let jump_target: u64 = counter.to();
                 let jump_condition = condition.is_zero().not();
 
                 prev_jump = if jump_condition {
