@@ -22,6 +22,7 @@ use anyhow::Context as _;
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
+use tracing::debug;
 
 use crate::{
     jumpdest::{self, structlogprime::try_reserialize},
@@ -94,11 +95,10 @@ where
 
     let jumpdest_table: Option<JumpDestTableWitness> = struct_logs_opt.and_then(|struct_logs| {
         jumpdest::generate_jumpdest_table(tx, &struct_logs, &tx_traces)
+            .map_err(|error| debug!("JumpDestTable generation failed with reason: {}", error))
             .map(Some)
             .unwrap_or_default()
     });
-
-    // if jumpdest_table.is_some() { eprintln!("======================> 1")};
 
     let tx_meta = TxnMeta {
         byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),

@@ -60,17 +60,18 @@ do
 done
 
 # TESTNETBLOCKS="$KNOWNFAILED $ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
-TESTNETBLOCKS="$ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
+BLOCKS="$ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
 
-TESTNETBLOCKS=`echo $TESTNETBLOCKS | sed 's/\s/\n/g'`
+BLOCKS=`echo $TESTNETBLOCKS | sed 's/\s/\n/g'`
 SHUF=`shuf -e $TESTNETBLOCKS` 
 echo $SHUF
 
 
+echo "Testing:  $BLOCKS"
 
-for BLOCK in $TESTNETBLOCKS; do
+for BLOCK in $BLOCKS; do
   GITHASH=`git rev-parse --short HEAD`
-  WITNESS="$witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
+  WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
   cargo run --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   echo "Checking block $BLOCK"

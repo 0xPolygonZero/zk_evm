@@ -19,6 +19,7 @@ use serde_json::json;
 use trace_decoder::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo, TxnMeta, TxnTrace,
 };
+use tracing::debug;
 use zero_bin_common::provider::CachedProvider;
 
 use super::fetch_other_block_data;
@@ -177,6 +178,7 @@ where
 
     let jumpdest_table: Option<JumpDestTableWitness> = struct_logs_opt.and_then(|struct_log| {
         jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces)
+            .map_err(|error| debug!("JumpDestTable generation failed with reason: {}", error))
             .map(Some)
             .unwrap_or_default()
     });
