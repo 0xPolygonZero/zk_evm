@@ -410,18 +410,13 @@ where
                     }
                     self.push_memory(jumpdest_bit_log);
                 }
-            } else {
-                if !gen_state.registers.is_kernel {
-                    // Perform a sanity check on the jumpdest, and abort if it is invalid.
-                    let addr = MemoryAddress::new(
-                        gen_state.registers.context,
-                        Segment::Code,
-                        dst as usize,
-                    );
-                    let jump_dst = gen_state.get_from_memory(addr);
-                    if jump_dst != get_opcode("JUMPDEST").into() {
-                        return Err(ProgramError::InvalidJumpDestination);
-                    }
+            } else if !gen_state.registers.is_kernel {
+                // Perform a sanity check on the jumpdest, and abort if it is invalid.
+                let addr =
+                    MemoryAddress::new(gen_state.registers.context, Segment::Code, dst as usize);
+                let jump_dst = gen_state.get_from_memory(addr);
+                if jump_dst != get_opcode("JUMPDEST").into() {
+                    return Err(ProgramError::InvalidJumpDestination);
                 }
             }
 
@@ -496,18 +491,16 @@ where
                 }
                 self.push_memory(jumpdest_bit_log);
             }
-        } else {
-            if should_jump && !gen_state.registers.is_kernel {
-                // Perform a sanity check on the jumpdest, and abort if it is invalid.
-                let addr = MemoryAddress::new(
-                    gen_state.registers.context,
-                    Segment::Code,
-                    dst.low_u32() as usize,
-                );
-                let jump_dst = gen_state.get_from_memory(addr);
-                if jump_dst != get_opcode("JUMPDEST").into() {
-                    return Err(ProgramError::InvalidJumpiDestination);
-                }
+        } else if should_jump && !gen_state.registers.is_kernel {
+            // Perform a sanity check on the jumpdest, and abort if it is invalid.
+            let addr = MemoryAddress::new(
+                gen_state.registers.context,
+                Segment::Code,
+                dst.low_u32() as usize,
+            );
+            let jump_dst = gen_state.get_from_memory(addr);
+            if jump_dst != get_opcode("JUMPDEST").into() {
+                return Err(ProgramError::InvalidJumpiDestination);
             }
         }
 
