@@ -110,7 +110,7 @@ cargo build --release --jobs "$num_procs"
 
 
 start_time=$(date +%s%N)
-"${REPO_ROOT}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
+"${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
  --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
 end_time=$(date +%s%N)
 
@@ -125,7 +125,7 @@ cat $PROOFS_FILE_LIST | while read proof_file;
 do
   echo "Verifying proof file $proof_file"
   verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  "${REPO_ROOT}/../../target/release/verifier" -f $proof_file | tee $verify_file
+  "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee $verify_file
   if grep -q 'All proofs verified successfully!' $verify_file; then
       echo "Proof verification for file $proof_file successful";
       rm $verify_file # we keep the generated proof for potential reuse
