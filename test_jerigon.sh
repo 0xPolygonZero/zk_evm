@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail
+set -uxo pipefail
 
 #export CARGO_LOG=cargo::core::compiler::fingerprint=debug
 export RPC=
@@ -15,7 +15,7 @@ export TOKIO_WORKER_THREADS=4
 export RUST_BACKTRACE=full
 export RUST_LOG=info
 export 'RUSTFLAGS=-C target-cpu=native -Zlinker-features=-lld'
-export RUST_MIN_STACK=33554432
+export RUST_MIN_STACK=67108864
 
 GITHASH=`git rev-parse --short HEAD`
 echo "Testing against jergion, current revision: $GITHASH."
@@ -60,16 +60,18 @@ do
 done
 
 # TESTNETBLOCKS="$KNOWNFAILED $ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
-BLOCKS="$ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
+# BLOCKS="$ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
+#BLOCKS=`echo $TESTNETBLOCKS | sed 's/\s/\n/g'`
 
-BLOCKS=`echo $TESTNETBLOCKS | sed 's/\s/\n/g'`
 SHUF=`shuf -e $TESTNETBLOCKS` 
 echo $SHUF
 
 
-echo "Testing:  $BLOCKS"
+#echo "Testing:  $BLOCKS"
+printf "githash       block verdict\n" | tee -a witnesses/jerigon_results.txt
+printf "---------------------------\n" | tee -a witnesses/jerigon_results.txt
 
-for BLOCK in $BLOCKS; do
+for BLOCK in {1..256}; do
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
@@ -77,13 +79,13 @@ for BLOCK in $BLOCKS; do
   echo "Checking block $BLOCK"
   zero_bin/tools/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
-  if [ -n $EXITCODE ]
+  if [ $EXITCODE -eq 0 ]
   then
     RESULT="success"
   else
     RESULT="failure"
   fi
-  printf "%10i %s %s\n" $BLOCK $GITHASH $RESULT | tee -a result.txt
+  printf "%s %10i %s\n" $GITHASH $BLOCK $RESULT | tee -a witnesses/jerigon_results.txt
 done
 
 exit 0

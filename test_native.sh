@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail
+set -uxo pipefail
 
 export RPC=
 if [ -z $RPC ]; then
@@ -49,10 +49,10 @@ for BLOCK in $BLOCKS; do
   WITNESS="witnesses/$BLOCK.native.$GITHASH.witness.json"
   until [ -f $WITNESS -a -s $WITNESS ]; do
     echo "Fetching block $BLOCK"
-    cargo run --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+    cargo run --release --verbose --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
     EXITCODE=$?
 
-    if [ -n $EXITCODE -a -f $WITNESS -a -s $WITNESS ]
+    if [ $EXITCODE -eq 0 -a -f $WITNESS -a -s $WITNESS ]
     then
       printf "%10i %s witness saved: %s.\n" $BLOCK $GITHASH success | tee -a witnesses/native_results.txt
       break
@@ -71,7 +71,7 @@ for WITNESS in witnesses/*.native.$GITHASH.witness.json; do
   echo "Testing $WITNESS"
   zero_bin/tools/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
-  if [ -n $EXITCODE ]
+  if [ $EXITCODE -eq 0 ]
   then
     RESULT="success"
   else
