@@ -26,11 +26,7 @@ mod signed_syscalls;
 mod transaction_parsing;
 mod transient_storage;
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    ops::Range,
-    str::FromStr,
-};
+use std::{ops::Range, str::FromStr};
 
 use anyhow::Result;
 use ethereum_types::U256;
@@ -248,10 +244,6 @@ impl<F: RichField> Interpreter<F> {
             code.into_iter().map(|val| Some(U256::from(val))).collect();
     }
 
-    pub(crate) fn set_jumpdest_analysis_inputs(&mut self, jumps: HashMap<usize, BTreeSet<usize>>) {
-        self.generation_state.set_jumpdest_analysis_inputs(jumps);
-    }
-
     pub(crate) fn extract_kernel_memory(self, segment: Segment, range: Range<usize>) -> Vec<U256> {
         let mut output: Vec<U256> = Vec::with_capacity(range.end);
         for i in range {
@@ -310,34 +302,6 @@ impl<F: RichField> Interpreter<F> {
         self.generation_state.registers.stack_len -= 1;
 
         result
-    }
-
-    pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
-        if self.generation_state.memory.contexts[self.context()].segments
-            [Segment::JumpdestBits.unscale()]
-        .content
-        .len()
-            > offset
-        {
-            // Even though we are in the interpreter, `JumpdestBits` is not part of the
-            // preinitialized segments, so we don't need to carry out the additional checks
-            // when get the value from memory.
-            self.generation_state.memory.get_with_init(MemoryAddress {
-                context: self.context(),
-                segment: Segment::JumpdestBits.unscale(),
-                virt: offset,
-            })
-        } else {
-            0.into()
-        }
-    }
-
-    pub(crate) fn get_jumpdest_bits(&self, context: usize) -> Vec<bool> {
-        self.generation_state.memory.contexts[context].segments[Segment::JumpdestBits.unscale()]
-            .content
-            .iter()
-            .map(|x| x.unwrap_or_default().bit(0))
-            .collect()
     }
 
     pub(crate) fn set_is_kernel(&mut self, is_kernel: bool) {
