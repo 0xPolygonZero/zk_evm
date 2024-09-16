@@ -11,6 +11,8 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
+use plonky2::gates::coset_interpolation::CosetInterpolationGate;
+use plonky2::gates::gate::Gate;
 use plonky2::gates::noop::NoopGate;
 use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::challenger::RecursiveChallenger;
@@ -827,7 +829,7 @@ where
         let inner_common_data: [_; NUM_TABLES] =
             core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
 
-        let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_zk_config());
 
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
@@ -885,26 +887,28 @@ where
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums =
-            vec![vec![builder.zero(); stark_config.num_challenges]; NUM_TABLES];
+        let mut extra_looking_sums = HashMap::new();
 
         // Memory
-        extra_looking_sums[*Table::Memory] = (0..stark_config.num_challenges)
-            .map(|c| {
-                get_memory_extra_looking_sum_circuit(
-                    &mut builder,
-                    &public_values,
-                    ctl_challenges.challenges[c],
-                )
-            })
-            .collect_vec();
+        extra_looking_sums.insert(
+            *Table::Memory,
+            (0..stark_config.num_challenges)
+                .map(|c| {
+                    get_memory_extra_looking_sum_circuit(
+                        &mut builder,
+                        &public_values,
+                        ctl_challenges.challenges[c],
+                    )
+                })
+                .collect_vec(),
+        );
 
         // Verify the CTL checks.
         verify_cross_table_lookups_circuit::<F, D, NUM_TABLES>(
             &mut builder,
             all_cross_table_lookups(),
             pis.map(|p| p.ctl_zs_first),
-            Some(&extra_looking_sums),
+            &extra_looking_sums,
             stark_config,
         );
 
@@ -952,7 +956,11 @@ where
         // they'll be ignored.
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
-        builder.add_gate(
+        if builder.config.zero_knowledge {
+            let gate = <CosetInterpolationGate<F, D>>::new(1);
+            builder.add_gate(gate.clone(), vec![]);
+        }
+        let idx = builder.add_gate(
             ConstantGate::new(inner_common_data[0].config.num_constants),
             vec![],
         );
@@ -1333,15 +1341,26 @@ where
         // Here, we have two block proofs and we aggregate them together.
         // The block circuit is similar to the agg circuit; both verify two inner
         // proofs.
-        let expected_common_data = CommonCircuitData {
-            fri_params: FriParams {
-                degree_bits: 14,
-                ..agg.circuit.common.fri_params.clone()
-            },
-            ..agg.circuit.common.clone()
+        let expected_common_data = if agg.circuit.common.config.zero_knowledge {
+            CommonCircuitData {
+                fri_params: FriParams {
+                    degree_bits: 15,
+                    ..agg.circuit.common.fri_params.clone()
+                },
+                ..agg.circuit.common.clone()
+            }
+        } else {
+            CommonCircuitData {
+                fri_params: FriParams {
+                    degree_bits: 14,
+                    ..agg.circuit.common.fri_params.clone()
+                },
+                ..agg.circuit.common.clone()
+            }
         };
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let mut builder =
+            CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_zk_config());
         let public_values = add_virtual_public_values_public_input(&mut builder);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);

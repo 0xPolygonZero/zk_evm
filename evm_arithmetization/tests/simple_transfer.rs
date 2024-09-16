@@ -14,18 +14,18 @@ use evm_arithmetization::testing_utils::{
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::{AllStark, Node, StarkConfig};
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::plonk::config::KeccakGoldilocksConfig;
+use plonky2::plonk::config::{KeccakGoldilocksConfig, PoseidonGoldilocksConfig};
 use plonky2::util::timing::TimingTree;
 
 type F = GoldilocksField;
 const D: usize = 2;
-type C = KeccakGoldilocksConfig;
+type C = PoseidonGoldilocksConfig;
 
 /// Test a simple token transfer to a new address.
 #[test]
@@ -161,19 +161,31 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         },
     };
 
-    let max_cpu_len_log = 20;
+    println!("got here");
+    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+        &all_stark,
+        &[
+            16..17,
+            8..10,
+            16..17,
+            10..11,
+            8..9,
+            11..12,
+            18..19,
+            17..18,
+            7..8,
+        ],
+        &config,
+    );
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
-    let proofs = prove_all_segments::<F, C, D>(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        &mut timing,
-        None,
-    )?;
-
+    let proofs =
+        all_circuits.prove_all_segments(&all_stark, &config, inputs, 16, &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
 
-    verify_all_proofs(&all_stark, &proofs, &config)
+    for proof in proofs {
+        all_circuits.verify_root(proof.proof_with_pis)?;
+    }
+    Ok(())
+    // all_circuits.verify_root(proof)
 }
