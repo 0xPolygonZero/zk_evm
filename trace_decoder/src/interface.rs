@@ -178,6 +178,11 @@ pub struct OtherBlockData {
     ///
     /// Only used if the `cfg_erigon` feature is activated.
     pub burn_addr: Option<Address>,
+    /// The global exit root along with the l1blockhash to write to the GER
+    /// manager.
+    ///
+    /// Only used if the `cfg_erigon` feature is activated.
+    pub ger_data: Option<(H256, H256)>,
 }
 
 /// Data that is specific to a block and is constant for all txns in a given
