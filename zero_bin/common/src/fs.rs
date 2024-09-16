@@ -2,7 +2,6 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use anyhow::anyhow;
-use evm_arithmetization::proof::PublicValues;
 use proof_gen::proof_types::GeneratedBlockProof;
 
 pub fn generate_block_proof_file_name(directory: &Option<&str>, block_height: u64) -> PathBuf {
@@ -24,15 +23,6 @@ pub fn get_previous_proof(path: Option<PathBuf>) -> anyhow::Result<Option<Genera
     if proof.len() != 1 {
         return Err(anyhow!("Invalid proof format."));
     }
-
-    std::fs::write(
-        "inputs.json",
-        serde_json::to_string(&PublicValues::from_public_inputs(
-            &proof[0].intern.public_inputs,
-        ))
-        .unwrap(),
-    )
-    .unwrap();
 
     Ok(Some(proof[0].to_owned()))
 }
