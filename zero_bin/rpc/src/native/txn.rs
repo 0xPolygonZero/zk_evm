@@ -18,14 +18,14 @@ use alloy::{
     },
     transports::Transport,
 };
-use anyhow::Context as _;
+use anyhow::{Context as _, Ok};
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 use tracing::debug;
 
 use crate::{
-    jumpdest::{self, structlogprime::try_reserialize},
+    jumpdest::{self, get_normalized_structlog},
     Compat,
 };
 
@@ -66,7 +66,7 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let (tx_receipt, pre_trace, diff_trace, structlog_trace) =
+    let (tx_receipt, pre_trace, diff_trace, structlog_opt) =
         fetch_tx_data(provider, &tx.hash).await?;
     let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
@@ -85,19 +85,14 @@ where
         tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
     };
 
-    let struct_logs_opt: Option<Vec<StructLog>> = match structlog_trace {
-        GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs),
-        GethTrace::JS(structlog_js_object) => try_reserialize(structlog_js_object)
-            .ok()
-            .map(|s| s.struct_logs),
-        _ => None,
-    };
-
-    let jumpdest_table: Option<JumpDestTableWitness> = struct_logs_opt.and_then(|struct_logs| {
-        jumpdest::generate_jumpdest_table(tx, &struct_logs, &tx_traces)
-            .map_err(|error| debug!("JumpDestTable generation failed with reason: {}", error))
-            .map(Some)
-            .unwrap_or_default()
+    let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_logs| {
+        jumpdest::generate_jumpdest_table(tx, &struct_logs, &tx_traces).map_or_else(
+            |error| {
+                debug!("JumpDestTable generation failed with reason: {}", error);
+                None
+            },
+            Some,
+        )
     });
 
     let tx_meta = TxnMeta {
@@ -127,7 +122,7 @@ async fn fetch_tx_data<ProviderT, TransportT>(
     <Ethereum as Network>::ReceiptResponse,
     GethTrace,
     GethTrace,
-    GethTrace,
+    Option<Vec<StructLog>>,
 )>
 where
     ProviderT: Provider<TransportT>,
@@ -136,8 +131,7 @@ where
     let tx_receipt_fut = provider.get_transaction_receipt(*tx_hash);
     let pre_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(false));
     let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
-    let structlog_trace_fut =
-        provider.debug_trace_transaction(*tx_hash, jumpdest::structlog_tracing_options());
+    let structlog_trace_fut = get_normalized_structlog(provider, tx_hash);
 
     let (tx_receipt, pre_trace, diff_trace, structlog_trace) = futures::try_join!(
         tx_receipt_fut,

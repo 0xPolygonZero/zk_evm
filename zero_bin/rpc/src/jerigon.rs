@@ -1,11 +1,9 @@
 use std::collections::BTreeMap;
 use std::ops::Deref as _;
 
-use alloy::providers::ext::DebugApi;
-use alloy::rpc::types::trace::geth::StructLog;
 use alloy::{
     providers::Provider,
-    rpc::types::{eth::BlockId, trace::geth::GethTrace, Block, BlockTransactionsKind, Transaction},
+    rpc::types::{eth::BlockId, Block, BlockTransactionsKind, Transaction},
     transports::Transport,
 };
 use alloy_primitives::Address;
@@ -23,8 +21,7 @@ use tracing::debug;
 use zero_bin_common::provider::CachedProvider;
 
 use super::fetch_other_block_data;
-use crate::jumpdest;
-use crate::jumpdest::structlogprime::try_reserialize;
+use crate::jumpdest::{self, get_normalized_structlog};
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
@@ -159,28 +156,21 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let structlog_trace = provider
-        .debug_trace_transaction(tx.hash, jumpdest::structlog_tracing_options())
-        .await?;
-
-    let struct_logs_opt: Option<Vec<StructLog>> = match structlog_trace {
-        GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs),
-        GethTrace::JS(structlog_js_object) => try_reserialize(structlog_js_object)
-            .ok()
-            .map(|s| s.struct_logs),
-        _ => None,
-    };
-
     let tx_traces = tx_trace
         .iter()
         .map(|(h, t)| (Address::from(h.to_fixed_bytes()), t.clone()))
         .collect();
 
-    let jumpdest_table: Option<JumpDestTableWitness> = struct_logs_opt.and_then(|struct_log| {
-        jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces)
-            .map_err(|error| debug!("JumpDestTable generation failed with reason: {}", error))
-            .map(Some)
-            .unwrap_or_default()
+    let structlog_opt = get_normalized_structlog(provider, &tx.hash).await?;
+
+    let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_log| {
+        jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces).map_or_else(
+            |error| {
+                debug!("JumpDestTable generation failed with reason: {}", error);
+                None
+            },
+            Some,
+        )
     });
 
     Ok(jumpdest_table)

@@ -7,30 +7,68 @@ use std::sync::OnceLock;
 use __compat_primitive_types::H256;
 use alloy::primitives::Address;
 use alloy::primitives::U160;
+use alloy::providers::ext::DebugApi;
+use alloy::providers::Provider;
 use alloy::rpc::types::eth::Transaction;
 use alloy::rpc::types::trace::geth::StructLog;
 use alloy::rpc::types::trace::geth::{GethDebugTracingOptions, GethDefaultTracingOptions};
+use alloy::transports::RpcError;
+use alloy::transports::Transport;
+use alloy::transports::TransportErrorKind;
+use alloy_primitives::B256;
 use alloy_primitives::U256;
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use keccak_hash::keccak;
+use structlogprime::normalize_structlog;
 use trace_decoder::TxnTrace;
 use tracing::trace;
 
-/// Tracing options for the `debug_traceTransaction` call to get structlog.
-/// Used for filling JUMPDEST table.
-pub(crate) fn structlog_tracing_options() -> GethDebugTracingOptions {
+/// Pass `true` for the components needed.
+fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDebugTracingOptions {
     GethDebugTracingOptions {
         config: GethDefaultTracingOptions {
-            disable_stack: Some(false),
+            disable_stack: Some(!stack),
             // needed for CREATE2
-            disable_memory: Some(false),
-            disable_storage: Some(true),
+            disable_memory: Some(!memory),
+            disable_storage: Some(!storage),
             ..GethDefaultTracingOptions::default()
         },
         tracer: None,
         ..GethDebugTracingOptions::default()
     }
+}
+
+fn trace_contains_create2(structlog: Vec<StructLog>) -> bool {
+    structlog.iter().any(|entry| entry.op == "CREATE2")
+}
+
+// Gets the lightest possible structlog for transcation `tx_hash`.
+pub(crate) async fn get_normalized_structlog<ProviderT, TransportT>(
+    provider: &ProviderT,
+    tx_hash: &B256,
+) -> Result<Option<Vec<StructLog>>, RpcError<TransportErrorKind>>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    let light_structlog_trace = provider
+        .debug_trace_transaction(*tx_hash, structlog_tracing_options(false, false, false))
+        .await?;
+
+    let structlogs_opt: Option<Vec<StructLog>> = normalize_structlog(light_structlog_trace).await;
+
+    let need_memory = structlogs_opt.is_some_and(trace_contains_create2);
+
+    let structlog = provider
+        .debug_trace_transaction(
+            *tx_hash,
+            structlog_tracing_options(true, need_memory, false),
+        )
+        .await?;
+
+    let ret = normalize_structlog(structlog).await;
+    Ok(ret)
 }
 
 /// Provides a way to check in constant time if an address points to a
@@ -309,7 +347,7 @@ pub mod structlogprime {
     use core::option::Option::None;
     use std::collections::BTreeMap;
 
-    use alloy::rpc::types::trace::geth::DefaultFrame;
+    use alloy::rpc::types::trace::geth::{DefaultFrame, GethTrace, StructLog};
     use alloy_primitives::{Bytes, B256, U256};
     use serde::{ser::SerializeMap as _, Deserialize, Serialize, Serializer};
     use serde_json::Value;
@@ -412,10 +450,22 @@ pub mod structlogprime {
         type Error = anyhow::Error;
     }
 
-    pub fn try_reserialize(structlog_object: Value) -> anyhow::Result<DefaultFrame> {
-        let a = serde_json::to_string(&structlog_object)?;
+    pub fn try_reserialize(structlog_object: &Value) -> anyhow::Result<DefaultFrame> {
+        let a = serde_json::to_string(structlog_object)?;
         let b: DefaultFramePrime = serde_json::from_str(&a)?;
         let d: DefaultFrame = b.try_into()?;
         Ok(d)
+    }
+
+    pub(crate) async fn normalize_structlog(
+        unnormalized_structlog: GethTrace,
+    ) -> Option<Vec<StructLog>> {
+        match unnormalized_structlog {
+            GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs),
+            GethTrace::JS(structlog_js_object) => try_reserialize(&structlog_js_object)
+                .ok()
+                .map(|s| s.struct_logs),
+            _ => None,
+        }
     }
 }
