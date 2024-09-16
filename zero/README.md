@@ -14,6 +14,7 @@ The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/pa
   - [Leader Usage](#leader-usage)
     - [stdio](#stdio)
     - [Jerigon](#jerigon)
+    - [Native](#native)
     - [HTTP](#http)
     - [Paladin Runtime](#paladin-runtime)
       - [Starting an AMQP enabled cluster](#starting-an-amqp-enabled-cluster)
@@ -27,6 +28,7 @@ The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/pa
   - [Testing Blocks](#testing-blocks)
     - [Proving Blocks](#proving-blocks)
     - [Generating Witnesses Only](#generating-witnesses-only)
+    - [Trace decoder tests](#trace-decoder-tests)
   - [License](#license)
     - [Contribution](#contribution)
 
@@ -466,7 +468,7 @@ When needed (e.g. some block with corner-case discovered), additional input witn
 1. Run the `rpc` tool to fetch the block (or multiple blocks) witness:
 
 ```sh
-cargo run --bin rpc fetch --rpc-url <node_rpc_endpoint> --start-block <start> --end-block <end> > ./b<number>_<network>.json
+cargo run --package zero --bin rpc fetch --rpc-url <node_rpc_endpoint> --start-block <start> --end-block <end> > ./b<number>_<network>.json
 ```
 
 2. Download the header file for the block (or range of blocks), making the json array of headers:
