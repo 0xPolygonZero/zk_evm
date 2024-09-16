@@ -967,7 +967,7 @@ where
         // Verify the CTL checks
         let ctl_zs_first: [_; NUM_TABLES] = pis.map(|p| {
             p.as_ref()
-                .map_or_else(|| vec![], |pi| pi.ctl_zs_first.clone())
+                .map_or_else(|| None, |pi| Some(pi.ctl_zs_first.clone()))
         });
 
         // Now call the `verify_cross_table_lookups_circuit` function

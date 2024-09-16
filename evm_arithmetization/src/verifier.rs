@@ -206,12 +206,15 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
             .collect_vec(),
     );
 
+    let ctl_zs_first = core::array::from_fn(|i| {
+        all_proof.multi_proof.stark_proofs[i]
+            .as_ref()
+            .and_then(|p| p.proof.openings.ctl_zs_first.clone())
+    });
+
     verify_cross_table_lookups::<F, D, NUM_TABLES>(
         cross_table_lookups,
-        all_proof
-            .multi_proof
-            .stark_proofs
-            .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
+        ctl_zs_first,
         &extra_looking_sums,
         config,
     )
