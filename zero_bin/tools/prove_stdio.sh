@@ -53,8 +53,8 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
       # These sizes are configured specifically for block 19807080. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b19807080.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
-        export BYTE_PACKING_CIRCUIT_SIZE="10..15"
-        export CPU_CIRCUIT_SIZE="16..20"
+        export BYTE_PACKING_CIRCUIT_SIZE="9..15"
+        export CPU_CIRCUIT_SIZE="15..20"
         export KECCAK_CIRCUIT_SIZE="12..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..14"
         export LOGIC_CIRCUIT_SIZE="8..17"
