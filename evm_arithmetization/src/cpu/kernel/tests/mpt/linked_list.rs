@@ -12,9 +12,11 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::generation::linked_list::LinkedList;
+use crate::generation::linked_list::AccountsLinkedList;
+use crate::generation::linked_list::StorageLinkedList;
 use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
+use crate::witness::memory::MemorySegmentState;
 
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
@@ -80,7 +82,8 @@ fn test_list_iterator() -> Result<()> {
         .memory
         .get_preinit_memory(Segment::AccountsLinkedList);
     let mut accounts_list =
-        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList).unwrap();
+        AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
+            .unwrap();
 
     let Some([addr, ptr, ptr_cpy, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -102,7 +105,7 @@ fn test_list_iterator() -> Result<()> {
         .memory
         .get_preinit_memory(Segment::StorageLinkedList);
     let mut storage_list =
-        LinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
+        StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
     let Some([addr, key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
@@ -171,8 +174,16 @@ fn test_insert_account() -> Result<()> {
         .memory
         .get_preinit_memory(Segment::AccountsLinkedList);
     let mut list =
-        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList).unwrap();
+        AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
+            .unwrap();
 
+    let Some([addr, ptr, ptr_cpy, _]) = list.next() else {
+        return Err(anyhow::Error::msg("Couldn't get value"));
+    };
+    // This is the dummy node
+    assert_eq!(addr, U256::MAX);
+    assert_eq!(ptr, U256::zero());
+    assert_eq!(ptr_cpy, U256::zero());
     let Some([addr, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
@@ -251,7 +262,16 @@ fn test_insert_storage() -> Result<()> {
         .memory
         .get_preinit_memory(Segment::StorageLinkedList);
     let mut list =
-        LinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
+        StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
+
+    let Some([inserted_addr, inserted_key, ptr, ptr_cpy, _]) = list.next() else {
+        return Err(anyhow::Error::msg("Couldn't get value"));
+    };
+    // This is the dummy node.
+    assert_eq!(inserted_addr, U256::MAX);
+    assert_eq!(inserted_key, U256::zero());
+    assert_eq!(ptr, U256::zero());
+    assert_eq!(ptr_cpy, U256::zero());
 
     let Some([inserted_addr, inserted_key, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -292,9 +312,17 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         Some((Segment::AccountsLinkedList as usize).into()),
     ];
     let init_len = init_accounts_ll.len();
-    interpreter.generation_state.memory.contexts[0].segments
-        [Segment::AccountsLinkedList.unscale()]
-    .content = init_accounts_ll;
+
+    interpreter
+        .generation_state
+        .memory
+        .insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            MemorySegmentState {
+                content: init_accounts_ll,
+            },
+        );
+
     interpreter.set_global_metadata_field(
         GlobalMetadata::AccountsLinkedListNextAvailable,
         (Segment::AccountsLinkedList as usize + init_len).into(),
@@ -433,19 +461,22 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         .generation_state
         .memory
         .get_preinit_memory(Segment::AccountsLinkedList);
-    let list =
-        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList).unwrap();
+    let list = AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
+        .unwrap();
 
     for (i, [addr, ptr, ptr_cpy, _]) in list.enumerate() {
         if addr == U256::MAX {
             assert_eq!(addr, U256::MAX);
             assert_eq!(ptr, U256::zero());
             assert_eq!(ptr_cpy, U256::zero());
-            break;
+            if i > 0 {
+                break;
+            }
+        } else {
+            let addr_in_list = U256::from(new_addresses[i - 1].0.as_slice());
+            assert_eq!(addr, addr_in_list);
+            assert_eq!(ptr, addr + delta_ptr);
         }
-        let addr_in_list = U256::from(new_addresses[i].0.as_slice());
-        assert_eq!(addr, addr_in_list);
-        assert_eq!(ptr, addr + delta_ptr);
     }
 
     Ok(())
@@ -640,7 +671,8 @@ fn test_insert_and_delete_storage() -> Result<()> {
         .generation_state
         .memory
         .get_preinit_memory(Segment::StorageLinkedList);
-    let list = LinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
+    let list =
+        StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
 
     for (i, [addr, key, ptr, ptr_cpy, _]) in list.enumerate() {
         if addr == U256::MAX {
@@ -648,12 +680,16 @@ fn test_insert_and_delete_storage() -> Result<()> {
             assert_eq!(key, U256::zero());
             assert_eq!(ptr, U256::zero());
             assert_eq!(ptr_cpy, U256::zero());
-            break;
+            if i > 0 {
+                break;
+            }
+        } else {
+            let [addr_in_list, key_in_list] =
+                new_addresses[i - 1].map(|x| U256::from(x.0.as_slice()));
+            assert_eq!(addr, addr_in_list);
+            assert_eq!(key, key_in_list);
+            assert_eq!(ptr, addr + delta_ptr);
         }
-        let [addr_in_list, key_in_list] = new_addresses[i].map(|x| U256::from(x.0.as_slice()));
-        assert_eq!(addr, addr_in_list);
-        assert_eq!(key, key_in_list);
-        assert_eq!(ptr, addr + delta_ptr);
     }
 
     Ok(())

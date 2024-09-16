@@ -12,7 +12,6 @@ use futures::StreamExt;
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero::block_interval::BlockIntervalStream;
-use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::prover::BlockProverInput;
 use zero::provider::CachedProvider;
 use zero::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
@@ -89,7 +88,6 @@ where
     let checkpoint_block_number = params
         .checkpoint_block_number
         .unwrap_or(params.start_block - 1);
-    check_previous_proof_and_checkpoint(checkpoint_block_number, &None, params.start_block)?;
 
     let block_interval = BlockInterval::Range(params.start_block..params.end_block + 1);
     let mut block_prover_inputs = Vec::new();
