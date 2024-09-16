@@ -149,7 +149,7 @@ impl ProverStateManager {
         &self,
         config: &StarkConfig,
         all_proof: &AllProof<Field, Config, SIZE>,
-    ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
+    ) -> anyhow::Result<[Option<(RecursiveCircuitsForTableSize, u8)>; NUM_TABLES]> {
         let degrees = all_proof.degree_bits(config);
 
         /// Given a recursive circuit index (e.g., Arithmetic / 0), return a
@@ -161,33 +161,29 @@ impl ProverStateManager {
                 (
                     RecursiveCircuitResource::get(&(
                         $circuit_index.into(),
-                        degrees[$circuit_index],
+                        degrees[$circuit_index].unwrap(),
                     ))
                     .map_err(|e| {
                         let circuit: $crate::prover_state::circuit::Circuit = $circuit_index.into();
-                        let size = degrees[$circuit_index];
+                        let size = degrees[$circuit_index].unwrap();
                         anyhow::Error::from(e).context(format!(
                             "Attempting to load circuit: {circuit:?} at size: {size}"
                         ))
-                    })?,
-                    (degrees[$circuit_index] - self.circuit_config[$circuit_index].start) as u8,
+                    })
+                    .ok()?,
+                    (degrees[$circuit_index].unwrap() - self.circuit_config[$circuit_index].start)
+                        as u8,
                 )
             };
         }
 
-        Ok([
-            circuit!(0),
-            circuit!(1),
-            circuit!(2),
-            circuit!(3),
-            circuit!(4),
-            circuit!(5),
-            circuit!(6),
-            circuit!(7),
-            circuit!(8),
-            #[cfg(feature = "cdk_erigon")]
-            circuit!(9),
-        ])
+        Ok(core::array::from_fn(|i| {
+            if all_proof.multi_proof.stark_proofs[i].is_some() {
+                Some(circuit!(i))
+            } else {
+                None
+            }
+        }))
     }
 
     /// Generate a segment proof using the specified input, loading

@@ -2066,15 +2066,16 @@ where
     pub fn prove_segment_after_initial_stark(
         &self,
         all_proof: AllProof<F, C, D>,
-        table_circuits: &[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES],
+        table_circuits: &[Option<(RecursiveCircuitsForTableSize<F, C, D>, u8)>; NUM_TABLES],
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            if let Some(stark_proof) = &all_proof.multi_proof.stark_proofs[table] {
-                let (table_circuit, index_verifier_data) = &table_circuits[table];
-
+            if let (Some(stark_proof), Some((table_circuit, index_verifier_data))) = (
+                &all_proof.multi_proof.stark_proofs[table],
+                &table_circuits[table],
+            ) {
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
                 root_inputs.set_target(
