@@ -22,8 +22,7 @@ pub(crate) async fn stdio_main(
         .into_iter()
         .collect::<Vec<_>>();
 
-    let (block_tx, block_rx) =
-        mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
+    let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
 
     let runtime_ = runtime.clone();
     let prover_config_ = prover_config.clone();
