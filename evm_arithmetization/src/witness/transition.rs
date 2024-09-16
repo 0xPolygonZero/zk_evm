@@ -1,13 +1,11 @@
-use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
-use super::util::{mem_read_gp_with_log_and_fill, stack_pop_with_log_and_fill};
+use super::util::stack_pop_with_log_and_fill;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
@@ -20,6 +18,8 @@ use crate::witness::operation::*;
 use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
+#[cfg(not(feature = "cdk_erigon"))]
+use crate::{cpu::membus::NUM_GP_CHANNELS, witness::util::mem_read_gp_with_log_and_fill};
 
 pub(crate) const EXC_STOP_CODE: u8 = 6;
 
@@ -382,30 +382,35 @@ where
             .map_err(|_| ProgramError::InvalidJumpDestination)?;
 
         if !self.generate_jumpdest_analysis(dst as usize) {
-            let gen_state = self.get_mut_generation_state();
-            let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
-                NUM_GP_CHANNELS - 1,
-                MemoryAddress::new(
-                    gen_state.registers.context,
-                    Segment::JumpdestBits,
-                    dst as usize,
-                ),
-                gen_state,
-                &mut row,
-            );
-
             row.mem_channels[1].value[0] = F::ONE;
 
-            if gen_state.registers.is_kernel {
-                // Don't actually do the read, just set the address, etc.
-                let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
-                channel.used = F::ZERO;
-                channel.value[0] = F::ONE;
-            } else {
-                if jumpdest_bit != U256::one() {
-                    return Err(ProgramError::InvalidJumpDestination);
+            // We skip jump destinations verification with `cdk_erigon`.
+            #[cfg(not(feature = "cdk_erigon"))]
+            {
+                let gen_state = self.get_mut_generation_state();
+
+                let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
+                    NUM_GP_CHANNELS - 1,
+                    MemoryAddress::new(
+                        gen_state.registers.context,
+                        Segment::JumpdestBits,
+                        dst as usize,
+                    ),
+                    gen_state,
+                    &mut row,
+                );
+
+                if gen_state.registers.is_kernel {
+                    // Don't actually do the read, just set the address, etc.
+                    let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
+                    channel.used = F::ZERO;
+                    channel.value[0] = F::ONE;
+                } else {
+                    if jumpdest_bit != ethereum_types::U256::one() {
+                        return Err(ProgramError::InvalidJumpDestination);
+                    }
+                    self.push_memory(jumpdest_bit_log);
                 }
-                self.push_memory(jumpdest_bit_log);
             }
 
             // Extra fields required by the constraints.
@@ -453,27 +458,33 @@ where
             self.incr_pc(1);
         }
 
-        let gen_state = self.get_mut_generation_state();
-        let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
-            NUM_GP_CHANNELS - 1,
-            MemoryAddress::new(
-                gen_state.registers.context,
-                Segment::JumpdestBits,
-                dst.low_u32() as usize,
-            ),
-            gen_state,
-            &mut row,
-        );
-        if !should_jump || gen_state.registers.is_kernel {
-            // Don't actually do the read, just set the address, etc.
-            let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
-            channel.used = F::ZERO;
-            channel.value[0] = F::ONE;
-        } else {
-            if jumpdest_bit != U256::one() {
-                return Err(ProgramError::InvalidJumpiDestination);
+        // We skip jump destinations verification with `cdk_erigon`.
+        #[cfg(not(feature = "cdk_erigon"))]
+        {
+            let gen_state = self.get_mut_generation_state();
+
+            let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
+                NUM_GP_CHANNELS - 1,
+                MemoryAddress::new(
+                    gen_state.registers.context,
+                    Segment::JumpdestBits,
+                    dst.low_u32() as usize,
+                ),
+                gen_state,
+                &mut row,
+            );
+
+            if !should_jump || gen_state.registers.is_kernel {
+                // Don't actually do the read, just set the address, etc.
+                let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
+                channel.used = F::ZERO;
+                channel.value[0] = F::ONE;
+            } else {
+                if jumpdest_bit != ethereum_types::U256::one() {
+                    return Err(ProgramError::InvalidJumpiDestination);
+                }
+                self.push_memory(jumpdest_bit_log);
             }
-            self.push_memory(jumpdest_bit_log);
         }
 
         let diff = row.stack_len - F::TWO;
