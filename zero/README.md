@@ -14,7 +14,6 @@ The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/pa
   - [Leader Usage](#leader-usage)
     - [stdio](#stdio)
     - [Jerigon](#jerigon)
-    - [Native](#native)
     - [HTTP](#http)
     - [Paladin Runtime](#paladin-runtime)
       - [Starting an AMQP enabled cluster](#starting-an-amqp-enabled-cluster)
@@ -28,7 +27,6 @@ The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/pa
   - [Testing Blocks](#testing-blocks)
     - [Proving Blocks](#proving-blocks)
     - [Generating Witnesses Only](#generating-witnesses-only)
-    - [Trace decoder tests](#trace-decoder-tests)
   - [License](#license)
     - [Contribution](#contribution)
 

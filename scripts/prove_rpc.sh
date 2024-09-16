@@ -33,10 +33,9 @@ if ! [[ $8 == "test_only" ]]; then
     export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
 fi
 
-# Force the working directory to always be the `tools/` directory.
-TOOLS_DIR=$(dirname $(realpath "$0"))
+REPO_ROOT=$(git rev-parse --show-toplevel)
 
-PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
+PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
 OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b$1_$2.log"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.
 TOT_BLOCKS=$(($2-$1+1))

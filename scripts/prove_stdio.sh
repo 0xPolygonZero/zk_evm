@@ -18,15 +18,15 @@ else
 fi
 
 # Force the working directory to always be the `tools/` directory. 
-TOOLS_DIR=$(dirname $(realpath "$0"))
-PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
 
 BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
 echo "Block batch size: $BLOCK_BATCH_SIZE"
 
-OUTPUT_LOG="${TOOLS_DIR}/output.log"
+OUTPUT_LOG="${REPO_ROOT}/output.log"
 PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
-TEST_OUT_PATH="${TOOLS_DIR}/test.out"
+TEST_OUT_PATH="${REPO_ROOT}/test.out"
 
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
@@ -110,7 +110,7 @@ cargo build --release --jobs "$num_procs"
 
 
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
+"${REPO_ROOT}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
  --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
 end_time=$(date +%s%N)
 
@@ -125,7 +125,7 @@ cat $PROOFS_FILE_LIST | while read proof_file;
 do
   echo "Verifying proof file $proof_file"
   verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  "${TOOLS_DIR}/../../target/release/verifier" -f $proof_file | tee $verify_file
+  "${REPO_ROOT}/../../target/release/verifier" -f $proof_file | tee $verify_file
   if grep -q 'All proofs verified successfully!' $verify_file; then
       echo "Proof verification for file $proof_file successful";
       rm $verify_file # we keep the generated proof for potential reuse

@@ -1,9 +1,25 @@
-/**/target
+# Alphabetically, by-category
+
+# Build artifacts
+#################
+# Ours
+/circuits
+# Rust's
 /target
-**/*.rs.bk
-*.iml
-.idea/
-.vscode
+
+# Editors
+#########
+/.idea/
+/.vscode
+/*.iml
+
+# Misc
+######
 /**/*.ignoreme
-**/output.log
 /**/*.ipynb
+/**/*.log
+
+# Proof artifacts
+#################
+/proofs
+/**/*.zkproof
