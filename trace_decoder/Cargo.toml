@@ -59,14 +59,23 @@ pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 
+[features]
+default = ["eth_mainnet"]
+eth_mainnet = ["evm_arithmetization/eth_mainnet"]
+cdk_erigon = ["evm_arithmetization/cdk_erigon"]
+polygon_pos = ["evm_arithmetization/polygon_pos"]
+
 [[bench]]
 name = "block_processing"
 harness = false
+required-features = ["eth_mainnet"]
 
 [[test]]
 name = "consistent-with-header"
 harness = false
+required-features = ["eth_mainnet"]
 
 [[test]]
 name = "simulate-execution"
 harness = false
+required-features = ["eth_mainnet"]

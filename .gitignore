@@ -2,9 +2,6 @@
 
 # Build artifacts
 #################
-# Ours
-/circuits
-# Rust's
 /target
 
 # Editors
