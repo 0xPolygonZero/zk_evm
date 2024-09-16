@@ -6,7 +6,6 @@ use std::{
 };
 
 use alloy::hex;
-use anyhow::anyhow;
 use directories::ProjectDirs;
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use once_cell::sync::Lazy;
@@ -346,15 +345,6 @@ pub fn set_circuit_cache_dir_env_if_not_set() -> anyhow::Result<()> {
             None => std::env::current_dir()?,
         }
     };
-
-    // Sanity check on naming convention for the circuit cache directory.
-    if let Some(path_str) = Path::new(&circuit_cache_dir).to_str() {
-        if !path_str.ends_with("_circuit_cache") {
-            return Err(anyhow!(
-            "zkEVM circuit cache directory {:?} does not follow convention of ending with \"_circuit_cache\".", path_str
-        ));
-        }
-    }
 
     std::env::set_var(ZK_EVM_CACHE_DIR_ENV, circuit_cache_dir);
 
