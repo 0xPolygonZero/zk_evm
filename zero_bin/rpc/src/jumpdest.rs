@@ -246,7 +246,10 @@ pub(crate) fn generate_jumpdest_table(
                 let [counter, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                ensure!(*counter <= U256::from(u64::MAX), "Operand for {op} caused overflow.");
+                ensure!(
+                    *counter <= U256::from(u64::MAX),
+                    "Operand for {op} caused overflow."
+                );
                 let jump_target: u64 = counter.to();
 
                 prev_jump = Some(jump_target);
@@ -264,7 +267,10 @@ pub(crate) fn generate_jumpdest_table(
                 let [counter, condition, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                ensure!(*counter <= U256::from(u64::MAX), "Operand for {op} caused overflow.");
+                ensure!(
+                    *counter <= U256::from(u64::MAX),
+                    "Operand for {op} caused overflow."
+                );
                 let jump_target: u64 = counter.to();
                 let jump_condition = condition.is_zero().not();
 
