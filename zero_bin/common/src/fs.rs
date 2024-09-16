@@ -21,7 +21,7 @@ pub fn get_previous_proof(path: Option<PathBuf>) -> anyhow::Result<Option<Genera
     let proof: Vec<GeneratedBlockProof> = serde_path_to_error::deserialize(des)?;
     // Individual proofs are serialized as vector to match other output formats.
     if proof.len() != 1 {
-        return Err(anyhow!("Invalid proof format."));
+        return Err(anyhow!("Invalid proof format, expected vector of generated block proofs with a single element."));
     }
 
     Ok(Some(proof[0].to_owned()))
