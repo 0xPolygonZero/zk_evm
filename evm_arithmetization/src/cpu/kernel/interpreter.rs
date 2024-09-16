@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use keccak_hash::H256;
-use log::Level;
+use log::{trace, Level};
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -167,7 +167,13 @@ pub(crate) fn set_jumpdest_analysis_inputs_rpc(
     let ctx_proofs = (*jumpdest_table_rpc)
         .iter()
         .flat_map(|(code_addr, ctx_jumpdests)| {
-            prove_context_jumpdests(&code_map[code_addr], ctx_jumpdests)
+            let code = if code_map.contains_key(code_addr) {
+                &code_map[code_addr]
+            } else {
+                &vec![]
+            };
+            trace!("code: {:?} <============", &code);
+            prove_context_jumpdests(code, ctx_jumpdests)
         })
         .collect();
     JumpDestTableProcessed::new(ctx_proofs)

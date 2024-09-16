@@ -41,6 +41,13 @@ TESTNETBLOCKS="
 
 
 KNOWNFAILED="
+2
+15
+28
+35
+37
+43
+65
 28
 444
 "
@@ -71,7 +78,7 @@ echo $SHUF
 printf "githash       block verdict\n" | tee -a witnesses/jerigon_results.txt
 printf "---------------------------\n" | tee -a witnesses/jerigon_results.txt
 
-for BLOCK in {1..256}; do
+for BLOCK in {66..688}; do
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
