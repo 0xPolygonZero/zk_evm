@@ -14,7 +14,6 @@ use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::block_interval::BlockIntervalStream;
-use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 use zero_bin_common::provider::CachedProvider;
 use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
@@ -88,7 +87,6 @@ where
     let checkpoint_block_number = params
         .checkpoint_block_number
         .unwrap_or(params.start_block - 1);
-    check_previous_proof_and_checkpoint(checkpoint_block_number, &None, params.start_block)?;
 
     let block_interval = BlockInterval::Range(params.start_block..params.end_block + 1);
     let mut block_prover_inputs = Vec::new();
