@@ -37,7 +37,8 @@ use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
 use crate::all_stark::{
-    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, MEMORY_CTL_IDX, NUM_CTLS,
+    NUM_TABLES,
 };
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
@@ -998,19 +999,23 @@ where
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums =
-            vec![vec![builder.zero(); stark_config.num_challenges]; NUM_TABLES];
+        let mut extra_looking_sums = HashMap::from_iter(
+            (0..NUM_CTLS).map(|i| (i, vec![builder.zero(); stark_config.num_challenges])),
+        );
 
         // Memory
-        extra_looking_sums[*Table::Memory] = (0..stark_config.num_challenges)
-            .map(|c| {
-                get_memory_extra_looking_sum_circuit(
-                    &mut builder,
-                    &public_values,
-                    ctl_challenges.challenges[c],
-                )
-            })
-            .collect_vec();
+        extra_looking_sums.insert(
+            MEMORY_CTL_IDX,
+            (0..stark_config.num_challenges)
+                .map(|c| {
+                    get_memory_extra_looking_sum_circuit(
+                        &mut builder,
+                        &public_values,
+                        ctl_challenges.challenges[c],
+                    )
+                })
+                .collect_vec(),
+        );
 
         // Ensure that when Keccak tables are skipped, the Keccak tables' ctl_zs_first
         // are all zeros.
@@ -1026,7 +1031,7 @@ where
             &mut builder,
             all_cross_table_lookups(),
             pis.map(|p| p.ctl_zs_first),
-            Some(&extra_looking_sums),
+            &extra_looking_sums,
             stark_config,
         );
 
@@ -2013,11 +2018,11 @@ where
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
-                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO)?;
                 root_inputs.set_proof_with_pis_target(
                     &self.root.proof_with_pis[table],
                     &dummy_proof_data.proof,
-                );
+                )?;
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
@@ -2042,9 +2047,9 @@ where
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(index_verifier_data),
-                );
+                )?;
                 root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof)?;
             }
 
             check_abort_signal(abort_signal.clone())?;
@@ -2053,7 +2058,7 @@ where
         root_inputs.set_verifier_data_target(
             &self.root.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         set_public_value_targets(
             &mut root_inputs,
@@ -2064,7 +2069,7 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
+        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables)?;
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2141,11 +2146,11 @@ where
                 let dummy_proof = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
-                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO)?;
                 root_inputs.set_proof_with_pis_target(
                     &self.root.proof_with_pis[table],
                     &dummy_proof.proof,
-                );
+                )?;
             } else {
                 let (table_circuit, index_verifier_data) = &table_circuits[table]
                     .as_ref()
@@ -2153,14 +2158,14 @@ where
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
-                );
+                )?;
                 let stark_proof = all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
                 root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof)?;
             }
 
             check_abort_signal(abort_signal.clone())?;
@@ -2169,7 +2174,7 @@ where
         root_inputs.set_verifier_data_target(
             &self.root.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         set_public_value_targets(
             &mut root_inputs,
@@ -2180,7 +2185,7 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
+        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables)?;
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2229,7 +2234,7 @@ where
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
             lhs_proof,
-        );
+        )?;
 
         // If rhs is dummy, the rhs proof is also set to be the lhs.
         let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
@@ -2241,12 +2246,12 @@ where
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
             real_rhs_proof,
-        );
+        )?;
 
         agg_inputs.set_verifier_data_target(
             &self.segment_aggregation.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         // Aggregates both `PublicValues` from the provided proofs into a single one.
         let lhs_public_values = &lhs.proof_with_pvs.public_values;
@@ -2339,7 +2344,7 @@ where
             &self.batch_aggregation.circuit,
             &mut batch_inputs,
             &lhs.intern,
-        );
+        )?;
 
         Self::set_dummy_if_necessary(
             &self.batch_aggregation.rhs,
@@ -2347,12 +2352,12 @@ where
             &self.batch_aggregation.circuit,
             &mut batch_inputs,
             &rhs.intern,
-        );
+        )?;
 
         batch_inputs.set_verifier_data_target(
             &self.batch_aggregation.cyclic_vk,
             &self.batch_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         let lhs_pvs = &lhs.public_values;
         let batch_public_values = PublicValues {
@@ -2393,20 +2398,20 @@ where
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
         proof: &ProofWithPublicInputs<F, C, D>,
-    ) {
-        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
-        agg_inputs.set_bool_target(agg_child.is_dummy, is_dummy);
+    ) -> anyhow::Result<()> {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg)?;
+        agg_inputs.set_bool_target(agg_child.is_dummy, is_dummy)?;
         if is_agg {
-            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof)?;
         } else {
             Self::set_dummy_proof_with_cyclic_vk_pis(
                 circuit,
                 agg_inputs,
                 &agg_child.agg_proof,
                 proof,
-            );
+            )?;
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof)
     }
 
     /// Create a final block proof, once all transactions of a given block have
@@ -2438,10 +2443,10 @@ where
         block_inputs.set_bool_target(
             self.block.has_parent_block,
             opt_parent_block_proof.is_some(),
-        );
+        )?;
         if let Some(parent_block_proof) = opt_parent_block_proof {
             block_inputs
-                .set_proof_with_pis_target(&self.block.parent_block_proof, parent_block_proof);
+                .set_proof_with_pis_target(&self.block.parent_block_proof, parent_block_proof)?;
         } else {
             if agg_root_proof.public_values.trie_roots_before.state_root
                 != agg_root_proof
@@ -2584,13 +2589,14 @@ where
                     &self.block.circuit.verifier_only,
                     nonzero_pis,
                 ),
-            );
+            )?;
         }
 
-        block_inputs.set_proof_with_pis_target(&self.block.agg_root_proof, &agg_root_proof.intern);
+        block_inputs
+            .set_proof_with_pis_target(&self.block.agg_root_proof, &agg_root_proof.intern)?;
 
         block_inputs
-            .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only);
+            .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only)?;
 
         // This is basically identical to this block public values, apart from the
         // `trie_roots_before` that may come from the previous proof, if any.
@@ -2649,13 +2655,15 @@ where
     )> {
         let mut block_wrapper_inputs = PartialWitness::new();
 
-        block_wrapper_inputs
-            .set_proof_with_pis_target(&self.block_wrapper.parent_block_proof, &block_proof.intern);
+        block_wrapper_inputs.set_proof_with_pis_target(
+            &self.block_wrapper.parent_block_proof,
+            &block_proof.intern,
+        )?;
 
         block_wrapper_inputs.set_verifier_data_target(
             &self.block_wrapper.cyclic_vk, // dummy
             &self.block_wrapper.circuit.verifier_only,
-        );
+        )?;
 
         let final_pvs = block_proof.public_values.clone().into();
         set_final_public_value_targets(
@@ -2709,7 +2717,7 @@ where
             &self.two_to_one_block.circuit,
             &mut witness,
             lhs,
-        );
+        )?;
 
         Self::set_dummy_if_necessary(
             &self.two_to_one_block.rhs,
@@ -2717,15 +2725,14 @@ where
             &self.two_to_one_block.circuit,
             &mut witness,
             rhs,
-        );
+        )?;
 
         witness.set_verifier_data_target(
             &self.two_to_one_block.cyclic_vk,
             &self.two_to_one_block.circuit.verifier_only,
-        );
+        )?;
 
-        let proof = self.two_to_one_block.circuit.prove(witness)?;
-        Ok(proof)
+        self.two_to_one_block.circuit.prove(witness)
     }
 
     /// Verifies an existing block aggregation proof.
@@ -2756,7 +2763,7 @@ where
         witness: &mut PartialWitness<F>,
         agg_proof_with_pis: &ProofWithPublicInputsTarget<D>,
         base_proof_with_pis: &ProofWithPublicInputs<F, C, D>,
-    ) {
+    ) -> anyhow::Result<()> {
         let ProofWithPublicInputs {
             proof: base_proof,
             public_inputs: _,
@@ -2767,7 +2774,7 @@ where
         } = agg_proof_with_pis;
 
         // The proof remains the same.
-        witness.set_proof_target(agg_proof_targets, base_proof);
+        witness.set_proof_target(agg_proof_targets, base_proof)?;
 
         let cyclic_verifying_data = &circuit_agg.verifier_only;
         let mut cyclic_vk = cyclic_verifying_data.circuit_digest.to_vec();
@@ -2778,8 +2785,10 @@ where
 
         // Set dummy public inputs.
         for (&pi_t, pi) in agg_pi_targets.iter().zip_eq(dummy_pis) {
-            witness.set_target(pi_t, pi);
+            witness.set_target(pi_t, pi)?;
         }
+
+        Ok(())
     }
 
     /// If the [`AggregationChild`] is a base proof and not an aggregation
@@ -2794,19 +2803,19 @@ where
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
         proof: &ProofWithPublicInputs<F, C, D>,
-    ) {
-        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
+    ) -> anyhow::Result<()> {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg)?;
         if is_agg {
-            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof)?;
         } else {
             Self::set_dummy_proof_with_cyclic_vk_pis(
                 circuit,
                 agg_inputs,
                 &agg_child.agg_proof,
                 proof,
-            );
+            )?;
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof)
     }
 }
 
