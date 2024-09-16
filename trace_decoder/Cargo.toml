@@ -10,7 +10,9 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-anyhow.workspace = true
+alloy = { workspace = true }
+alloy-compat = "0.1.0"
+anyhow = { workspace = true }
 bitflags = { workspace = true }
 bitvec = { workspace = true }
 bytes = { workspace = true }
@@ -22,7 +24,7 @@ enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true }
 hex-literal = { workspace = true }
-itertools.workspace = true
+itertools = { workspace = true }
 keccak-hash = { workspace = true }
 log = { workspace = true }
 nunny = { workspace = true, features = ["serde"] }
@@ -46,10 +48,13 @@ alloy = { workspace = true }
 alloy-compat = "0.1.0"
 assert2 = "0.3.15"
 camino = "1.1.9"
+clap = { workspace = true }
 criterion = { workspace = true }
 glob = "0.3.1"
 libtest-mimic = "0.7.3"
 plonky2_maybe_rayon = { workspace = true }
+pretty_assertions = "1.4.0"
+pretty_env_logger = { workspace = true }
 prover = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
@@ -65,15 +70,22 @@ cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
     "prover/cdk_erigon",
 ]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "prover/polygon_pos",
+]
 
 [[bench]]
 name = "block_processing"
 harness = false
+required-features = ["eth_mainnet"]
 
 [[test]]
 name = "consistent-with-header"
 harness = false
+required-features = ["eth_mainnet"]
 
 [[test]]
 name = "simulate-execution"
 harness = false
+required-features = ["eth_mainnet"]

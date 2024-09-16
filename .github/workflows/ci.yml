@@ -22,7 +22,7 @@ jobs:
     name: Test mpt_trie
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -47,7 +47,12 @@ jobs:
     name: Test trace_decoder
     runs-on: zero-ci
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    env:
+      RUST_LOG: info
+      CARGO_INCREMENTAL: 1
+      RUST_BACKTRACE: 1
+
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -60,18 +65,17 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Test in trace_decoder subdirectory
+      - name: build # build separately so test logs are actually nice
+        run: cargo build --tests --manifest-path trace_decoder/Cargo.toml
+
+      - name: test
         run: cargo test --release --manifest-path trace_decoder/Cargo.toml -- --nocapture
-        env:
-          RUST_LOG: info
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
 
   test_proof_gen:
     name: Test proof_gen
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -96,7 +100,7 @@ jobs:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -121,7 +125,7 @@ jobs:
     name: Test zero_bin
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -132,7 +136,7 @@ jobs:
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Test in zero_bin subdirectory
         run: |
@@ -154,7 +158,7 @@ jobs:
     name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -218,7 +222,7 @@ jobs:
     name: Rustdoc, Formatting and Clippy
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4

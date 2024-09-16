@@ -31,8 +31,12 @@ pub(crate) fn initialize_mpts<F: RichField>(
 ) {
     // Load all MPTs.
     let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-        load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
-            .expect("Invalid MPT data for preinitialization");
+        load_linked_lists_and_txn_and_receipt_mpts(
+            &mut interpreter.generation_state.accounts_pointers,
+            &mut interpreter.generation_state.storage_pointers,
+            trie_inputs,
+        )
+        .expect("Invalid MPT data for preinitialization");
 
     interpreter.generation_state.memory.contexts[0].segments
         [Segment::AccountsLinkedList.unscale()]
@@ -43,6 +47,9 @@ pub(crate) fn initialize_mpts<F: RichField>(
     interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
         trie_data.clone();
     interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
+
+    interpreter.generation_state.insert_all_slots_in_memory();
+    interpreter.generation_state.insert_all_accounts_in_memory();
 
     if trie_root_ptrs.state_root_ptr.is_none() {
         trie_root_ptrs.state_root_ptr = Some(

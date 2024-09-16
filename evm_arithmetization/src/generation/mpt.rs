@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use bytes::Bytes;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
@@ -10,8 +10,9 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
-use super::linked_list::empty_list_mem;
-use super::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
+use super::linked_list::{
+    empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
+};
 use super::TrimmedTrieInputs;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
@@ -133,7 +134,7 @@ fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     Ok(vec![value])
 }
 
-const fn parse_storage_value_no_return(_value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+fn parse_storage_value_no_return(_value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     Ok(vec![])
 }
 
@@ -335,6 +336,8 @@ fn get_state_and_storage_leaves(
     state_leaves: &mut Vec<Option<U256>>,
     storage_leaves: &mut Vec<Option<U256>>,
     trie_data: &mut Vec<Option<U256>>,
+    accounts_pointers: &mut BTreeMap<U256, usize>,
+    storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
     match trie.deref() {
@@ -357,6 +360,8 @@ fn get_state_and_storage_leaves(
                     state_leaves,
                     storage_leaves,
                     trie_data,
+                    accounts_pointers,
+                    storage_pointers,
                     storage_tries_by_state_key,
                 )?;
             }
@@ -371,6 +376,8 @@ fn get_state_and_storage_leaves(
                 state_leaves,
                 storage_leaves,
                 trie_data,
+                accounts_pointers,
+                storage_pointers,
                 storage_tries_by_state_key,
             )?;
 
@@ -400,9 +407,7 @@ fn get_state_and_storage_leaves(
 
             // The last leaf must point to the new one.
             let len = state_leaves.len();
-            state_leaves[len - 1] = Some(U256::from(
-                Segment::AccountsLinkedList as usize + state_leaves.len(),
-            ));
+            state_leaves[len - 1] = Some(U256::from(Segment::AccountsLinkedList as usize + len));
             // The nibbles are the address.
             let addr_key = merged_key
                 .try_into()
@@ -426,8 +431,11 @@ fn get_state_and_storage_leaves(
                 empty_nibbles(),
                 storage_trie,
                 storage_leaves,
+                storage_pointers,
                 &parse_storage_value,
             )?;
+
+            accounts_pointers.insert(addr_key, Segment::AccountsLinkedList as usize + len);
 
             Ok(())
         }
@@ -440,6 +448,7 @@ pub(crate) fn get_storage_leaves<F>(
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
+    storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -453,7 +462,14 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                get_storage_leaves(addr_key, extended_key, child, storage_leaves, parse_value)?;
+                get_storage_leaves(
+                    addr_key,
+                    extended_key,
+                    child,
+                    storage_leaves,
+                    storage_pointers,
+                    parse_value,
+                )?;
             }
 
             Ok(())
@@ -461,7 +477,14 @@ where
 
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            get_storage_leaves(addr_key, extended_key, child, storage_leaves, parse_value)?;
+            get_storage_leaves(
+                addr_key,
+                extended_key,
+                child,
+                storage_leaves,
+                storage_pointers,
+                parse_value,
+            )?;
 
             Ok(())
         }
@@ -469,17 +492,14 @@ where
             // The last leaf must point to the new one.
             let len = storage_leaves.len();
             let merged_key = key.merge_nibbles(nibbles);
-            storage_leaves[len - 1] = Some(U256::from(
-                Segment::StorageLinkedList as usize + storage_leaves.len(),
-            ));
+            storage_leaves[len - 1] = Some(U256::from(Segment::StorageLinkedList as usize + len));
             // Write the address.
             storage_leaves.push(Some(addr_key));
             // Write the key.
-            storage_leaves.push(Some(
-                merged_key
-                    .try_into()
-                    .map_err(|_| ProgramError::IntegerTooLarge)?,
-            ));
+            let slot_key = merged_key
+                .try_into()
+                .map_err(|_| ProgramError::IntegerTooLarge)?;
+            storage_leaves.push(Some(slot_key));
             // Write `value_ptr_ptr`.
             let leaves = parse_value(value)?
                 .into_iter()
@@ -494,6 +514,11 @@ where
             storage_leaves.push(Some(0.into()));
             // Set the next node as the initial node.
             storage_leaves.push(Some((Segment::StorageLinkedList as usize).into()));
+
+            storage_pointers.insert(
+                (addr_key, slot_key),
+                Segment::StorageLinkedList as usize + len,
+            );
 
             Ok(())
         }
@@ -514,6 +539,8 @@ type TriePtrsLinkedLists = (
 );
 
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
+    accounts_pointers: &mut BTreeMap<U256, usize>,
+    storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     trie_inputs: &TrieInputs,
 ) -> Result<TriePtrsLinkedLists, ProgramError> {
     let mut state_leaves =
@@ -546,6 +573,8 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &mut state_leaves,
         &mut storage_leaves,
         &mut trie_data,
+        accounts_pointers,
+        storage_pointers,
         &storage_tries_by_state_key,
     )?;
 

@@ -4,5 +4,5 @@
 *.iml
 .idea/
 .vscode
+/**/*.ignoreme
 **/output.log
-

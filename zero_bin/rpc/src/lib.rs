@@ -1,7 +1,10 @@
+zk_evm_common::check_chain_features!();
+
 use std::sync::Arc;
 
+use __compat_primitive_types::{H256, U256};
 use alloy::{
-    primitives::{Bytes, FixedBytes, B256},
+    primitives::{Address, Bytes, FixedBytes, B256},
     providers::Provider,
     rpc::types::eth::{BlockId, BlockTransactionsKind, Withdrawal},
     transports::Transport,
@@ -9,8 +12,9 @@ use alloy::{
 use anyhow::{anyhow, Context as _};
 use clap::ValueEnum;
 use compat::Compat;
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+use evm_arithmetization::proof::{consolidate_hashes, BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
+use proof_gen::types::{Field, Hasher};
 use prover::BlockProverInput;
 use serde_json::json;
 use trace_decoder::{BlockLevelData, OtherBlockData};
@@ -37,7 +41,7 @@ pub enum RpcType {
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_id: BlockId,
-    checkpoint_state_trie_root: B256,
+    checkpoint_block_number: u64,
     rpc_type: RpcType,
 ) -> Result<BlockProverInput, anyhow::Error>
 where
@@ -46,10 +50,10 @@ where
 {
     match rpc_type {
         RpcType::Jerigon => {
-            jerigon::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await
+            jerigon::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
         }
         RpcType::Native => {
-            native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await
+            native::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
         }
     }
 }
@@ -63,7 +67,6 @@ where
     TransportT: Transport + Clone,
 {
     use itertools::Itertools;
-
     // For one block, we will fetch 128 previous blocks to get hashes instead of
     // 256. But for two consecutive blocks (odd and even) we would fetch 256
     // previous blocks in total. To overcome this, we add an offset so that we
@@ -198,7 +201,7 @@ where
 async fn fetch_other_block_data<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
-    checkpoint_state_trie_root: B256,
+    checkpoint_block_number: u64,
 ) -> anyhow::Result<OtherBlockData>
 where
     ProviderT: Provider<TransportT>,
@@ -209,7 +212,23 @@ where
         .await?;
     let target_block_number = target_block.header.number;
     let chain_id = cached_provider.get_provider().await?.get_chain_id().await?;
-    let prev_hashes = fetch_previous_block_hashes(cached_provider, target_block_number).await?;
+
+    // Grab interval checkpoint block state trie
+    let checkpoint_state_trie_root = cached_provider
+        .get_block(
+            checkpoint_block_number.into(),
+            BlockTransactionsKind::Hashes,
+        )
+        .await?
+        .header
+        .state_root;
+
+    let prev_hashes =
+        fetch_previous_block_hashes(cached_provider.clone(), target_block_number).await?;
+    let checkpoint_prev_hashes =
+        fetch_previous_block_hashes(cached_provider, checkpoint_block_number + 1) // include the checkpoint block
+            .await?
+            .map(|it| it.compat());
 
     let other_data = OtherBlockData {
         b_data: BlockLevelData {
@@ -225,28 +244,48 @@ where
                     .compat(),
                 block_gaslimit: target_block.header.gas_limit.into(),
                 block_chain_id: chain_id.into(),
-                block_base_fee: target_block
-                    .header
-                    .base_fee_per_gas
-                    .context("target block is missing field `base_fee_per_gas`")?
-                    .into(),
+                block_base_fee: if !cfg!(feature = "cdk_erigon") {
+                    target_block
+                        .header
+                        .base_fee_per_gas
+                        .context("target block is missing field `base_fee_per_gas`")?
+                        .into()
+                } else {
+                    target_block
+                        .header
+                        .base_fee_per_gas
+                        .unwrap_or_default() // `baseFee` may be disabled to enable 0 price calls (EIP-1559)
+                        .into()
+                },
                 block_gas_used: target_block.header.gas_used.into(),
                 block_bloom: target_block.header.logs_bloom.compat(),
-                parent_beacon_block_root: target_block
-                    .header
-                    .parent_beacon_block_root
-                    .context("target block is missing field `parent_beacon_block_root`")?
-                    .compat(),
-                block_blob_gas_used: target_block
-                    .header
-                    .blob_gas_used
-                    .context("target block is missing field `blob_gas_used`")?
-                    .into(),
-                block_excess_blob_gas: target_block
-                    .header
-                    .excess_blob_gas
-                    .context("target block is missing field `excess_blob_gas`")?
-                    .into(),
+                parent_beacon_block_root: if cfg!(feature = "eth_mainnet") {
+                    target_block
+                        .header
+                        .parent_beacon_block_root
+                        .context("target block is missing field `parent_beacon_block_root`")?
+                        .compat()
+                } else {
+                    H256::zero()
+                },
+                block_blob_gas_used: if cfg!(feature = "eth_mainnet") {
+                    target_block
+                        .header
+                        .blob_gas_used
+                        .context("target block is missing field `blob_gas_used`")?
+                        .into()
+                } else {
+                    U256::zero()
+                },
+                block_excess_blob_gas: if cfg!(feature = "eth_mainnet") {
+                    target_block
+                        .header
+                        .excess_blob_gas
+                        .context("target block is missing field `excess_blob_gas`")?
+                        .into()
+                } else {
+                    U256::zero()
+                },
             },
             b_hashes: BlockHashes {
                 prev_hashes: prev_hashes.map(|it| it.compat()).into(),
@@ -264,6 +303,14 @@ where
                 .collect(),
         },
         checkpoint_state_trie_root: checkpoint_state_trie_root.compat(),
+        checkpoint_consolidated_hash: consolidate_hashes::<Hasher, Field>(&checkpoint_prev_hashes),
+        burn_addr: if cfg!(feature = "cdk_erigon") {
+            // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+            //       Retrieve the actual burn address from `cdk-erigon`.
+            Some(Address::ZERO.compat())
+        } else {
+            None
+        },
     };
     Ok(other_data)
 }

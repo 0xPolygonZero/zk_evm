@@ -134,6 +134,8 @@
 //!     assert!(verifier_state.verify(block_proof.intern).is_ok());
 //! ```
 
+zk_evm_common::check_chain_features!();
+
 pub(crate) mod constants;
 pub mod proof_gen;
 pub mod proof_types;

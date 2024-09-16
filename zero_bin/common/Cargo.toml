@@ -33,6 +33,7 @@ directories = "5.0.1"
 # Local dependencies
 evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
+zk_evm_common = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
@@ -49,6 +50,10 @@ eth_mainnet = [
 cdk_erigon = [
     "evm_arithmetization/cdk_erigon",
     "proof_gen/cdk_erigon",
+]
+polygon_pos = [
+    "evm_arithmetization/polygon_pos",
+    "proof_gen/polygon_pos",
 ]
 
 [lints]

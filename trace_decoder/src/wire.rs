@@ -4,7 +4,7 @@
 //!
 //! Fortunately, their opcodes don't conflict, so we can have a single
 //! [`Instruction`] type, with shared parsing logic in this module, and bail on
-//! unsupported instructions later on in the frontend.
+//! unsupported instructions later on.
 //!
 //! This is fine because we don't care about failing fast when parsing.
 
@@ -68,7 +68,7 @@ pub enum Instruction {
     AccountLeaf {
         key: NonEmpty<Vec<U4>>,
         nonce: Option<u64>,
-        /// BUG(spec): see decode site [`account_leaf`].
+        /// BUG(spec): see parse site [`account_leaf`].
         balance: Option<U256>,
         has_code: bool,
         has_storage: bool,

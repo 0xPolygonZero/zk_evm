@@ -183,16 +183,7 @@
 #![allow(clippy::field_reassign_with_default)]
 #![feature(let_chains)]
 
-#[cfg_attr(
-    not(any(feature = "polygon_pos", feature = "cdk_erigon")),
-    cfg(feature = "eth_mainnet")
-)]
-#[cfg(any(
-    all(feature = "cdk_erigon", feature = "polygon_pos"),
-    all(feature = "cdk_erigon", feature = "eth_mainnet"),
-    all(feature = "polygon_pos", feature = "eth_mainnet"),
-))]
-compile_error!("Only a single network feature should be enabled at a time!");
+zk_evm_common::check_chain_features!();
 
 // Individual STARK processing units
 pub mod arithmetic;
@@ -243,4 +234,4 @@ pub use starky::config::StarkConfig;
 
 /// Returned type from a `SegmentDataIterator`, needed to prove all segments in
 /// a transaction batch.
-pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), SegmentError>;
+pub type AllData<F> = Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), SegmentError>;

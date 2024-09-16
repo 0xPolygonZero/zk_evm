@@ -1,9 +1,12 @@
+use std::marker::PhantomData;
+
 use ethereum_types::{Address, H256, U256};
+use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::GenericConfig;
+use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
@@ -11,7 +14,7 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofChallenges};
 
 use crate::all_stark::NUM_TABLES;
-use crate::util::{get_h160, get_h256, get_u256, h2u};
+use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
 use crate::witness::state::RegistersState;
 
 /// The default cap height used for our zkEVM STARK proofs.
@@ -27,7 +30,7 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     /// their cross-table lookup challenges.
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
-    pub public_values: PublicValues,
+    pub public_values: PublicValues<F>,
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
@@ -47,7 +50,8 @@ pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usiz
 
 /// Memory values which are public.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PublicValues {
+#[serde(bound = "")]
+pub struct PublicValues<F: RichField> {
     /// Trie hashes before the execution of the local state transition
     pub trie_roots_before: TrieRoots,
     /// Trie hashes after the execution of the local state transition.
@@ -60,7 +64,7 @@ pub struct PublicValues {
     /// 256 previous block hashes and current block's hash.
     pub block_hashes: BlockHashes,
     /// Extra block data that is specific to the current proof.
-    pub extra_block_data: ExtraBlockData,
+    pub extra_block_data: ExtraBlockData<F>,
     /// Registers to initialize the current proof.
     pub registers_before: RegistersData,
     /// Registers at the end of the current proof.
@@ -70,12 +74,12 @@ pub struct PublicValues {
     pub mem_after: MemCap,
 }
 
-impl PublicValues {
+impl<F: RichField> PublicValues<F> {
     /// Extracts public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     /// `len_mem_cap` is the length of the `MemBefore` and `MemAfter` caps.
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() >= PublicValuesTarget::SIZE);
 
         let mut offset = 0;
@@ -130,37 +134,64 @@ impl PublicValues {
 
 /// Memory values which are public once a final block proof is generated.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct FinalPublicValues {
+#[serde(bound = "")]
+pub struct FinalPublicValues<F: RichField, H: Hasher<F>> {
+    /// The chain id of this chian.
+    pub chain_id: U256,
     /// State trie root before the execution of this global state transition.
-    pub state_trie_root_before: H256,
+    pub checkpoint_state_trie_root: H256,
     /// State trie root after the execution of this global state transition.
-    pub state_trie_root_after: H256,
+    pub new_state_trie_root: H256,
+    /// A compact view of the block hashes before the previous checkpoint.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
+    /// A compact view of the previous block hashes, for connection past
+    /// checkpoints.
+    pub new_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
+
+    _phantom: PhantomData<H>,
 }
 
-impl FinalPublicValues {
+impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
     /// Extracts final public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
-        let mut offset = 0;
-        let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        let chain_id = pis[0].to_noncanonical_u64().into();
+        let mut offset = 1;
+        let checkpoint_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
-        let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        let new_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        offset += TARGET_HASH_SIZE;
+        let checkpoint_consolidated_hash =
+            pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
+        offset += NUM_HASH_OUT_ELTS;
+        let new_consolidated_hash = pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
 
         Self {
-            state_trie_root_before,
-            state_trie_root_after,
+            chain_id,
+            checkpoint_state_trie_root,
+            new_state_trie_root,
+            checkpoint_consolidated_hash,
+            new_consolidated_hash,
+            _phantom: PhantomData,
         }
     }
 }
 
-impl From<PublicValues> for FinalPublicValues {
-    fn from(value: PublicValues) -> Self {
+impl<H: Hasher<F>, F: RichField> From<PublicValues<F>> for FinalPublicValues<F, H> {
+    fn from(value: PublicValues<F>) -> Self {
+        let mut hash_payload = value.block_hashes.prev_hashes[1..].to_vec();
+        hash_payload.push(value.block_hashes.cur_hash);
+
         Self {
-            state_trie_root_before: value.trie_roots_before.state_root,
-            state_trie_root_after: value.trie_roots_after.state_root,
+            chain_id: value.block_metadata.block_chain_id,
+            checkpoint_state_trie_root: value.trie_roots_before.state_root,
+            new_state_trie_root: value.trie_roots_after.state_root,
+            checkpoint_consolidated_hash: value.extra_block_data.checkpoint_consolidated_hash,
+            new_consolidated_hash: consolidate_hashes::<H, F>(&hash_payload),
+            _phantom: PhantomData,
         }
     }
 }
@@ -170,56 +201,94 @@ impl From<PublicValues> for FinalPublicValues {
 /// order.
 #[derive(Eq, PartialEq, Debug)]
 pub struct FinalPublicValuesTarget {
+    /// The chain id of this chian.
+    pub chain_id: Target,
     /// State trie root before the execution of this global state transition.
-    pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
+    pub checkpoint_state_trie_root: [Target; TARGET_HASH_SIZE],
     /// State trie root after the execution of this global state transition.
-    pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
+    pub new_state_trie_root: [Target; TARGET_HASH_SIZE],
+    /// A compact view of the block hashes before the previous checkpoint.
+    pub checkpoint_consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
+    /// A compact view of the previous block hashes, for connection past
+    /// checkpoints.
+    pub new_consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
 }
 
 impl FinalPublicValuesTarget {
-    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2;
+    pub(crate) const SIZE: usize = 1 + TARGET_HASH_SIZE * 2 + NUM_HASH_OUT_ELTS * 2;
 
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
-        buffer.write_target_array(&self.state_trie_root_before)?;
-        buffer.write_target_array(&self.state_trie_root_after)?;
+        buffer.write_target(self.chain_id)?;
+        buffer.write_target_array(&self.checkpoint_state_trie_root)?;
+        buffer.write_target_array(&self.new_state_trie_root)?;
+        buffer.write_target_array(&self.checkpoint_consolidated_hash)?;
+        buffer.write_target_array(&self.new_consolidated_hash)?;
 
         Ok(())
     }
 
     /// Deserializes public value targets.
     pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
-        let state_trie_root_before = buffer.read_target_array()?;
-        let state_trie_root_after = buffer.read_target_array()?;
+        let chain_id = buffer.read_target()?;
+        let checkpoint_state_trie_root = buffer.read_target_array()?;
+        let new_state_trie_root = buffer.read_target_array()?;
+        let checkpoint_consolidated_hash = buffer.read_target_array()?;
+        let new_consolidated_hash = buffer.read_target_array()?;
 
         Ok(Self {
-            state_trie_root_before,
-            state_trie_root_after,
+            chain_id,
+            checkpoint_state_trie_root,
+            new_state_trie_root,
+            checkpoint_consolidated_hash,
+            new_consolidated_hash,
         })
     }
 
     /// Connects these `FinalPublicValuesTarget` with their corresponding
     /// counterpart in a full parent `PublicValuesTarget`.
-    pub(crate) fn connect_parent<F: RichField + Extendable<D>, const D: usize>(
+    pub(crate) fn connect_parent<F, C, const D: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        pv1: &PublicValuesTarget,
-    ) {
-        for i in 0..8 {
+        pv: &PublicValuesTarget,
+    ) where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F> + 'static,
+    {
+        builder.connect(self.chain_id, pv.block_metadata.block_chain_id);
+
+        for i in 0..TARGET_HASH_SIZE {
             builder.connect(
-                self.state_trie_root_before[i],
-                pv1.trie_roots_before.state_root[i],
+                self.checkpoint_state_trie_root[i],
+                pv.trie_roots_before.state_root[i],
             );
             builder.connect(
-                self.state_trie_root_after[i],
-                pv1.trie_roots_after.state_root[i],
+                self.new_state_trie_root[i],
+                pv.trie_roots_after.state_root[i],
             );
             // We only use `FinalPublicValues` at the final block proof wrapping stage,
             // where we should enforce consistency with the known checkpoint.
             builder.connect(
-                self.state_trie_root_before[i],
-                pv1.extra_block_data.checkpoint_state_trie_root[i],
+                self.checkpoint_state_trie_root[i],
+                pv.extra_block_data.checkpoint_state_trie_root[i],
             );
+        }
+
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.connect(
+                self.checkpoint_consolidated_hash[i],
+                pv.extra_block_data.checkpoint_consolidated_hash[i],
+            );
+        }
+
+        let mut hash_payload = pv.block_hashes.prev_hashes[TARGET_HASH_SIZE..].to_vec();
+        hash_payload.extend_from_slice(&pv.block_hashes.cur_hash);
+        let consolidated_hash = builder
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(hash_payload)
+            .elements;
+
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.connect(self.new_consolidated_hash[i], consolidated_hash[i]);
         }
     }
 }
@@ -292,6 +361,19 @@ impl BlockHashes {
             cur_hash,
         }
     }
+}
+
+/// Generates the consolidated hash for a sequence of block hashes.
+///
+/// It will pack 256 contiguous block hashes and hash them out.
+pub fn consolidate_hashes<H: Hasher<F>, F: RichField>(hashes: &[H256]) -> [F; NUM_HASH_OUT_ELTS] {
+    debug_assert!(hashes.len() == 256);
+
+    let payload = hashes.iter().flat_map(|&h| h256_limbs(h)).collect_vec();
+    H::hash_no_pad(&payload)
+        .to_vec()
+        .try_into()
+        .expect("Digests have fixed size.")
 }
 
 /// Metadata contained in a block header. Those are identical between
@@ -368,10 +450,13 @@ impl BlockMetadata {
 
 /// Additional block data that are specific to the local transaction being
 /// proven, unlike `BlockMetadata`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct ExtraBlockData {
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(bound = "")]
+pub struct ExtraBlockData<F: RichField> {
     /// The state trie digest of the checkpoint block.
     pub checkpoint_state_trie_root: H256,
+    /// The consolidated previous block hashes, at the checkpoint block.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
     /// The transaction count prior execution of the local state transition,
     /// starting at 0 for the initial transaction of a block.
     pub txn_number_before: U256,
@@ -386,18 +471,42 @@ pub struct ExtraBlockData {
     pub gas_used_after: U256,
 }
 
-impl ExtraBlockData {
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+impl<F: RichField> Default for ExtraBlockData<F> {
+    fn default() -> Self {
+        Self {
+            checkpoint_state_trie_root: H256::default(),
+            checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
+            txn_number_before: U256::default(),
+            txn_number_after: U256::default(),
+            gas_used_before: U256::default(),
+            gas_used_after: U256::default(),
+        }
+    }
+}
+
+/// Consolidated hash for the Genesis block, where all previous block hashes
+/// default to 0.
+pub const EMPTY_CONSOLIDATED_BLOCKHASH: [u64; NUM_HASH_OUT_ELTS] = [
+    5498946765822202150,
+    10724662260254836878,
+    9161393967331872654,
+    5704373722058976135,
+];
+
+impl<F: RichField> ExtraBlockData<F> {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() == ExtraBlockDataTarget::SIZE);
 
         let checkpoint_state_trie_root = get_h256(&pis[0..8]);
-        let txn_number_before = pis[8].to_canonical_u64().into();
-        let txn_number_after = pis[9].to_canonical_u64().into();
-        let gas_used_before = pis[10].to_canonical_u64().into();
-        let gas_used_after = pis[11].to_canonical_u64().into();
+        let checkpoint_consolidated_hash = pis[8..12].try_into().unwrap();
+        let txn_number_before = pis[12].to_canonical_u64().into();
+        let txn_number_after = pis[13].to_canonical_u64().into();
+        let gas_used_before = pis[14].to_canonical_u64().into();
+        let gas_used_after = pis[15].to_canonical_u64().into();
 
         Self {
             checkpoint_state_trie_root,
+            checkpoint_consolidated_hash,
             txn_number_before,
             txn_number_after,
             gas_used_before,
@@ -574,12 +683,14 @@ impl PublicValuesTarget {
 
         let ExtraBlockDataTarget {
             checkpoint_state_trie_root,
+            checkpoint_consolidated_hash,
             txn_number_before,
             txn_number_after,
             gas_used_before,
             gas_used_after,
         } = self.extra_block_data;
         buffer.write_target_array(&checkpoint_state_trie_root)?;
+        buffer.write_target_array(&checkpoint_consolidated_hash)?;
         buffer.write_target(txn_number_before)?;
         buffer.write_target(txn_number_after)?;
         buffer.write_target(gas_used_before)?;
@@ -661,6 +772,7 @@ impl PublicValuesTarget {
 
         let extra_block_data = ExtraBlockDataTarget {
             checkpoint_state_trie_root: buffer.read_target_array()?,
+            checkpoint_consolidated_hash: buffer.read_target_array()?,
             txn_number_before: buffer.read_target()?,
             txn_number_after: buffer.read_target()?,
             gas_used_before: buffer.read_target()?,
@@ -1229,7 +1341,7 @@ pub struct BlockHashesTarget {
     /// hash, i.e. `prev_hashes[0..8]`, is the oldest, and the rightmost,
     /// i.e. `prev_hashes[255 * 7..255 * 8]` is the hash of the parent block.
     pub(crate) prev_hashes: [Target; 2048],
-    // `Target` for the hash of the current block.
+    // `Target`s for the hash of the current block.
     pub(crate) cur_hash: [Target; 8],
 }
 
@@ -1302,6 +1414,9 @@ impl BlockHashesTarget {
 pub struct ExtraBlockDataTarget {
     /// `Target`s for the state trie digest of the checkpoint block.
     pub checkpoint_state_trie_root: [Target; 8],
+    /// `Target`s for the consolidated previous block hashes, at the checkpoint
+    /// block.
+    pub checkpoint_consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
     /// `Target` for the transaction count prior execution of the local state
     /// transition, starting at 0 for the initial trnasaction of a block.
     pub txn_number_before: Target,
@@ -1319,19 +1434,21 @@ pub struct ExtraBlockDataTarget {
 
 impl ExtraBlockDataTarget {
     /// Number of `Target`s required for the extra block data.
-    pub(crate) const SIZE: usize = 12;
+    pub(crate) const SIZE: usize = 16;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
         let checkpoint_state_trie_root = pis[0..8].try_into().unwrap();
-        let txn_number_before = pis[8];
-        let txn_number_after = pis[9];
-        let gas_used_before = pis[10];
-        let gas_used_after = pis[11];
+        let checkpoint_consolidated_hash = pis[8..12].try_into().unwrap();
+        let txn_number_before = pis[12];
+        let txn_number_after = pis[13];
+        let gas_used_before = pis[14];
+        let gas_used_after = pis[15];
 
         Self {
             checkpoint_state_trie_root,
+            checkpoint_consolidated_hash,
             txn_number_before,
             txn_number_after,
             gas_used_before,
@@ -1353,6 +1470,13 @@ impl ExtraBlockDataTarget {
                     condition,
                     ed0.checkpoint_state_trie_root[i],
                     ed1.checkpoint_state_trie_root[i],
+                )
+            }),
+            checkpoint_consolidated_hash: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    ed0.checkpoint_consolidated_hash[i],
+                    ed1.checkpoint_consolidated_hash[i],
                 )
             }),
             txn_number_before: builder.select(
@@ -1379,6 +1503,12 @@ impl ExtraBlockDataTarget {
                 ed1.checkpoint_state_trie_root[i],
             );
         }
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.connect(
+                ed0.checkpoint_consolidated_hash[i],
+                ed1.checkpoint_consolidated_hash[i],
+            );
+        }
         builder.connect(ed0.txn_number_before, ed1.txn_number_before);
         builder.connect(ed0.txn_number_after, ed1.txn_number_after);
         builder.connect(ed0.gas_used_before, ed1.gas_used_before);
@@ -1397,6 +1527,13 @@ impl ExtraBlockDataTarget {
                 condition.target,
                 ed0.checkpoint_state_trie_root[i],
                 ed1.checkpoint_state_trie_root[i],
+            );
+        }
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.conditional_assert_eq(
+                condition.target,
+                ed0.checkpoint_consolidated_hash[i],
+                ed1.checkpoint_consolidated_hash[i],
             );
         }
         builder.conditional_assert_eq(

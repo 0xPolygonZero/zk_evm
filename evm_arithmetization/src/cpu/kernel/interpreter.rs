@@ -5,7 +5,7 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
@@ -115,6 +115,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    pub(crate) accounts: BTreeMap<U256, usize>,
+    pub(crate) storage: BTreeMap<(U256, U256), usize>,
     pub(crate) next_txn_index: usize,
 }
 
@@ -154,7 +156,7 @@ impl<F: RichField> Interpreter<F> {
     pub(crate) fn new_with_generation_inputs(
         initial_offset: usize,
         initial_stack: Vec<U256>,
-        inputs: &GenerationInputs,
+        inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
     ) -> Self {
         debug_inputs(inputs);
@@ -216,7 +218,7 @@ impl<F: RichField> Interpreter<F> {
     }
 
     /// Initializes the interpreter state given `GenerationInputs`.
-    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
+    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs<F>) {
         // Initialize registers.
         let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
@@ -232,8 +234,12 @@ impl<F: RichField> Interpreter<F> {
 
         // Initialize the MPT's pointers.
         let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
-                .expect("Invalid MPT data for preinitialization");
+            load_linked_lists_and_txn_and_receipt_mpts(
+                &mut self.generation_state.accounts_pointers,
+                &mut self.generation_state.storage_pointers,
+                &inputs.tries,
+            )
+            .expect("Invalid MPT data for preinitialization");
 
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
@@ -252,6 +258,10 @@ impl<F: RichField> Interpreter<F> {
             preinit_accounts_ll_segment,
         );
         self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
+
+        // Initialize the accounts and storage BTrees.
+        self.generation_state.insert_all_slots_in_memory();
+        self.generation_state.insert_all_accounts_in_memory();
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);

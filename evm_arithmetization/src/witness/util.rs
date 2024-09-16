@@ -1,5 +1,4 @@
 use ethereum_types::U256;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
 use super::memory::DUMMY_MEMOP;
@@ -23,7 +22,7 @@ fn to_byte_checked(n: U256) -> u8 {
     res
 }
 
-fn to_bits_le<F: Field>(n: u8) -> [F; 8] {
+fn to_bits_le<F: RichField>(n: u8) -> [F; 8] {
     let mut res = [F::ZERO; 8];
     for (i, bit) in res.iter_mut().enumerate() {
         *bit = F::from_bool(n & (1 << i) != 0);
@@ -62,7 +61,11 @@ pub(crate) fn current_context_peek<F: RichField>(
         .get_with_init(MemoryAddress::new(context, segment, virt))
 }
 
-pub(crate) fn fill_channel_with_value<F: Field>(row: &mut CpuColumnsView<F>, n: usize, val: U256) {
+pub(crate) fn fill_channel_with_value<F: RichField>(
+    row: &mut CpuColumnsView<F>,
+    n: usize,
+    val: U256,
+) {
     let channel = &mut row.mem_channels[n];
     let val_limbs: [u64; 4] = val.0;
     for (i, limb) in val_limbs.into_iter().enumerate() {
