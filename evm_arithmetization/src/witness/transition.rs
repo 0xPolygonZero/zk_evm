@@ -6,6 +6,8 @@ use super::util::stack_pop_with_log_and_fill;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::opcodes::get_opcode;
+use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
@@ -16,10 +18,8 @@ use crate::witness::gas::gas_to_charge;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::*;
 use crate::witness::state::RegistersState;
-use crate::witness::util::mem_read_code_with_log_and_fill;
+use crate::witness::util::{mem_read_code_with_log_and_fill, mem_read_gp_with_log_and_fill};
 use crate::{arithmetic, logic};
-#[cfg(not(feature = "cdk_erigon"))]
-use crate::{cpu::membus::NUM_GP_CHANNELS, witness::util::mem_read_gp_with_log_and_fill};
 
 pub(crate) const EXC_STOP_CODE: u8 = 6;
 
@@ -384,11 +384,10 @@ where
         if !self.generate_jumpdest_analysis(dst as usize) {
             row.mem_channels[1].value[0] = F::ONE;
 
-            // We skip jump destinations verification with `cdk_erigon`.
-            #[cfg(not(feature = "cdk_erigon"))]
-            {
-                let gen_state = self.get_mut_generation_state();
+            let gen_state = self.get_mut_generation_state();
 
+            // We skip jump destinations verification with `cdk_erigon`.
+            if !cfg!(feature = "cdk_erigon") {
                 let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
                     NUM_GP_CHANNELS - 1,
                     MemoryAddress::new(
@@ -410,6 +409,19 @@ where
                         return Err(ProgramError::InvalidJumpDestination);
                     }
                     self.push_memory(jumpdest_bit_log);
+                }
+            } else {
+                if !gen_state.registers.is_kernel {
+                    // Perform a sanity check on the jumpdest, and abort if it is invalid.
+                    let addr = MemoryAddress::new(
+                        gen_state.registers.context,
+                        Segment::Code,
+                        dst as usize,
+                    );
+                    let jump_dst = gen_state.get_from_memory(addr);
+                    if jump_dst != get_opcode("JUMPDEST").into() {
+                        return Err(ProgramError::InvalidJumpDestination);
+                    }
                 }
             }
 
@@ -458,11 +470,10 @@ where
             self.incr_pc(1);
         }
 
-        // We skip jump destinations verification with `cdk_erigon`.
-        #[cfg(not(feature = "cdk_erigon"))]
-        {
-            let gen_state = self.get_mut_generation_state();
+        let gen_state = self.get_mut_generation_state();
 
+        // We skip jump destinations verification with `cdk_erigon`.
+        if !cfg!(feature = "cdk_erigon") {
             let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
                 NUM_GP_CHANNELS - 1,
                 MemoryAddress::new(
@@ -484,6 +495,19 @@ where
                     return Err(ProgramError::InvalidJumpiDestination);
                 }
                 self.push_memory(jumpdest_bit_log);
+            }
+        } else {
+            if should_jump && !gen_state.registers.is_kernel {
+                // Perform a sanity check on the jumpdest, and abort if it is invalid.
+                let addr = MemoryAddress::new(
+                    gen_state.registers.context,
+                    Segment::Code,
+                    dst.low_u32() as usize,
+                );
+                let jump_dst = gen_state.get_from_memory(addr);
+                if jump_dst != get_opcode("JUMPDEST").into() {
+                    return Err(ProgramError::InvalidJumpiDestination);
+                }
             }
         }
 
