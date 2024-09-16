@@ -3,9 +3,9 @@ use std::{fs::File, path::Path};
 use alloy::rpc::types::Header;
 use anyhow::{ensure, Context as _};
 use camino::Utf8Path;
-use prover::BlockProverInput;
 use serde::de::DeserializeOwned;
 use trace_decoder::{BlockTrace, OtherBlockData};
+use zero::prover::BlockProverInput;
 
 pub fn cases() -> anyhow::Result<Vec<Case>> {
     print!("loading test vectors...");

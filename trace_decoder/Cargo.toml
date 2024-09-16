@@ -54,26 +54,16 @@ glob = "0.3.1"
 libtest-mimic = "0.7.3"
 plonky2_maybe_rayon = { workspace = true }
 pretty_assertions = "1.4.0"
+zero = { workspace = true, features = ["eth_mainnet"] }
 pretty_env_logger = { workspace = true }
-prover = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 
-
 [features]
 default = ["eth_mainnet"]
-eth_mainnet = [
-    "evm_arithmetization/eth_mainnet",
-    "prover/eth_mainnet",
-]
-cdk_erigon = [
-    "evm_arithmetization/cdk_erigon",
-    "prover/cdk_erigon",
-]
-polygon_pos = [
-    "evm_arithmetization/polygon_pos",
-    "prover/polygon_pos",
-]
+eth_mainnet = ["evm_arithmetization/eth_mainnet"]
+cdk_erigon = ["evm_arithmetization/cdk_erigon"]
+polygon_pos = ["evm_arithmetization/polygon_pos"]
 
 [[bench]]
 name = "block_processing"

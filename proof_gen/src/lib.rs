@@ -145,5 +145,4 @@ pub mod verifier_state;
 
 // Re-exports
 
-pub use prover_state::ProverState;
 pub use verifier_state::VerifierState;
