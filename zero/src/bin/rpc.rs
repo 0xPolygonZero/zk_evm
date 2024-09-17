@@ -67,7 +67,7 @@ enum Command {
 }
 
 #[derive(Parser)]
-#[command(version = zero::version())]
+#[command(version = zero::version(), propagate_version = true)]
 struct Cli {
     #[clap(flatten)]
     pub(crate) config: RpcToolConfig,

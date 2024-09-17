@@ -14,7 +14,7 @@ use zero::{ops::register, tracing};
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Parser)]
-#[command(version = zero::version())]
+#[command(version = zero::version(), propagate_version = true)]
 struct Cli {
     #[clap(flatten)]
     paladin: paladin::config::Config,
