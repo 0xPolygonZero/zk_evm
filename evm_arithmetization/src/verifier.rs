@@ -16,7 +16,7 @@ use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, MEMORY_CTL_IDX, NUM_CTLS, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
@@ -196,11 +196,12 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 
     // Extra sums to add to the looked last value.
     // Only necessary for the Memory values.
-    let mut extra_looking_sums: HashMap<usize, Vec<F>> = HashMap::new();
+    let mut extra_looking_sums =
+        HashMap::from_iter((0..NUM_CTLS).map(|i| (i, vec![F::ZERO; config.num_challenges])));
 
     // Memory
     extra_looking_sums.insert(
-        *Table::Memory,
+        MEMORY_CTL_IDX,
         (0..config.num_challenges)
             .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
             .collect_vec(),

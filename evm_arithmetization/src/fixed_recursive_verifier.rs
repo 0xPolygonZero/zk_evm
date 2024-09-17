@@ -36,7 +36,8 @@ use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
 use crate::all_stark::{
-    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, MEMORY_CTL_IDX, NUM_CTLS,
+    NUM_TABLES,
 };
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
@@ -952,19 +953,23 @@ where
 
         // Extra sums to add to the looked last value. Only necessary for the Memory
         // values.
-        let mut extra_looking_sums: HashMap<usize, Vec<Target>> = HashMap::new();
+        let mut extra_looking_sums = HashMap::from_iter(
+            (0..NUM_CTLS).map(|i| (i, vec![builder.zero(); stark_config.num_challenges])),
+        );
 
         // Memory
-        let memory_sums = (0..stark_config.num_challenges)
-            .map(|c| {
-                get_memory_extra_looking_sum_circuit(
-                    &mut builder,
-                    &public_values,
-                    ctl_challenges.challenges[c],
-                )
-            })
-            .collect_vec();
-        extra_looking_sums.insert(*Table::Memory, memory_sums);
+        extra_looking_sums.insert(
+            MEMORY_CTL_IDX,
+            (0..stark_config.num_challenges)
+                .map(|c| {
+                    get_memory_extra_looking_sum_circuit(
+                        &mut builder,
+                        &public_values,
+                        ctl_challenges.challenges[c],
+                    )
+                })
+                .collect_vec(),
+        );
 
         // Verify the CTL checks
         let ctl_zs_first: [_; NUM_TABLES] = pis.map(|p| {
