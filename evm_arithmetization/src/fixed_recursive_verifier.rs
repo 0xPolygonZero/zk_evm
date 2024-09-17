@@ -825,7 +825,7 @@ where
         log::info!("create_segment_circuit");
         let root = Self::create_segment_circuit(&by_table, stark_config, true);
         log::info!("create root_no_keccak_tables");
-        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, true);
+        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, false);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let txn_aggregation =
             Self::create_txn_aggregation_circuit(&segment_aggregation, stark_config);

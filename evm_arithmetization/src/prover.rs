@@ -20,7 +20,7 @@ use starky::proof::{MultiProof, StarkProofWithMetadata};
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, MEMORY_CTL_IDX, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
@@ -190,7 +190,7 @@ where
 
         let mut extra_values = HashMap::new();
         extra_values.insert(
-            *Table::Memory,
+            MEMORY_CTL_IDX,
             get_memory_extra_looking_values(public_values),
         );
         check_ctls(
