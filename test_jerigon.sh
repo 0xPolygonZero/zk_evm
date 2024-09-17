@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -uxo pipefail
+set -uo pipefail
 
 #export CARGO_LOG=cargo::core::compiler::fingerprint=debug
 export RPC=
@@ -20,7 +20,7 @@ export RUST_MIN_STACK=67108864
 GITHASH=`git rev-parse --short HEAD`
 echo "Testing against jergion, current revision: $GITHASH."
 
-TESTNETBLOCKS="
+CIBLOCKS="
 1
 2
 3
@@ -81,30 +81,28 @@ do
   ROBIN+=" $i"
 done
 
-# Pick random blocks
-for i in {1..10}
-do
-  RANDOMBLOCKS+=" $((1 + $RANDOM % 688))"
-done
+TIP=688
+NUMRANDOMBLOCKS=10
+RANDOMBLOCKS=`shuf --input-range=0-$TIP -n $NUMRANDOMBLOCKS | sort`
 
-# TESTNETBLOCKS="$KNOWNFAILED $ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
-# BLOCKS="$ROBIN $RANDOMBLOCKS $TESTNETBLOCKS"
-#BLOCKS=`echo $TESTNETBLOCKS | sed 's/\s/\n/g'`
-
-SHUF=`shuf -e $TESTNETBLOCKS` 
-echo $SHUF
-
+# CIBLOCKS="$KNOWNFAILED $ROBIN $RANDOMBLOCKS $CIBLOCKS"
+#BLOCKS="$ROBIN $RANDOMBLOCKS $CIBLOCKS"
+#BLOCKS=`echo $CIBLOCKS | sed 's/\s/\n/g'`
+BLOCKS="$CIBLOCKS $KNOWNFAILED $RANDOMBLOCKS"
+BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 #echo "Testing:  $BLOCKS"
 printf "githash       block verdict\n" | tee -a witnesses/jerigon_results.txt
-printf "---------------------------\n" | tee -a witnesses/jerigon_results.txt
+echo "---------------------------" | tee -a witnesses/jerigon_results.txt
 
-for BLOCK in $KNOWNFAILED; do
+for BLOCK in $BLOCKS; do
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
   timeout 2m cargo run --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
-  echo "Checking block $BLOCK"
+  echo "Testing blocks:"
+  echo $BLOCKS
+  echo "Now testing block $BLOCK"
   zero_bin/tools/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
   if [ $EXITCODE -eq 0 ]
