@@ -32,8 +32,8 @@ pub(crate) fn initialize_mpts<F: RichField>(
     // Load all MPTs.
     let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
         load_linked_lists_and_txn_and_receipt_mpts(
-            &mut interpreter.generation_state.accounts_pointers,
-            &mut interpreter.generation_state.storage_pointers,
+            &mut interpreter.generation_state.state_ptrs.accounts_ptrs,
+            &mut interpreter.generation_state.state_ptrs.storage_ptrs,
             trie_inputs,
         )
         .expect("Invalid MPT data for preinitialization");

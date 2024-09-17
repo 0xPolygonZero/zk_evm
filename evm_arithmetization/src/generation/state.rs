@@ -8,7 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
-use super::linked_list::{AccountsLinkedList, StorageLinkedList};
+use super::linked_list::{AccountsLinkedList, LinkedList, LinkedListPtrs, StorageLinkedList};
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -376,15 +376,13 @@ pub struct GenerationState<F: RichField> {
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
-    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
-    /// of an account in the accounts linked list, and ptr is the respective
-    /// node address in memory.
-    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
+    // Provides quick access to pointers that reference the memory location
+    // of an accounts or storage access list node containing a specific key.
+    pub(crate) access_lists_ptrs: LinkedListPtrs,
 
-    /// Each entry contains the pair ((account_key, slot_key), ptr) where
-    /// account_key is the (hashed) key of an account, slot_key is the slot
-    /// key, and ptr is the respective node address in memory.
-    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
+    // Provides quick access to pointers that reference the memory location
+    // of a accounts or storage linked list node containing a specific key.
+    pub(crate) state_ptrs: LinkedListPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -395,8 +393,8 @@ impl<F: RichField> GenerationState<F> {
         let generation_state = self.get_mut_generation_state();
         let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
-                &mut generation_state.accounts_pointers,
-                &mut generation_state.storage_pointers,
+                &mut generation_state.state_ptrs.accounts_ptrs,
+                &mut generation_state.state_ptrs.storage_ptrs,
                 trie_inputs,
             )
             .expect("Invalid MPT data for preinitialization");
@@ -447,8 +445,8 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            accounts_pointers: BTreeMap::new(),
-            storage_pointers: BTreeMap::new(),
+            access_lists_ptrs: LinkedListPtrs::default(),
+            state_ptrs: LinkedListPtrs::default(),
             ger_prover_inputs,
         };
         let trie_root_ptrs =
@@ -564,8 +562,8 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            accounts_pointers: self.accounts_pointers.clone(),
-            storage_pointers: self.storage_pointers.clone(),
+            access_lists_ptrs: self.access_lists_ptrs.clone(),
+            state_ptrs: self.state_ptrs.clone(),
         }
     }
 
@@ -582,9 +580,9 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.accounts_pointers
+        self.state_ptrs.accounts_ptrs
             .clone_from(&segment_data.extra_data.accounts);
-        self.storage_pointers
+        self.state_ptrs.storage_ptrs
             .clone_from(&segment_data.extra_data.storage);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
@@ -600,7 +598,7 @@ impl<F: RichField> GenerationState<F> {
     /// the accounts `BtreeMap`.
     pub(crate) fn insert_all_slots_in_memory(&mut self) {
         let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        self.storage_pointers.extend(
+        self.state_ptrs.storage_ptrs.extend(
             StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
                 .expect("There must be at least an empty storage linked list")
                 .tuple_windows()
@@ -622,7 +620,7 @@ impl<F: RichField> GenerationState<F> {
 
     pub(crate) fn insert_all_accounts_in_memory(&mut self) {
         let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        self.accounts_pointers.extend(
+        self.state_ptrs.accounts_ptrs.extend(
             AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
                 .expect("There must be at least an empty accounts linked list")
                 .tuple_windows()

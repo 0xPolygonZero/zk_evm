@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 
 use anyhow::Result;
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
 
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
@@ -40,6 +42,20 @@ where
     offset: usize,
     pos: usize,
     _marker: PhantomData<T>,
+}
+
+// Provides quick access to pointers that reference the memory location
+// of a storage or accounts linked list node, containing a specific key.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct LinkedListPtrs {
+    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
+    /// of an account in the accounts linked list, and ptr is the respective
+    /// node address in memory.
+    pub(crate) accounts_ptrs: BTreeMap<U256, usize>,
+    /// Each entry contains the pair ((account_key, slot_key), ptr) where
+    /// account_key is the (hashed) key of an account, slot_key is the slot
+    /// key, and ptr is the respective node address in memory.
+    pub(crate) storage_ptrs: BTreeMap<(U256, U256), usize>,
 }
 
 pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>; N] {

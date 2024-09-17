@@ -410,8 +410,26 @@ impl<F: RichField> GenerationState<F> {
 
     /// Returns a pointer to an element in the list whose value is such that
     /// `value <= addr < next_value` and `addr` is the top of the stack.
-    fn run_next_addresses_insert(&self) -> Result<U256, ProgramError> {
+    fn run_next_addresses_insert(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
+
+        let (&pred_addr, &pred_ptr) = self
+            .access_lists_ptrs
+            .accounts_ptrs
+            .range(..=addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
+
+        if pred_addr != addr {
+            self.access_lists_ptrs.accounts_ptrs.insert(
+                addr,
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::AccessedAddressesLen),
+                )?,
+            );
+        }
+
         if let Some((([_, ptr], _), _)) = self
             .get_addresses_access_list()?
             .zip(self.get_addresses_access_list()?.skip(1))
@@ -420,6 +438,7 @@ impl<F: RichField> GenerationState<F> {
                 (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
             })
         {
+            assert_eq!(U256::from(pred_ptr), ptr);
             Ok(ptr / U256::from(2))
         } else {
             Ok((Segment::AccessedAddresses as usize).into())
@@ -429,13 +448,26 @@ impl<F: RichField> GenerationState<F> {
     /// Returns a pointer to an element in the list whose value is such that
     /// `value < addr == next_value` and addr is the top of the stack.
     /// If the element is not in the list, it loops forever
-    fn run_next_addresses_remove(&self) -> Result<U256, ProgramError> {
+    fn run_next_addresses_remove(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
+
+        let (_, &other_ptr) = self
+            .access_lists_ptrs
+            .accounts_ptrs
+            .range(..addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+        self.access_lists_ptrs
+            .accounts_ptrs
+            .remove(&addr)
+            .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+
         if let Some(([_, ptr], _)) = self
             .get_addresses_access_list()?
             .zip(self.get_addresses_access_list()?.skip(2))
             .find(|&(_, [next_addr, _])| next_addr == addr)
         {
+            assert_eq!(U256::from(other_ptr), ptr);
             Ok(ptr / U256::from(2))
         } else {
             Ok((Segment::AccessedAddresses as usize).into())
@@ -444,9 +476,29 @@ impl<F: RichField> GenerationState<F> {
 
     /// Returns a pointer to the predecessor of the top of the stack in the
     /// accessed storage keys list.
-    fn run_next_storage_insert(&self) -> Result<U256, ProgramError> {
+    fn run_next_storage_insert(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
+
+        let (&(pred_addr, pred_slot_key), &pred_ptr) = self
+            .access_lists_ptrs
+            .storage_ptrs
+            .range(..=(addr, key))
+            .next_back()
+            .unwrap_or((
+                &(U256::MAX, U256::zero()),
+                &(Segment::AccessedStorageKeys as usize),
+            ));
+        if (pred_addr != addr || pred_slot_key != key) {
+            self.access_lists_ptrs.storage_ptrs.insert(
+                (addr, key),
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::AccessedStorageKeysLen),
+                )?,
+            );
+        }
+
         if let Some((([.., ptr], _), _)) = self
             .get_storage_keys_access_list()?
             .zip(self.get_storage_keys_access_list()?.skip(1))
@@ -461,6 +513,7 @@ impl<F: RichField> GenerationState<F> {
                 },
             )
         {
+            assert_eq!(U256::from(pred_ptr), ptr);
             Ok(ptr / U256::from(4))
         } else {
             Ok((Segment::AccessedStorageKeys as usize).into())
@@ -469,14 +522,30 @@ impl<F: RichField> GenerationState<F> {
 
     /// Returns a pointer to the predecessor of the top of the stack in the
     /// accessed storage keys list.
-    fn run_next_storage_remove(&self) -> Result<U256, ProgramError> {
+    fn run_next_storage_remove(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
+
+        let (_, &other_ptr) = self
+            .access_lists_ptrs
+            .storage_ptrs
+            .range(..(addr, key))
+            .next_back()
+            .unwrap_or((
+                &(U256::MAX, U256::zero()),
+                &(Segment::AccessedStorageKeys as usize),
+            ));
+        self.access_lists_ptrs
+            .storage_ptrs
+            .remove(&(addr, key))
+            .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+
         if let Some(([.., ptr], _)) = self
             .get_storage_keys_access_list()?
             .zip(self.get_storage_keys_access_list()?.skip(2))
             .find(|&(_, [next_addr, next_key, ..])| (next_addr == addr && next_key == key))
         {
+            assert_eq!(U256::from(other_ptr), ptr);
             Ok(ptr / U256::from(4))
         } else {
             Ok((Segment::AccessedStorageKeys as usize).into())
@@ -489,13 +558,14 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (&pred_addr, &pred_ptr) = self
-            .accounts_pointers
+            .state_ptrs
+            .accounts_ptrs
             .range(..=addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
-            self.accounts_pointers.insert(
+            self.state_ptrs.accounts_ptrs.insert(
                 addr,
                 u256_to_usize(
                     self.memory
@@ -516,7 +586,8 @@ impl<F: RichField> GenerationState<F> {
         let key = stack_peek(self, 1)?;
 
         let (&(pred_addr, pred_slot_key), &pred_ptr) = self
-            .storage_pointers
+            .state_ptrs
+            .storage_ptrs
             .range(..=(addr, key))
             .next_back()
             .unwrap_or((
@@ -524,7 +595,7 @@ impl<F: RichField> GenerationState<F> {
                 &(Segment::StorageLinkedList as usize),
             ));
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
-            self.storage_pointers.insert(
+            self.state_ptrs.storage_ptrs.insert(
                 (addr, key),
                 u256_to_usize(
                     self.memory
@@ -544,11 +615,13 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &ptr) = self
-            .accounts_pointers
+            .state_ptrs
+            .accounts_ptrs
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        self.accounts_pointers
+        self.state_ptrs
+            .accounts_ptrs
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -564,14 +637,16 @@ impl<F: RichField> GenerationState<F> {
         let key = stack_peek(self, 1)?;
 
         let (_, &ptr) = self
-            .storage_pointers
+            .state_ptrs
+            .storage_ptrs
             .range(..(addr, key))
             .next_back()
             .unwrap_or((
                 &(U256::MAX, U256::zero()),
                 &(Segment::StorageLinkedList as usize),
             ));
-        self.storage_pointers
+        self.state_ptrs
+            .storage_ptrs
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -588,7 +663,8 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &pred_ptr) = self
-            .storage_pointers
+            .state_ptrs
+            .storage_ptrs
             .range(..(addr, U256::zero()))
             .next_back()
             .unwrap_or((
