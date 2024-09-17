@@ -821,8 +821,10 @@ where
             #[cfg(feature = "cdk_erigon")]
             poseidon,
         ];
+        log::info!("create_segment_circuit");
         let root = Self::create_segment_circuit(&by_table, stark_config, true);
-        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, false);
+        log::info!("create root_no_keccak_tables");
+        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, true);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let txn_aggregation =
             Self::create_txn_aggregation_circuit(&segment_aggregation, stark_config);
@@ -973,7 +975,7 @@ where
         // Now call the `verify_cross_table_lookups_circuit` function
         verify_cross_table_lookups_circuit(
             &mut builder,
-            all_cross_table_lookups(),
+            all_cross_table_lookups(enable_keccak_tables),
             ctl_zs_first,
             &extra_looking_sums,
             stark_config,

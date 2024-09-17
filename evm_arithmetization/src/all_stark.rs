@@ -64,7 +64,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
             mem_after_stark: MemoryContinuationStark::default(),
             #[cfg(feature = "cdk_erigon")]
             poseidon_stark: PoseidonStark::default(),
-            cross_table_lookups: all_cross_table_lookups(),
+            cross_table_lookups: all_cross_table_lookups(true),
         }
     }
 }
@@ -150,13 +150,12 @@ impl Table {
 }
 
 /// Returns all the `CrossTableLookups` used for proving the EVM.
-pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
-    vec![
+pub(crate) fn all_cross_table_lookups<F: Field>(
+    enable_keccak_tables: bool,
+) -> Vec<CrossTableLookup<F>> {
+    let mut lookups = vec![
         ctl_arithmetic(),
         ctl_byte_packing(),
-        ctl_keccak_sponge(),
-        ctl_keccak_inputs(),
-        ctl_keccak_outputs(),
         ctl_logic(),
         ctl_memory(),
         ctl_mem_before(),
@@ -168,7 +167,15 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_poseidon_general_input(),
         #[cfg(feature = "cdk_erigon")]
         ctl_poseidon_general_output(),
-    ]
+    ];
+
+    if enable_keccak_tables {
+        lookups.push(ctl_keccak_sponge());
+        lookups.push(ctl_keccak_inputs());
+        lookups.push(ctl_keccak_outputs());
+    }
+
+    lookups
 }
 
 /// `CrossTableLookup` for `ArithmeticStark`, to connect it with the `Cpu`
