@@ -312,6 +312,13 @@ where
         } else {
             None
         },
+        ger_data: if cfg!(feature = "cdk_erigon") {
+            // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+            //       Retrieve the actual GER data from `cdk-erigon`.
+            None
+        } else {
+            None
+        },
     };
     Ok(other_data)
 }
