@@ -172,7 +172,12 @@ pub(crate) fn set_jumpdest_analysis_inputs_rpc(
             } else {
                 &vec![]
             };
-            trace!("code: {:?} <============", &code);
+            trace!(
+                "code: {:?}, code_addr: {:?} <============",
+                &code,
+                &code_addr
+            );
+            trace!("code_map: {:?}", &code_map);
             prove_context_jumpdests(code, ctx_jumpdests)
         })
         .collect();

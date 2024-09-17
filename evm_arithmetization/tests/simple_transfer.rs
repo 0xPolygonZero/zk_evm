@@ -163,7 +163,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
-        jumpdest_tables: vec![],
+        jumpdest_tables: Default::default(),
     };
 
     let max_cpu_len_log = 20;

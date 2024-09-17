@@ -1,4 +1,4 @@
-use core::option::Option::None;
+use core::{convert::Into as _, option::Option::None};
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -6,6 +6,11 @@ use std::{
 };
 
 use alloy::primitives::address;
+use alloy::{
+    consensus::{Transaction, TxEnvelope},
+    primitives::TxKind,
+    rlp::Decodable as _,
+};
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
@@ -97,7 +102,7 @@ pub fn entrypoint(
                     running_gas_used += gas_used;
                     running_gas_used.into()
                 },
-                signed_txns: byte_code.into_iter().map(Into::into).collect(),
+                signed_txns: byte_code.clone().into_iter().map(Into::into).collect(),
                 withdrawals,
                 ger_data: None,
                 tries: TrieInputs {
@@ -109,14 +114,34 @@ pub fn entrypoint(
                 trie_roots_after: after,
                 checkpoint_state_trie_root,
                 checkpoint_consolidated_hash,
-                contract_code: contract_code
-                    .into_iter()
-                    .map(|it| (keccak_hash::keccak(&it), it))
-                    .collect(),
+                contract_code: {
+                    let cc = contract_code.into_iter();
+
+                    let initcodes =
+                        byte_code
+                            .iter()
+                            .filter_map(|nonempty_txn_raw| -> Option<Vec<u8>> {
+                                let tx_envelope =
+                                    TxEnvelope::decode(&mut &nonempty_txn_raw[..]).unwrap();
+                                match tx_envelope.to() {
+                                    TxKind::Create => Some(tx_envelope.input().to_vec()),
+                                    TxKind::Call(_address) => None,
+                                }
+                            });
+
+                    cc.chain(initcodes)
+                        .map(|it| (keccak_hash::keccak(&it), it))
+                        .collect()
+                },
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
                 burn_addr,
-                jumpdest_tables,
+                jumpdest_tables: {
+                    jumpdest_tables
+                        .into_iter()
+                        .collect::<Option<Vec<_>>>()
+                        .map(|vj| JumpDestTableWitness::merge(vj.iter()).0)
+                },
             },
         )
         .collect())

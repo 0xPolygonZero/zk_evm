@@ -48,10 +48,31 @@ KNOWNFAILED="
 37
 43
 65
+
 28
 444
-"
 
+43
+460
+461
+462
+463
+464
+465
+467
+468
+474
+475
+476
+566
+662
+664
+665
+667
+670
+72
+77
+"
 
 
 # 470..663 from Robin
@@ -78,11 +99,11 @@ echo $SHUF
 printf "githash       block verdict\n" | tee -a witnesses/jerigon_results.txt
 printf "---------------------------\n" | tee -a witnesses/jerigon_results.txt
 
-for BLOCK in {66..688}; do
+for BLOCK in $KNOWNFAILED; do
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
-  cargo run --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  timeout 2m cargo run --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   echo "Checking block $BLOCK"
   zero_bin/tools/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?

@@ -111,7 +111,7 @@ pub struct GenerationInputs<F: RichField> {
 
     /// A table listing each JUMPDESTs reached in each call context under
     /// associated code hash.
-    pub jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
+    pub jumpdest_tables: Option<JumpDestTableWitness>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
@@ -165,7 +165,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// A list of tables listing each JUMPDESTs reached in each call context
     /// under associated code hash.
-    pub jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
+    pub jumpdest_tables: Option<JumpDestTableWitness>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

@@ -7,6 +7,7 @@ use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use keccak_hash::keccak;
+use log::trace;
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -769,15 +770,18 @@ impl<F: RichField> GenerationState<F> {
         dbg!(&self.inputs.jumpdest_tables);
         eprintln!("Generating JUMPDEST tables");
         // w for witness
-        let txn_idx = self.next_txn_index - 1;
-        let rpcw = self.inputs.jumpdest_tables[txn_idx].as_ref();
-        let rpc = rpcw.map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+        // let txn_idx = self.next_txn_index - 1;
+        // let rpcw = self.inputs.jumpdest_tables[txn_idx].as_ref();contract_code
+        let rpcw = &self.inputs.jumpdest_tables;
+        let rpc = rpcw
+            .as_ref()
+            .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
 
         if let Some((_sim, simw)) = simulate_cpu_and_get_user_jumps("terminate_common", self) {
-            if rpcw.is_some() && rpcw.unwrap() != &simw.clone() {
+            if rpcw.is_some() && rpcw.clone().unwrap() != simw.clone() {
                 println!("SIMW {}", simw.clone());
-                println!("RPCW {}", rpcw.unwrap());
-                assert_eq!(simw.clone(), *rpcw.unwrap());
+                println!("RPCW {}", rpcw.clone().unwrap());
+                assert_eq!(simw.clone(), rpcw.clone().unwrap());
             }
         }
         self.jumpdest_table = rpc;
@@ -796,6 +800,11 @@ impl<F: RichField> GenerationState<F> {
         self.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from_iter(
             jumpdest_table.into_iter().map(|(ctx, jumpdest_table)| {
                 let code = self.get_code(ctx).unwrap();
+                trace!(
+                    "ctx: {ctx}, code_hash: {:?} code: {:?}",
+                    keccak(code.clone()),
+                    code
+                );
                 for offset in jumpdest_table.clone() {
                     jdtw.insert(keccak(code.clone()), ctx, offset);
                 }
