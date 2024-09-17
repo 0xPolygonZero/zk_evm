@@ -129,7 +129,7 @@ impl TrieKey {
     pub fn from_slot_position(pos: U256) -> Self {
         let mut bytes = [0; 32];
         pos.to_big_endian(&mut bytes);
-        Self::from_hash(keccak_hash::keccak(bytes))
+        Self::from_hash(keccak_hash::keccak(H256::from_slice(&bytes)))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")

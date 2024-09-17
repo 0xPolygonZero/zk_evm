@@ -107,7 +107,7 @@ fn insert_beacon_roots_update(
         (timestamp % chunk).into(),           // timestamp_idx
         ((timestamp % chunk) + chunk).into(), // root_idx
     ]);
-    state_access.insert(BEACON_ROOTS_CONTRACT_ADDRESS.0.into(), keys);
+    state_access.insert(BEACON_ROOTS_CONTRACT_ADDRESS.as_fixed_bytes().into(), keys);
 
     Ok(())
 }
