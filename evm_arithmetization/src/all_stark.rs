@@ -152,7 +152,7 @@ impl Table {
 /// The total number of CTLs used by the zkEVM.
 pub(crate) const NUM_CTLS: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 10 };
 /// The position of the Memory CTL within all CTLs of the zkEVM.
-pub(crate) const MEMORY_CTL_IDX: usize = 6;
+pub(crate) const MEMORY_CTL_IDX: usize = 3;
 
 /// Returns all the `CrossTableLookups` used for proving the EVM.
 pub(crate) fn all_cross_table_lookups<F: Field>(
