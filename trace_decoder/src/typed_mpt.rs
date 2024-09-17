@@ -126,9 +126,9 @@ impl TrieKey {
     pub fn from_address(address: Address) -> Self {
         Self::from_hash(keccak_hash::keccak(address))
     }
-    pub fn from_marker_slot(slot: U256) -> Self {
+    pub fn from_slot_position(pos: U256) -> Self {
         let mut bytes = [0; 32];
-        slot.to_big_endian(&mut bytes);
+        pos.to_big_endian(&mut bytes);
         Self::from_hash(keccak_hash::keccak(bytes))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {

@@ -476,7 +476,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         || (cfg!(feature = "polygon_pos")
                             // Include P256Verify for Polygon PoS
                             && addr.compat()
-                                == address!("0000000000000000000000000000000000000001"))
+                                == address!("0000000000000000000000000000000000000100"))
                 }
 
                 if !is_precompile(addr) {
@@ -609,7 +609,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         .context("missing scalable contract storage trie")?;
     let scalable_trim = trim_storage.entry(ADDRESS_SCALABLE_L2).or_default();
 
-    let timestamp_slot_key = TrieKey::from_marker_slot(U256::from(TIMESTAMP_STORAGE_POS.1));
+    let timestamp_slot_key = TrieKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
 
     let timestamp = scalable_storage
         .get(&timestamp_slot_key)
@@ -623,7 +623,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         (U256::from(LAST_BLOCK_STORAGE_POS.1), block.block_number),
         (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
     ] {
-        let slot = TrieKey::from_marker_slot(ix);
+        let slot = TrieKey::from_slot_position(ix);
         scalable_trim.insert(slot);
 
         // These values are never 0.
@@ -637,7 +637,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     let mut arr = [0; 64];
     (block.block_number - 1).to_big_endian(&mut arr[0..32]);
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-    let slot = TrieKey::from_hash(keccak_hash::keccak(&arr));
+    let slot = TrieKey::from_hash(keccak_hash::keccak(arr));
 
     scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
     scalable_trim.insert(slot);
@@ -663,7 +663,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         let mut arr = [0; 64];
         arr[0..32].copy_from_slice(&root.0);
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-        let slot = TrieKey::from_hash(keccak_hash::keccak(&arr));
+        let slot = TrieKey::from_hash(keccak_hash::keccak(arr));
 
         ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
         ger_trim.insert(slot);
@@ -717,7 +717,7 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
             U256::from_big_endian(parent_beacon_block_root.as_bytes()),
         ),
     ] {
-        let slot = TrieKey::from_marker_slot(ix);
+        let slot = TrieKey::from_slot_position(ix);
         beacon_trim.insert(slot);
 
         match u.is_zero() {

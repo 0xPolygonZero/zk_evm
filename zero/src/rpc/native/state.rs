@@ -97,7 +97,7 @@ fn insert_beacon_roots_update(
 ) -> anyhow::Result<()> {
     use alloy::primitives::U256;
     use evm_arithmetization::testing_utils::{
-        BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH,
+        BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
     };
 
     let timestamp = U256::from(block.header.timestamp);
@@ -107,7 +107,7 @@ fn insert_beacon_roots_update(
         (timestamp % chunk).into(),           // timestamp_idx
         ((timestamp % chunk) + chunk).into(), // root_idx
     ]);
-    state_access.insert(BEACON_ROOTS_CONTRACT_STATE_KEY.1.into(), keys);
+    state_access.insert(BEACON_ROOTS_CONTRACT_ADDRESS.0.into(), keys);
 
     Ok(())
 }
