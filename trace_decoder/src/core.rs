@@ -7,7 +7,7 @@ use std::{
 use alloy::primitives::address;
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H160, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -462,10 +462,24 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     state_mask.extend(state_trie.reporting_remove(addr)?)
                 }
 
-                let precompiled_addresses = address!("0000000000000000000000000000000000000001")
-                    ..address!("000000000000000000000000000000000000000a");
+                fn is_precompile(addr: H160) -> bool {
+                    let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
+                        address!("0000000000000000000000000000000000000001")
+                            ..address!("000000000000000000000000000000000000000a")
+                    } else {
+                        // Remove KZG Peval for non-Eth mainnet networks
+                        address!("0000000000000000000000000000000000000001")
+                            ..address!("0000000000000000000000000000000000000009")
+                    };
 
-                if !precompiled_addresses.contains(&addr.compat()) {
+                    precompiled_addresses.contains(&addr.compat())
+                        || (cfg!(feature = "polygon_pos")
+                            // Include P256Verify for Polygon PoS
+                            && addr.compat()
+                                == address!("0000000000000000000000000000000000000001"))
+                }
+
+                if !is_precompile(addr) {
                     // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
                     //                masking like this SHOULD be a space-saving optimization,
                     //                BUT if it's omitted, we actually get state root mismatches
