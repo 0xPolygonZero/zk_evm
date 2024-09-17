@@ -36,8 +36,7 @@ use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
 use crate::all_stark::{
-    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, MEMORY_CTL_IDX, NUM_CTLS,
-    NUM_TABLES,
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, MEMORY_CTL_IDX, NUM_TABLES,
 };
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
@@ -951,10 +950,11 @@ where
             prev_state = current_pi.challenger_state_after.clone();
         }
 
+        let num_ctls = all_cross_table_lookups::<F>(enable_keccak_tables).len();
         // Extra sums to add to the looked last value. Only necessary for the Memory
         // values.
         let mut extra_looking_sums = HashMap::from_iter(
-            (0..NUM_CTLS).map(|i| (i, vec![builder.zero(); stark_config.num_challenges])),
+            (0..num_ctls).map(|i| (i, vec![builder.zero(); stark_config.num_challenges])),
         );
 
         // Memory

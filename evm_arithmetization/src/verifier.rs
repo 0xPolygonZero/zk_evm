@@ -16,7 +16,7 @@ use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
 
-use crate::all_stark::{AllStark, Table, MEMORY_CTL_IDX, NUM_CTLS, NUM_TABLES};
+use crate::all_stark::{all_cross_table_lookups, AllStark, Table, MEMORY_CTL_IDX, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
@@ -194,10 +194,11 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         verify_initial_memory::<F, C, D>(&public_values, config)?;
     }
 
+    let num_ctls = all_cross_table_lookups::<F>(stark_proofs[*Table::KeccakSponge].is_some()).len();
     // Extra sums to add to the looked last value.
     // Only necessary for the Memory values.
     let mut extra_looking_sums =
-        HashMap::from_iter((0..NUM_CTLS).map(|i| (i, vec![F::ZERO; config.num_challenges])));
+        HashMap::from_iter((0..num_ctls).map(|i| (i, vec![F::ZERO; config.num_challenges])));
 
     // Memory
     extra_looking_sums.insert(

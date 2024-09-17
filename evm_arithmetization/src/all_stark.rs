@@ -150,7 +150,7 @@ impl Table {
 }
 
 /// The total number of CTLs used by the zkEVM.
-pub(crate) const NUM_CTLS: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 10 };
+// pub(crate) const NUM_CTLS: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 10 };
 /// The position of the Memory CTL within all CTLs of the zkEVM.
 pub(crate) const MEMORY_CTL_IDX: usize = 3;
 
@@ -161,8 +161,8 @@ pub(crate) fn all_cross_table_lookups<F: Field>(
     let mut lookups = vec![
         ctl_arithmetic(),
         ctl_byte_packing(),
-        ctl_logic(),
-        ctl_memory(),
+        ctl_logic(enable_keccak_tables),
+        ctl_memory(enable_keccak_tables),
         ctl_mem_before(),
         ctl_mem_after(),
         ctl_context_pruning(),
@@ -284,20 +284,22 @@ fn ctl_keccak_sponge<F: Field>() -> CrossTableLookup<F> {
 
 /// `CrossTableLookup` for `LogicStark` to connect it with the `Cpu` and
 /// `KeccakSponge` modules.
-fn ctl_logic<F: Field>() -> CrossTableLookup<F> {
+fn ctl_logic<F: Field>(enable_keccak_tables: bool) -> CrossTableLookup<F> {
     let cpu_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_logic(),
         cpu_stark::ctl_filter_logic(),
     );
     let mut all_lookers = vec![cpu_looking];
-    for i in 0..keccak_sponge_stark::num_logic_ctls() {
-        let keccak_sponge_looking = TableWithColumns::new(
-            *Table::KeccakSponge,
-            keccak_sponge_stark::ctl_looking_logic(i),
-            keccak_sponge_stark::ctl_looking_logic_filter(),
-        );
-        all_lookers.push(keccak_sponge_looking);
+    if enable_keccak_tables {
+        for i in 0..keccak_sponge_stark::num_logic_ctls() {
+            let keccak_sponge_looking = TableWithColumns::new(
+                *Table::KeccakSponge,
+                keccak_sponge_stark::ctl_looking_logic(i),
+                keccak_sponge_stark::ctl_looking_logic_filter(),
+            );
+            all_lookers.push(keccak_sponge_looking);
+        }
     }
     let logic_looked = TableWithColumns::new(*Table::Logic, logic::ctl_data(), logic::ctl_filter());
     CrossTableLookup::new(all_lookers, logic_looked)
@@ -305,7 +307,7 @@ fn ctl_logic<F: Field>() -> CrossTableLookup<F> {
 
 /// `CrossTableLookup` for `MemoryStark` to connect it with all the modules
 /// which need memory accesses.
-fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
+fn ctl_memory<F: Field>(enable_keccak_tables: bool) -> CrossTableLookup<F> {
     let cpu_memory_code_read = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_code_memory(),
@@ -362,7 +364,7 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
         )
     });
 
-    let all_lookers = vec![
+    let mut all_lookers: Vec<_> = vec![
         cpu_memory_code_read,
         cpu_push_write_ops,
         cpu_set_context_write,
@@ -370,14 +372,17 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     ]
     .into_iter()
     .chain(cpu_memory_gp_ops)
-    .chain(keccak_sponge_reads)
     .chain(byte_packing_ops)
-    .chain(iter::once(mem_before_ops));
+    .chain(iter::once(mem_before_ops))
+    .collect();
+
+    if enable_keccak_tables {
+        all_lookers.extend(keccak_sponge_reads);
+    }
 
     #[cfg(feature = "cdk_erigon")]
-    let all_lookers = all_lookers.chain(poseidon_general_reads);
+    all_lookers.extend(poseidon_general_reads);
 
-    let all_lookers = all_lookers.collect();
     let memory_looked = TableWithColumns::new(
         *Table::Memory,
         memory_stark::ctl_data(),
