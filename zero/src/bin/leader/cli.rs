@@ -8,6 +8,7 @@ use zero::rpc::RpcType;
 
 /// zero-bin leader config
 #[derive(Parser)]
+#[command(version = zero::version(), propagate_version = true)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
