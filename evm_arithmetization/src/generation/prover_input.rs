@@ -7,7 +7,7 @@ use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use keccak_hash::keccak;
-use log::trace;
+use log::{info, trace};
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -767,7 +767,7 @@ impl<F: RichField> GenerationState<F> {
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
 
-        eprintln!("Generating JUMPDEST tables");
+        info!("Generating JUMPDEST tables");
         dbg!(&self.inputs.jumpdest_tables);
         // w for witness
         // let txn_idx = self.next_txn_index - 1;
@@ -775,20 +775,18 @@ impl<F: RichField> GenerationState<F> {
         let rpcw = &self.inputs.jumpdest_tables;
         let rpc: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
-            .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+            .map(|jdt| set_jumpdest_analysis_inputs_rpc(&jdt, &self.inputs.contract_code));
 
         let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
 
         let (sim, simw): (Option<JumpDestTableProcessed>, Option<JumpDestTableWitness>) =
             sims.map_or_else(|| (None, None), |(sim, simw)| (Some(sim), Some(simw)));
 
-        if let (Some(rw), Some(sw)) = (rpcw, simw)
-            && rw != &sw
-        {
-            trace!("SIMW {}", sw);
-            trace!("RPCW {}", rw);
-            assert_eq!(rw, &sw);
-        }
+        if let (Some(rw), Some(sw)) = (rpcw, simw) && rw != &sw {
+                info!("SIMW {}", sw);
+                info!("RPCW {}", rw);
+                assert_eq!(rw, &sw);
+            }
 
         self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
 

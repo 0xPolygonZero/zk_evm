@@ -3,7 +3,7 @@ use std::ops::Deref as _;
 
 use alloy::{
     providers::Provider,
-    rpc::types::{eth::BlockId, Block, BlockTransactionsKind, Transaction},
+    rpc::types::{eth::BlockId, trace::geth::StructLog, Block, BlockTransactionsKind, Transaction},
     transports::Transport,
 };
 use alloy_primitives::Address;
@@ -161,15 +161,20 @@ where
         .map(|(h, t)| (Address::from(h.to_fixed_bytes()), t.clone()))
         .collect();
 
-    let structlog_opt = get_normalized_structlog(provider, &tx.hash).await?;
+    let structlog_opt: Option<Vec<StructLog>> = get_normalized_structlog(provider, &tx.hash)
+        .await
+        .ok()
+        .flatten();
 
     let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_log| {
         jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces).map_or_else(
             |error| {
-                debug!("JumpDestTable generation failed with reason: {}", error);
+                debug!("{:#?}: JumpDestTable generation failed with reason: {}", tx.hash, error);
                 None
             },
-            Some,
+            |jdt|{
+                debug!("{:#?}: JumpDestTable generation succeceeded with result: {}",tx.hash, jdt);
+                Some(jdt)},
         )
     });
 

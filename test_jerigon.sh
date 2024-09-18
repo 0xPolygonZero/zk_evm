@@ -163,9 +163,11 @@ for BLOCK in $BLOCKS; do
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
+  export RUST_LOG=rpc=trace
   timeout 2m cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
+  export RUST_LOG=info
   zero_bin/tools/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
   if [ $EXITCODE -eq 0 ]

@@ -137,7 +137,7 @@ where
         tx_receipt_fut,
         pre_trace_fut,
         diff_trace_fut,
-        structlog_trace_fut
+        structlog_trace_fut,
     )?;
 
     Ok((

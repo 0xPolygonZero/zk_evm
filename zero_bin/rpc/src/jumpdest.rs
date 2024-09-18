@@ -1,3 +1,5 @@
+use core::default::Default;
+use core::time::Duration;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -21,8 +23,17 @@ use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use keccak_hash::keccak;
 use structlogprime::normalize_structlog;
+use tokio::time::timeout;
 use trace_decoder::TxnTrace;
-use tracing::trace;
+use tracing::{instrument, trace};
+
+/// The maximum time we are willing to wait for a structlog before failing over
+/// to simulating the JumpDest analysis.
+const TIMEOUT_LIMIT: Duration = Duration::from_secs(10);
+
+/// Structure of Etheruem memory
+type Word = [u8; 32];
+const WORDSIZE: usize = std::mem::size_of::<Word>();
 
 /// Pass `true` for the components needed.
 fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDebugTracingOptions {
@@ -52,6 +63,7 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
+    // Optimization: It may be a better default to pull the stack immediately.
     let light_structlog_trace = provider
         .debug_trace_transaction(*tx_hash, structlog_tracing_options(false, false, false))
         .await?;
@@ -59,16 +71,19 @@ where
     let structlogs_opt: Option<Vec<StructLog>> = normalize_structlog(light_structlog_trace).await;
 
     let need_memory = structlogs_opt.is_some_and(trace_contains_create2);
+    trace!("Need structlog with memory: {need_memory}");
 
-    let structlog = provider
-        .debug_trace_transaction(
-            *tx_hash,
-            structlog_tracing_options(true, need_memory, false),
-        )
-        .await?;
+    let structlog = provider.debug_trace_transaction(
+        *tx_hash,
+        structlog_tracing_options(true, need_memory, false),
+    );
 
-    let ret = normalize_structlog(structlog).await;
-    Ok(ret)
+    match timeout(TIMEOUT_LIMIT, structlog).await {
+        Err(ellapsed_error) => Err(RpcError::Transport(TransportErrorKind::Custom(Box::new(
+            ellapsed_error,
+        )))),
+        Ok(structlog_res) => Ok(normalize_structlog(structlog_res?).await),
+    }
 }
 
 /// Provides a way to check in constant time if an address points to a
@@ -119,7 +134,7 @@ pub(crate) fn generate_jumpdest_table(
         );
         callee_addr_to_code_hash[&to_address]
     } else {
-        let init = tx.input.clone();
+        let init = &tx.input;
         keccak(init)
     };
 
@@ -240,33 +255,36 @@ pub(crate) fn generate_jumpdest_table(
                 ensure!(*offset <= U256::from(usize::MAX));
                 let offset: usize = offset.to();
                 ensure!(*size <= U256::from(usize::MAX));
+
                 let size: usize = size.to();
-                let memory_size = entry.memory.as_ref().unwrap().len();
-                let salt: [u8; 32] = salt.to_be_bytes();
+                let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
+                let salt: Word = salt.to_be_bytes();
 
                 ensure!(
-                    entry.memory.is_some() && size <= memory_size,
-                    "No or insufficient memory available for {op}. Contract size is {size} while memory size is {memory_size}."
+                    entry.memory.is_some() && offset + size <= memory_size,
+                    "Insufficient memory available for {op}. Contract has size {size} and is supposed to be stored between offset {offset} and {}, but memory size is only {memory_size}.", offset+size
                 );
                 let memory_raw: &[String] = entry.memory.as_ref().unwrap();
-                let memory_parsed: Vec<anyhow::Result<[u8; 32]>> = memory_raw
+                let memory_parsed: Vec<anyhow::Result<Word>> = memory_raw
                     .iter()
                     .map(|s| {
-                        let c = s.parse();
+                        // let c = s.parse();
+                        let c = U256::from_str_radix(s, 16);
                         ensure!(c.is_ok(), "Parsing memory failed.");
                         let a: U256 = c.unwrap();
-                        let d: [u8; 32] = a.to_be_bytes();
+                        let d: Word = a.to_be_bytes();
                         Ok(d)
                     })
                     .collect();
-                let mem_res: anyhow::Result<Vec<[u8; 32]>> = memory_parsed.into_iter().collect();
+                let mem_res: anyhow::Result<Vec<Word>> = memory_parsed.into_iter().collect();
                 let memory: Vec<u8> = mem_res?.concat();
 
                 let init_code = &memory[offset..offset + size];
-                let contract_address = tx.from.create2_from_code(salt, init_code);
-                ensure!(callee_addr_to_code_hash.contains_key(&contract_address));
-                let code_hash = callee_addr_to_code_hash[&contract_address];
-                call_stack.push((code_hash, next_ctx_available));
+                let init_code_hash = keccak(init_code);
+                // let contract_address = tx.from.create2_from_code(salt, init_code);
+                // ensure!(callee_addr_to_code_hash.contains_key(&contract_address));
+                // let code_hash = callee_addr_to_code_hash[&contract_address];
+                call_stack.push((init_code_hash, next_ctx_available));
 
                 next_ctx_available += 1;
                 prev_jump = None;
@@ -286,7 +304,9 @@ pub(crate) fn generate_jumpdest_table(
                 };
                 ensure!(
                     *counter <= U256::from(u64::MAX),
-                    "Operand for {op} caused overflow."
+                    "Operand for {op} caused overflow:  counter: {} is larger than u64::MAX {}",
+                    *counter,
+                    u64::MAX
                 );
                 let jump_target: u64 = counter.to();
 

@@ -35,7 +35,7 @@ export RAYON_NUM_THREADS=$num_procs
 
 #export RUST_MIN_STACK=33554432
 #export RUST_BACKTRACE=full
-#export RUST_LOG=info
+#export RUST_LOG=trace
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
@@ -102,7 +102,7 @@ if [[ $TEST_ONLY == "test_only" ]]; then
         rm $TEST_OUT_PATH
         exit
     else
-         echo "Failed to create proof witnesses. See \"zk_evm/tools/test.out\" for more details."
+         echo "Failed to create proof witnesses. See \"zk_evm/zero_bin/tools/test.out\" for more details."
         exit 1
     fi
 fi
