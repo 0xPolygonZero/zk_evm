@@ -38,6 +38,11 @@
 /// the accounts, storing a pointer to the copied account in the node.
 /// Computes the length of `SEGMENT_ACCOUNTS_LINKED_LIST` and 
 /// stores it in `GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE`.
+/// It also checks that the next node address is current address + 4
+/// and that all keys are strictly increasing.
+/// NOTE: It may be more efficient to check that the next node addres != U256_MAX
+/// (i.e. node was not deleted) and ensure that no node with repeated key
+/// is ever read.
 global store_initial_accounts:
     // stack: retdest
     PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
@@ -45,15 +50,24 @@ global store_initial_accounts:
     ADD
     // stack: cur_len, retdest
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    // stack: current_node_ptr, cur_len, retdest
+    DUP1
+    MLOAD_GENERAL
+    // stack: current_addr_key, current_node_ptr, cur_len', retdest
+    %assert_eq_const(@U256_MAX)
+    DUP1
     %next_account
+    // stack: next_node_ptr, current_node_ptr, cur_len', retdest
+    DUP1
+    SWAP2
+    %next_initial_account
+    %assert_eq(store_initial_accounts_end) // next_node_ptr ==  current_node_ptr + node_size
+    // stack: next_node_ptr, cur_len', retdest
+    
 loop_store_initial_accounts:
     // stack: current_node_ptr, cur_len, retdest
     %get_trie_data_size
-    DUP2
-    MLOAD_GENERAL
-    // stack: current_addr_key, cpy_ptr, current_node_ptr, cur_len, retdest
-    %eq_const(@U256_MAX)
-    %jumpi(store_initial_accounts_end)
+    // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
     %increment
     MLOAD_GENERAL
@@ -84,13 +98,35 @@ loop_store_initial_accounts:
     SWAP1 PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE 
     ADD
     SWAP1
-    // stack: current_node_ptr, cur_len', retdest
+    // Check next node ptr validity and strict keys monotonicity
+    DUP1
+    MLOAD_GENERAL
+    // stack: current_addr_key, current_node_ptr, cur_len', retdest
+    SWAP1
+    DUP1
     %next_account
+    // stack: next_node_ptr, current_node_ptr, current_addr_key, cur_len', retdest
+    DUP1
+    SWAP2
+    %next_initial_account
+    %assert_eq(store_initial_accounts_end_pop_key) // next_node_ptr ==  current_node_ptr + node_size
+    // stack: next_node_ptr, current_addr_key, cur_len', retdest
+    SWAP1
+    DUP2
+    MLOAD_GENERAL
+    %assert_gt // next_addr_key > current_addr_key
+    // stack: next_node_ptr, cur_len', retdest
     %jump(loop_store_initial_accounts)
 
+store_initial_accounts_end_pop_key:
+    // stack: next_node_ptr, current_addr_key, cur_len', retdest
+    SWAP1 POP
 store_initial_accounts_end:
-    %pop2
+    // stack: next_node_ptr, cur_len', retdest
+    %assert_eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
     // stack: cur_len, retdest
+    DUP1
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     JUMP
 
@@ -324,6 +360,11 @@ global remove_account:
 /// the accounts, storing a pointer to the copied account in the node.
 /// Computes the length of `SEGMENT_STORAGE_LINKED_LIST` and 
 /// checks against `GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE`.
+/// It also checks that the next node address is current address + 5
+/// and that all keys are strictly increasing.
+/// NOTE: It may be more efficient to check that the next node addres != U256_MAX
+/// (i.e. node was not deleted) and ensure that no node with repeated key
+/// is ever read.
 global store_initial_slots:
     // stack: retdest
     PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
@@ -331,15 +372,23 @@ global store_initial_slots:
     ADD
     // stack: cur_len, retdest
     PUSH @SEGMENT_STORAGE_LINKED_LIST
-    %next_slot
-
-loop_store_initial_slots:
-    // stack: current_node_ptr, cur_len, retdest
     DUP1
     MLOAD_GENERAL
     // stack: current_addr_key, current_node_ptr, cur_len, retdest
-    %eq_const(@U256_MAX)
-    %jumpi(store_initial_slots_end)
+    %assert_eq_const(@U256_MAX)
+
+    // stack: current_node_ptr, cur_len', retdest
+    DUP1
+    %next_slot
+    // stack: next_node_ptr, current_node_ptr, cur_len, retdest
+    DUP1
+    SWAP2
+    %next_initial_slot
+    %assert_eq(store_initial_slots_end) // next_node_ptr == current_node_ptr + node_size
+    // stack: next_node_ptr, cur_len', retdest
+ 
+loop_store_initial_slots:
+    // stack: current_node_ptr, cur_len, retdest
     DUP1
     %add_const(2)
     MLOAD_GENERAL
@@ -353,13 +402,65 @@ loop_store_initial_slots:
     SWAP1 PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
     ADD
     SWAP1
-    // stack: current_node_ptr, cur_len', retdest
+    // Check correctness of next node ptr and strict key monotonicity.
+    DUP1
+    MLOAD_GENERAL
+    // stack: current_addr_key, current_node_ptr, cur_len', retdest
+    SWAP1
+    DUP1
+    %increment
+    MLOAD_GENERAL
+    // stack: current_slot_key, current_node_ptr, current_addr_key, cur_len', retdest
+    SWAP1
+    DUP1
     %next_slot
+    // stack: next_node_ptr, current_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    DUP1
+    SWAP2
+    %next_initial_slot
+    %assert_eq(store_initial_slots_end_pop_keys) // next_node_ptr == current_node_ptr + node_size
+    // stack: next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    DUP1
+    DUP1
+    %increment
+    MLOAD_GENERAL
+    // stack: next_node_slot_key, next_node_ptr, next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    SWAP1
+    MLOAD_GENERAL
+    // stack: next_node_addr_key, next_node_slot_key, next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    SWAP3
+    LT
+    // stack: current_slot_key > next_node_slot_key, next_node_ptr, next_node_addr_key, current_addr_key, cur_len', retdest
+    SWAP2
+    SWAP1
+    SWAP3
+    // stack: current_addr_key, next_node_addr_key, current_slot_key > next_node_slot_key, next_node_ptr, cur_len', retdest
+    DUP2
+    DUP2
+    EQ
+    // stack: current_addr_key == next_node_addr_key, current_addr_key, next_node_addr_key, current_slot_key > next_node_slot_key, next_node_ptr, cur_len', retdest
+    SWAP1
+    SWAP3
+    MUL // AND
+    // stack  current_slot_key > next_node_slot_key AND current_addr_key == next_node_addr_key, next_node_addr_key, current_addr_key, next_node_ptr, cur_len', retdest
+    SWAP2
+    LT
+    ADD // OR
+    %assert_nonzero
     %jump(loop_store_initial_slots)
 
+store_initial_slots_end_pop_keys:
+    // stack: next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
+    SWAP2
+    %pop2
+
 store_initial_slots_end:
-    POP
+    // stack: next_node_ptr, cur_len', retdest
+    %assert_eq_const(@SEGMENT_STORAGE_LINKED_LIST)
+    
     // stack: cur_len, retdest
+    DUP1
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     JUMP
 
@@ -894,10 +995,22 @@ remove_all_slots_end:
     %next_account
 %endmacro
 
+%macro first_initial_account
+    // stack: empty
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    %next_initial_account
+%endmacro
+
 %macro next_account
     // stack: node_ptr
     %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
+    // stack: next_node_ptr
+%endmacro
+
+%macro next_initial_account
+    // stack: node_ptr
+    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE)
     // stack: next_node_ptr
 %endmacro
 
@@ -907,9 +1020,37 @@ remove_all_slots_end:
     %next_slot
 %endmacro
 
+%macro first_initial_slot
+    // stack: empty
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    %next_initial_slot
+%endmacro
+
 %macro next_slot
     // stack: node_ptr
     %add_const(@STORAGE_NEXT_NODE_PTR)
     MLOAD_GENERAL
     // stack: next_node_ptr
+%endmacro
+
+%macro next_initial_slot
+    // stack: node_ptr
+    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE)
+    // stack: next_node_ptr
+%endmacro
+
+%macro next_hash_node
+    // stack: hash_node_ptr
+    %add_const(4)
+    // stack: next_hash_node_ptr
+%endmacro
+
+// Skip over the the first three words (number of nibbles and keys)
+// and load the hash from memory.
+%macro get_hash
+    // stack: hash_node_ptr
+    %add_const(3)
+    // stack: next_ptr
+    MLOAD_GENERAL
+    // stack: hash
 %endmacro
