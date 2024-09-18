@@ -322,6 +322,8 @@ impl<F: RichField> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_access_lists(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        log::debug!("la ll = {:?}", self.get_addresses_access_list());
+        log::debug!("el bt = {:?}", self.access_lists_ptrs.accounts_ptrs);
         match input_fn.0[1].as_str() {
             "address_insert" => self.run_next_addresses_insert(),
             "storage_insert" => self.run_next_storage_insert(),
@@ -421,6 +423,12 @@ impl<F: RichField> GenerationState<F> {
             .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
 
         if pred_addr != addr {
+            log::debug!(
+                "adding {:?} at {:?}",
+                addr,
+                self.memory
+                    .read_global_metadata(GlobalMetadata::AccessedAddressesLen)
+            );
             self.access_lists_ptrs.accounts_ptrs.insert(
                 addr,
                 u256_to_usize(
@@ -429,6 +437,10 @@ impl<F: RichField> GenerationState<F> {
                 )?,
             );
         }
+
+        log::debug!("la addr = {:?}", addr);
+        log::debug!("la ll = {:?}", self.get_addresses_access_list());
+        log::debug!("el bt = {:?}", self.access_lists_ptrs.accounts_ptrs);
 
         if let Some((([_, ptr], _), _)) = self
             .get_addresses_access_list()?
@@ -456,7 +468,7 @@ impl<F: RichField> GenerationState<F> {
             .accounts_ptrs
             .range(..addr)
             .next_back()
-            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+            .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
         self.access_lists_ptrs
             .accounts_ptrs
             .remove(&addr)

@@ -82,7 +82,7 @@ impl<'a, const N: usize, T: LinkedListType> LinkedList<'a, N, T> {
         mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
-        if mem.is_empty() {
+        if mem.is_empty() || mem.len() % N != 0 {
             return Err(ProgramError::ProverInputError(InvalidInput));
         }
         Ok(Self {
