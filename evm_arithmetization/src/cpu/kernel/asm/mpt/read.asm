@@ -147,5 +147,5 @@ global mpt_read_leaf_found:
     %add_const(2) // The value pointer is located after num_nibbles and the key.
     // stack: value_ptr_ptr, retdest
     SWAP1
-    // For leafs we return the pointer
+    // For leaves, we return the pointer
     JUMP

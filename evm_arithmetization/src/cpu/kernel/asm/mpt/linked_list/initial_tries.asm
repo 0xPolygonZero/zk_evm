@@ -1,5 +1,6 @@
 
 global set_initial_state_trie:
+    // stack: retdest
     PUSH set_initial_state_trie_after
     %first_initial_slot // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)

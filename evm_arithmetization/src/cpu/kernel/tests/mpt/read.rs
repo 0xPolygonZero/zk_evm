@@ -42,7 +42,7 @@ fn mpt_read() -> Result<()> {
     interpreter.run()?;
 
     assert_eq!(interpreter.stack().len(), 1);
-    // mp_read returns a pointer to the accounts pointer
+    // mpt_read returns a pointer to the accounts pointer
     let result_ptr_ptr = interpreter.stack()[0].as_usize();
     let result_ptr = interpreter.get_trie_data()[result_ptr_ptr..][..4][0].as_usize();
     let result = &interpreter.get_trie_data()[result_ptr..][..4];
