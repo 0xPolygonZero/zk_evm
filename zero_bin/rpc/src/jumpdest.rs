@@ -212,7 +212,7 @@ pub(crate) fn generate_jumpdest_table(
                     "Opcode {op} expected {operands} operands at  the EVM stack, but only {} were found.",
                     evm_stack.len()
                 );
-                let [_value, _offset, _size, _salt, ..] = evm_stack[..] else {
+                let [_value, _offset, _size, ..] = evm_stack[..] else {
                     unreachable!()
                 };
 
