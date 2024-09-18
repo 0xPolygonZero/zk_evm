@@ -1435,8 +1435,8 @@ where
         prev_timestamp: Target,
         timestamp: Target,
     ) {
-        // We check that timestamp > prev_timestamp.
-        // In other words, we range-check `diff = timestamp - prev_timestamp - 1`
+        // We check that timestamp >= prev_timestamp.
+        // In other words, we range-check `diff = timestamp - prev_timestamp`
         // between 0 and 2ˆ32.
         let diff = builder.sub(timestamp, prev_timestamp);
         builder.range_check(diff, 32);
