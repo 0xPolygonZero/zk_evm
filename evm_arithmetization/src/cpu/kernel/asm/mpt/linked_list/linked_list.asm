@@ -450,6 +450,7 @@ loop_store_initial_slots:
     %jump(loop_store_initial_slots)
 
 store_initial_slots_end_pop_keys:
+    // stack: next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
     SWAP2
     %pop2
 
