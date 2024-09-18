@@ -775,18 +775,20 @@ impl<F: RichField> GenerationState<F> {
         let rpcw = &self.inputs.jumpdest_tables;
         let rpc: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
-            .map(|jdt| set_jumpdest_analysis_inputs_rpc(&jdt, &self.inputs.contract_code));
+            .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
 
         let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
 
         let (sim, simw): (Option<JumpDestTableProcessed>, Option<JumpDestTableWitness>) =
             sims.map_or_else(|| (None, None), |(sim, simw)| (Some(sim), Some(simw)));
 
-        if let (Some(rw), Some(sw)) = (rpcw, simw) && rw != &sw {
-                info!("SIMW {}", sw);
-                info!("RPCW {}", rw);
-                assert_eq!(rw, &sw);
-            }
+        if let (Some(rw), Some(sw)) = (rpcw, simw)
+            && rw != &sw
+        {
+            info!("SIMW {}", sw);
+            info!("RPCW {}", rw);
+            assert_eq!(rw, &sw);
+        }
 
         self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
 

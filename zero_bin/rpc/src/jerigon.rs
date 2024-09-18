@@ -169,12 +169,19 @@ where
     let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_log| {
         jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces).map_or_else(
             |error| {
-                debug!("{:#?}: JumpDestTable generation failed with reason: {}", tx.hash, error);
+                debug!(
+                    "{:#?}: JumpDestTable generation failed with reason: {}",
+                    tx.hash, error
+                );
                 None
             },
-            |jdt|{
-                debug!("{:#?}: JumpDestTable generation succeceeded with result: {}",tx.hash, jdt);
-                Some(jdt)},
+            |jdt| {
+                debug!(
+                    "{:#?}: JumpDestTable generation succeceeded with result: {}",
+                    tx.hash, jdt
+                );
+                Some(jdt)
+            },
         )
     });
 

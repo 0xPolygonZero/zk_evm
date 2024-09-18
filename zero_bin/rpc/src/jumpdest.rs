@@ -249,7 +249,7 @@ pub(crate) fn generate_jumpdest_table(
                     "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
                     evm_stack.len()
                 );
-                let [_value, offset, size, salt, ..] = evm_stack[..] else {
+                let [_value, offset, size, _salt, ..] = evm_stack[..] else {
                     unreachable!()
                 };
                 ensure!(*offset <= U256::from(usize::MAX));
@@ -258,7 +258,7 @@ pub(crate) fn generate_jumpdest_table(
 
                 let size: usize = size.to();
                 let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
-                let salt: Word = salt.to_be_bytes();
+                // let salt: Word = salt.to_be_bytes();
 
                 ensure!(
                     entry.memory.is_some() && offset + size <= memory_size,

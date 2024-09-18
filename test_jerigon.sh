@@ -152,7 +152,7 @@ RANDOMBLOCKS=`shuf --input-range=0-$TIP -n $NUMRANDOMBLOCKS | sort`
 #BLOCKS="$ROBIN $RANDOMBLOCKS $CIBLOCKS"
 #BLOCKS=`echo $CIBLOCKS | sed 's/\s/\n/g'`
 #BLOCKS="$CIBLOCKS $KNOWNFAILED $RANDOMBLOCKS"
-BLOCKS="$DECODING"
+BLOCKS="$DECODING $CREATE2"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 #echo "Testing:  $BLOCKS"
