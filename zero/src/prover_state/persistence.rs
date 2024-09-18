@@ -35,8 +35,14 @@ const KERNEL_HASH_PREFIX: usize = 8;
 /// kernel to determine if the circuit is compatible with our current binary. If
 /// the kernel hash of the circuit that we are loading in from disk differs,
 /// then using these circuits would cause failures during proof generation
-pub static CIRCUIT_VERSION: Lazy<String> =
-    Lazy::new(|| hex::encode(KERNEL.hash())[..KERNEL_HASH_PREFIX].to_string());
+pub static KERNEL_HASH: Lazy<&'static str> = Lazy::new(|| {
+    String::leak(
+        hex::encode(KERNEL.hash())
+            .chars()
+            .take(KERNEL_HASH_PREFIX)
+            .collect(),
+    )
+});
 
 fn get_serializers() -> (
     DefaultGateSerializer,
@@ -126,7 +132,7 @@ impl DiskResource for BaseProverResource {
             "{}/{}_base_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             p.get_configuration_digest()
         )
     }
@@ -162,7 +168,7 @@ impl DiskResource for MonolithicProverResource {
             "{}/{}_monolithic_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             p.get_configuration_digest()
         )
     }
@@ -197,7 +203,7 @@ impl DiskResource for RecursiveCircuitResource {
             "{}/{}_{}_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             circuit_type.as_short_str(),
             size
         )
@@ -241,7 +247,7 @@ impl DiskResource for VerifierResource {
             "{}/{}_{}_{}",
             circuit_dir(),
             VERIFIER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             p.get_configuration_digest()
         )
     }
