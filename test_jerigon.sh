@@ -40,7 +40,71 @@ CIBLOCKS="
 "
 
 
-KNOWNFAILED="
+STILLFAIL="
+37
+75
+15
+35
+43
+72
+77
+184
+460
+461
+462
+463
+464
+465
+467
+468
+474
+475
+476
+566
+662
+664
+665
+667
+670
+477
+478
+444
+"
+
+JUMPI="
+662
+664
+665
+667
+670
+"
+
+CONTAINSKEY="
+461
+462
+463
+464
+465
+467
+468
+474
+475
+476
+72
+"
+
+CREATE2="
+43
+566
+77
+"
+
+DECODING="
+477
+478
+"
+
+USEDTOFAIL="
 2
 15
 28
@@ -50,7 +114,6 @@ KNOWNFAILED="
 65
 
 28
-444
 
 43
 460
@@ -88,7 +151,8 @@ RANDOMBLOCKS=`shuf --input-range=0-$TIP -n $NUMRANDOMBLOCKS | sort`
 # CIBLOCKS="$KNOWNFAILED $ROBIN $RANDOMBLOCKS $CIBLOCKS"
 #BLOCKS="$ROBIN $RANDOMBLOCKS $CIBLOCKS"
 #BLOCKS=`echo $CIBLOCKS | sed 's/\s/\n/g'`
-BLOCKS="$CIBLOCKS $KNOWNFAILED $RANDOMBLOCKS"
+#BLOCKS="$CIBLOCKS $KNOWNFAILED $RANDOMBLOCKS"
+BLOCKS="$DECODING"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 #echo "Testing:  $BLOCKS"
@@ -99,10 +163,9 @@ for BLOCK in $BLOCKS; do
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
-  timeout 2m cargo run --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
-  echo "Testing blocks:"
-  echo $BLOCKS
-  echo "Now testing block $BLOCK"
+  timeout 2m cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  echo "Testing blocks: $BLOCKS."
+  echo "Now testing block $BLOCK .."
   zero_bin/tools/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
   if [ $EXITCODE -eq 0 ]

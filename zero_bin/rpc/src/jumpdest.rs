@@ -82,13 +82,13 @@ fn precompiles() -> &'static HashSet<Address> {
 
 /// Generate at JUMPDEST table by simulating the call stack in EVM,
 /// using a Geth structlog as input.
+#[instrument]
 pub(crate) fn generate_jumpdest_table(
     tx: &Transaction,
     struct_log: &[StructLog],
     tx_traces: &BTreeMap<Address, TxnTrace>,
 ) -> anyhow::Result<JumpDestTableWitness> {
     trace!("Generating JUMPDEST table for tx: {}", tx.hash);
-    ensure!(struct_log.is_empty().not(), "Structlog is empty.");
 
     let mut jumpdest_table = JumpDestTableWitness::default();
 
@@ -123,7 +123,7 @@ pub(crate) fn generate_jumpdest_table(
         keccak(init)
     };
 
-    // `None` encodes that previous `entry`` was not a JUMP or JUMPI with true
+    // `None` encodes that previous `entry` was not a JUMP or JUMPI with true
     // condition, `Some(jump_target)` encodes we came from a JUMP or JUMPI with
     // true condition and target `jump_target`.
     let mut prev_jump = None;

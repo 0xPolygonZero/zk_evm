@@ -767,24 +767,30 @@ impl<F: RichField> GenerationState<F> {
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
 
-        dbg!(&self.inputs.jumpdest_tables);
         eprintln!("Generating JUMPDEST tables");
+        dbg!(&self.inputs.jumpdest_tables);
         // w for witness
         // let txn_idx = self.next_txn_index - 1;
         // let rpcw = self.inputs.jumpdest_tables[txn_idx].as_ref();contract_code
         let rpcw = &self.inputs.jumpdest_tables;
-        let rpc = rpcw
+        let rpc: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
             .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
 
-        if let Some((_sim, simw)) = simulate_cpu_and_get_user_jumps("terminate_common", self) {
-            if rpcw.is_some() && rpcw.clone().unwrap() != simw.clone() {
-                println!("SIMW {}", simw.clone());
-                println!("RPCW {}", rpcw.clone().unwrap());
-                assert_eq!(simw.clone(), rpcw.clone().unwrap());
-            }
+        let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
+
+        let (sim, simw): (Option<JumpDestTableProcessed>, Option<JumpDestTableWitness>) =
+            sims.map_or_else(|| (None, None), |(sim, simw)| (Some(sim), Some(simw)));
+
+        if let (Some(rw), Some(sw)) = (rpcw, simw)
+            && rw != &sw
+        {
+            trace!("SIMW {}", sw);
+            trace!("RPCW {}", rw);
+            assert_eq!(rw, &sw);
         }
-        self.jumpdest_table = rpc;
+
+        self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
 
         Ok(())
     }
