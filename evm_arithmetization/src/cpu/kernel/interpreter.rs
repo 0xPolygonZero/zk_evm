@@ -701,9 +701,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
     }
 
     fn log(&self, level: Level, msg: String) {
-        // if !self.is_jumpdest_analysis {
+        if !self.is_jumpdest_analysis {
             log::log!(level, "{}", msg);
-        // }
+        }
     }
 }
 
