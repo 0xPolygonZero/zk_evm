@@ -1439,7 +1439,6 @@ where
         // In other words, we range-check `diff = timestamp - prev_timestamp - 1`
         // between 0 and 2ˆ32.
         let diff = builder.sub(timestamp, prev_timestamp);
-        let diff = builder.add_const(diff, F::NEG_ONE);
         builder.range_check(diff, 32);
     }
     fn connect_extra_public_values(
