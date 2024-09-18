@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -458,10 +459,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     state_mask.insert(TrieKey::from_address(addr));
                 } else {
                     // Simple state access
-                    let precompiled_addresses = address!("0000000000000000000000000000000000000001")
-                        ..address!("000000000000000000000000000000000000000a");
+                    const PRECOMPILE_ADDRESSES: Range<alloy::primitives::Address> =
+                        address!("0000000000000000000000000000000000000001")
+                            ..address!("000000000000000000000000000000000000000a");
 
-                    if receipt.status || !precompiled_addresses.contains(&addr.compat()) {
+                    if receipt.status || !PRECOMPILE_ADDRESSES.contains(&addr.compat()) {
                         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
                         //                masking like this SHOULD be a space-saving optimization,
                         //                BUT if it's omitted, we actually get state root mismatches
