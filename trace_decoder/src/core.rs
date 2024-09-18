@@ -624,7 +624,6 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
     ] {
         let slot = TrieKey::from_slot_position(ix);
-        scalable_trim.insert(slot);
 
         // These values are never 0.
         scalable_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
