@@ -18,10 +18,10 @@
 - changed-files:
   - any-glob-to-any-file: proof_gen/**
 
-# Add 'crate: zero_bin' label to any changes within 'zero_bin' folder.
+# Add 'crate: zero_bin' label to any changes within 'zero' folder.
 'crate: zero_bin':
 - changed-files:
-  - any-glob-to-any-file: zero_bin/**
+  - any-glob-to-any-file: zero/**
 
 # Add 'specs' label to any changes within 'docs' or `book` folder.
 'specs':

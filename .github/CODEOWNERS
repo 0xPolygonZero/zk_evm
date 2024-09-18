@@ -1,6 +1,6 @@
 * @muursh @Nashtare
 /evm_arithmetization/ @wborgeaud @muursh @Nashtare @LindaGuiga
-/zero_bin/ @muursh @Nashtare @atanmarko
+/zero/ @muursh @Nashtare @atanmarko
 /smt_trie/ @0xaatif @muursh @Nashtare
 /mpt_trie/ @0xaatif @Nashtare @muursh
 /trace_decoder/ @0xaatif @muursh @Nashtare

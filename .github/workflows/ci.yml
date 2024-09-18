@@ -140,13 +140,7 @@ jobs:
 
       - name: Test in zero_bin subdirectory
         run: |
-          cargo test --manifest-path zero_bin/common/Cargo.toml
-          cargo test --manifest-path zero_bin/leader/Cargo.toml
-          cargo test --manifest-path zero_bin/ops/Cargo.toml
-          cargo test --manifest-path zero_bin/prover/Cargo.toml
-          cargo test --manifest-path zero_bin/rpc/Cargo.toml
-          cargo test --manifest-path zero_bin/verifier/Cargo.toml
-          cargo test --manifest-path zero_bin/worker/Cargo.toml
+          cargo test --manifest-path zero/Cargo.toml
 
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
@@ -188,9 +182,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: |
-          pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19807080.json
+        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -201,9 +193,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: |
-          pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19807080.json test_only
+        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json test_only
 
   multi_blocks_proof_regular:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
@@ -214,9 +204,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: |
-          pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b3_b6.json
+        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
 
   lints:
     name: Rustdoc, Formatting and Clippy
@@ -244,7 +232,7 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings -A incomplete-features
 
       - name: Run cargo clippy (with `cdk_erigon` flag)
-        run: cargo clippy --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
+        run: cargo clippy --package zero --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
 
       - name: Rustdoc
         run: cargo doc --all
