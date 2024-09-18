@@ -86,6 +86,8 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             log::debug!("Simulating CPU for jumpdest analysis.");
 
+            log::debug!("el bt = {:?}", interpreter.generation_state.access_lists_ptrs.accounts_ptrs);
+
             let _ = interpreter.run();
 
             log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
@@ -699,9 +701,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
     }
 
     fn log(&self, level: Level, msg: String) {
-        if !self.is_jumpdest_analysis {
+        // if !self.is_jumpdest_analysis {
             log::log!(level, "{}", msg);
-        }
+        // }
     }
 }
 

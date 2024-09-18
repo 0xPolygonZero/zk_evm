@@ -322,8 +322,6 @@ impl<F: RichField> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_access_lists(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        log::debug!("la ll = {:?}", self.get_addresses_access_list());
-        log::debug!("el bt = {:?}", self.access_lists_ptrs.accounts_ptrs);
         match input_fn.0[1].as_str() {
             "address_insert" => self.run_next_addresses_insert(),
             "storage_insert" => self.run_next_storage_insert(),
@@ -437,10 +435,6 @@ impl<F: RichField> GenerationState<F> {
                 )?,
             );
         }
-
-        log::debug!("la addr = {:?}", addr);
-        log::debug!("la ll = {:?}", self.get_addresses_access_list());
-        log::debug!("el bt = {:?}", self.access_lists_ptrs.accounts_ptrs);
 
         if let Some((([_, ptr], _), _)) = self
             .get_addresses_access_list()?

@@ -6,12 +6,10 @@ mod common;
 
 use anyhow::Context as _;
 use common::{cases, Case};
-use evm_arithmetization::testing_utils::init_logger;
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
 
 fn main() -> anyhow::Result<()> {
-    init_logger();
     let mut trials = vec![];
     for batch_size in [1, 3] {
         for Case {
@@ -24,20 +22,14 @@ fn main() -> anyhow::Result<()> {
             let gen_inputs = trace_decoder::entrypoint(trace, other, batch_size).context(
                 format!("error in `trace_decoder` for {name} at batch size {batch_size}"),
             )?;
-            for (ix, gi) in gen_inputs.into_iter().enumerate()
-            {
-                let other_name = name.clone();
+            for (ix, gi) in gen_inputs.into_iter().enumerate() {
                 trials.push(Trial::test(
                     format!("{name}@{batch_size}/{ix}"),
                     move || {
-                        if other_name == "b4_dev" && batch_size == 3 && ix == 1
-                        {
-                            evm_arithmetization::prover::testing::simulate_execution_all_segments::<
+                        evm_arithmetization::prover::testing::simulate_execution_all_segments::<
                             GoldilocksField,
-                                    >(gi, 19)
-                        .map_err(|e| format!("{e:?}"))?; // get the full error
-                                                         // chain
-                        }
+                        >(gi, 19)
+                        .map_err(|e| format!("{e:?}"))?; // get the full error chain
                         Ok(())
                     },
                 ))

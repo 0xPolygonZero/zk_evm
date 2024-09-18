@@ -307,9 +307,6 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
-    if let Ok(ll) = state.get_generation_state().get_addresses_access_list() && state.get_clock() >= 62435{
-        state.log(level, format!("la ll = {:?}", ll));
-    }
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
