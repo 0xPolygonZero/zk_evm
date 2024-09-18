@@ -8,7 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
-use super::linked_list::{AccountsLinkedList, LinkedList, LinkedListPtrs, StorageLinkedList};
+use super::linked_list::{AccountsLinkedList, LinkedListPtrs, StorageLinkedList};
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
