@@ -86,7 +86,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             log::debug!("Simulating CPU for jumpdest analysis.");
 
-            log::debug!("el bt = {:?}", interpreter.generation_state.access_lists_ptrs.accounts_ptrs);
+            log::debug!("el bt = {:?}", interpreter.generation_state.access_lists_ptrs.accounts);
 
             let _ = interpreter.run();
 
@@ -237,8 +237,8 @@ impl<F: RichField> Interpreter<F> {
         // Initialize the MPT's pointers.
         let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.state_ptrs.accounts_ptrs,
-                &mut self.generation_state.state_ptrs.storage_ptrs,
+                &mut self.generation_state.state_ptrs.accounts,
+                &mut self.generation_state.state_ptrs.storage,
                 &inputs.tries,
             )
             .expect("Invalid MPT data for preinitialization");

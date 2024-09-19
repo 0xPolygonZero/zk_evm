@@ -51,11 +51,11 @@ pub(crate) struct LinkedListPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
-    pub(crate) accounts_ptrs: BTreeMap<U256, usize>,
+    pub(crate) accounts: BTreeMap<U256, usize>,
     /// Each entry contains the pair ((account_key, slot_key), ptr) where
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
-    pub(crate) storage_ptrs: BTreeMap<(U256, U256), usize>,
+    pub(crate) storage: BTreeMap<(U256, U256), usize>,
 }
 
 pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>; N] {

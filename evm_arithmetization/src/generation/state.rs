@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
@@ -400,8 +400,8 @@ impl<F: RichField> GenerationState<F> {
         let generation_state = self.get_mut_generation_state();
         let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
-                &mut generation_state.state_ptrs.accounts_ptrs,
-                &mut generation_state.state_ptrs.storage_ptrs,
+                &mut generation_state.state_ptrs.accounts,
+                &mut generation_state.state_ptrs.storage,
                 trie_inputs,
             )
             .expect("Invalid MPT data for preinitialization");
@@ -587,9 +587,9 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.state_ptrs.accounts_ptrs
+        self.state_ptrs.accounts
             .clone_from(&segment_data.extra_data.accounts);
-        self.state_ptrs.storage_ptrs
+        self.state_ptrs.storage
             .clone_from(&segment_data.extra_data.storage);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
@@ -605,7 +605,7 @@ impl<F: RichField> GenerationState<F> {
     /// the accounts `BtreeMap`.
     pub(crate) fn insert_all_slots_in_memory(&mut self) {
         let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        self.state_ptrs.storage_ptrs.extend(
+        self.state_ptrs.storage.extend(
             StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
                 .expect("There must be at least an empty storage linked list")
                 .tuple_windows()
@@ -627,7 +627,7 @@ impl<F: RichField> GenerationState<F> {
 
     pub(crate) fn insert_all_accounts_in_memory(&mut self) {
         let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        self.state_ptrs.accounts_ptrs.extend(
+        self.state_ptrs.accounts.extend(
             AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
                 .expect("There must be at least an empty accounts linked list")
                 .tuple_windows()
