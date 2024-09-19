@@ -26,7 +26,7 @@ use keccak_hash::keccak;
 use structlogprime::normalize_structlog;
 use tokio::time::timeout;
 use trace_decoder::TxnTrace;
-use tracing::{instrument, trace};
+use tracing::trace;
 
 /// The maximum time we are willing to wait for a structlog before failing over
 /// to simulating the JumpDest analysis.
@@ -98,7 +98,6 @@ fn precompiles() -> &'static HashSet<Address> {
 
 /// Generate at JUMPDEST table by simulating the call stack in EVM,
 /// using a Geth structlog as input.
-// #[instrument]
 pub(crate) fn generate_jumpdest_table(
     tx: &Transaction,
     struct_log: &[StructLog],

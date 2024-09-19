@@ -13,8 +13,8 @@ mkdir -p witnesses
 export RAYON_NUM_THREADS=4
 export TOKIO_WORKER_THREADS=1
 export RUST_BACKTRACE=full
-export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
-export RUST_MIN_STACK=67108864
+#export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
+#export RUST_MIN_STACK=67108864
 
 GITHASH=`git rev-parse --short HEAD`
 echo "Testing against jergion, current revision: $GITHASH."
@@ -138,9 +138,9 @@ USEDTOFAIL="
 
 ROUND2="
 664
-665
 667
 670
+665
 "
 
 NOWSUCCESS="
@@ -185,7 +185,7 @@ for BLOCK in $BLOCKS; do
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
-  prove_stdio.sh $WITNESS test_only
+  ./prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
   if [ $EXITCODE -eq 0 ]
   then

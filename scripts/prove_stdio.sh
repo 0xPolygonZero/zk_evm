@@ -40,7 +40,7 @@ export RAYON_NUM_THREADS=$num_procs
 #export RUST_LOG=trace
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
-export RUSTFLAGS='-C target-cpu=native -Z linker-features=-lld'
+#export RUSTFLAGS='-C target-cpu=native -Z linker-features=-lld'
 
 INPUT_FILE=$1
 TEST_ONLY=$2
