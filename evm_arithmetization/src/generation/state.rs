@@ -196,13 +196,6 @@ pub(crate) trait State<F: RichField> {
             let registers = self.get_registers();
             let pc = registers.program_counter;
 
-            // If we reached init_access_lists, we need to clear the pointers
-            let init_access_lists = KERNEL.global_labels["init_access_lists"];
-            if running && pc == init_access_lists  && registers.is_kernel {
-                let gen_state = self.get_mut_generation_state();
-                gen_state.access_lists_ptrs = LinkedListPtrs::default();
-            }
-
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
             if running && (self.at_halt() || self.at_end_segment(cycle_limit)) {
                 running = false;

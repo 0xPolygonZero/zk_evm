@@ -11,7 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::{
-    LinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
+    LinkedList, LinkedListPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE
 };
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -329,6 +329,7 @@ impl<F: RichField> GenerationState<F> {
             "storage_insert" => self.run_next_storage_insert(),
             "address_remove" => self.run_next_addresses_remove(),
             "storage_remove" => self.run_next_storage_remove(),
+            "reset" => self.run_reset(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -502,6 +503,11 @@ impl<F: RichField> GenerationState<F> {
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
         Ok(U256::from(ptr / 4))
+    }
+
+    fn run_reset(&mut self) -> Result<U256, ProgramError> {
+        self.access_lists_ptrs = LinkedListPtrs::default();
+        Ok(U256::zero())
     }
 
     /// Returns a pointer to a node in the list such that
