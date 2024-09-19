@@ -527,12 +527,10 @@ where
 }
 
 /// A type alias used to gather:
-///     - the trie root pointers for all tries
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type TriePtrsLinkedLists = (
-    TrieRootPtrs,
+type LinkedListsAndTrieData = (
     Vec<Option<U256>>,
     Vec<Option<U256>>,
     Vec<Option<U256>>,
@@ -542,13 +540,12 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     trie_inputs: &TrieInputs,
-) -> Result<TriePtrsLinkedLists, ProgramError> {
+) -> Result<LinkedListsAndTrieData, ProgramError> {
     let mut state_leaves =
         empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
     let mut storage_leaves =
         empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
     let mut trie_data = vec![Some(U256::zero())];
-
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
         .iter()
@@ -558,14 +555,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
             (key, storage_trie)
         })
         .collect();
-
-    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
-        let mut parsed_txn = vec![U256::from(rlp.len())];
-        parsed_txn.extend(rlp.iter().copied().map(U256::from));
-        Ok(parsed_txn)
-    })?;
-
-    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
     get_state_and_storage_leaves(
         &trie_inputs.state_trie,
@@ -579,11 +568,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     )?;
 
     Ok((
-        TrieRootPtrs {
-            state_root_ptr: None,
-            txn_root_ptr,
-            receipt_root_ptr,
-        },
         state_leaves,
         storage_leaves,
         trie_data,
@@ -610,6 +594,18 @@ pub(crate) fn load_state_mpt(
         trie_data,
         &storage_tries_by_state_key,
     )
+}
+
+pub(crate) fn load_transactions_mpt(transactions_trie: &HashedPartialTrie, trie_data: &mut Vec<Option<U256>>) {
+    load_mpt(transactions_trie, trie_data, &|rlp| {
+        let mut parsed_txn = vec![U256::from(rlp.len())];
+        parsed_txn.extend(rlp.iter().copied().map(U256::from));
+        Ok(parsed_txn)
+    })?;
+}
+
+pub(crate) fn load_receipts_mpt(receipts_trie: &HashedPartialTrie, trie_data: &mut Vec<Option<U256>>) {
+    load_mpt(receipts_trie, trie_data, &parse_receipts)?;
 }
 
 pub mod transaction_testing {

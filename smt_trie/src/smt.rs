@@ -1,13 +1,14 @@
 #![allow(clippy::needless_range_loop)]
 
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
 use plonky2::plonk::config::Hasher;
+use serde::{Deserialize, Serialize};
 
 use crate::bits::Bits;
 use crate::db::Db;
@@ -20,8 +21,9 @@ pub(crate) const INTERNAL_TYPE: u8 = 1;
 pub(crate) const LEAF_TYPE: u8 = 2;
 
 pub type F = GoldilocksField;
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Key(pub [F; 4]);
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Node(pub [F; 12]);
 pub type Hash = PoseidonHash;
@@ -82,7 +84,7 @@ impl Node {
 /// subtree. Internal nodes hold the hashes of their children.
 /// The root is the hash of the root internal node.
 /// Leaves are hashed using a prefix of 0, internal nodes using a prefix of 1.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Smt<D: Db> {
     pub db: D,
     pub kv_store: HashMap<Key, U256>,
@@ -438,9 +440,58 @@ impl<D: Db> Smt<D> {
         v
     }
 
+    pub fn serialize_and_prune_with_linked_lists<K, I, const O: usize>
+    (
+        &self,
+        keys: I,
+        linked_list_mem: &mut Vec<Option<U256>>,
+        state_ptrs: &mut BTreeMap<U256, usize>,
+    ) -> Vec<Option<U256>> 
+    where 
+        K: Borrow<Key>,
+        I: IntoIterator<Item = K>,
+    {
+        let mut smt_mem = vec![Some(U256::zero()); 2]; // For empty hash node.
+        let key = Key(self.root.elements);
+
+        let mut keys_to_include = HashSet::new();
+        for key in keys.into_iter() {
+            let mut bits = key.borrow().split();
+            loop {
+                keys_to_include.insert(bits);
+                if bits.is_empty() {
+                    break;
+                }
+                bits.pop_next_bit();
+            }
+        }
+
+        serialize_with_linked_lists::<_, O>(
+            self,
+            key,
+            Bits::empty(),
+            &keys_to_include,
+            &mut smt_mem,
+            linked_list_mem,
+            state_ptrs,
+        );
+        if smt_mem.len() == 2 {
+            smt_mem.extend([Some(U256::zero()); 2]);
+        }
+        smt_mem
+    }
+
     pub fn serialize(&self) -> Vec<U256> {
         // Include all keys.
         self.serialize_and_prune(self.kv_store.keys())
+    }
+
+    pub fn serialize_with_linked_lists<const O: usize>(
+        &self,
+        linked_list_mem: &mut Vec<Option<U256>>,
+        state_ptrs: &mut BTreeMap<U256, usize>,
+    ) -> Vec<Option<U256>> {
+        self.serialize_and_prune_with_linked_lists::<_, _, O>(self.kv_store.keys(), linked_list_mem, state_ptrs)
     }
 }
 
@@ -490,6 +541,93 @@ fn serialize<D: Db>(
             let i_right =
                 serialize(smt, key_right, v, cur_bits.add_bit(true), keys_to_include).into();
             v[index + 2] = i_right;
+            index
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn serialize_with_linked_lists<D: Db, const O: usize>(
+    smt: &Smt<D>,
+    key: Key,
+    cur_bits: Bits,
+    keys_to_include: &HashSet<Bits>,
+    smt_mem: &mut Vec<Option<U256>>,
+    linked_list_mem: &mut Vec<Option<U256>>,
+    state_ptrs: &mut BTreeMap<U256, usize>,
+) -> usize {
+    if key.0.iter().all(F::is_zero) {
+        return 0; // `ptr=0` is an empty node.
+    }
+
+    if !keys_to_include.contains(&cur_bits) || smt.db.get_node(&key).is_none() {
+        let index = smt_mem.len();
+        smt_mem.push(Some(HASH_TYPE.into()));
+        smt_mem.push(Some(key2u(key)));
+        index
+    } else if let Some(node) = smt.db.get_node(&key) {
+        if node.0.iter().all(F::is_zero) {
+            panic!("wtf?");
+        }
+
+        if node.is_one_siblings() {
+            let val_h = node.0[4..8].try_into().unwrap();
+            let val_a = smt.db.get_node(&Key(val_h)).unwrap().0[0..8]
+                .try_into()
+                .unwrap();
+            let rem_key = Key(node.0[0..4].try_into().unwrap());
+            let val = limbs2f(val_a);
+            let index = smt_mem.len();
+
+            // The last leaf must point to the new one.
+            let len = linked_list_mem.len();
+            linked_list_mem[len - 1] = Some(U256::from(O + len));
+            // The nibbles are the address.
+            linked_list_mem.push(Some(key2u(rem_key)));
+            // Set `value_ptr_ptr`.
+            linked_list_mem.push(Some(val));
+            // Set the next node as the initial node.
+            linked_list_mem.push(Some(U256::from(O)));
+
+            // Push the values in the smt memory
+            smt_mem.push(Some(LEAF_TYPE.into()));
+            smt_mem.push(Some(key2u(rem_key)));
+            smt_mem.push(Some(val));
+
+            // Put the pointer in state_ptrs
+            state_ptrs.insert(key2u(rem_key), O + len);
+
+            index
+        } else {
+            let key_left = Key(node.0[0..4].try_into().unwrap());
+            let key_right = Key(node.0[4..8].try_into().unwrap());
+            let index = smt_mem.len();
+            smt_mem.push(Some(INTERNAL_TYPE.into()));
+            smt_mem.push(Some(U256::zero()));
+            smt_mem.push(Some(U256::zero()));
+            let i_left = serialize_with_linked_lists::<_, O>(
+                smt,
+                key_left,
+                cur_bits.add_bit(false),
+                keys_to_include,
+                smt_mem,
+                linked_list_mem,
+                state_ptrs,
+            )
+            .into();
+            smt_mem[index + 1] = Some(i_left);
+            let i_right = serialize_with_linked_lists::<_, O>(
+                smt,
+                key_right,
+                cur_bits.add_bit(true),
+                keys_to_include,
+                smt_mem,
+                linked_list_mem,
+                state_ptrs,
+            )
+            .into();
+            smt_mem[index + 2] = Some(i_right);
             index
         }
     } else {

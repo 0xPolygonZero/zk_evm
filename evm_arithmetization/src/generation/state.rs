@@ -39,6 +39,8 @@ use crate::witness::transition::{
 };
 use crate::witness::util::{fill_channel_with_value, stack_peek};
 use crate::{arithmetic, keccak, logic};
+use crate::generation::mpt::{load_transactions_mpt, load_receipts_mpt};
+use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
 /// a `GenerationState`.
@@ -392,15 +394,29 @@ impl<F: RichField> GenerationState<F> {
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
+        let mut trie_data = vec![];
+        if cfg!(not(feature = "cdk_erigon")) {
+            trie_data = self.preinitialize_linked_lists_and_get_trie_data(trie_inputs);
+        } else {
+            trie_data = self.preinitialize_linked_lists_and_get_smt_data(trie_inputs);
+        }
+
+            let trie_root_ptrs = TrieRootPtrs {
+                state_root_ptr: None,
+                txn_root_ptr : load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data),
+                receipt_root_ptr: load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data),
+            };
+    }
+
+    fn preinitialize_linked_lists_and_get_trie_data(&mut self, trie_inputs: &super::AbstractTrieInputs<mpt_trie::partial_trie::HashedPartialTrie>) -> Vec<Option<U256>> {
         let generation_state = self.get_mut_generation_state();
-        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
+        let (state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
                 &mut generation_state.accounts_pointers,
                 &mut generation_state.storage_pointers,
                 trie_inputs,
             )
             .expect("Invalid MPT data for preinitialization");
-
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
@@ -417,8 +433,27 @@ impl<F: RichField> GenerationState<F> {
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },
         );
-
-        trie_roots_ptrs
+        trie_data
+    }
+    
+    fn preinitialize_linked_lists_and_get_smt_data(
+        &mut self,
+        trie_inputs: &TrieInputs,
+    ) -> Vec<Option<U256>> {
+        let generation_state = self.get_mut_generation_state();
+        let mut state_linked_list_data = 
+        empty_list_mem::<STATE_LINKED_LIST_NODE_SIZE>(Segment::StateLinkedList).to_vec();
+            let smt_data = trie_inputs.state_trie.serialize_with_linked_lists(&mut state_linked_list_data);
+            self.memory.insert_preinitialized_segment(
+                Segment::StateLinkedList,
+                crate::witness::memory::MemorySegmentState {
+                    content: state_linked_list_data,
+                },
+            );
+            self.memory.insert_preinitialized_segment(
+                Segment::TrieData,
+                crate::witness::memory::MemorySegmentState { content: smt_data },
+            );
     }
 
     pub(crate) fn new(

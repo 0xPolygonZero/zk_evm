@@ -17,6 +17,8 @@ use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
     StateTrieRootDigestBefore, TransactionTrieRootDigestAfter, TransactionTrieRootDigestBefore,
 };
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::smt::Smt;
 
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
@@ -158,12 +160,21 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     pub block_hashes: BlockHashes,
 }
 
+#[cfg(feature = "cdk_erigon")]
+type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
+
+#[cfg(feature = "cdk_erigon")]
+pub type TrieInputs = AbstractTrieInputs<SmtTrie>;
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub type TrieInputs = AbstractTrieInputs<HashedPartialTrie>;
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct TrieInputs {
+pub struct AbstractTrieInputs<T> {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
-    /// transactions.
-    pub state_trie: HashedPartialTrie,
+    /// transactions. 
+    pub state_trie: T,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -178,15 +189,21 @@ pub struct TrieInputs {
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    pub storage_tries: Vec<(H256, T)>,
 }
 
+#[cfg(feature = "cdk_erigon")]
+pub type TrimmedTrieInputs = AbstractTrimmedTrieInputs<SmtTrie>;
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub type TrimmedTrieInputs = AbstractTrimmedTrieInputs<HashedPartialTrie>;
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct TrimmedTrieInputs {
+pub struct AbstractTrimmedTrieInputs<T> {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    pub state_trie: HashedPartialTrie,
+    pub state_trie: T,
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
