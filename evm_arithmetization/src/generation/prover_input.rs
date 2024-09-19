@@ -861,7 +861,7 @@ impl<F: RichField> GenerationState<F> {
         )
     }
 
-    #[allow(dead_code)]git co
+    #[allow(dead_code)]
     pub(crate) fn get_storage_keys_access_list(
         &self,
     ) -> Result<LinkedList<STORAGE_KEYS_ACCESS_LIST_LEN>, ProgramError> {
