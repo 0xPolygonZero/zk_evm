@@ -143,7 +143,7 @@ pub(crate) fn generate_jumpdest_table(
     // `None` encodes that previous `entry` was not a JUMP or JUMPI with true
     // condition, `Some(jump_target)` encodes we came from a JUMP or JUMPI with
     // true condition and target `jump_target`.
-    let mut prev_jump = None;
+    let mut prev_jump: Option<U256> = None;
 
     // Call depth of the previous `entry`. We initialize to 0 as this compares
     // smaller to 1.
@@ -167,14 +167,14 @@ pub(crate) fn generate_jumpdest_table(
         ensure!(call_stack.is_empty().not(), "Call stack was empty.");
         let (code_hash, ctx) = call_stack.last().unwrap();
 
-        // trace!("TX:   {:?}", tx.hash);
-        // trace!("STEP: {:?}", step);
-        // trace!("STEPS: {:?}", struct_log.len());
-        // trace!("OPCODE: {}", entry.op.as_str());
-        // trace!("CODE: {:?}", code_hash);
-        // trace!("CTX:  {:?}", ctx);
-        // trace!("CURR_DEPTH:  {:?}", curr_depth);
-        // trace!("{:#?}\n", entry);
+        trace!("TX:   {:?}", tx.hash);
+        trace!("STEP: {:?}", step);
+        trace!("STEPS: {:?}", struct_log.len());
+        trace!("OPCODE: {}", entry.op.as_str());
+        trace!("CODE: {:?}", code_hash);
+        trace!("CTX:  {:?}", ctx);
+        trace!("CURR_DEPTH:  {:?}", curr_depth);
+        trace!("{:#?}\n", entry);
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
@@ -226,7 +226,7 @@ pub(crate) fn generate_jumpdest_table(
                 let operands = 3;
                 ensure!(
                     evm_stack.len() >= operands,
-                    "Opcode {op} expected {operands} operands at  the EVM stack, but only {} were found.",
+                    "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
                     evm_stack.len()
                 );
                 let [_value, _offset, _size, ..] = evm_stack[..] else {
@@ -301,18 +301,18 @@ pub(crate) fn generate_jumpdest_table(
                     "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
                     evm_stack.len()
                 );
-                let [counter, ..] = evm_stack[..] else {
+                let [jump_target, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                ensure!(
-                    *counter <= U256::from(u64::MAX),
-                    "Operand for {op} caused overflow:  counter: {} is larger than u64::MAX {}",
-                    *counter,
-                    u64::MAX
-                );
-                let jump_target: u64 = counter.to();
+                // ensure!(
+                //     *counter <= U256::from(u64::MAX),
+                //     "Operand for {op} caused overflow:  counter: {} is larger than u64::MAX
+                // {}",     *counter,
+                //     u64::MAX
+                // );
+                // let jump_target: u64 = counter.to();
 
-                prev_jump = Some(jump_target);
+                prev_jump = Some(*jump_target);
             }
             "JUMPI" => {
                 ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
@@ -324,25 +324,27 @@ pub(crate) fn generate_jumpdest_table(
                     "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
                     evm_stack.len()
                 );
-                let [counter, condition, ..] = evm_stack[..] else {
+                let [jump_target, condition, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                ensure!(
-                    *counter <= U256::from(u64::MAX),
-                    "Operand for {op} caused overflow."
-                );
-                let jump_target: u64 = counter.to();
+                // ensure!(
+                //     *counter <= U256::from(u64::MAX),
+                //     "Operand for {op} caused overflow:  counter: {} is larger than u64::MAX
+                // {}",     *counter,
+                //     u64::MAX
+                // );
+                // let jump_target: u64 = counter.to();
                 let jump_condition = condition.is_zero().not();
 
                 prev_jump = if jump_condition {
-                    Some(jump_target)
+                    Some(*jump_target)
                 } else {
                     None
                 };
             }
             "JUMPDEST" => {
                 let jumped_here = if let Some(jmp_target) = prev_jump {
-                    jmp_target == entry.pc
+                    jmp_target == U256::from(entry.pc)
                 } else {
                     false
                 };

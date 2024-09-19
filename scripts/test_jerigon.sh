@@ -13,8 +13,7 @@ mkdir -p witnesses
 export RAYON_NUM_THREADS=4
 export TOKIO_WORKER_THREADS=1
 export RUST_BACKTRACE=full
-export RUST_LOG=rpc=trace,evm_arithmetization::generation::prover_input=trace
-export 'RUSTFLAGS=-C target-cpu=native -Zlinker-features=-lld'
+export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 export RUST_MIN_STACK=67108864
 
 GITHASH=`git rev-parse --short HEAD`
@@ -142,10 +141,10 @@ ROUND2="
 665
 667
 670
-444
 "
 
 NOWSUCCESS="
+444
 4
 5
 28

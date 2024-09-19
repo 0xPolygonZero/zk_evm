@@ -790,10 +790,10 @@ impl<F: RichField> GenerationState<F> {
             assert_eq!(rw, &sw);
         }
 
-        info!("SIMW {:#?}", sim);
-        info!("RPCW {:#?}", rpc);
+        info!("SIM {:#?}", sim);
+        info!("RPC {:#?}", rpc);
 
-        self.jumpdest_table = sim;// = if rpc.is_some() { rpc } else { sim };
+        self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
 
         Ok(())
     }

@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use crate::rpc::Compat;
 use __compat_primitive_types::{H256, U256};
 use alloy::{
     primitives::{keccak256, Address, B256},
@@ -26,6 +25,7 @@ use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 use tracing::debug;
 
 use crate::rpc::jumpdest::{self, get_normalized_structlog};
+use crate::rpc::Compat;
 
 /// Processes the transactions in the given block and updates the code db.
 pub async fn process_transactions<ProviderT, TransportT>(

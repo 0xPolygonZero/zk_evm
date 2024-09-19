@@ -26,9 +26,9 @@ mod signed_syscalls;
 mod transaction_parsing;
 mod transient_storage;
 
-use ::core::iter::Iterator as _;
 use std::{ops::Range, str::FromStr};
 
+use ::core::iter::Iterator as _;
 use anyhow::Result;
 use ethereum_types::U256;
 use plonky2::hash::hash_types::RichField;

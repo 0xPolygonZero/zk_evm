@@ -16,9 +16,12 @@ use serde_json::json;
 use trace_decoder::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo, TxnMeta, TxnTrace,
 };
-use tracing::debug;
+use tracing::info;
 
-use super::{fetch_other_block_data, jumpdest::{self, get_normalized_structlog}};
+use super::{
+    fetch_other_block_data,
+    jumpdest::{self, get_normalized_structlog},
+};
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
 /// Transaction traces retrieved from Erigon zeroTracer.
@@ -167,14 +170,14 @@ where
     let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_log| {
         jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces).map_or_else(
             |error| {
-                debug!(
+                info!(
                     "{:#?}: JumpDestTable generation failed with reason: {}",
                     tx.hash, error
                 );
                 None
             },
             |jdt| {
-                debug!(
+                info!(
                     "{:#?}: JumpDestTable generation succeeded with result: {}",
                     tx.hash, jdt
                 );
