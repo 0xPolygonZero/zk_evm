@@ -69,7 +69,7 @@ echo "Testing prepared witnesses.."
 
 for WITNESS in witnesses/*.native.$GITHASH.witness.json; do
   echo "Testing $WITNESS"
-  zero_bin/tools/prove_stdio.sh $WITNESS test_only
+  prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
   if [ $EXITCODE -eq 0 ]
   then
