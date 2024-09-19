@@ -228,7 +228,7 @@ where
 {
     pub circuit: CircuitData<F, C, D>,
     lhs: AggregationChildTarget<D, NUM_ROOT_CIRCUITS>,
-    rhs: AggregationChildWithDummyTarget<D>,
+    rhs: AggregationChildWithDummyTarget<D, NUM_ROOT_CIRCUITS>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -273,19 +273,23 @@ where
 }
 
 #[derive(Eq, PartialEq, Debug)]
-struct AggregationChildWithDummyTarget<const D: usize> {
+struct AggregationChildWithDummyTarget<const D: usize, const N: usize> {
     is_agg: BoolTarget,
     is_dummy: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
-    real_proof: ProofWithPublicInputsTarget<D>,
+    is_real_proof: [BoolTarget; N],
+    real_proofs: [ProofWithPublicInputsTarget<D>; N],
 }
 
-impl<const D: usize> AggregationChildWithDummyTarget<D> {
+impl<const D: usize, const N: usize> AggregationChildWithDummyTarget<D, N> {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_bool(self.is_agg)?;
         buffer.write_target_bool(self.is_dummy)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
-        buffer.write_target_proof_with_public_inputs(&self.real_proof)?;
+        for i in 0..N {
+            buffer.write_target_bool(self.is_real_proof[i])?;
+            buffer.write_target_proof_with_public_inputs(&self.real_proofs[i])?;
+        }
         Ok(())
     }
 
@@ -293,25 +297,41 @@ impl<const D: usize> AggregationChildWithDummyTarget<D> {
         let is_agg = buffer.read_target_bool()?;
         let is_dummy = buffer.read_target_bool()?;
         let agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        let real_proof = buffer.read_target_proof_with_public_inputs()?;
+
+        let mut is_real_proof = Vec::with_capacity(N);
+        let mut real_proofs = Vec::with_capacity(N);
+
+        for _ in 0..N {
+            is_real_proof.push(buffer.read_target_bool()?);
+            real_proofs.push(buffer.read_target_proof_with_public_inputs()?);
+        }
+
         Ok(Self {
             is_agg,
             is_dummy,
             agg_proof,
-            real_proof,
+            // Convert Vecs to arrays
+            is_real_proof: is_real_proof
+                .try_into()
+                .expect("Incorrect length for is_base_proof"),
+            real_proofs: real_proofs
+                .try_into()
+                .expect("Incorrect length for base_proofs"),
         })
     }
 
-    // `len_mem_cap` is the length of the Merkle
-    // caps for `MemBefore` and `MemAfter`.
     fn public_values<F: RichField + Extendable<D>>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
     ) -> PublicValuesTarget {
-        let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
-        let segment_pv = PublicValuesTarget::from_public_inputs(&self.real_proof.public_inputs);
-
-        PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
+        let mut selected_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
+        for i in 0..N {
+            let base_pv =
+                PublicValuesTarget::from_public_inputs(&self.real_proofs[i].public_inputs);
+            selected_pv =
+                PublicValuesTarget::select(builder, self.is_real_proof[i], base_pv, selected_pv);
+        }
+        selected_pv
     }
 }
 
@@ -1094,7 +1114,7 @@ where
             &mut builder,
             root,
             root_no_keccak_tables,
-            lhs_segment.base_proof.clone(),
+            lhs_segment.base_proofs[0].clone(), // use a base proof as the dummy proof
         );
 
         let lhs_pv = lhs_segment.public_values(&mut builder);
@@ -1383,7 +1403,7 @@ where
     ) -> AggregationChildTarget<D, N> {
         let common = &base_circuits[0].common;
         for i in 1..N {
-            assert_eq!(common, base_circuits[i].common);
+            assert_eq!(common, &base_circuits[i].common);
         }
 
         let is_agg = builder.add_virtual_bool_target_safe();
@@ -1648,21 +1668,43 @@ where
         root: &RootCircuitData<F, C, D>,
         root_no_keccak_tables: &RootCircuitData<F, C, D>,
         dummy_proof: ProofWithPublicInputsTarget<D>,
-    ) -> AggregationChildWithDummyTarget<D> {
+    ) -> AggregationChildWithDummyTarget<D, NUM_ROOT_CIRCUITS> {
         let common = &root.circuit.common;
-        let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
-        let is_agg = builder.add_virtual_bool_target_safe();
-        let agg_proof = builder.add_virtual_proof_with_pis(common);
-        let is_dummy = builder.add_virtual_bool_target_safe();
-        let real_proof = builder.add_virtual_proof_with_pis(common);
 
-        let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
+        let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
+        let root_no_keccak_tables_vk =
+            builder.constant_verifier_data(&root_no_keccak_tables.circuit.verifier_only);
+
+        let is_agg = builder.add_virtual_bool_target_safe();
+        let is_dummy = builder.add_virtual_bool_target_safe();
+        let is_agg_or_is_dummy = builder.or(is_agg, is_dummy);
+        let is_real_proof_with_keccak_tables = builder.add_virtual_bool_target_safe();
+        let tmp = builder.or(is_agg_or_is_dummy, is_real_proof_with_keccak_tables);
+        let is_real_proof_without_keccak_tables = builder.not(tmp);
+
+        let agg_proof = builder.add_virtual_proof_with_pis(common);
+        let real_proof_with_keccak_tables = builder.add_virtual_proof_with_pis(common);
+        let real_proof_without_keccak_tables = builder.add_virtual_proof_with_pis(common);
+
+        let is_other_proof = [
+            is_dummy,
+            is_real_proof_with_keccak_tables,
+            is_real_proof_without_keccak_tables,
+        ];
+        let other_proofs = [
+            dummy_proof,
+            real_proof_with_keccak_tables.clone(),
+            real_proof_without_keccak_tables.clone(),
+        ];
+        let other_vks = [root_vk.clone(), root_vk, root_no_keccak_tables_vk];
+
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg,
                 &agg_proof,
-                &segment_proof,
-                &root_vk,
+                &is_other_proof,
+                &other_proofs,
+                &other_vks,
                 common,
             )
             .expect("Failed to build cyclic recursion circuit");
@@ -1670,7 +1712,14 @@ where
             is_agg,
             is_dummy,
             agg_proof,
-            real_proof,
+            is_real_proof: [
+                is_real_proof_with_keccak_tables,
+                is_real_proof_without_keccak_tables,
+            ],
+            real_proofs: [
+                real_proof_with_keccak_tables,
+                real_proof_without_keccak_tables,
+            ],
         }
     }
 
@@ -1786,8 +1835,8 @@ where
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
-        let lhs = Self::add_agg_child(&mut builder, &block_wrapper_circuit.circuit);
-        let rhs = Self::add_agg_child(&mut builder, &block_wrapper_circuit.circuit);
+        let lhs = Self::add_agg_child(&mut builder, &[&block_wrapper_circuit.circuit]);
+        let rhs = Self::add_agg_child(&mut builder, &[&block_wrapper_circuit.circuit]);
 
         let lhs_public_inputs = lhs.public_inputs(&mut builder);
         let rhs_public_inputs = rhs.public_inputs(&mut builder);
@@ -2412,7 +2461,7 @@ where
     /// is dummy, we set `is_dummy` to `true`. Note that only the rhs can be
     /// dummy.
     fn set_dummy_if_necessary_with_dummy(
-        agg_child: &AggregationChildWithDummyTarget<D>,
+        agg_child: &AggregationChildWithDummyTarget<D, NUM_ROOT_CIRCUITS>,
         is_agg: bool,
         is_dummy: bool,
         circuit: &CircuitData<F, C, D>,
@@ -2431,7 +2480,7 @@ where
                 proof,
             );
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.real_proofs[0], proof);
     }
 
     /// Create a final block proof, once all transactions of a given block have
@@ -2806,7 +2855,8 @@ where
                 proof,
             );
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
+
+        agg_inputs.set_proof_with_pis_target(&agg_child.base_proofs[0], proof);
     }
 }
 
