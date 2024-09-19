@@ -8,13 +8,7 @@ members = [
   "proof_gen",
   "smt_trie",
   "trace_decoder",
-  "zero_bin/common",
-  "zero_bin/leader",
-  "zero_bin/ops",
-  "zero_bin/prover",
-  "zero_bin/rpc",
-  "zero_bin/verifier",
-  "zero_bin/worker",
+  "zero",
 ]
 resolver = "2"
 
@@ -57,7 +51,6 @@ criterion = "0.5.1"
 dotenvy = "0.15.7"
 either = "1.12.0"
 enum-as-inner = "0.6.0"
-enumn = "0.1.13"
 env_logger = "0.11.3"
 eth_trie = "0.4.0"
 ethereum-types = "0.14.1"
@@ -94,7 +87,6 @@ serde = "1.0.203"
 serde-big-array = "0.5.1"
 serde_json = "1.0.118"
 serde_path_to_error = "0.1.16"
-serde_with = "3.8.1"
 sha2 = "0.10.8"
 static_assertions = "1.1.0"
 thiserror = "1.0.61"
@@ -107,7 +99,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 u4 = "0.1.0"
 uint = "0.9.5"
 url = "2.5.2"
-vergen = { version = "9.0.0", features = ["build", "rustc"] }
 winnow = "0.6.13"
 
 # local dependencies
@@ -118,12 +109,7 @@ smt_trie = { path = "smt_trie", version = "0.1.1" }
 trace_decoder = { path = "trace_decoder", version = "0.6.0", default-features = false }
 zk_evm_common = { path = "common", version = "0.1.0" }
 zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
-
-# zero-bin related dependencies
-ops = { path = "zero_bin/ops", default-features = false }
-prover = { path = "zero_bin/prover", default-features = false }
-rpc = { path = "zero_bin/rpc", default-features = false }
-zero_bin_common = { path = "zero_bin/common", default-features = false }
+zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
 plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }

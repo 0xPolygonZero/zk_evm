@@ -24,7 +24,8 @@ global mpt_read_state_trie:
 // - the key, as a U256
 // - return destination
 //
-// This function returns a pointer to the value, or 0 if the key is not found.
+// This function returns a pointer to the value, or 0 if the key is not found. If the key
+// is a leaf, it returns a pointer to a pointer.
 global mpt_read:
     // stack: node_ptr, num_nibbles, key, retdest
     DUP1
@@ -145,7 +146,6 @@ global mpt_read_leaf_found:
     // stack: node_payload_ptr, retdest
     %add_const(2) // The value pointer is located after num_nibbles and the key.
     // stack: value_ptr_ptr, retdest
-    %mload_trie_data
-    // stack: value_ptr, retdest
     SWAP1
+    // For leaves, we return the pointer
     JUMP

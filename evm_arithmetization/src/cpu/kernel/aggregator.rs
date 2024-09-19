@@ -11,9 +11,7 @@ use crate::cpu::kernel::parser::parse;
 
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     157
-} else if cfg!(feature = "cdk_erigon") {
-    155
-} else if cfg!(feature = "polygon_pos") {
+} else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
     154
 } else {
     // unreachable
@@ -43,6 +41,7 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/create_receipt.asm"),
     include_str!("asm/core/gas.asm"),
     include_str!("asm/core/intrinsic_gas.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/core/jumpdest_analysis.asm"),
     include_str!("asm/core/nonce.asm"),
     include_str!("asm/core/process_txn.asm"),
@@ -141,8 +140,8 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/mpt/insert/insert_leaf.asm"),
     include_str!("asm/mpt/insert/insert_trie_specific.asm"),
     include_str!("asm/mpt/linked_list/linked_list.asm"),
-    include_str!("asm/mpt/linked_list/initial_tries.asm"),
     include_str!("asm/mpt/linked_list/final_tries.asm"),
+    include_str!("asm/mpt/linked_list/initial_tries.asm"),
     include_str!("asm/mpt/read.asm"),
     include_str!("asm/mpt/storage/storage_read.asm"),
     include_str!("asm/mpt/storage/storage_write.asm"),
