@@ -1378,6 +1378,13 @@ where
             agg_pv.extra_block_data,
         );
 
+        // Check that the paent block's timestamp is less than the current block's.
+        Self::check_block_timestamp(
+            &mut builder,
+            parent_pv.block_metadata.block_timestamp,
+            agg_pv.block_metadata.block_timestamp,
+        );
+
         // Connect the burn address targets.
         #[cfg(feature = "cdk_erigon")]
         {
@@ -1420,6 +1427,17 @@ where
         }
     }
 
+    fn check_block_timestamp(
+        builder: &mut CircuitBuilder<F, D>,
+        prev_timestamp: Target,
+        timestamp: Target,
+    ) {
+        // We check that timestamp >= prev_timestamp.
+        // In other words, we range-check `diff = timestamp - prev_timestamp`
+        // is between 0 and 2ˆ32.
+        let diff = builder.sub(timestamp, prev_timestamp);
+        builder.range_check(diff, 32);
+    }
     fn connect_extra_public_values(
         builder: &mut CircuitBuilder<F, D>,
         pvs: &ExtraBlockDataTarget,

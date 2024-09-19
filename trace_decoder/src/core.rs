@@ -1,4 +1,5 @@
 use core::{convert::Into as _, option::Option::None};
+use std::ops::Range;
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -490,24 +491,25 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
+                    state_mask.insert(TrieKey::from_address(addr));
+                } else {
+                    // Simple state access
+                    const PRECOMPILE_ADDRESSES: Range<alloy::primitives::Address> =
+                        address!("0000000000000000000000000000000000000001")
+                            ..address!("000000000000000000000000000000000000000a");
+
+                    if receipt.status || !PRECOMPILE_ADDRESSES.contains(&addr.compat()) {
+                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
+                        //                masking like this SHOULD be a space-saving optimization,
+                        //                BUT if it's omitted, we actually get state root mismatches
+                        state_mask.insert(TrieKey::from_address(addr));
+                    }
                 }
 
                 if self_destructed {
                     storage_tries.remove(&keccak_hash::keccak(addr));
                     state_mask.extend(state_trie.reporting_remove(addr)?)
                 }
-
-                let precompiled_addresses = address!("0000000000000000000000000000000000000001")
-                    ..address!("000000000000000000000000000000000000000a");
-
-                if !precompiled_addresses.contains(&addr.compat()) {
-                    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
-                    //                masking like this SHOULD be a space-saving optimization,
-                    //                BUT if it's omitted, we actually get state root mismatches
-                    state_mask.insert(TrieKey::from_address(addr));
-                } // else we don't even need to include them,
-                  // because nodes will only emit a precompiled address if
-                  // the transaction calling them reverted.
             }
 
             jumpdest_tables.push(jumpdest_table);

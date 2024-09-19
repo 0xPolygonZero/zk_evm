@@ -316,10 +316,6 @@ impl<F: RichField> Interpreter<F> {
         );
         self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
 
-        // Initialize the accounts and storage BTrees.
-        self.generation_state.insert_all_slots_in_memory();
-        self.generation_state.insert_all_accounts_in_memory();
-
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);

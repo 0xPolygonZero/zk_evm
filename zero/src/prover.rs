@@ -31,9 +31,7 @@ use crate::ops;
 //
 // While proving a block interval, we will output proofs corresponding to block
 // batches as soon as they are generated.
-const PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE: usize = 16;
-static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore =
-    Semaphore::const_new(PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE);
+static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore = Semaphore::const_new(0);
 
 #[derive(Debug, Clone)]
 pub struct ProverConfig {
@@ -44,6 +42,7 @@ pub struct ProverConfig {
     pub proof_output_dir: PathBuf,
     pub keep_intermediate_proofs: bool,
     pub block_batch_size: usize,
+    pub block_pool_size: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -242,6 +241,9 @@ pub async fn prove(
     let mut task_set: JoinSet<
         std::result::Result<std::result::Result<u64, anyhow::Error>, anyhow::Error>,
     > = JoinSet::new();
+
+    PARALLEL_BLOCK_PROVING_PERMIT_POOL.add_permits(prover_config.block_pool_size);
+
     while let Some((block_prover_input, is_last_block)) = block_receiver.recv().await {
         block_counter += 1;
         let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
