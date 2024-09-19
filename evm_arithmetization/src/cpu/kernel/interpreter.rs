@@ -233,7 +233,7 @@ impl<F: RichField> Interpreter<F> {
         self.generation_state.inputs = inputs.trim();
 
         // Initialize the MPT's pointers.
-        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+        let (state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
                 &mut self.generation_state.accounts_pointers,
                 &mut self.generation_state.storage_pointers,
@@ -241,27 +241,14 @@ impl<F: RichField> Interpreter<F> {
             )
             .expect("Invalid MPT data for preinitialization");
 
+            let trie_root_ptrs = TrieRootPtrs {
+                state_root_ptr: None,
+                txn_root_ptr : load_transactions_mpt(&input.tries.transactions_trie, &mut trie_data),
+                receipt_root_ptr: load_receipts_mpt(&input.tries.transactions_trie, &mut trie_data),
+            };
+
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
-
-        // Initialize the `TrieData` segment.
-        let preinit_trie_data_segment = MemorySegmentState { content: trie_data };
-        let preinit_accounts_ll_segment = MemorySegmentState {
-            content: state_leaves,
-        };
-        let preinit_storage_ll_segment = MemorySegmentState {
-            content: storage_leaves,
-        };
-        self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
-        self.insert_preinitialized_segment(
-            Segment::AccountsLinkedList,
-            preinit_accounts_ll_segment,
-        );
-        self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
-
-        // Initialize the accounts and storage BTrees.
-        self.generation_state.insert_all_slots_in_memory();
-        self.generation_state.insert_all_accounts_in_memory();
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
