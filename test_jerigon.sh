@@ -140,19 +140,19 @@ USEDTOFAIL="
 ROUND2="
 15
 35
-566
 664
 665
 667
 670
+444
 "
-#444
 
-TESTED="
+NOWSUCCESS="
 4
 5
 28
 65
+566
 "
 
 # 470..663 from Robin
@@ -186,7 +186,7 @@ for BLOCK in $BLOCKS; do
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
-  zero_bin/tools/prove_stdio.sh $WITNESS test_only
+  scripts/prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
   if [ $EXITCODE -eq 0 ]
   then

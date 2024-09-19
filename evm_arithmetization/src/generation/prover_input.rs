@@ -102,7 +102,7 @@ impl<F: RichField> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
-            "state" => self
+            "initial_state" => self
                 .trie_root_ptrs
                 .state_root_ptr
                 .map_or_else(

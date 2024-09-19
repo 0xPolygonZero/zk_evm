@@ -14,7 +14,7 @@ export RAYON_NUM_THREADS=4
 export TOKIO_WORKER_THREADS=4
 export RUST_BACKTRACE=full
 export RUST_LOG=info
-export 'RUSTFLAGS=-C target-cpu=native -Zlinker-features=-lld'
+export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 export RUST_MIN_STACK=33554432
 
 

@@ -1,9 +1,27 @@
-/**/target
+# Alphabetically, by-category
+
+# Build artifacts
+#################
 /target
-**/*.rs.bk
-*.iml
-.idea/
-.vscode
+
+# Editors
+#########
+/.idea/
+/.vscode
+/*.iml
+
+# Misc
+######
 /**/*.ignoreme
 **/output.log
-witnesses
+/**/*.ipynb
+/**/*.log
+/**/*.out
+# Hardcoded in https://github.com/0xPolygonZero/zk_evm/blob/v0.6.0/zero_bin/common/src/debug_utils.rs#L9
+/debug
+
+# Proof artifacts
+#################
+/proofs
+/**/*.zkproof
+/witnesses

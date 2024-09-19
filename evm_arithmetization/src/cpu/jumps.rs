@@ -74,7 +74,6 @@ pub(crate) fn eval_packed_jump_jumpi<P: PackedField>(
     let dst = lv.mem_channels[0].value;
     let cond = lv.mem_channels[1].value;
     let filter = lv.op.jumps; // `JUMP` or `JUMPI`
-    let jumpdest_flag_channel = lv.mem_channels[NUM_GP_CHANNELS - 1];
     let is_jump = filter * (P::ONES - lv.opcode_bits[0]);
     let is_jumpi = filter * lv.opcode_bits[0];
 
@@ -121,26 +120,34 @@ pub(crate) fn eval_packed_jump_jumpi<P: PackedField>(
     // If we're jumping, then the high 7 limbs of the destination must be 0.
     let dst_hi_sum: P = dst[1..].iter().copied().sum();
     yield_constr.constraint(filter * jumps_lv.should_jump * dst_hi_sum);
-    // Check that the destination address holds a `JUMPDEST` instruction. Note that
-    // this constraint does not need to be conditioned on `should_jump` because
-    // no read takes place if we're not jumping, so we're free to set the
-    // channel to 1.
-    yield_constr.constraint(filter * (jumpdest_flag_channel.value[0] - P::ONES));
 
-    // Make sure that the JUMPDEST flag channel is constrained.
-    // Only need to read if we're about to jump and we're not in kernel mode.
-    yield_constr.constraint(
-        filter
-            * (jumpdest_flag_channel.used - jumps_lv.should_jump * (P::ONES - lv.is_kernel_mode)),
-    );
-    yield_constr.constraint(filter * (jumpdest_flag_channel.is_read - P::ONES));
-    yield_constr.constraint(filter * (jumpdest_flag_channel.addr_context - lv.context));
-    yield_constr.constraint(
-        filter
-            * (jumpdest_flag_channel.addr_segment
-                - P::Scalar::from_canonical_usize(Segment::JumpdestBits.unscale())),
-    );
-    yield_constr.constraint(filter * (jumpdest_flag_channel.addr_virtual - dst[0]));
+    // We skip jump destinations verification with `cdk_erigon`.
+    #[cfg(not(feature = "cdk_erigon"))]
+    {
+        let jumpdest_flag_channel = lv.mem_channels[NUM_GP_CHANNELS - 1];
+
+        // Check that the destination address holds a `JUMPDEST` instruction. Note that
+        // this constraint does not need to be conditioned on `should_jump` because
+        // no read takes place if we're not jumping, so we're free to set the
+        // channel to 1.
+        yield_constr.constraint(filter * (jumpdest_flag_channel.value[0] - P::ONES));
+
+        // Make sure that the JUMPDEST flag channel is constrained.
+        // Only need to read if we're about to jump and we're not in kernel mode.
+        yield_constr.constraint(
+            filter
+                * (jumpdest_flag_channel.used
+                    - jumps_lv.should_jump * (P::ONES - lv.is_kernel_mode)),
+        );
+        yield_constr.constraint(filter * (jumpdest_flag_channel.is_read - P::ONES));
+        yield_constr.constraint(filter * (jumpdest_flag_channel.addr_context - lv.context));
+        yield_constr.constraint(
+            filter
+                * (jumpdest_flag_channel.addr_segment
+                    - P::Scalar::from_canonical_usize(Segment::JumpdestBits.unscale())),
+        );
+        yield_constr.constraint(filter * (jumpdest_flag_channel.addr_virtual - dst[0]));
+    }
 
     // Disable unused memory channels
     for &channel in &lv.mem_channels[2..NUM_GP_CHANNELS - 1] {
@@ -179,7 +186,6 @@ pub(crate) fn eval_ext_circuit_jump_jumpi<F: RichField + Extendable<D>, const D:
     let dst = lv.mem_channels[0].value;
     let cond = lv.mem_channels[1].value;
     let filter = lv.op.jumps; // `JUMP` or `JUMPI`
-    let jumpdest_flag_channel = lv.mem_channels[NUM_GP_CHANNELS - 1];
     let one_extension = builder.one_extension();
     let is_jump = builder.sub_extension(one_extension, lv.opcode_bits[0]);
     let is_jump = builder.mul_extension(filter, is_jump);
@@ -281,50 +287,57 @@ pub(crate) fn eval_ext_circuit_jump_jumpi<F: RichField + Extendable<D>, const D:
         let constr = builder.mul_extension(filter, constr);
         yield_constr.constraint(builder, constr);
     }
-    // Check that the destination address holds a `JUMPDEST` instruction. Note that
-    // this constraint does not need to be conditioned on `should_jump` because
-    // no read takes place if we're not jumping, so we're free to set the
-    // channel to 1.
-    {
-        let constr = builder.mul_sub_extension(filter, jumpdest_flag_channel.value[0], filter);
-        yield_constr.constraint(builder, constr);
-    }
 
-    // Make sure that the JUMPDEST flag channel is constrained.
-    // Only need to read if we're about to jump and we're not in kernel mode.
+    // We skip jump destinations verification with `cdk_erigon`.
+    #[cfg(not(feature = "cdk_erigon"))]
     {
-        let constr = builder.mul_sub_extension(
-            jumps_lv.should_jump,
-            lv.is_kernel_mode,
-            jumps_lv.should_jump,
-        );
-        let constr = builder.add_extension(jumpdest_flag_channel.used, constr);
-        let constr = builder.mul_extension(filter, constr);
-        yield_constr.constraint(builder, constr);
-    }
-    {
-        let constr = builder.mul_sub_extension(filter, jumpdest_flag_channel.is_read, filter);
-        yield_constr.constraint(builder, constr);
-    }
-    {
-        let constr = builder.sub_extension(jumpdest_flag_channel.addr_context, lv.context);
-        let constr = builder.mul_extension(filter, constr);
-        yield_constr.constraint(builder, constr);
-    }
-    {
-        let constr = builder.arithmetic_extension(
-            F::ONE,
-            -F::from_canonical_usize(Segment::JumpdestBits.unscale()),
-            filter,
-            jumpdest_flag_channel.addr_segment,
-            filter,
-        );
-        yield_constr.constraint(builder, constr);
-    }
-    {
-        let constr = builder.sub_extension(jumpdest_flag_channel.addr_virtual, dst[0]);
-        let constr = builder.mul_extension(filter, constr);
-        yield_constr.constraint(builder, constr);
+        let jumpdest_flag_channel = lv.mem_channels[NUM_GP_CHANNELS - 1];
+
+        // Check that the destination address holds a `JUMPDEST` instruction. Note that
+        // this constraint does not need to be conditioned on `should_jump` because
+        // no read takes place if we're not jumping, so we're free to set the
+        // channel to 1.
+        {
+            let constr = builder.mul_sub_extension(filter, jumpdest_flag_channel.value[0], filter);
+            yield_constr.constraint(builder, constr);
+        }
+
+        // Make sure that the JUMPDEST flag channel is constrained.
+        // Only need to read if we're about to jump and we're not in kernel mode.
+        {
+            let constr = builder.mul_sub_extension(
+                jumps_lv.should_jump,
+                lv.is_kernel_mode,
+                jumps_lv.should_jump,
+            );
+            let constr = builder.add_extension(jumpdest_flag_channel.used, constr);
+            let constr = builder.mul_extension(filter, constr);
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr = builder.mul_sub_extension(filter, jumpdest_flag_channel.is_read, filter);
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr = builder.sub_extension(jumpdest_flag_channel.addr_context, lv.context);
+            let constr = builder.mul_extension(filter, constr);
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr = builder.arithmetic_extension(
+                F::ONE,
+                -F::from_canonical_usize(Segment::JumpdestBits.unscale()),
+                filter,
+                jumpdest_flag_channel.addr_segment,
+                filter,
+            );
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr = builder.sub_extension(jumpdest_flag_channel.addr_virtual, dst[0]);
+            let constr = builder.mul_extension(filter, constr);
+            yield_constr.constraint(builder, constr);
+        }
     }
 
     // Disable unused memory channels

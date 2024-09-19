@@ -386,11 +386,17 @@ call_too_deep:
     SET_CONTEXT
     %checkpoint // Checkpoint
     %increment_call_depth
-    // Perform jumpdest analysis
-    %mload_context_metadata(@CTX_METADATA_CODE_SIZE)
-    GET_CONTEXT
-    // stack: ctx, code_size, retdest
-    %jumpdest_analysis
+
+    // We skip jumpdest analysis with `cdk_erigon`.
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        // Perform jumpdest analysis
+        %mload_context_metadata(@CTX_METADATA_CODE_SIZE)
+        GET_CONTEXT
+        // stack: ctx, code_size, retdest
+        %jumpdest_analysis
+    }
+    
     PUSH 0 // jump dest
     EXIT_KERNEL
     // (Old context) stack: new_ctx
