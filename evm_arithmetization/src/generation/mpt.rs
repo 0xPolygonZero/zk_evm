@@ -23,26 +23,101 @@ use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AccountRlp {
+    Type1(Type1AccountRlp),
+    Type2(Type2AccountRlp),
+}
+
+impl Encodable for AccountRlp {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match self {
+            Self::Type1(acc) => acc.rlp_append(s),
+            Self::Type2(acc) => acc.rlp_append(s),
+        }
+    }
+}
+
+impl From<Type1AccountRlp> for AccountRlp {
+    fn from(value: Type1AccountRlp) -> Self {
+        Self::Type1(value)
+    }
+}
+
+impl AccountRlp {
+    pub fn nonce(&self) -> U256 {
+        match self {
+            Self::Type1(acc) => acc.nonce,
+            Self::Type2(acc) => acc.nonce,
+        }
+    }
+
+    pub fn set_nonce(&mut self, val: U256) {
+        match self {
+            Self::Type1(acc) => acc.nonce = val,
+            Self::Type2(acc) => acc.nonce = val,
+        }
+    }
+
+    pub fn balance(&self) -> U256 {
+        match self {
+            Self::Type1(acc) => acc.balance,
+            Self::Type2(acc) => acc.balance,
+        }
+    }
+
+    pub fn set_balance(&mut self, val: U256) {
+        match self {
+            Self::Type1(acc) => acc.balance = val,
+            Self::Type2(acc) => acc.balance = val,
+        }
+    }
+
+    pub fn code_hash(&self) -> H256 {
+        match self {
+            Self::Type1(acc) => acc.code_hash,
+            Self::Type2(acc) => acc.code_hash,
+        }
+    }
+
+    pub fn set_code_hash(&mut self, hash: H256) {
+        match self {
+            Self::Type1(acc) => acc.code_hash = hash,
+            Self::Type2(acc) => acc.code_hash = hash,
+        }
+    }
+
+    pub fn storage_root(&self) -> Option<H256> {
+        match self {
+            Self::Type1(acc) => Some(acc.storage_root),
+            Self::Type2(_) => None,
+        }
+    }
+
+    pub fn set_storage_root(&mut self, hash: H256) {
+        match self {
+            Self::Type1(acc) => acc.storage_root = hash,
+            Self::Type2(_) => panic!("No storage root for type 2 accounts."),
+        }
+    }
+
+    pub fn code_length(&self) -> Option<U256> {
+        match self {
+            Self::Type1(_) => None,
+            Self::Type2(acc) => Some(acc.code_length),
+        }
+    }
+}
+
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AccountRlp {
+pub struct Type1AccountRlp {
     pub nonce: U256,
     pub balance: U256,
-    #[cfg(not(feature = "cdk_erigon"))]
     pub storage_root: H256,
-    #[cfg(feature = "cdk_erigon")]
-    pub code_length: U256,
-    pub code_hash: U256,
+    pub code_hash: H256,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct TrieRootPtrs {
-    pub state_root_ptr: Option<usize>,
-    pub txn_root_ptr: usize,
-    pub receipt_root_ptr: usize,
-}
-
-impl Default for AccountRlp {
-    #[cfg(not(feature = "cdk_erigon"))]
+impl Default for Type1AccountRlp {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
@@ -51,16 +126,32 @@ impl Default for AccountRlp {
             code_hash: keccak([]),
         }
     }
+}
 
-    #[cfg(feature = "cdk_erigon")]
+#[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Type2AccountRlp {
+    pub nonce: U256,
+    pub balance: U256,
+    pub code_length: U256,
+    pub code_hash: H256,
+}
+
+impl Default for Type2AccountRlp {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
-            code_hash: hash_bytecode_u256(vec![]),
+            code_hash: keccak(vec![]),
             code_length: U256::zero(),
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TrieRootPtrs {
+    pub state_root_ptr: Option<usize>,
+    pub txn_root_ptr: usize,
+    pub receipt_root_ptr: usize,
 }
 
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone)]

@@ -12,7 +12,7 @@ use crate::cpu::kernel::parser::parse;
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     158
 } else if cfg!(feature = "cdk_erigon") {
-    162
+    161
 } else if cfg!(feature = "polygon_pos") {
     157
 } else {

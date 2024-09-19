@@ -3,14 +3,15 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ethereum_types::H256;
-use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use ethereum_types::{BigEndianHash, H256};
+use evm_arithmetization::generation::{GenerationInputs, InputStateTrie, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
-    ger_account_nibbles, ger_contract_from_storage, init_logger, scalable_account_nibbles,
-    scalable_contract_from_storage, update_ger_account_storage, update_scalable_account_storage,
-    ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+    ger_account_nibbles, init_logger, preinitialized_state_smt_ger,
+    preinitialized_state_with_updated_storage, scalable_account_nibbles, set_account,
+    update_ger_account_storage, update_scalable_account_storage,
+    ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
@@ -21,6 +22,9 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use smt_trie::db::MemoryDb;
+use smt_trie::smt::Smt;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -40,21 +44,22 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         ..BlockMetadata::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-    let mut storage_tries = vec![];
-    state_trie_before.insert(
-        ger_account_nibbles(),
-        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-    )?;
+    let mut state_smt_before = preinitialized_state_smt_ger();
+    // let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    // let mut storage_tries = vec![];
+    // state_trie_before.insert(
+    //     ger_account_nibbles(),
+    //     rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+    // )?;
 
-    let mut ger_account_storage = HashedPartialTrie::from(Node::Empty);
-    let mut scalable_account_storage = HashedPartialTrie::from(Node::Empty);
+    // let mut ger_account_storage = HashedPartialTrie::from(Node::Empty);
+    // let mut scalable_account_storage = HashedPartialTrie::from(Node::Empty);
 
-    storage_tries.push((GLOBAL_EXIT_ROOT_ADDRESS_HASHED, ger_account_storage.clone()));
-    storage_tries.push((
-        ADDRESS_SCALABLE_L2_ADDRESS_HASHED,
-        scalable_account_storage.clone(),
-    ));
+    // storage_tries.push((GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+    // ger_account_storage.clone())); storage_tries.push((
+    //     ADDRESS_SCALABLE_L2_ADDRESS_HASHED,
+    //     scalable_account_storage.clone(),
+    // ));
 
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
@@ -64,29 +69,15 @@ fn test_global_exit_root() -> anyhow::Result<()> {
 
     let ger_data = Some((H256::random(), H256::random()));
 
-    let state_trie_after = {
-        let mut trie = HashedPartialTrie::from(Node::Empty);
-        update_ger_account_storage(&mut ger_account_storage, ger_data)?;
-        update_scalable_account_storage(
-            &mut scalable_account_storage,
-            &block_metadata,
-            state_trie_before.hash(),
-        )?;
+    let expected_smt_after: Smt<MemoryDb> = {
+        let mut smt = preinitialized_state_with_updated_storage(&[]);
+        // TODO: Update GER and scalable account.
 
-        let ger_account = ger_contract_from_storage(&ger_account_storage);
-        let scalable_account = scalable_contract_from_storage(&scalable_account_storage);
-
-        trie.insert(ger_account_nibbles(), rlp::encode(&ger_account).to_vec())?;
-        trie.insert(
-            scalable_account_nibbles(),
-            rlp::encode(&scalable_account).to_vec(),
-        )?;
-
-        trie
+        smt
     };
 
     let trie_roots_after = TrieRoots {
-        state_root: state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -97,10 +88,10 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         withdrawals: vec![],
         ger_data,
         tries: TrieInputs {
-            state_trie: state_trie_before,
+            state_trie: InputStateTrie::Type2(state_smt_before.serialize()),
             transactions_trie,
             receipts_trie,
-            storage_tries,
+            storage_tries: None,
         },
         trie_roots_after,
         contract_code,

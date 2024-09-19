@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::generation::mpt::{AccountRlp, Type1AccountRlp};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
@@ -286,7 +286,7 @@ pub trait StateTrie {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
 pub struct StateMpt {
-    typed: TypedMpt<AccountRlp>,
+    typed: TypedMpt<Type1AccountRlp>,
 }
 
 impl StateMpt {
@@ -304,15 +304,18 @@ impl StateMpt {
         key: H256,
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>> {
-        self.typed.insert(TrieKey::from_hash(key), account)
+        match account {
+            AccountRlp::Type1(acc) => self
+                .typed
+                .insert(TrieKey::from_hash(key), acc)
+                .map(|res| res.map(|inner_res| AccountRlp::Type1(inner_res))),
+            AccountRlp::Type2(_) => panic!("Expected type 1 account."),
+        }
     }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (H256, Type1AccountRlp)> + '_ {
         self.typed
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
-    }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
     }
 }
 
@@ -332,6 +335,7 @@ impl StateTrie for StateMpt {
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.typed
             .get(TrieKey::from_hash(keccak_hash::keccak(address)))
+            .map(|res| res.into())
     }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
@@ -355,7 +359,7 @@ impl StateTrie for StateMpt {
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.typed
             .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
+            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp.into()))
     }
     fn root(&self) -> H256 {
         self.typed.root()

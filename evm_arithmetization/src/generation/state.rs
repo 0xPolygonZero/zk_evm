@@ -392,33 +392,38 @@ impl<F: RichField> GenerationState<F> {
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        let generation_state = self.get_mut_generation_state();
-        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut generation_state.accounts_pointers,
-                &mut generation_state.storage_pointers,
-                trie_inputs,
-            )
-            .expect("Invalid MPT data for preinitialization");
+        #[cfg(not(feature = "cdk_erigon"))]
+        {
+            let generation_state = self.get_mut_generation_state();
+            let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
+                load_linked_lists_and_txn_and_receipt_mpts(
+                    &mut generation_state.accounts_pointers,
+                    &mut generation_state.storage_pointers,
+                    trie_inputs,
+                )
+                .expect("Invalid MPT data for preinitialization");
 
-        self.memory.insert_preinitialized_segment(
-            Segment::AccountsLinkedList,
-            crate::witness::memory::MemorySegmentState {
-                content: state_leaves,
-            },
-        );
-        self.memory.insert_preinitialized_segment(
-            Segment::StorageLinkedList,
-            crate::witness::memory::MemorySegmentState {
-                content: storage_leaves,
-            },
-        );
-        self.memory.insert_preinitialized_segment(
-            Segment::TrieData,
-            crate::witness::memory::MemorySegmentState { content: trie_data },
-        );
+            self.memory.insert_preinitialized_segment(
+                Segment::AccountsLinkedList,
+                crate::witness::memory::MemorySegmentState {
+                    content: state_leaves,
+                },
+            );
+            self.memory.insert_preinitialized_segment(
+                Segment::StorageLinkedList,
+                crate::witness::memory::MemorySegmentState {
+                    content: storage_leaves,
+                },
+            );
+            self.memory.insert_preinitialized_segment(
+                Segment::TrieData,
+                crate::witness::memory::MemorySegmentState { content: trie_data },
+            );
 
-        trie_roots_ptrs
+            trie_roots_ptrs
+        }
+        #[cfg(feature = "cdk_erigon")]
+        unimplemented!();
     }
 
     pub(crate) fn new(

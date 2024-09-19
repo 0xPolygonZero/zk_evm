@@ -5,16 +5,19 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
-use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, Type2AccountRlp};
+use evm_arithmetization::generation::{GenerationInputs, InputStateTrie, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
-    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, sd2u,
+    init_logger, preinitialized_state_smt_ger, preinitialized_state_with_updated_storage, sd2u,
 };
-use evm_arithmetization::verifier::verify_proof;
+use evm_arithmetization::util::h2u;
+use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
+use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -64,7 +67,7 @@ fn test_erc20() -> anyhow::Result<()> {
     let giver = hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
     let token = hex!("5FbDB2315678afecb367f032d93F642f64180aa3");
 
-    let mut state_smt_before = preinitialized_state();
+    let mut state_smt_before = preinitialized_state_smt_ger();
     set_account(
         &mut state_smt_before,
         H160(sender),
@@ -85,9 +88,10 @@ fn test_erc20() -> anyhow::Result<()> {
     );
 
     let tries_before = TrieInputs {
-        state_smt: state_smt_before.serialize(),
+        state_trie: InputStateTrie::Type2(state_smt_before.serialize()),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
+        storage_tries: None,
     };
 
     let txn = signed_tx();
@@ -109,13 +113,13 @@ fn test_erc20() -> anyhow::Result<()> {
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]
-        .map(|v| (hash_bytecode_u256(v.clone()), v))
+        .map(|v| (keccak(v.clone()), v))
         .into();
 
     let expected_smt_after: Smt<MemoryDb> = {
-        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
+        let mut smt = preinitialized_state_with_updated_storage(&[]);
         let sender_account = sender_account();
-        let sender_account_after = AccountRlp {
+        let sender_account_after = Type2AccountRlp {
             nonce: sender_account.nonce + 1,
             balance: sender_account.balance - gas_used * 0xa,
             ..sender_account
@@ -178,8 +182,8 @@ fn test_erc20() -> anyhow::Result<()> {
 
     let inputs = GenerationInputs::<F> {
         signed_txns: vec![txn.to_vec()],
+        burn_addr: None,
         withdrawals: vec![],
-        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -193,13 +197,22 @@ fn test_erc20() -> anyhow::Result<()> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
+        ger_data: Some((H256::random(), H256::random())),
     };
 
+    let max_cpu_len_log = 20;
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
+    let proofs = prove_all_segments::<F, C, D>(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
     timing.filter(Duration::from_millis(100)).print();
 
-    verify_proof(&all_stark, proof, &config)
+    verify_all_proofs(&all_stark, &proofs, &config)
 }
 
 fn giver_bytecode() -> Vec<u8> {
@@ -241,30 +254,30 @@ fn token_storage_after() -> HashMap<U256, U256> {
     storage
 }
 
-fn giver_account() -> AccountRlp {
+fn giver_account() -> Type2AccountRlp {
     let code = giver_bytecode();
     let len = code.len();
-    AccountRlp {
+    Type2AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        code_hash: hash_bytecode_u256(code),
+        code_hash: keccak(code),
         code_length: len.into(),
     }
 }
 
-fn token_account() -> AccountRlp {
+fn token_account() -> Type2AccountRlp {
     let code = token_bytecode();
     let len = code.len();
-    AccountRlp {
+    Type2AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        code_hash: hash_bytecode_u256(code),
+        code_hash: keccak(code),
         code_length: len.into(),
     }
 }
 
-fn sender_account() -> AccountRlp {
-    AccountRlp {
+fn sender_account() -> Type2AccountRlp {
+    Type2AccountRlp {
         nonce: 0.into(),
         balance: sd2u("10000000000000000000000"),
         ..Default::default()
@@ -290,12 +303,12 @@ fn bloom() -> [U256; 8] {
 fn set_account<D: Db>(
     smt: &mut Smt<D>,
     addr: Address,
-    account: &AccountRlp,
+    account: &Type2AccountRlp,
     storage: &HashMap<U256, U256>,
 ) {
     smt.set(key_balance(addr), account.balance);
     smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), account.code_hash);
+    smt.set(key_code(addr), h2u(account.code_hash));
     smt.set(key_code_length(addr), account.code_length);
     for (&k, &v) in storage {
         smt.set(key_storage(addr, k), v);

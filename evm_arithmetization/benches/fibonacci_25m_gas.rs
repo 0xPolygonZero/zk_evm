@@ -12,13 +12,13 @@ use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, Type1AccountRlp};
+use evm_arithmetization::generation::{GenerationInputs, InputStateTrie, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    preinitialized_state_mpt_and_beacon_roots, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::Node;
 use hex_literal::hex;
@@ -76,20 +76,20 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
 
     let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
 
-    let sender_account_before = AccountRlp {
+    let sender_account_before = Type1AccountRlp {
         nonce: 169.into(),
         balance: U256::from_dec_str("999999999998417410153631615")?,
         storage_root: empty_trie_root,
         code_hash: keccak(vec![]),
     };
-    let to_account_before = AccountRlp {
+    let to_account_before = Type1AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
         storage_root: empty_trie_root,
         code_hash,
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_mpt_and_beacon_roots()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
@@ -98,10 +98,10 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     storage_tries.push((to_state_key, Node::Empty.into()));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_trie: InputStateTrie::Type1(state_trie_before),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
+        storage_tries: Some(storage_tries),
     };
 
     let gas_used = U256::from(0x17d7840_u32);
@@ -127,7 +127,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     contract_code.insert(keccak(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    let sender_account_after = AccountRlp {
+    let sender_account_after = Type1AccountRlp {
         balance: sender_account_before.balance - value - gas_used * block_metadata.block_base_fee,
         nonce: sender_account_before.nonce + 1,
         ..sender_account_before

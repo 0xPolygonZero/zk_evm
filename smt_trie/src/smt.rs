@@ -8,6 +8,7 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
 use plonky2::plonk::config::Hasher;
+use serde::{Deserialize, Serialize};
 
 use crate::bits::Bits;
 use crate::db::Db;
@@ -20,9 +21,9 @@ pub(crate) const INTERNAL_TYPE: u8 = 1;
 pub(crate) const LEAF_TYPE: u8 = 2;
 
 pub type F = GoldilocksField;
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Key(pub [F; 4]);
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Node(pub [F; 12]);
 pub type Hash = PoseidonHash;
 pub type HashOut = <PoseidonHash as Hasher<F>>::Hash;
@@ -82,7 +83,7 @@ impl Node {
 /// subtree. Internal nodes hold the hashes of their children.
 /// The root is the hash of the root internal node.
 /// Leaves are hashed using a prefix of 0, internal nodes using a prefix of 1.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct Smt<D: Db> {
     pub db: D,
     pub kv_store: HashMap<Key, U256>,

@@ -234,36 +234,45 @@ impl<F: RichField> Interpreter<F> {
         // Set state's inputs. We trim unnecessary components.
         self.generation_state.inputs = inputs.trim();
 
-        // Initialize the MPT's pointers.
-        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.accounts_pointers,
-                &mut self.generation_state.storage_pointers,
-                &inputs.tries,
-            )
-            .expect("Invalid MPT data for preinitialization");
-
         let trie_roots_after = &inputs.trie_roots_after;
-        self.generation_state.trie_root_ptrs = trie_root_ptrs;
 
-        // Initialize the `TrieData` segment.
-        let preinit_trie_data_segment = MemorySegmentState { content: trie_data };
-        let preinit_accounts_ll_segment = MemorySegmentState {
-            content: state_leaves,
-        };
-        let preinit_storage_ll_segment = MemorySegmentState {
-            content: storage_leaves,
-        };
-        self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
-        self.insert_preinitialized_segment(
-            Segment::AccountsLinkedList,
-            preinit_accounts_ll_segment,
-        );
-        self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
+        #[cfg(not(feature = "cdk_erigon"))]
+        {
+            // Initialize the MPT's pointers.
+            let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+                load_linked_lists_and_txn_and_receipt_mpts(
+                    &mut self.generation_state.accounts_pointers,
+                    &mut self.generation_state.storage_pointers,
+                    &inputs.tries,
+                )
+                .expect("Invalid MPT data for preinitialization");
 
-        // Initialize the accounts and storage BTrees.
-        self.generation_state.insert_all_slots_in_memory();
-        self.generation_state.insert_all_accounts_in_memory();
+            self.generation_state.trie_root_ptrs = trie_root_ptrs;
+
+            // Initialize the `TrieData` segment.
+            let preinit_trie_data_segment = MemorySegmentState { content: trie_data };
+            let preinit_accounts_ll_segment = MemorySegmentState {
+                content: state_leaves,
+            };
+            let preinit_storage_ll_segment = MemorySegmentState {
+                content: storage_leaves,
+            };
+            self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
+            self.insert_preinitialized_segment(
+                Segment::AccountsLinkedList,
+                preinit_accounts_ll_segment,
+            );
+            self.insert_preinitialized_segment(
+                Segment::StorageLinkedList,
+                preinit_storage_ll_segment,
+            );
+
+            // Initialize the accounts and storage BTrees.
+            self.generation_state.insert_all_slots_in_memory();
+            self.generation_state.insert_all_accounts_in_memory();
+        }
+        #[cfg(feature = "cdk_erigon")]
+        unimplemented!();
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
@@ -317,15 +326,9 @@ impl<F: RichField> Interpreter<F> {
                 GlobalMetadata::TxnNumberAfter,
                 inputs.txn_number_before + inputs.signed_txns.len(),
             ),
-            #[cfg(not(feature = "cdk_erigon"))]
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
                 h2u(tries.state_trie.hash()),
-            ),
-            #[cfg(feature = "cdk_erigon")]
-            (
-                GlobalMetadata::StateTrieRootDigestBefore,
-                hash_serialize_u256(&tries.state_smt),
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,

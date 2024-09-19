@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::generation::mpt::{AccountRlp, Type1AccountRlp};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
@@ -80,7 +80,7 @@ fn visit(
                     storage,
                     code,
                 }) => {
-                    let account = AccountRlp {
+                    let account = Type1AccountRlp {
                         nonce: nonce.into(),
                         balance,
                         storage_root: {
@@ -106,7 +106,9 @@ fn visit(
                         },
                     };
                     #[expect(deprecated)] // this is MPT-specific code
-                    let clobbered = frontend.state.insert_by_hashed_address(path, account)?;
+                    let clobbered = frontend
+                        .state
+                        .insert_by_hashed_address(path, account.into())?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }

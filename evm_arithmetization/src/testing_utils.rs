@@ -19,7 +19,11 @@ use smt_trie::{
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u};
+use crate::{
+    generation::mpt::{AccountRlp, Type1AccountRlp, Type2AccountRlp},
+    proof::BlockMetadata,
+    util::h2u,
+};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -71,7 +75,6 @@ pub fn create_account_storage(storage_pairs: &[(U256, U256)]) -> anyhow::Result<
 
 /// Updates the beacon roots account storage with the provided timestamp and
 /// block parent root.
-#[cfg(not(feature = "cdk_erigon"))]
 pub fn update_beacon_roots_account_storage(
     storage_trie: &mut HashedPartialTrie,
     timestamp: U256,
@@ -80,14 +83,13 @@ pub fn update_beacon_roots_account_storage(
     let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.value;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
 
-    insert_storage(storage_trie, timestamp_idx, timestamp)?;
-    insert_storage(storage_trie, root_idx, h2u(parent_root))
+    insert_storage_mpt(storage_trie, timestamp_idx, timestamp)?;
+    insert_storage_mpt(storage_trie, root_idx, h2u(parent_root))
 }
 
 /// Returns the beacon roots contract account from its provided storage trie.
-#[cfg(not(feature = "cdk_erigon"))]
-pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> Type1AccountRlp {
+    Type1AccountRlp {
         storage_root: storage_trie.hash(),
         ..BEACON_ROOTS_ACCOUNT
     }
@@ -95,7 +97,6 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> A
 
 /// Returns an initial state trie containing the beacon roots contract, along
 /// with its storage trie.
-#[cfg(feature = "eth_mainnet")]
 pub fn preinitialized_state_mpt_and_beacon_roots(
 ) -> anyhow::Result<(HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)> {
     let mut state_trie = HashedPartialTrie::from(Node::Empty);
@@ -115,6 +116,22 @@ pub fn preinitialized_state_mpt_and_beacon_roots(
 pub fn preinitialized_state_smt_ger() -> Smt<MemoryDb> {
     let mut smt = Smt::<MemoryDb>::default();
     set_global_exit_root_account(&mut smt, &HashMap::new());
+
+    smt
+}
+
+/// Returns a final state trie containing the global exit
+/// roots contracts, with its updated storage.
+pub fn preinitialized_state_with_updated_storage(
+    global_exit_roots: &[(U256, H256)],
+) -> Smt<MemoryDb> {
+    let mut smt = Smt::<MemoryDb>::default();
+
+    let mut storage = HashMap::new();
+    for &(timestamp, root) in global_exit_roots {
+        storage.insert(ger_storage_slot(root), timestamp);
+    }
+    set_global_exit_root_account(&mut smt, &storage);
 
     smt
 }
@@ -192,12 +209,12 @@ pub fn eth_to_wei(eth: U256) -> U256 {
 pub fn set_account<D: Db>(
     smt: &mut Smt<D>,
     addr: Address,
-    account: &AccountRlp,
+    account: &Type2AccountRlp,
     storage: &HashMap<U256, U256>,
 ) {
     smt.set(key_balance(addr), account.balance);
     smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), account.code_hash);
+    smt.set(key_code(addr), h2u(account.code_hash));
     smt.set(key_code_length(addr), account.code_length);
     for (&k, &v) in storage {
         smt.set(key_storage(addr, k), v);

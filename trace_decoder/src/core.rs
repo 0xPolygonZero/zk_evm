@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
     mem,
@@ -9,7 +10,10 @@ use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
 use evm_arithmetization::{
-    generation::{mpt::AccountRlp, TrieInputs},
+    generation::{
+        mpt::{AccountRlp, Type1AccountRlp},
+        InputStateTrie, TrieInputs,
+    },
     proof::TrieRoots,
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH},
     GenerationInputs,
@@ -98,10 +102,10 @@ pub fn entrypoint(
                 withdrawals,
                 ger_data: None,
                 tries: TrieInputs {
-                    state_trie: state.into(),
+                    state_trie: InputStateTrie::Type1(state.into()),
                     transactions_trie: transaction.into(),
                     receipts_trie: receipt.into(),
-                    storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                    storage_tries: Some(storage.into_iter().map(|(k, v)| (k, v.into())).collect()),
                 },
                 trie_roots_after: after,
                 checkpoint_state_trie_root,
@@ -144,8 +148,10 @@ fn start(
                             acc.insert_by_hashed_address(
                                 path.into_hash()
                                     .context("invalid path length in direct state trie")?,
-                                rlp::decode(&bytes)
-                                    .context("invalid AccountRlp in direct state trie")?,
+                                AccountRlp::Type1(
+                                    rlp::decode(&bytes)
+                                        .context("invalid AccountRlp in direct state trie")?,
+                                ),
                             )?;
                         }
                         mpt_trie::trie_ops::ValOrHash::Hash(h) => {
@@ -287,12 +293,15 @@ fn middle<StateTrieT: StateTrie + Clone>(
     for (haddr, acct) in state_trie.iter() {
         let storage = storage_tries.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
-            it.insert_hash(TrieKey::default(), acct.storage_root)
-                .expect("empty trie insert cannot fail");
+            it.insert_hash(
+                TrieKey::default(),
+                acct.storage_root().expect("Should be a Type1 account."),
+            )
+            .expect("empty trie insert cannot fail");
             it
         });
         ensure!(
-            storage.root() == acct.storage_root,
+            storage.root() == acct.storage_root().expect("Should be a Type1 account."),
             "inconsistent initial storage for hashed address {haddr:x}"
         )
     }
@@ -383,7 +392,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
                     .map(|acct| (acct, false))
-                    .unwrap_or((AccountRlp::default(), true));
+                    .unwrap_or((AccountRlp::Type1(Type1AccountRlp::default()), true));
 
                 if born || just_access {
                     state_trie
@@ -415,23 +424,25 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 );
 
                 if do_writes {
-                    acct.balance = balance.unwrap_or(acct.balance);
-                    acct.nonce = nonce.unwrap_or(acct.nonce);
-                    acct.code_hash = code_usage
-                        .map(|it| match it {
-                            ContractCodeUsage::Read(hash) => {
-                                batch_contract_code.insert(code.get(hash)?);
-                                anyhow::Ok(hash)
-                            }
-                            ContractCodeUsage::Write(bytes) => {
-                                code.insert(bytes.clone());
-                                let hash = keccak_hash::keccak(&bytes);
-                                batch_contract_code.insert(bytes);
-                                Ok(hash)
-                            }
-                        })
-                        .transpose()?
-                        .unwrap_or(acct.code_hash);
+                    acct.set_balance(balance.unwrap_or(acct.balance()));
+                    acct.set_nonce(nonce.unwrap_or(acct.nonce()));
+                    acct.set_code_hash(
+                        code_usage
+                            .map(|it| match it {
+                                ContractCodeUsage::Read(hash) => {
+                                    batch_contract_code.insert(code.get(hash)?);
+                                    anyhow::Ok(hash)
+                                }
+                                ContractCodeUsage::Write(bytes) => {
+                                    code.insert(bytes.clone());
+                                    let hash = keccak_hash::keccak(&bytes);
+                                    batch_contract_code.insert(bytes);
+                                    Ok(hash)
+                                }
+                            })
+                            .transpose()?
+                            .unwrap_or(acct.code_hash()),
+                    );
 
                     if !storage_written.is_empty() {
                         let storage = match born {
@@ -451,7 +462,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                                 }
                             }
                         }
-                        acct.storage_root = storage.root();
+                        acct.set_storage_root(storage.root());
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
@@ -493,7 +504,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         let mut acct = state_trie
                             .get_by_address(*addr)
                             .context("missing address for withdrawal")?;
-                        acct.balance += *amt;
+                        acct.set_balance(acct.balance() + *amt);
                         state_trie
                             .insert_by_address(*addr, acct)
                             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -578,7 +589,7 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     let mut beacon_acct = state_trie
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context("missing beacon contract address")?;
-    beacon_acct.storage_root = beacon_storage.root();
+    beacon_acct.set_storage_root(beacon_storage.root());
     state_trie
         .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
