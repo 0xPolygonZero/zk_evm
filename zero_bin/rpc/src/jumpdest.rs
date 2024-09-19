@@ -1,4 +1,5 @@
 use core::default::Default;
+use core::option::Option::None;
 use core::time::Duration;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -97,7 +98,7 @@ fn precompiles() -> &'static HashSet<Address> {
 
 /// Generate at JUMPDEST table by simulating the call stack in EVM,
 /// using a Geth structlog as input.
-#[instrument]
+// #[instrument]
 pub(crate) fn generate_jumpdest_table(
     tx: &Transaction,
     struct_log: &[StructLog],
@@ -107,6 +108,7 @@ pub(crate) fn generate_jumpdest_table(
 
     let mut jumpdest_table = JumpDestTableWitness::default();
 
+    // This does not contain `initcodes`.
     let callee_addr_to_code_hash: HashMap<Address, H256> = tx_traces
         .iter()
         .map(|(callee_addr, trace)| (callee_addr, &trace.code_usage))
@@ -126,16 +128,16 @@ pub(crate) fn generate_jumpdest_table(
         }
     );
 
-    let entrypoint_code_hash: H256 = if let Some(to_address) = tx.to {
-        // Guard against transactions to a non-contract address.
-        ensure!(
-            callee_addr_to_code_hash.contains_key(&to_address),
-            format!("Callee addr {} is not at contract address", to_address)
-        );
-        callee_addr_to_code_hash[&to_address]
-    } else {
-        let init = &tx.input;
-        keccak(init)
+    let entrypoint_code_hash: H256 = match tx.to {
+        Some(to_address) if precompiles().contains(&to_address) => return Ok(jumpdest_table),
+        Some(to_address) if callee_addr_to_code_hash.contains_key(&to_address).not() => {
+            return Ok(jumpdest_table)
+        }
+        Some(to_address) => callee_addr_to_code_hash[&to_address],
+        None => {
+            let init = &tx.input;
+            keccak(init)
+        }
     };
 
     // `None` encodes that previous `entry` was not a JUMP or JUMPI with true
@@ -165,14 +167,14 @@ pub(crate) fn generate_jumpdest_table(
         ensure!(call_stack.is_empty().not(), "Call stack was empty.");
         let (code_hash, ctx) = call_stack.last().unwrap();
 
-        trace!("TX:   {:?}", tx.hash);
-        trace!("STEP: {:?}", step);
-        trace!("STEPS: {:?}", struct_log.len());
-        trace!("OPCODE: {}", entry.op.as_str());
-        trace!("CODE: {:?}", code_hash);
-        trace!("CTX:  {:?}", ctx);
-        trace!("CURR_DEPTH:  {:?}", curr_depth);
-        trace!("{:#?}\n", entry);
+        // trace!("TX:   {:?}", tx.hash);
+        // trace!("STEP: {:?}", step);
+        // trace!("STEPS: {:?}", struct_log.len());
+        // trace!("OPCODE: {}", entry.op.as_str());
+        // trace!("CODE: {:?}", code_hash);
+        // trace!("CTX:  {:?}", ctx);
+        // trace!("CURR_DEPTH:  {:?}", curr_depth);
+        // trace!("{:#?}\n", entry);
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {

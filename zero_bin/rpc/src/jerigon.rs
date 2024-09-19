@@ -177,7 +177,7 @@ where
             },
             |jdt| {
                 debug!(
-                    "{:#?}: JumpDestTable generation succeceeded with result: {}",
+                    "{:#?}: JumpDestTable generation succeeded with result: {}",
                     tx.hash, jdt
                 );
                 Some(jdt)

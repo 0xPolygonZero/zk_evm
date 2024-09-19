@@ -76,6 +76,7 @@ pub fn entrypoint(
         withdrawals,
     )?;
 
+    dbg!(&batches.first().unwrap().jumpdest_tables);
     let mut running_gas_used = 0;
     Ok(batches
         .into_iter()

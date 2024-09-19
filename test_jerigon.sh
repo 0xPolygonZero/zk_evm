@@ -11,9 +11,9 @@ fi
 mkdir -p witnesses
 
 export RAYON_NUM_THREADS=4
-export TOKIO_WORKER_THREADS=4
+export TOKIO_WORKER_THREADS=1
 export RUST_BACKTRACE=full
-export RUST_LOG=info
+export RUST_LOG=rpc=trace,evm_arithmetization::generation::prover_input=trace
 export 'RUSTFLAGS=-C target-cpu=native -Zlinker-features=-lld'
 export RUST_MIN_STACK=67108864
 
@@ -137,6 +137,23 @@ USEDTOFAIL="
 77
 "
 
+ROUND2="
+15
+35
+566
+664
+665
+667
+670
+"
+#444
+
+TESTED="
+4
+5
+28
+65
+"
 
 # 470..663 from Robin
 for i in {470..663}
@@ -152,7 +169,8 @@ RANDOMBLOCKS=`shuf --input-range=0-$TIP -n $NUMRANDOMBLOCKS | sort`
 #BLOCKS="$ROBIN $RANDOMBLOCKS $CIBLOCKS"
 #BLOCKS=`echo $CIBLOCKS | sed 's/\s/\n/g'`
 #BLOCKS="$CIBLOCKS $KNOWNFAILED $RANDOMBLOCKS"
-BLOCKS="$DECODING $CREATE2"
+#BLOCKS="$CREATE2 $DECODING $CONTAINSKEY $USEDTOFAIL $STILLFAIL $CIBLOCKS $JUMPI"
+BLOCKS="$ROUND2"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 #echo "Testing:  $BLOCKS"
@@ -164,7 +182,7 @@ for BLOCK in $BLOCKS; do
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
-  timeout 2m cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
