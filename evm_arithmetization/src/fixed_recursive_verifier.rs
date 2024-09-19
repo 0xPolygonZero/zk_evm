@@ -214,6 +214,9 @@ where
     }
 }
 
+// Root circuits with and without Keccak Tables
+const NUM_ROOT_CIRCUITS: usize = 2;
+
 /// Data for the segment aggregation circuit, which is used to compress two
 /// segment proofs into one. Each inner proof can be either an EVM root proof or
 /// another segment aggregation proof.
@@ -224,7 +227,7 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: AggregationChildTarget<D>,
+    lhs: AggregationChildTarget<D, NUM_ROOT_CIRCUITS>,
     rhs: AggregationChildWithDummyTarget<D>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
@@ -322,8 +325,8 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: AggregationChildTarget<D>,
-    rhs: AggregationChildTarget<D>,
+    lhs: AggregationChildTarget<D, 1>,
+    rhs: AggregationChildTarget<D, 1>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -368,28 +371,46 @@ where
 }
 
 #[derive(Eq, PartialEq, Debug)]
-struct AggregationChildTarget<const D: usize> {
+struct AggregationChildTarget<const D: usize, const N: usize> {
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
-    base_proof: ProofWithPublicInputsTarget<D>,
+    is_base_proof: [BoolTarget; N],
+    base_proofs: [ProofWithPublicInputsTarget<D>; N],
 }
 
-impl<const D: usize> AggregationChildTarget<D> {
+impl<const D: usize, const N: usize> AggregationChildTarget<D, N> {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_bool(self.is_agg)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
-        buffer.write_target_proof_with_public_inputs(&self.base_proof)?;
+        for i in 0..N {
+            buffer.write_target_bool(self.is_base_proof[i])?;
+            buffer.write_target_proof_with_public_inputs(&self.base_proofs[i])?;
+        }
         Ok(())
     }
 
     fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
         let is_agg = buffer.read_target_bool()?;
         let agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        let base_proof = buffer.read_target_proof_with_public_inputs()?;
+
+        let mut is_base_proof = Vec::with_capacity(N);
+        let mut base_proofs = Vec::with_capacity(N);
+
+        for _ in 0..N {
+            is_base_proof.push(buffer.read_target_bool()?);
+            base_proofs.push(buffer.read_target_proof_with_public_inputs()?);
+        }
+
         Ok(Self {
             is_agg,
             agg_proof,
-            base_proof,
+            // Convert Vecs to arrays
+            is_base_proof: is_base_proof
+                .try_into()
+                .expect("Incorrect length for is_base_proof"),
+            base_proofs: base_proofs
+                .try_into()
+                .expect("Incorrect length for base_proofs"),
         })
     }
 
@@ -397,21 +418,29 @@ impl<const D: usize> AggregationChildTarget<D> {
         &self,
         builder: &mut CircuitBuilder<F, D>,
     ) -> PublicValuesTarget {
-        let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
-        let base_pv = PublicValuesTarget::from_public_inputs(&self.base_proof.public_inputs);
-        PublicValuesTarget::select(builder, self.is_agg, agg_pv, base_pv)
+        let mut selected_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
+        for i in 0..N {
+            let base_pv =
+                PublicValuesTarget::from_public_inputs(&self.base_proofs[i].public_inputs);
+            selected_pv =
+                PublicValuesTarget::select(builder, self.is_base_proof[i], base_pv, selected_pv);
+        }
+        selected_pv
     }
 
     fn public_inputs<F: RichField + Extendable<D>>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
     ) -> Vec<Target> {
-        zip_eq(
-            &self.agg_proof.public_inputs,
-            &self.base_proof.public_inputs,
-        )
-        .map(|(&agg_pv, &base_pv)| builder.select(self.is_agg, agg_pv, base_pv))
-        .collect()
+        let mut selected_pi = self.agg_proof.public_inputs.clone();
+        for i in 0..N {
+            selected_pi = zip_eq(&selected_pi, &self.base_proofs[i].public_inputs)
+                .map(|(&selected_pi, &base_pi)| {
+                    builder.select(self.is_base_proof[i], base_pi, selected_pi)
+                })
+                .collect();
+        }
+        selected_pi
     }
 }
 
@@ -532,8 +561,8 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: AggregationChildTarget<D>,
-    rhs: AggregationChildTarget<D>,
+    lhs: AggregationChildTarget<D, 1>,
+    rhs: AggregationChildTarget<D, 1>,
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -821,11 +850,10 @@ where
             #[cfg(feature = "cdk_erigon")]
             poseidon,
         ];
-        log::info!("create_segment_circuit");
         let root = Self::create_segment_circuit(&by_table, stark_config, true);
-        log::info!("create root_no_keccak_tables");
         let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, false);
-        let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
+        let segment_aggregation =
+            Self::create_segment_aggregation_circuit(&root, &root_no_keccak_tables);
         let txn_aggregation =
             Self::create_txn_aggregation_circuit(&segment_aggregation, stark_config);
         let block = Self::create_block_circuit(&txn_aggregation);
@@ -1054,16 +1082,18 @@ where
 
     fn create_segment_aggregation_circuit(
         root: &RootCircuitData<F, C, D>,
+        root_no_keccak_tables: &RootCircuitData<F, C, D>,
     ) -> SegmentAggregationCircuitData<F, C, D> {
         let mut builder = CircuitBuilder::<F, D>::new(root.circuit.common.config.clone());
         let public_values = add_virtual_public_values_public_input(&mut builder);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         // The right hand side child might be dummy.
-        let lhs_segment = Self::add_segment_agg_child(&mut builder, root);
+        let lhs_segment = Self::add_segment_agg_child(&mut builder, root, root_no_keccak_tables);
         let rhs_segment = Self::add_segment_agg_child_with_dummy(
             &mut builder,
             root,
+            root_no_keccak_tables,
             lhs_segment.base_proof.clone(),
         );
 
@@ -1347,28 +1377,47 @@ where
     /// # Outputs
     ///
     /// Returns a [`TwoToOneBlockChildTarget<D>`] object.
-    fn add_agg_child(
+    fn add_agg_child<const N: usize>(
         builder: &mut CircuitBuilder<F, D>,
-        base_circuit: &CircuitData<F, C, D>,
-    ) -> AggregationChildTarget<D> {
-        let common = &base_circuit.common;
-        let base_vk = builder.constant_verifier_data(&base_circuit.verifier_only);
+        base_circuits: &[&CircuitData<F, C, D>; N],
+    ) -> AggregationChildTarget<D, N> {
+        let common = &base_circuits[0].common;
+        for i in 1..N {
+            assert_eq!(common, base_circuits[i].common);
+        }
+
         let is_agg = builder.add_virtual_bool_target_safe();
         let agg_proof = builder.add_virtual_proof_with_pis(common);
-        let base_proof = builder.add_virtual_proof_with_pis(common);
+
+        let mut base_vks = Vec::with_capacity(N);
+        let mut base_proofs = Vec::with_capacity(N);
+        let mut is_base_proof = Vec::with_capacity(N);
+
+        for i in 1..N {
+            base_vks.push(builder.constant_verifier_data(&base_circuits[i].verifier_only));
+            base_proofs.push(builder.add_virtual_proof_with_pis(common));
+            is_base_proof.push(builder.add_virtual_bool_target_safe());
+        }
+
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg,
                 &agg_proof,
-                &base_proof,
-                &base_vk,
+                &is_base_proof,
+                &base_proofs,
+                &base_vks,
                 common,
             )
             .expect("Failed to build cyclic recursion circuit");
         AggregationChildTarget {
             is_agg,
             agg_proof,
-            base_proof,
+            is_base_proof: is_base_proof
+                .try_into()
+                .expect("Incorrect length for is_base_proof"),
+            base_proofs: base_proofs
+                .try_into()
+                .expect("Incorrect length for base_proofs"),
         }
     }
 
@@ -1550,31 +1599,54 @@ where
     fn add_segment_agg_child(
         builder: &mut CircuitBuilder<F, D>,
         root: &RootCircuitData<F, C, D>,
-    ) -> AggregationChildTarget<D> {
+        root_no_keccak_tables: &RootCircuitData<F, C, D>,
+    ) -> AggregationChildTarget<D, NUM_ROOT_CIRCUITS> {
         let common = &root.circuit.common;
+
         let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
+        let root_vk_no_keccak_tables =
+            builder.constant_verifier_data(&root_no_keccak_tables.circuit.verifier_only);
+
         let is_agg = builder.add_virtual_bool_target_safe();
+        let with_keccak_tables = builder.add_virtual_bool_target_safe();
+        let is_agg_or_with_keccak_tables = builder.or(is_agg, with_keccak_tables);
+        let without_keccak_tables = builder.not(is_agg_or_with_keccak_tables);
+
         let agg_proof = builder.add_virtual_proof_with_pis(common);
         let base_proof = builder.add_virtual_proof_with_pis(common);
+        let base_proof_no_keccak_tables = builder.add_virtual_proof_with_pis(common);
+
+        let is_base_proof = [with_keccak_tables, without_keccak_tables];
+        let base_proofs = [base_proof, base_proof_no_keccak_tables];
+        let base_vks = [root_vk, root_vk_no_keccak_tables];
+
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg,
                 &agg_proof,
-                &base_proof,
-                &root_vk,
+                &is_base_proof,
+                &base_proofs,
+                &base_vks,
                 common,
             )
             .expect("Failed to build cyclic recursion circuit");
+
         AggregationChildTarget {
             is_agg,
             agg_proof,
-            base_proof,
+            is_base_proof: is_base_proof
+                .try_into()
+                .expect("Incorrect length for is_base_proof"),
+            base_proofs: base_proofs
+                .try_into()
+                .expect("Incorrect length for base_proofs"),
         }
     }
 
     fn add_segment_agg_child_with_dummy(
         builder: &mut CircuitBuilder<F, D>,
         root: &RootCircuitData<F, C, D>,
+        root_no_keccak_tables: &RootCircuitData<F, C, D>,
         dummy_proof: ProofWithPublicInputsTarget<D>,
     ) -> AggregationChildWithDummyTarget<D> {
         let common = &root.circuit.common;
@@ -1605,26 +1677,29 @@ where
     fn add_txn_agg_child(
         builder: &mut CircuitBuilder<F, D>,
         segment_agg: &SegmentAggregationCircuitData<F, C, D>,
-    ) -> AggregationChildTarget<D> {
+    ) -> AggregationChildTarget<D, 1> {
         let common = &segment_agg.circuit.common;
         let inner_segment_agg_vk =
             builder.constant_verifier_data(&segment_agg.circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
+        let not_agg = builder.not(is_agg);
         let agg_proof = builder.add_virtual_proof_with_pis(common);
         let base_proof = builder.add_virtual_proof_with_pis(common);
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg,
                 &agg_proof,
-                &base_proof,
-                &inner_segment_agg_vk,
+                &[not_agg],
+                &[base_proof.clone()],
+                &[inner_segment_agg_vk],
                 common,
             )
             .expect("Failed to build cyclic recursion circuit");
         AggregationChildTarget {
             is_agg,
             agg_proof,
-            base_proof,
+            is_base_proof: [not_agg],
+            base_proofs: [base_proof],
         }
     }
 
@@ -2713,8 +2788,8 @@ where
     /// aggregation circuit. The cyclic prover expects to find the `cyclic_vk`
     /// targets in the very end of the public inputs vector, and so it does not
     /// matter what the preceding values are.
-    fn set_dummy_if_necessary(
-        agg_child: &AggregationChildTarget<D>,
+    fn set_dummy_if_necessary<const N: usize>(
+        agg_child: &AggregationChildTarget<D, N>,
         is_agg: bool,
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
