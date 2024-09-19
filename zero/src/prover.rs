@@ -31,7 +31,6 @@ use crate::ops;
 //
 // While proving a block interval, we will output proofs corresponding to block
 // batches as soon as they are generated.
-const DEFAULT_PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE: usize = 16;
 static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore = Semaphore::const_new(0);
 
 #[derive(Debug, Clone)]
@@ -243,14 +242,7 @@ pub async fn prove(
         std::result::Result<std::result::Result<u64, anyhow::Error>, anyhow::Error>,
     > = JoinSet::new();
 
-    if prover_config.block_pool_size > 0 {
-        PARALLEL_BLOCK_PROVING_PERMIT_POOL.add_permits(prover_config.block_pool_size);
-    } else {
-        anyhow::bail!(
-            "block_pool_size should be greater than 0, value passed from cli is {}",
-            prover_config.block_pool_size
-        );
-    }
+    PARALLEL_BLOCK_PROVING_PERMIT_POOL.add_permits(prover_config.block_pool_size);
 
     while let Some((block_prover_input, is_last_block)) = block_receiver.recv().await {
         block_counter += 1;

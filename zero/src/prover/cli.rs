@@ -43,7 +43,8 @@ pub struct CliProverConfig {
     /// generate one proof file.
     #[arg(long, default_value_t = 8)]
     block_batch_size: usize,
-    /// The maximum number of block proving tasks that can run in parallel.
+    /// The maximum number of block proving tasks that can run in parallel. Must
+    /// be greater than zero.
     #[arg(long, default_value_t = 16)]
     block_pool_size: usize,
 }
