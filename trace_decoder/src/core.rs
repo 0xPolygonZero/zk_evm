@@ -31,6 +31,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
+    pre_execution: Option<PreExecution>,
 ) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     ensure!(batch_size_hint != 0);
 
@@ -67,6 +68,7 @@ pub fn entrypoint(
         &b_meta,
         ger_data,
         withdrawals,
+        pre_execution,
     )?;
 
     let mut running_gas_used = 0;
@@ -269,6 +271,7 @@ struct IntraBlockTries<StateTrieT> {
 }
 
 /// Does the main work mentioned in the [module documentation](super).
+#[allow(clippy::too_many_arguments)] // TODO(0xaatif): break this out into a `struct MiddleArgs`
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
@@ -282,6 +285,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
+    pre_execution: Option<PreExecution>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
@@ -326,14 +330,25 @@ fn middle<StateTrieT: StateTrie + Clone>(
         let mut state_mask = BTreeSet::new();
 
         if txn_ix == 0 {
-            do_pre_execution(
-                block,
-                ger_data,
-                &mut storage_tries,
-                &mut storage_masks,
-                &mut state_mask,
-                &mut state_trie,
-            )?;
+            match pre_execution {
+                Some(PreExecution::Beacon) => beacon_pre_execution(
+                    block.block_timestamp,
+                    &mut storage_tries,
+                    &mut storage_masks,
+                    block.parent_beacon_block_root,
+                    &mut state_mask,
+                    &mut state_trie,
+                )?,
+                Some(PreExecution::Scalable) => scalable_pre_execution(
+                    block,
+                    ger_data,
+                    &mut storage_tries,
+                    &mut storage_masks,
+                    &mut state_mask,
+                    &mut state_trie,
+                )?,
+                None => {}
+            }
         }
 
         for txn in batch {
@@ -547,47 +562,21 @@ fn middle<StateTrieT: StateTrie + Clone>(
     Ok(out)
 }
 
-#[allow(unused_variables)]
-/// Performs all the pre-txn execution rules of the targeted network.
-fn do_pre_execution<StateTrieT: StateTrie + Clone>(
-    block: &BlockMetadata,
-    ger_data: Option<(H256, H256)>,
-    storage: &mut BTreeMap<H256, StorageTrie>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
-    trim_state: &mut BTreeSet<TrieKey>,
-    state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
-    // Ethereum mainnet: EIP-4788
-    #[cfg(feature = "eth_mainnet")]
-    do_beacon_hook(
-        block.block_timestamp,
-        storage,
-        trim_storage,
-        block.parent_beacon_block_root,
-        trim_state,
-        state_trie,
-    )?;
-
-    #[cfg(feature = "cdk_erigon")]
-    do_scalable_hook(
-        block,
-        ger_data,
-        storage,
-        trim_storage,
-        trim_state,
-        state_trie,
-    )?;
-
-    Ok(())
+/// What pre-execution procedure to perform.
+#[derive(Debug)]
+pub enum PreExecution {
+    /// See [`beacon_pre_execution`].
+    Beacon,
+    /// See [`scalable_pre_execution`].
+    Scalable,
 }
 
-#[cfg(feature = "cdk_erigon")]
 /// Updates the storage of the Scalable and GER contracts, according to
 /// <https://docs.polygon.technology/zkEVM/architecture/proving-system/processing-l2-blocks/#etrog-upgrade-fork-id-6>.
 ///
 /// This is Polygon-CDK-specific, and runs at the start of the block,
 /// before any transactions (as per the Etrog specification).
-fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
+fn scalable_pre_execution<StateTrieT: StateTrie + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
@@ -682,13 +671,12 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     Ok(())
 }
 
-#[cfg(feature = "eth_mainnet")]
 /// Updates the storage of the beacon block root contract,
 /// according to <https://eips.ethereum.org/EIPS/eip-4788>
 ///
 /// This is Cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
-fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
+fn beacon_pre_execution<StateTrieT: StateTrie + Clone>(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
