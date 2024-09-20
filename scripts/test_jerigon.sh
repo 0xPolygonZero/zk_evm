@@ -2,7 +2,6 @@
 
 set -uo pipefail
 
-#export CARGO_LOG=cargo::core::compiler::fingerprint=debug
 export RPC=
 if [ -z $RPC ]; then
   # You must set an RPC endpoint
