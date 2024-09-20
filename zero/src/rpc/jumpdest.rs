@@ -176,7 +176,10 @@ pub(crate) fn generate_jumpdest_table(
             call_stack.pop();
         }
 
-        ensure!(call_stack.is_empty().not(), "Call stack was empty.");
+        ensure!(
+            call_stack.is_empty().not(),
+            "Call stack was unexpectedly empty."
+        );
         let (code_hash, ctx) = call_stack.last().unwrap();
 
         trace!("TX:   {:?}", tx.hash);
@@ -190,26 +193,32 @@ pub(crate) fn generate_jumpdest_table(
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
+                prev_jump = None;
                 ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
                 // We reverse the stack, so the order matches our assembly code.
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
-                let operands = 2; // actually 6 or 7.
-                ensure!(
-                    evm_stack.len() >= operands,
-                    "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
-                    evm_stack.len()
-                );
+                let operands_used = 2; // actually 6 or 7.
+
+                if evm_stack.len() < operands_used {
+                    trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len());
+                    // maybe increment ctx here
+                    continue;
+                }
                 // This is the same stack index (i.e. 2nd) for all four opcodes. See https://ethervm.io/#F1
                 let [_gas, address, ..] = evm_stack[..] else {
                     unreachable!()
                 };
 
-                let callee_address = {
-                    let callee_raw = *address;
-                    ensure!(callee_raw <= U256::from(U160::MAX));
-                    let lower_20_bytes = U160::from(callee_raw);
-                    Address::from(lower_20_bytes)
+                if *address > U256::from(U160::MAX) {
+                    trace!(
+                        "{op}: Callee address {} was larger than possible {}.",
+                        *address,
+                        U256::from(U160::MAX)
+                    );
+                    continue;
                 };
+                let lower_20_bytes = U160::from(*address);
+                let callee_address = Address::from(lower_20_bytes);
 
                 if callee_addr_to_code_hash.contains_key(&callee_address) {
                     let next_code_hash = callee_addr_to_code_hash[&callee_address];
@@ -231,69 +240,63 @@ pub(crate) fn generate_jumpdest_table(
                     );
                 }
                 next_ctx_available += 1;
-                prev_jump = None;
             }
-            "CREATE" => {
+            "CREATE" | "CREATE2" => {
+                prev_jump = None;
                 ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
                 // We reverse the stack, so the order matches our assembly code.
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
-                let operands = 3;
-                ensure!(
-                    evm_stack.len() >= operands,
-                    "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
-                    evm_stack.len()
-                );
-                let [_value, _offset, _size, ..] = evm_stack[..] else {
-                    unreachable!()
+                let operands_used = 3;
+
+                if evm_stack.len() < operands_used {
+                    trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len() );
+                    continue;
                 };
 
-                let contract_address = tx.from.create(tx.nonce);
-                ensure!(callee_addr_to_code_hash.contains_key(&contract_address));
-                let code_hash = callee_addr_to_code_hash[&contract_address];
-                call_stack.push((code_hash, next_ctx_available));
-
-                next_ctx_available += 1;
-                prev_jump = None;
-            }
-            "CREATE2" => {
-                ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
-                // We reverse the stack, so the order matches our assembly code.
-                let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
-                let operands = 4;
-                ensure!(
-                    evm_stack.len() >= operands,
-                    "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
-                    evm_stack.len()
-                );
-                let [_value, offset, size, _salt, ..] = evm_stack[..] else {
+                let [_value, offset, size, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                ensure!(*offset <= U256::from(usize::MAX));
+                if *offset > U256::from(usize::MAX) {
+                    trace!(
+                        "{op}: Offset {offset} was too large to fit in usize {}.",
+                        usize::MAX
+                    );
+                    continue;
+                };
                 let offset: usize = offset.to();
-                ensure!(*size <= U256::from(usize::MAX));
 
+                if *size > U256::from(usize::MAX) {
+                    trace!(
+                        "{op}: Size {size} was too large to fit in usize {}.",
+                        usize::MAX
+                    );
+                    continue;
+                };
                 let size: usize = size.to();
-                let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
-                // let salt: Word = salt.to_be_bytes();
 
-                ensure!(
-                    entry.memory.is_some() && offset + size <= memory_size,
-                    "Insufficient memory available for {op}. Contract has size {size} and is supposed to be stored between offset {offset} and {}, but memory size is only {memory_size}.", offset+size
-                );
+                let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
+
+                if entry.memory.is_none() || offset + size > memory_size {
+                    trace!("Insufficient memory available for {op}. Contract has size {size} and is supposed to be stored between offset {offset} and {}, but memory size is only {memory_size}.", offset+size);
+                    continue;
+                }
                 let memory_raw: &[String] = entry.memory.as_ref().unwrap();
                 let memory_parsed: Vec<anyhow::Result<Word>> = memory_raw
                     .iter()
-                    .map(|s| {
-                        // let c = s.parse();
-                        let c = U256::from_str_radix(s, 16);
-                        ensure!(c.is_ok(), "Parsing memory failed.");
-                        let a: U256 = c.unwrap();
-                        let d: Word = a.to_be_bytes();
-                        Ok(d)
+                    .map(|mem_line| {
+                        let mem_line_parsed = U256::from_str_radix(mem_line, 16)?;
+                        Ok(mem_line_parsed.to_be_bytes())
                     })
                     .collect();
                 let mem_res: anyhow::Result<Vec<Word>> = memory_parsed.into_iter().collect();
-                let memory: Vec<u8> = mem_res?.concat();
+                if mem_res.is_err() {
+                    trace!(
+                        "{op}: Parsing memory failed with error: {}",
+                        mem_res.unwrap_err()
+                    );
+                    continue;
+                }
+                let memory: Vec<u8> = mem_res.unwrap().concat();
 
                 let init_code = &memory[offset..offset + size];
                 let init_code_hash = keccak(init_code);
@@ -303,18 +306,17 @@ pub(crate) fn generate_jumpdest_table(
                 call_stack.push((init_code_hash, next_ctx_available));
 
                 next_ctx_available += 1;
-                prev_jump = None;
             }
             "JUMP" => {
+                prev_jump = None;
                 ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
                 // We reverse the stack, so the order matches our assembly code.
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
                 let operands = 1;
-                ensure!(
-                    evm_stack.len() >= operands,
-                    "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
-                    evm_stack.len()
-                );
+                if evm_stack.len() < operands {
+                    trace!( "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.", evm_stack.len() );
+                    continue;
+                }
                 let [jump_target, ..] = evm_stack[..] else {
                     unreachable!()
                 };
@@ -322,42 +324,55 @@ pub(crate) fn generate_jumpdest_table(
                 prev_jump = Some(*jump_target);
             }
             "JUMPI" => {
+                prev_jump = None;
                 ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
                 // We reverse the stack, so the order matches our assembly code.
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
                 let operands = 2;
-                ensure!(
-                    evm_stack.len() >= operands,
-                    "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.",
-                    evm_stack.len()
-                );
+                if evm_stack.len() < operands {
+                    trace!( "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.", evm_stack.len());
+                    continue;
+                };
+
                 let [jump_target, condition, ..] = evm_stack[..] else {
                     unreachable!()
                 };
                 let jump_condition = condition.is_zero().not();
 
-                prev_jump = if jump_condition {
-                    Some(*jump_target)
-                } else {
-                    None
-                };
+                if jump_condition {
+                    prev_jump = Some(*jump_target)
+                }
             }
             "JUMPDEST" => {
-                let jumped_here = if let Some(jmp_target) = prev_jump {
-                    jmp_target == U256::from(entry.pc)
-                } else {
-                    false
-                };
-                let jumpdest_offset = TryInto::<usize>::try_into(entry.pc)?;
-                if jumped_here {
-                    jumpdest_table.insert(*code_hash, *ctx, jumpdest_offset);
+                let mut jumped_here = false;
+
+                if let Some(jmp_target) = prev_jump {
+                    jumped_here = jmp_target == U256::from(entry.pc);
                 }
-                // else: we do not care about JUMPDESTs reached through fall-through.
                 prev_jump = None;
+
+                if jumped_here.not() {
+                    trace!(
+                        "{op}: JUMPDESTs at offset {} was reached through fall-through.",
+                        entry.pc
+                    );
+                    continue;
+                }
+
+                let jumpdest_offset = TryInto::<usize>::try_into(entry.pc);
+                if jumpdest_offset.is_err() {
+                    trace!(
+                        "{op}: Could not cast offset {} to usize {}.",
+                        entry.pc,
+                        usize::MAX
+                    );
+                    continue;
+                }
+                jumpdest_table.insert(*code_hash, *ctx, jumpdest_offset.unwrap());
             }
             "EXTCODECOPY" | "EXTCODESIZE" => {
-                next_ctx_available += 1;
                 prev_jump = None;
+                next_ctx_available += 1;
             }
             _ => {
                 prev_jump = None;
@@ -367,6 +382,8 @@ pub(crate) fn generate_jumpdest_table(
     Ok(jumpdest_table)
 }
 
+/// This module exists as a workaround for parsing `StrucLog`.  The `error`
+/// field is a string in Alloy but an object in Erigon.
 pub mod structlogprime {
     use core::option::Option::None;
     use std::collections::BTreeMap;
