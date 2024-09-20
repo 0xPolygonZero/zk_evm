@@ -51,7 +51,7 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
     }
 }
 
-fn trace_contains_create2(structlog: Vec<StructLog>) -> bool {
+fn trace_contains_create2(structlog: &[StructLog]) -> bool {
     structlog.iter().any(|entry| entry.op == "CREATE2")
 }
 
@@ -64,27 +64,39 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    // Optimization: It may be a better default to pull the stack immediately.
-    let stackonly_structlog_trace = provider
-        .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
-        .await?;
+    let inner = async {
+        // Optimization: It may be a better default to pull the stack immediately.
+        let stackonly_structlog_trace = provider
+            .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
+            .await?;
 
-    let structlogs_opt: Option<Vec<StructLog>> =
-        normalize_structlog(stackonly_structlog_trace).await;
+        let stackonly_structlog_opt: Option<Vec<StructLog>> =
+            normalize_structlog(&stackonly_structlog_trace).await;
 
-    let need_memory = structlogs_opt.is_some_and(trace_contains_create2);
-    trace!("Need structlog with memory: {need_memory}");
+        let need_memory = stackonly_structlog_opt
+            .as_deref()
+            .is_some_and(trace_contains_create2);
+        trace!("Need structlog with memory: {need_memory}");
 
-    let structlog = provider.debug_trace_transaction(
-        *tx_hash,
-        structlog_tracing_options(true, need_memory, false),
-    );
+        if need_memory.not() {
+            return Ok(stackonly_structlog_opt);
+        };
 
-    match timeout(TIMEOUT_LIMIT, structlog).await {
+        let memory_structlog_fut = provider.debug_trace_transaction(
+            *tx_hash,
+            structlog_tracing_options(true, need_memory, false),
+        );
+
+        let memory_structlog = normalize_structlog(&memory_structlog_fut.await?).await;
+
+        Ok::<Option<Vec<_>>, RpcError<TransportErrorKind>>(memory_structlog)
+    };
+
+    match timeout(TIMEOUT_LIMIT, inner).await {
         Err(ellapsed_error) => Err(RpcError::Transport(TransportErrorKind::Custom(Box::new(
             ellapsed_error,
         )))),
-        Ok(structlog_res) => Ok(normalize_structlog(structlog_res?).await),
+        Ok(structlog_res) => Ok(structlog_res?),
     }
 }
 
@@ -470,11 +482,11 @@ pub mod structlogprime {
     }
 
     pub(crate) async fn normalize_structlog(
-        unnormalized_structlog: GethTrace,
+        unnormalized_structlog: &GethTrace,
     ) -> Option<Vec<StructLog>> {
         match unnormalized_structlog {
-            GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs),
-            GethTrace::JS(structlog_js_object) => try_reserialize(&structlog_js_object)
+            GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs.clone()),
+            GethTrace::JS(structlog_js_object) => try_reserialize(structlog_js_object)
                 .ok()
                 .map(|s| s.struct_logs),
             _ => None,
