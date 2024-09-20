@@ -23,7 +23,9 @@ use starky::stark::Stark;
 use crate::all_stark::{AllStark, Table, MEMORY_CTL_IDX, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::GenerationSegmentData;
-use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
+use crate::generation::{
+    generate_traces, GenerationInputs, TablesWithPolynomialValues, TrimmedGenerationInputs,
+};
 use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
 
@@ -71,7 +73,7 @@ where
 pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
-    trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    trace_poly_values: TablesWithPolynomialValues<F>,
     public_values: &mut PublicValues,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -91,19 +93,21 @@ where
         trace_poly_values
             .iter()
             .zip_eq(Table::all())
-            .map(|(trace, table)| {
-                timed!(
-                    timing,
-                    &format!("compute trace commitment for {:?}", table),
-                    PolynomialBatch::<F, C, D>::from_values(
-                        trace.clone(),
-                        rate_bits,
-                        false,
-                        cap_height,
+            .map(|(trace_opt, table)| {
+                trace_opt.as_ref().map(|trace| {
+                    timed!(
                         timing,
-                        None,
+                        &format!("compute trace commitment for {:?}", table),
+                        PolynomialBatch::<F, C, D>::from_values(
+                            trace.clone(),
+                            rate_bits,
+                            false,
+                            cap_height,
+                            timing,
+                            None,
+                        )
                     )
-                )
+                })
             })
             .collect::<Vec<_>>()
     );
@@ -111,7 +115,7 @@ where
     // Get the Merkle caps for all trace commitments and observe them.
     let trace_caps = trace_commitments
         .iter()
-        .map(|c| c.merkle_tree.cap.clone())
+        .filter_map(|commitment_opt| commitment_opt.as_ref().map(|c| c.merkle_tree.cap.clone()))
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
     for cap in &trace_caps {
@@ -227,8 +231,8 @@ type ProofWithMemCaps<F, C, H, const D: usize> = (
 fn prove_with_commitments<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
-    trace_poly_values: &[Vec<PolynomialValues<F>>; NUM_TABLES],
-    trace_commitments: Vec<PolynomialBatch<F, C, D>>,
+    trace_poly_values: &TablesWithPolynomialValues<F>,
+    trace_commitments: Vec<Option<PolynomialBatch<F, C, D>>>,
     ctl_data_per_table: [CtlData<F>; NUM_TABLES],
     challenger: &mut Challenger<F, C::Hasher>,
     ctl_challenges: &GrandProductChallengeSet<F>,
@@ -239,171 +243,89 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let (arithmetic_proof, _) = timed!(
-        timing,
-        "prove Arithmetic STARK",
-        prove_single_table(
-            &all_stark.arithmetic_stark,
-            config,
-            &trace_poly_values[*Table::Arithmetic],
-            &trace_commitments[*Table::Arithmetic],
-            &ctl_data_per_table[*Table::Arithmetic],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (byte_packing_proof, _) = timed!(
-        timing,
-        "prove byte packing STARK",
-        prove_single_table(
-            &all_stark.byte_packing_stark,
-            config,
-            &trace_poly_values[*Table::BytePacking],
-            &trace_commitments[*Table::BytePacking],
-            &ctl_data_per_table[*Table::BytePacking],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (cpu_proof, _) = timed!(
-        timing,
-        "prove CPU STARK",
-        prove_single_table(
-            &all_stark.cpu_stark,
-            config,
-            &trace_poly_values[*Table::Cpu],
-            &trace_commitments[*Table::Cpu],
-            &ctl_data_per_table[*Table::Cpu],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (keccak_proof, _) = timed!(
-        timing,
-        "prove Keccak STARK",
-        prove_single_table(
-            &all_stark.keccak_stark,
-            config,
-            &trace_poly_values[*Table::Keccak],
-            &trace_commitments[*Table::Keccak],
-            &ctl_data_per_table[*Table::Keccak],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (keccak_sponge_proof, _) = timed!(
-        timing,
-        "prove Keccak sponge STARK",
-        prove_single_table(
-            &all_stark.keccak_sponge_stark,
-            config,
-            &trace_poly_values[*Table::KeccakSponge],
-            &trace_commitments[*Table::KeccakSponge],
-            &ctl_data_per_table[*Table::KeccakSponge],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (logic_proof, _) = timed!(
-        timing,
-        "prove logic STARK",
-        prove_single_table(
-            &all_stark.logic_stark,
-            config,
-            &trace_poly_values[*Table::Logic],
-            &trace_commitments[*Table::Logic],
-            &ctl_data_per_table[*Table::Logic],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (memory_proof, _) = timed!(
-        timing,
-        "prove memory STARK",
-        prove_single_table(
-            &all_stark.memory_stark,
-            config,
-            &trace_poly_values[*Table::Memory],
-            &trace_commitments[*Table::Memory],
-            &ctl_data_per_table[*Table::Memory],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (mem_before_proof, mem_before_cap) = timed!(
-        timing,
-        "prove mem_before STARK",
-        prove_single_table(
-            &all_stark.mem_before_stark,
-            config,
-            &trace_poly_values[*Table::MemBefore],
-            &trace_commitments[*Table::MemBefore],
-            &ctl_data_per_table[*Table::MemBefore],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (mem_after_proof, mem_after_cap) = timed!(
-        timing,
-        "prove mem_after STARK",
-        prove_single_table(
-            &all_stark.mem_after_stark,
-            config,
-            &trace_poly_values[*Table::MemAfter],
-            &trace_commitments[*Table::MemAfter],
-            &ctl_data_per_table[*Table::MemAfter],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
+    macro_rules! prove_table {
+        ($stark:ident, $table:expr) => {
+            if let (Some(trace_poly_values), Some(trace_commitment)) = (
+                trace_poly_values[$table].as_ref(),
+                trace_commitments[$table].as_ref(),
+            ) {
+                Some(
+                    timed!(
+                        timing,
+                        &format!("prove {} STARK", stringify!($stark)),
+                        prove_single_table(
+                            &all_stark.$stark,
+                            config,
+                            trace_poly_values,
+                            trace_commitment,
+                            &ctl_data_per_table[$table],
+                            ctl_challenges,
+                            challenger,
+                            timing,
+                            abort_signal.clone(),
+                        )?
+                    )
+                    .0,
+                )
+            } else {
+                None
+            }
+        };
+    }
+
+    let arithmetic_proof = prove_table!(arithmetic_stark, *Table::Arithmetic);
+    let byte_packing_proof = prove_table!(byte_packing_stark, *Table::BytePacking);
+    let cpu_proof = prove_table!(cpu_stark, *Table::Cpu);
+    let keccak_proof = prove_table!(keccak_stark, *Table::Keccak);
+    let keccak_sponge_proof = prove_table!(keccak_sponge_stark, *Table::KeccakSponge);
+    let logic_proof = prove_table!(logic_stark, *Table::Logic);
+    let memory_proof = prove_table!(memory_stark, *Table::Memory);
+
+    macro_rules! prove_mem_table {
+        ($stark:ident, $table:expr) => {
+            timed!(
+                timing,
+                &format!("prove {} STARK", stringify!($stark)),
+                prove_single_table(
+                    &all_stark.$stark,
+                    config,
+                    trace_poly_values[$table].as_ref().expect(&format!(
+                        "Missing trace poly values for {:?}",
+                        stringify!($table)
+                    )),
+                    trace_commitments[$table].as_ref().expect(&format!(
+                        "Missing trace commitments for {:?}",
+                        stringify!($table)
+                    )),
+                    &ctl_data_per_table[$table],
+                    ctl_challenges,
+                    challenger,
+                    timing,
+                    abort_signal.clone(),
+                )?
+            )
+        };
+    }
+
+    let (mem_before_proof, mem_before_cap) = prove_mem_table!(mem_before_stark, *Table::MemBefore);
+    let (mem_after_proof, mem_after_cap) = prove_mem_table!(mem_after_stark, *Table::MemAfter);
+
     #[cfg(feature = "cdk_erigon")]
-    let (poseidon_proof, _) = timed!(
-        timing,
-        "prove poseidon STARK",
-        prove_single_table(
-            &all_stark.poseidon_stark,
-            config,
-            &trace_poly_values[*Table::Poseidon],
-            &trace_commitments[*Table::Poseidon],
-            &ctl_data_per_table[*Table::Poseidon],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal,
-        )?
-    );
+    let poseidon_proof = prove_table!(poseidon_stark, *Table::Poseidon);
 
     Ok((
         [
-            Some(arithmetic_proof),
-            Some(byte_packing_proof),
-            Some(cpu_proof),
-            Some(keccak_proof),
-            Some(keccak_sponge_proof),
-            Some(logic_proof),
-            Some(memory_proof),
+            arithmetic_proof,
+            byte_packing_proof,
+            cpu_proof,
+            keccak_proof,
+            keccak_sponge_proof,
+            logic_proof,
+            memory_proof,
             Some(mem_before_proof),
             Some(mem_after_proof),
             #[cfg(feature = "cdk_erigon")]
-            Some(poseidon_proof),
+            poseidon_proof,
         ],
         mem_before_cap,
         mem_after_cap,

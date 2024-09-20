@@ -1,3 +1,5 @@
+use ethereum_types::if_ethbloom;
+use log::info;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
@@ -11,7 +13,7 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::arithmetic::{BinaryOperator, Operation};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
-use crate::generation::MemBeforeValues;
+use crate::generation::{MemBeforeValues, TablesWithPolynomialValues};
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory_continuation::memory_continuation_stark::mem_before_values_to_rows;
 #[cfg(feature = "cdk_erigon")]
@@ -142,7 +144,7 @@ impl<T: Copy + Field> Traces<T> {
         mut trace_lengths: TraceCheckpoint,
         config: &StarkConfig,
         timing: &mut TimingTree,
-    ) -> [Vec<PolynomialValues<T>>; NUM_TABLES]
+    ) -> TablesWithPolynomialValues<T>
     where
         T: RichField + Extendable<D>,
     {
@@ -173,20 +175,32 @@ impl<T: Copy + Field> Traces<T> {
         );
         let cpu_rows = cpu.into_iter().map(|x| x.into()).collect();
         let cpu_trace = trace_rows_to_poly_values(cpu_rows);
-        let keccak_trace = timed!(
-            timing,
-            "generate Keccak trace",
-            all_stark
-                .keccak_stark
-                .generate_trace(keccak_inputs, cap_elements, timing)
-        );
-        let keccak_sponge_trace = timed!(
-            timing,
-            "generate KeccakSponge trace",
-            all_stark
-                .keccak_sponge_stark
-                .generate_trace(keccak_sponge_ops, cap_elements, timing)
-        );
+        let keccak_trace = if keccak_inputs.is_empty() {
+            None
+        } else {
+            Some(timed!(
+                timing,
+                "generate Keccak trace",
+                all_stark
+                    .keccak_stark
+                    .generate_trace(keccak_inputs, cap_elements, timing)
+            ))
+        };
+        dbg!(keccak_trace.is_none());
+        let keccak_sponge_trace = if keccak_sponge_ops.is_empty() {
+            None
+        } else {
+            Some(timed!(
+                timing,
+                "generate KeccakSponge trace",
+                all_stark.keccak_sponge_stark.generate_trace(
+                    keccak_sponge_ops,
+                    cap_elements,
+                    timing
+                )
+            ))
+        };
+        dbg!(keccak_sponge_trace.is_none());
         let logic_trace = timed!(
             timing,
             "generate Logic trace",
@@ -239,17 +253,17 @@ impl<T: Copy + Field> Traces<T> {
         );
 
         [
-            arithmetic_trace,
-            byte_packing_trace,
-            cpu_trace,
+            Some(arithmetic_trace),
+            Some(byte_packing_trace),
+            Some(cpu_trace),
             keccak_trace,
             keccak_sponge_trace,
-            logic_trace,
-            memory_trace,
-            mem_before_trace,
-            mem_after_trace,
+            Some(logic_trace),
+            Some(memory_trace),
+            Some(mem_before_trace),
+            Some(mem_after_trace),
             #[cfg(feature = "cdk_erigon")]
-            poseidon_trace,
+            Some(poseidon_trace),
         ]
     }
 }

@@ -1413,7 +1413,8 @@ where
         let mut base_proofs = Vec::with_capacity(N);
         let mut is_base_proof = Vec::with_capacity(N);
 
-        for i in 1..N {
+        // TODO (sai): tests passed when i in 1..N?
+        for i in 0..N {
             base_vks.push(builder.constant_verifier_data(&base_circuits[i].verifier_only));
             base_proofs.push(builder.add_virtual_proof_with_pis(common));
             is_base_proof.push(builder.add_virtual_bool_target_safe());
@@ -2092,7 +2093,13 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        let root_proof = self.root.circuit.prove(root_inputs)?;
+        let root_proof = if all_proof.multi_proof.stark_proofs[*Table::KeccakSponge].is_none()
+            && all_proof.multi_proof.stark_proofs[*Table::Keccak].is_none()
+        {
+            self.root_no_keccak_tables.circuit.prove(root_inputs)?
+        } else {
+            self.root.circuit.prove(root_inputs)?
+        };
 
         Ok(ProverOutputData {
             is_dummy: false,

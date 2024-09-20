@@ -445,7 +445,8 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
+pub(crate) type TablesWithPolynomialValues<F> = [Option<Vec<PolynomialValues<F>>>; NUM_TABLES];
+type TablesWithPVsAndFinalMem<F> = (TablesWithPolynomialValues<F>, PublicValues);
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: &TrimmedGenerationInputs,
