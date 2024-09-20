@@ -16,6 +16,9 @@ keywords.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+alloy.workspace = true
+alloy-serde.workspace = true
+alloy-primitives.workspace = true
 bytes.workspace = true
 env_logger.workspace = true
 ethereum-types.workspace = true

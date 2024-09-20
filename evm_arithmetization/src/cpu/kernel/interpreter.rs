@@ -9,7 +9,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
-use log::Level;
+use log::{log_enabled, Level};
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
 use crate::generation::linked_list::LinkedListsPtrs;
@@ -30,6 +31,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::structlog::zerostructlog::ZeroStructLog;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -64,6 +66,15 @@ pub(crate) struct Interpreter<F: RichField> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
+    /// Optional logs for transactions code.
+    pub(crate) struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+    /// Counter within a transaction.
+    pub(crate) struct_log_debugger_info: StructLogDebuggerInfo,
+}
+
+pub(crate) struct StructLogDebuggerInfo {
+    pub(crate) counter: usize,
+    pub(crate) gas: usize,
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -81,6 +92,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
                 state,
                 halt_pc,
                 initial_context,
+                None,
                 None,
             );
 
@@ -158,10 +170,11 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
+        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
     ) -> Self {
         debug_inputs(inputs);
 
-        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
+        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log, struct_logs);
         result.initialize_interpreter_state(inputs);
         result
     }
@@ -170,6 +183,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
+        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -183,6 +197,8 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
+            struct_logs: struct_logs.clone(),
+            struct_log_debugger_info: StructLogDebuggerInfo { counter: 0, gas: 0 },
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -204,6 +220,7 @@ impl<F: RichField> Interpreter<F> {
         halt_offset: usize,
         halt_context: usize,
         max_cpu_len_log: Option<usize>,
+        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
@@ -214,6 +231,8 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
+            struct_logs,
+            struct_log_debugger_info: StructLogDebuggerInfo { counter: 0, gas: 0 },
         }
     }
 
@@ -524,6 +543,145 @@ impl<F: RichField> State<F> for Interpreter<F> {
         }
     }
 
+    fn check_against_struct_logs_before_op(
+        &mut self,
+        opcode: u8,
+        is_user_mode: bool,
+    ) -> Result<(), ProgramError> {
+        if let Some(struct_logs) = &self.struct_logs
+            && is_user_mode
+            && log_enabled!(log::Level::Debug)
+        {
+            let txn_idx = self.generation_state.next_txn_index;
+
+            if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
+                let counter = self.struct_log_debugger_info.counter;
+                if counter == 0 {
+                    // Initialize txn gas.
+                    let gas_limit_address = MemoryAddress::new(
+                        self.get_registers().context,
+                        Segment::ContextMetadata,
+                        ContextMetadata::GasLimit.unscale(), // context offsets are already scaled
+                    );
+                    let gas_limit = self.generation_state.get_from_memory(gas_limit_address);
+                    self.struct_log_debugger_info.gas = gas_limit.as_usize();
+                    // Check against actual initial gas.
+                    if gas_limit.as_u64() != txn_struct_logs[0].gas {
+                        log::warn!("Wrong initial transaction gas: it is {:?} in the Kernel but {:?} in the struct logs.", gas_limit.as_u64(), txn_struct_logs[0].gas);
+                        return Err(ProgramError::StructLogDebuggerError);
+                    }
+                }
+
+                // Check opcode.
+                let cur_txn_struct_logs = txn_struct_logs[counter].clone();
+                let struct_op = cur_txn_struct_logs.op;
+                let op_string_res = get_mnemonic(opcode);
+                match op_string_res {
+                    Ok(cur_op_str) => {
+                        let cur_op = cur_op_str.to_string();
+                        if struct_op != cur_op {
+                            log::warn!(
+                                "Wrong opcode: it is {} in the Kernel but {} in the struct logs.",
+                                cur_op,
+                                struct_op
+                            );
+                            return Err(ProgramError::StructLogDebuggerError);
+                        }
+                    }
+                    Err(_) => {
+                        if cur_txn_struct_logs.error.is_none() {
+                            // This is not necessarily a discrepancy: the struct logs might not hold
+                            // an error message in case of an error.
+                            log::warn!("There is a wrong opcode on the Kernel side but no error message in the struct logs.");
+                        }
+                    }
+                }
+
+                // Check pc.
+                let txn_pc = cur_txn_struct_logs.pc;
+                if txn_pc != self.get_registers().program_counter as u64 {
+                    log::warn!(
+                        "Wrong pc: it is {} in the Kernel but {} in the struct logs",
+                        self.get_registers().program_counter,
+                        txn_pc
+                    );
+                    return Err(ProgramError::StructLogDebuggerError);
+                }
+
+                // Check stack.
+                if let Some(txn_stack) = cur_txn_struct_logs.stack {
+                    let cur_stack = self.get_full_stack();
+                    let txn_stack = txn_stack
+                        .into_iter()
+                        .map(|s| U256::from(s))
+                        .collect::<Vec<_>>();
+
+                    if txn_stack != cur_stack {
+                        log::warn!(
+                            "Wrong stack: it is {:?} in the Kernel but {:?} in
+                    the struct logs.",
+                            cur_stack,
+                            txn_stack
+                        );
+                        return Err(ProgramError::StructLogDebuggerError);
+                    }
+                };
+            };
+        }
+        Ok(())
+    }
+
+    fn check_against_struct_logs_after_op(
+        &mut self,
+        res: &Result<Operation, ProgramError>,
+        consumed_gas: u64,
+        is_user_mode: bool,
+    ) -> Result<(), ProgramError> {
+        if let Some(struct_logs) = &self.struct_logs
+            && is_user_mode
+            && log_enabled!(log::Level::Debug)
+        {
+            let txn_idx = self.generation_state.next_txn_index;
+            // First, update the gas.
+            self.struct_log_debugger_info.gas -= consumed_gas as usize;
+
+            if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
+                let cur_txn_struct_logs =
+                    txn_struct_logs[self.struct_log_debugger_info.counter].clone();
+                let cur_txn_struct_logs_e = cur_txn_struct_logs.error;
+                if cur_txn_struct_logs_e.is_some() && res.is_err() {
+                    log::warn!("The kernel
+                transaction and struct_logs disagree on error. The struct logs return an errorwhile the Kernel doesn't.");
+                    return Err(ProgramError::StructLogDebuggerError);
+                }
+
+                if res.is_err() && cur_txn_struct_logs_e.is_none() {
+                    // This is not necessarily a discrepancy: the struct logs might not hold
+                    // an error message in case of an error.
+                    log::warn!("There is an error on the Kernel side but no error message in the struct logs.");
+                }
+
+                // Check opcode gas.
+                let txn_op_gas = cur_txn_struct_logs.gas;
+                if txn_op_gas != cur_txn_struct_logs.gas {
+                    log::warn!("Wrong gas update in the last operation. The current remaining gas in the Kernel is {} but {} in the struct logs.", cur_txn_struct_logs.gas, txn_op_gas);
+                    return Err(ProgramError::StructLogDebuggerError);
+                }
+
+                // Update the user code counter.
+                self.struct_log_debugger_info.counter += 1;
+                if self.struct_log_debugger_info.counter == txn_struct_logs.len() {
+                    self.struct_log_debugger_info.counter = 0;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn update_struct_logs_gas(&mut self, n: usize) {
+        self.struct_log_debugger_info.gas = n;
+    }
+
     fn incr_gas(&mut self, n: u64) {
         self.generation_state.incr_gas(n);
     }
@@ -605,6 +763,16 @@ impl<F: RichField> State<F> for Interpreter<F> {
         stack
     }
 
+    /// Returns the entire stack. Only used for checking against struct logs.
+    fn get_full_stack(&self) -> Vec<U256> {
+        let mut stack: Vec<U256> = (0..self.get_registers().stack_len)
+            .map(|i| crate::witness::util::stack_peek(self.get_generation_state(), i).unwrap())
+            .collect();
+        stack.reverse();
+
+        stack
+    }
+
     fn get_halt_offsets(&self) -> Vec<usize> {
         self.halt_offsets.clone()
     }
@@ -665,6 +833,12 @@ impl<F: RichField> State<F> for Interpreter<F> {
 
         let op = decode(registers, opcode)?;
 
+        let is_user_mode = !self.is_kernel();
+
+        // If we are in user and debug mode, and have extracted the struct logs, check
+        // the kernel run against the struct logs.
+        self.check_against_struct_logs_before_op(opcode, is_user_mode)?;
+
         // Increment the opcode count
         *self.opcode_count.entry(op).or_insert(0) += 1;
 
@@ -692,7 +866,15 @@ impl<F: RichField> State<F> for Interpreter<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(op, row)
+        let res_and_gas = self.perform_state_op(op, row);
+        let (res, consumed_gas) = match res_and_gas {
+            Ok((res, consumed_gas)) => (Ok(res), consumed_gas),
+            Err(e) => (Err(e), 0),
+        };
+
+        // Final checks against struct logs in debug and user mode.
+        self.check_against_struct_logs_after_op(&res, consumed_gas, is_user_mode)?;
+        res
     }
 
     fn log_debug(&self, msg: String) {
@@ -750,6 +932,212 @@ impl<F: RichField> Transition<F> for Interpreter<F> {
     }
 }
 
+fn get_mnemonic(opcode: u8) -> anyhow::Result<&'static str> {
+    match opcode {
+        0x00 => Ok("STOP"),
+        0x01 => Ok("ADD"),
+        0x02 => Ok("MUL"),
+        0x03 => Ok("SUB"),
+        0x04 => Ok("DIV"),
+        0x05 => Ok("SDIV"),
+        0x06 => Ok("MOD"),
+        0x07 => Ok("SMOD"),
+        0x08 => Ok("ADDMOD"),
+        0x09 => Ok("MULMOD"),
+        0x0a => Ok("EXP"),
+        0x0b => Ok("SIGNEXTEND"),
+        0x0c => Ok("ADDFP254"),
+        0x0d => Ok("MULFP254"),
+        0x0e => Ok("SUBFP254"),
+        0x0f => Ok("SUBMOD"),
+        0x10 => Ok("LT"),
+        0x11 => Ok("GT"),
+        0x12 => Ok("SLT"),
+        0x13 => Ok("SGT"),
+        0x14 => Ok("EQ"),
+        0x15 => Ok("ISZERO"),
+        0x16 => Ok("AND"),
+        0x17 => Ok("OR"),
+        0x18 => Ok("XOR"),
+        0x19 => Ok("NOT"),
+        0x1a => Ok("BYTE"),
+        0x1b => Ok("SHL"),
+        0x1c => Ok("SHR"),
+        0x1d => Ok("SAR"),
+        0x20 => Ok("KECCAK256"),
+        0x21 => Ok("KECCAK_GENERAL"),
+        #[cfg(feature = "cdk_erigon")]
+        0x22 => Ok("POSEIDON"),
+        #[cfg(feature = "cdk_erigon")]
+        0x23 => Ok("POSEIDON_GENERAL"),
+        0x30 => Ok("ADDRESS"),
+        0x31 => Ok("BALANCE"),
+        0x32 => Ok("ORIGIN"),
+        0x33 => Ok("CALLER"),
+        0x34 => Ok("CALLVALUE"),
+        0x35 => Ok("CALLDATALOAD"),
+        0x36 => Ok("CALLDATASIZE"),
+        0x37 => Ok("CALLDATACOPY"),
+        0x38 => Ok("CODESIZE"),
+        0x39 => Ok("CODECOPY"),
+        0x3a => Ok("GASPRICE"),
+        0x3b => Ok("EXTCODESIZE"),
+        0x3c => Ok("EXTCODECOPY"),
+        0x3d => Ok("RETURNDATASIZE"),
+        0x3e => Ok("RETURNDATACOPY"),
+        0x3f => Ok("EXTCODEHASH"),
+        0x40 => Ok("BLOCKHASH"),
+        0x41 => Ok("COINBASE"),
+        0x42 => Ok("TIMESTAMP"),
+        0x43 => Ok("NUMBER"),
+        0x44 => Ok("DIFFICULTY"),
+        0x45 => Ok("GASLIMIT"),
+        0x46 => Ok("CHAINID"),
+        0x47 => Ok("SELFBALANCE"),
+        0x48 => Ok("BASEFEE"),
+        #[cfg(feature = "eth_mainnet")]
+        0x49 => Ok("BLOBHASH"),
+        #[cfg(feature = "eth_mainnet")]
+        0x4a => Ok("BLOBBASEFEE"),
+        0x50 => Ok("POP"),
+        0x51 => Ok("MLOAD"),
+        0x52 => Ok("MSTORE"),
+        0x53 => Ok("MSTORE8"),
+        0x54 => Ok("SLOAD"),
+        0x55 => Ok("SSTORE"),
+        0x56 => Ok("JUMP"),
+        0x57 => Ok("JUMPI"),
+        0x58 => Ok("PC"),
+        0x59 => Ok("MSIZE"),
+        0x5a => Ok("GAS"),
+        0x5b => Ok("JUMPDEST"),
+        0x5c => Ok("TLOAD"),
+        0x5d => Ok("TSTORE"),
+        0x5e => Ok("MCOPY"),
+        0x5f => Ok("PUSH0"),
+        0x60 => Ok("PUSH1"),
+        0x61 => Ok("PUSH2"),
+        0x62 => Ok("PUSH3"),
+        0x63 => Ok("PUSH4"),
+        0x64 => Ok("PUSH5"),
+        0x65 => Ok("PUSH6"),
+        0x66 => Ok("PUSH7"),
+        0x67 => Ok("PUSH8"),
+        0x68 => Ok("PUSH9"),
+        0x69 => Ok("PUSH10"),
+        0x6a => Ok("PUSH11"),
+        0x6b => Ok("PUSH12"),
+        0x6c => Ok("PUSH13"),
+        0x6d => Ok("PUSH14"),
+        0x6e => Ok("PUSH15"),
+        0x6f => Ok("PUSH16"),
+        0x70 => Ok("PUSH17"),
+        0x71 => Ok("PUSH18"),
+        0x72 => Ok("PUSH19"),
+        0x73 => Ok("PUSH20"),
+        0x74 => Ok("PUSH21"),
+        0x75 => Ok("PUSH22"),
+        0x76 => Ok("PUSH23"),
+        0x77 => Ok("PUSH24"),
+        0x78 => Ok("PUSH25"),
+        0x79 => Ok("PUSH26"),
+        0x7a => Ok("PUSH27"),
+        0x7b => Ok("PUSH28"),
+        0x7c => Ok("PUSH29"),
+        0x7d => Ok("PUSH30"),
+        0x7e => Ok("PUSH31"),
+        0x7f => Ok("PUSH32"),
+        0x80 => Ok("DUP1"),
+        0x81 => Ok("DUP2"),
+        0x82 => Ok("DUP3"),
+        0x83 => Ok("DUP4"),
+        0x84 => Ok("DUP5"),
+        0x85 => Ok("DUP6"),
+        0x86 => Ok("DUP7"),
+        0x87 => Ok("DUP8"),
+        0x88 => Ok("DUP9"),
+        0x89 => Ok("DUP10"),
+        0x8a => Ok("DUP11"),
+        0x8b => Ok("DUP12"),
+        0x8c => Ok("DUP13"),
+        0x8d => Ok("DUP14"),
+        0x8e => Ok("DUP15"),
+        0x8f => Ok("DUP16"),
+        0x90 => Ok("SWAP1"),
+        0x91 => Ok("SWAP2"),
+        0x92 => Ok("SWAP3"),
+        0x93 => Ok("SWAP4"),
+        0x94 => Ok("SWAP5"),
+        0x95 => Ok("SWAP6"),
+        0x96 => Ok("SWAP7"),
+        0x97 => Ok("SWAP8"),
+        0x98 => Ok("SWAP9"),
+        0x99 => Ok("SWAP10"),
+        0x9a => Ok("SWAP11"),
+        0x9b => Ok("SWAP12"),
+        0x9c => Ok("SWAP13"),
+        0x9d => Ok("SWAP14"),
+        0x9e => Ok("SWAP15"),
+        0x9f => Ok("SWAP16"),
+        0xa0 => Ok("LOG0"),
+        0xa1 => Ok("LOG1"),
+        0xa2 => Ok("LOG2"),
+        0xa3 => Ok("LOG3"),
+        0xa4 => Ok("LOG4"),
+        0xa5 => Ok("PANIC"),
+        0xc0 => Ok("MSTORE_32BYTES_1"),
+        0xc1 => Ok("MSTORE_32BYTES_2"),
+        0xc2 => Ok("MSTORE_32BYTES_3"),
+        0xc3 => Ok("MSTORE_32BYTES_4"),
+        0xc4 => Ok("MSTORE_32BYTES_5"),
+        0xc5 => Ok("MSTORE_32BYTES_6"),
+        0xc6 => Ok("MSTORE_32BYTES_7"),
+        0xc7 => Ok("MSTORE_32BYTES_8"),
+        0xc8 => Ok("MSTORE_32BYTES_9"),
+        0xc9 => Ok("MSTORE_32BYTES_10"),
+        0xca => Ok("MSTORE_32BYTES_11"),
+        0xcb => Ok("MSTORE_32BYTES_12"),
+        0xcc => Ok("MSTORE_32BYTES_13"),
+        0xcd => Ok("MSTORE_32BYTES_14"),
+        0xce => Ok("MSTORE_32BYTES_15"),
+        0xcf => Ok("MSTORE_32BYTES_16"),
+        0xd0 => Ok("MSTORE_32BYTES_17"),
+        0xd1 => Ok("MSTORE_32BYTES_18"),
+        0xd2 => Ok("MSTORE_32BYTES_19"),
+        0xd3 => Ok("MSTORE_32BYTES_20"),
+        0xd4 => Ok("MSTORE_32BYTES_21"),
+        0xd5 => Ok("MSTORE_32BYTES_22"),
+        0xd6 => Ok("MSTORE_32BYTES_23"),
+        0xd7 => Ok("MSTORE_32BYTES_24"),
+        0xd8 => Ok("MSTORE_32BYTES_25"),
+        0xd9 => Ok("MSTORE_32BYTES_26"),
+        0xda => Ok("MSTORE_32BYTES_27"),
+        0xdb => Ok("MSTORE_32BYTES_28"),
+        0xdc => Ok("MSTORE_32BYTES_29"),
+        0xdd => Ok("MSTORE_32BYTES_30"),
+        0xde => Ok("MSTORE_32BYTES_31"),
+        0xdf => Ok("MSTORE_32BYTES_32"),
+        0xee => Ok("PROVER_INPUT"),
+        0xf0 => Ok("CREATE"),
+        0xf1 => Ok("CALL"),
+        0xf2 => Ok("CALLCODE"),
+        0xf3 => Ok("RETURN"),
+        0xf4 => Ok("DELEGATECALL"),
+        0xf5 => Ok("CREATE2"),
+        0xf6 => Ok("GET_CONTEXT"),
+        0xf7 => Ok("SET_CONTEXT"),
+        0xf8 => Ok("MLOAD_32BYTES"),
+        0xf9 => Ok("EXIT_KERNEL"),
+        0xfa => Ok("STATICCALL"),
+        0xfb => Ok("MLOAD_GENERAL"),
+        0xfc => Ok("MSTORE_GENERAL"),
+        0xfd => Ok("REVERT"),
+        0xfe => Ok("INVALID"),
+        0xff => Ok("SELFDESTRUCT"),
+        _ => Err(anyhow!("Invalid opcode: {}", opcode)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ethereum_types::U256;
@@ -780,7 +1168,7 @@ mod tests {
             0x60, 0xff, 0x60, 0x0, 0x52, 0x60, 0, 0x51, 0x60, 0x1, 0x51, 0x60, 0x42, 0x60, 0x27,
             0x53,
         ];
-        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
+        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
 
         interpreter.set_code(1, code.to_vec());
 

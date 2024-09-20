@@ -15,6 +15,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::BYTES_PER_OFFSET;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
@@ -846,6 +847,22 @@ pub(crate) fn generate_exit_kernel<F: RichField, T: Transition<F>>(
     generation_state.registers.program_counter = program_counter;
     generation_state.registers.is_kernel = is_kernel_mode;
     generation_state.registers.gas_used = gas_used_val;
+
+    // If we are in debug mode and the next operation is in user mode, update the
+    // `gas` field so we can check against struct logs.
+    if !is_kernel_mode {
+        let get_field = |field: NormalizedTxnField| {
+            state.get_generation_state().memory.contexts[0].segments[Segment::TxnFields.unscale()]
+                .get(field.unscale())
+                .as_usize()
+        };
+        let intrinsic_gas = get_field(NormalizedTxnField::IntrinsicGas);
+        let max_gas = get_field(NormalizedTxnField::GasLimit);
+        let txn_gas = max_gas - intrinsic_gas - gas_used_val as usize;
+
+        state.update_struct_logs_gas(txn_gas);
+    }
+
     state.log_debug(format!(
         "Exiting to {}, is_kernel={}",
         program_counter, is_kernel_mode

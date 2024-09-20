@@ -340,11 +340,12 @@ where
         &mut self,
         op: Operation,
         row: CpuColumnsView<F>,
-    ) -> Result<Operation, ProgramError>
+    ) -> Result<(Operation, u64), ProgramError>
     where
         Self: Sized,
     {
         self.perform_op(op, row)?;
+
         self.incr_pc(match op {
             Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
             Operation::Push(n) => n as usize + 1,
@@ -352,7 +353,9 @@ where
             _ => 1,
         });
 
+        let gas_consumed_by_op = gas_to_charge(op);
         self.incr_gas(gas_to_charge(op));
+
         let registers = self.get_registers();
         let gas_limit_address = MemoryAddress::new(
             registers.context,
@@ -372,7 +375,7 @@ where
             }
         }
 
-        Ok(op)
+        Ok((op, gas_consumed_by_op))
     }
 
     fn generate_jump(&mut self, mut row: CpuColumnsView<F>) -> Result<(), ProgramError> {
@@ -437,6 +440,7 @@ where
 
             self.push_cpu(row);
         }
+
         self.get_mut_generation_state().jump_to(dst as usize)?;
         Ok(())
     }

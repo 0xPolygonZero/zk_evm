@@ -77,6 +77,11 @@ pub(crate) trait State<F: RichField> {
     /// Returns a `State`'s stack.
     fn get_stack(&self) -> Vec<U256>;
 
+    /// Returns the entire stack. Only used for checking against struct logs.
+    fn get_full_stack(&self) -> Vec<U256> {
+        vec![]
+    }
+
     /// Returns the current context.
     fn get_context(&self) -> usize;
 
@@ -167,6 +172,32 @@ pub(crate) trait State<F: RichField> {
 
     fn update_interpreter_final_registers(&mut self, _final_registers: RegistersState) {}
 
+    /// Only used in debug mode and in the interpreter. If in user mode, check
+    /// some elements from the kernel execution against the transaction logs,
+    /// before the operation execution.
+    fn check_against_struct_logs_before_op(
+        &mut self,
+        _opcode: u8,
+        _is_user_mode: bool,
+    ) -> Result<(), ProgramError> {
+        Ok(())
+    }
+
+    /// Only used in debug mode and in the interpreter. If in user mode, check
+    /// some elements from the kernel execution against the transaction logs,
+    /// after the operation execution.
+    fn check_against_struct_logs_after_op(
+        &mut self,
+        _res: &Result<Operation, ProgramError>,
+        _consumed_gas: u64,
+        _is_user_mode: bool,
+    ) -> Result<(), ProgramError> {
+        Ok(())
+    }
+
+    /// Updates the gas field in `struct_logs_debugger_info`.
+    fn update_struct_logs_gas(&mut self, _n: usize) {}
+
     /// Returns all the memory from non-stale contexts.
     /// This is only necessary during segment data generation, hence the blanket
     /// impl returns a dummy value.
@@ -184,7 +215,6 @@ pub(crate) trait State<F: RichField> {
         Self: Transition<F>,
     {
         let halt_offsets = self.get_halt_offsets();
-
         let cycle_limit =
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
@@ -294,6 +324,26 @@ pub(crate) trait State<F: RichField> {
                             .collect_vec(),
                     );
                 }
+                // The current `is_kernel` is the updated value (post operation execution). A
+                // `StructLogDebuggerError` might have arisen on a user
+                // operation before or after it was executed.
+                match e {
+                    ProgramError::StructLogDebuggerError => {
+                        let offset_name = KERNEL.offset_name(self.get_registers().program_counter);
+                        bail!(
+                            "{:?} at struct log debugger at pc={}, stack={:?}, memory={:?}",
+                            e,
+                            offset_name,
+                            self.get_stack(),
+                            self.mem_get_kernel_content()
+                                .iter()
+                                .map(|c| c.unwrap_or_default())
+                                .collect_vec(),
+                        );
+                    }
+                    _ => (),
+                };
+
                 self.rollback(checkpoint);
                 self.handle_error(e)
             }
@@ -696,7 +746,11 @@ impl<F: RichField> State<F> for GenerationState<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(op, row)
+        let res_and_gas = self.perform_state_op(op, row);
+        match res_and_gas {
+            Ok((res, _)) => Ok(res),
+            Err(e) => Err(e),
+        }
     }
 }
 

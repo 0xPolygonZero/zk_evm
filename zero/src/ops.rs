@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use anyhow::anyhow;
 use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
+use evm_arithmetization::structlog::zerostructlog::ZeroStructLog;
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use evm_arithmetization::{Field, ProofWithPublicValues, PublicValues, TrimmedGenerationInputs};
 use paladin::{
@@ -73,53 +74,63 @@ pub struct SegmentProofTestOnly {
 }
 
 impl Operation for SegmentProofTestOnly {
-    // The input is a tuple of the batch generation inputs, max_cpu_len_log and
-    // batch index.
-    type Input = (GenerationInputs, usize, usize);
+    // The input is a tuple of the batch generation inputs, max_cpu_len_log,
+    // batch index and optional struct logs.
+    type Input = (
+        GenerationInputs,
+        usize,
+        usize,
+        Option<Vec<Option<Vec<ZeroStructLog>>>>,
+    );
     type Output = ();
 
     fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
         if self.save_inputs_on_error || self.save_tries_on_error {
-            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|err| {
-                let block_number = inputs.0.block_metadata.block_number.low_u64();
-                let batch_index = inputs.2;
+            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1, inputs.3).map_err(
+                |err| {
+                    let block_number = inputs.0.block_metadata.block_number.low_u64();
+                    let batch_index = inputs.2;
 
-                let err = if self.save_tries_on_error {
-                    if let Some(ref tries) = err.tries {
-                        if let Err(write_err) =
-                            save_tries_to_disk(&err.to_string(), block_number, batch_index, tries)
-                        {
-                            error!("Failed to save tries to disk: {:?}", write_err);
+                    let err = if self.save_tries_on_error {
+                        if let Some(ref tries) = err.tries {
+                            if let Err(write_err) = save_tries_to_disk(
+                                &err.to_string(),
+                                block_number,
+                                batch_index,
+                                tries,
+                            ) {
+                                error!("Failed to save tries to disk: {:?}", write_err);
+                            }
+                        }
+                        anyhow!(
+                            "block:{} batch:{} error: {}",
+                            block_number,
+                            batch_index,
+                            err.to_string()
+                        )
+                    } else {
+                        err.into()
+                    };
+
+                    if self.save_inputs_on_error {
+                        if let Err(write_err) = save_inputs_to_disk(
+                            format!(
+                                "b{}_txns_{}..{}_input.json",
+                                block_number,
+                                inputs.0.txn_number_before,
+                                inputs.0.txn_number_before + inputs.0.signed_txns.len(),
+                            ),
+                            inputs.0,
+                        ) {
+                            error!("Failed to save txn proof input to disk: {:?}", write_err);
                         }
                     }
-                    anyhow!(
-                        "block:{} batch:{} error: {}",
-                        block_number,
-                        batch_index,
-                        err.to_string()
-                    )
-                } else {
-                    err.into()
-                };
 
-                if self.save_inputs_on_error {
-                    if let Err(write_err) = save_inputs_to_disk(
-                        format!(
-                            "b{}_txns_{}..{}_input.json",
-                            block_number,
-                            inputs.0.txn_number_before,
-                            inputs.0.txn_number_before + inputs.0.signed_txns.len(),
-                        ),
-                        inputs.0,
-                    ) {
-                        error!("Failed to save txn proof input to disk: {:?}", write_err);
-                    }
-                }
-
-                FatalError::from_anyhow(err, FatalStrategy::Terminate)
-            })?
+                    FatalError::from_anyhow(err, FatalStrategy::Terminate)
+                },
+            )?
         } else {
-            simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
+            simulate_execution_all_segments::<Field>(inputs.0, inputs.1, inputs.3)
                 .map_err(|err| FatalError::from_anyhow(err.into(), FatalStrategy::Terminate))?;
         }
 

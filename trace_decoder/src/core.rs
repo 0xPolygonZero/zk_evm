@@ -7,6 +7,7 @@ use std::{
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
+use evm_arithmetization::structlog::zerostructlog::ZeroStructLog;
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -30,9 +31,13 @@ use crate::{
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
+    all_struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
     batch_size_hint: usize,
     observer: &mut impl Observer<StateMpt>,
-) -> anyhow::Result<Vec<GenerationInputs>> {
+) -> anyhow::Result<(
+    Vec<GenerationInputs>,
+    Option<Vec<Vec<Option<Vec<ZeroStructLog>>>>>,
+)> {
     ensure!(batch_size_hint != 0);
 
     let BlockTrace {
@@ -71,53 +76,66 @@ pub fn entrypoint(
         observer,
     )?;
 
-    let mut running_gas_used = 0;
-    Ok(batches
-        .into_iter()
-        .map(
-            |Batch {
-                 first_txn_ix,
-                 gas_used,
-                 contract_code,
-                 byte_code,
-                 before:
-                     IntraBlockTries {
-                         state,
-                         storage,
-                         transaction,
-                         receipt,
-                     },
-                 after,
-                 withdrawals,
-             }| GenerationInputs {
-                txn_number_before: first_txn_ix.into(),
-                gas_used_before: running_gas_used.into(),
-                gas_used_after: {
-                    running_gas_used += gas_used;
-                    running_gas_used.into()
-                },
-                signed_txns: byte_code.into_iter().map(Into::into).collect(),
-                withdrawals,
-                ger_data,
-                tries: TrieInputs {
-                    state_trie: state.into(),
-                    transactions_trie: transaction.into(),
-                    receipts_trie: receipt.into(),
-                    storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
-                },
-                trie_roots_after: after,
-                checkpoint_state_trie_root,
-                checkpoint_consolidated_hash,
-                contract_code: contract_code
-                    .into_iter()
-                    .map(|it| (keccak_hash::keccak(&it), it))
-                    .collect(),
-                block_metadata: b_meta.clone(),
-                block_hashes: b_hashes.clone(),
-                burn_addr,
-            },
+    let batched_struct_logs = if let Some(struct_logs) = all_struct_logs {
+        Some(
+            struct_logs
+                .chunks(batch_size_hint)
+                .map(|c| c.to_vec())
+                .collect_vec(),
         )
-        .collect())
+    } else {
+        None
+    };
+    let mut running_gas_used = 0;
+    Ok((
+        batches
+            .into_iter()
+            .map(
+                |Batch {
+                     first_txn_ix,
+                     gas_used,
+                     contract_code,
+                     byte_code,
+                     before:
+                         IntraBlockTries {
+                             state,
+                             storage,
+                             transaction,
+                             receipt,
+                         },
+                     after,
+                     withdrawals,
+                 }| GenerationInputs {
+                    txn_number_before: first_txn_ix.into(),
+                    gas_used_before: running_gas_used.into(),
+                    gas_used_after: {
+                        running_gas_used += gas_used;
+                        running_gas_used.into()
+                    },
+                    signed_txns: byte_code.into_iter().map(Into::into).collect(),
+                    withdrawals,
+                    ger_data,
+                    tries: TrieInputs {
+                        state_trie: state.into(),
+                        transactions_trie: transaction.into(),
+                        receipts_trie: receipt.into(),
+                        storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                    },
+                    trie_roots_after: after,
+                    checkpoint_state_trie_root,
+                    checkpoint_consolidated_hash,
+                    contract_code: contract_code
+                        .into_iter()
+                        .map(|it| (keccak_hash::keccak(&it), it))
+                        .collect(),
+                    block_metadata: b_meta.clone(),
+                    block_hashes: b_hashes.clone(),
+                    burn_addr,
+                },
+            )
+            .collect(),
+        batched_struct_logs,
+    ))
 }
 
 /// The user has either provided us with a [`serde`]-ed
@@ -350,6 +368,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         byte_code,
                         new_receipt_trie_node_byte,
                         gas_used: txn_gas_used,
+                        struct_log: _,
                     },
             } = txn.unwrap_or_default();
 

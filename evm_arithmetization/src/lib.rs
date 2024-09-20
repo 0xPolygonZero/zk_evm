@@ -266,6 +266,7 @@ pub mod memory;
 pub mod memory_continuation;
 #[cfg(feature = "cdk_erigon")]
 pub mod poseidon;
+pub mod structlog;
 
 // Proving system components
 pub mod all_stark;

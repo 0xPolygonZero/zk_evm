@@ -6,8 +6,9 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use alloy::primitives::U256;
+use alloy_primitives::U256;
 use anyhow::{Context, Result};
+use evm_arithmetization::structlog::zerostructlog::ZeroStructLog;
 use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use hashbrown::HashMap;
@@ -45,6 +46,7 @@ pub struct ProverConfig {
     pub max_cpu_len_log: usize,
     pub save_inputs_on_error: bool,
     pub test_only: bool,
+    pub get_struct_logs: bool,
     pub proof_output_dir: PathBuf,
     pub keep_intermediate_proofs: bool,
     pub block_batch_size: usize,
@@ -56,6 +58,7 @@ pub struct ProverConfig {
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
+    pub struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
 }
 
 impl BlockProverInput {
@@ -83,9 +86,10 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let block_generation_inputs = trace_decoder::entrypoint(
+        let (block_generation_inputs, opt_all_struct_logs) = trace_decoder::entrypoint(
             self.block_trace,
             self.other_data,
+            self.struct_logs,
             batch_size,
             &mut DummyObserver::new(),
         )?;
@@ -111,8 +115,15 @@ impl BlockProverInput {
             .iter()
             .enumerate()
             .map(|(idx, txn_batch)| {
-                let segment_data_iterator =
-                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log));
+                let segment_data_iterator = if let Some(all_struct_logs) = &opt_all_struct_logs {
+                    SegmentDataIterator::<Field>::new(
+                        txn_batch,
+                        Some(max_cpu_len_log),
+                        &Some(all_struct_logs[idx].clone()),
+                    )
+                } else {
+                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log), &None)
+                };
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
@@ -175,32 +186,48 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
-
-        let block_generation_inputs = trace_decoder::entrypoint(
+        let (block_generation_inputs, opt_struct_logs) = trace_decoder::entrypoint(
             self.block_trace,
             self.other_data,
+            self.struct_logs,
             batch_size,
             &mut DummyObserver::new(),
         )?;
-
         let seg_ops = ops::SegmentProofTestOnly {
             save_inputs_on_error,
             save_tries_on_error,
         };
 
-        let simulation = Directive::map(
-            IndexedStream::from(
-                block_generation_inputs
-                    .into_iter()
-                    .enumerate()
-                    .zip(repeat(max_cpu_len_log))
-                    .map(|((batch_index, txn_batch), max_cpu_len_log)| {
-                        (txn_batch, max_cpu_len_log, batch_index)
-                    }),
-            ),
-            &seg_ops,
-        );
-
+        let simulation = if let Some(struct_logs) = opt_struct_logs {
+            Directive::map(
+                IndexedStream::from(
+                    block_generation_inputs
+                        .into_iter()
+                        .enumerate()
+                        .zip(repeat(max_cpu_len_log))
+                        .zip(struct_logs)
+                        .map(
+                            |(((batch_index, txn_batch), max_cpu_len_log), struct_log)| {
+                                (txn_batch, max_cpu_len_log, batch_index, Some(struct_log))
+                            },
+                        ),
+                ),
+                &seg_ops,
+            )
+        } else {
+            Directive::map(
+                IndexedStream::from(
+                    block_generation_inputs
+                        .into_iter()
+                        .enumerate()
+                        .zip(repeat(max_cpu_len_log))
+                        .map(|((batch_index, txn_batch), max_cpu_len_log)| {
+                            (txn_batch, max_cpu_len_log, batch_index, None)
+                        }),
+                ),
+                &seg_ops,
+            )
+        };
         simulation
             .run(&runtime)
             .await?

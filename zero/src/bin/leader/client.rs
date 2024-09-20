@@ -39,7 +39,7 @@ pub(crate) async fn client_main(
     use futures::StreamExt;
 
     let test_only = leader_config.prover_config.test_only;
-
+    let get_struct_logs = leader_config.prover_config.get_struct_logs;
     let cached_provider = Arc::new(zero::provider::CachedProvider::new(
         build_http_retry_provider(
             rpc_params.rpc_url.clone(),
@@ -92,6 +92,7 @@ pub(crate) async fn client_main(
             block_id,
             leader_config.checkpoint_block_number,
             rpc_params.rpc_type,
+            get_struct_logs,
         )
         .await?;
         block_tx

@@ -37,6 +37,8 @@ alloy = { version = '0.3.0', default-features = false, features = [
 ] }
 anyhow = "1.0.86"
 async-stream = "0.3.5"
+alloy-primitives = "0.8.0"
+alloy-serde = "0.3.0"
 axum = "0.7.5"
 bitflags = "2.5.0"
 bitvec = "1.0.1"
