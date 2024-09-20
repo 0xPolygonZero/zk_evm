@@ -52,7 +52,9 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
 }
 
 fn trace_contains_create2(structlog: &[StructLog]) -> bool {
-    structlog.iter().any(|entry| entry.op == "CREATE2")
+    structlog
+        .iter()
+        .any(|entry| entry.op == "CREATE" || entry.op == "CREATE2")
 }
 
 // Gets the lightest possible structlog for transcation `tx_hash`.
