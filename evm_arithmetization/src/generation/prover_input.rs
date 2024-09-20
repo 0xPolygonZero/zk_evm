@@ -43,8 +43,7 @@ use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 use crate::witness::util::{current_context_peek, stack_peek};
 
-/// A set of contract code as a byte arrays.  From this a mapping: hash ->
-/// contract can be built.
+/// A set to hold contract code as a byte vectors.
 pub type CodeDb = BTreeSet<Vec<u8>>;
 
 /// Prover input function represented as a scoped function name.
@@ -768,11 +767,11 @@ impl<F: RichField> GenerationState<F> {
         // skipping the validate table call
 
         info!("Generating JUMPDEST tables");
-        dbg!(&self.inputs.jumpdest_tables);
+        dbg!(&self.inputs.jumpdest_table);
         // w for witness
         // let txn_idx = self.next_txn_index - 1;
         // let rpcw = self.inputs.jumpdest_tables[txn_idx].as_ref();contract_code
-        let rpcw = &self.inputs.jumpdest_tables;
+        let rpcw = &self.inputs.jumpdest_table;
         let rpc: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
             .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
@@ -809,13 +808,10 @@ impl<F: RichField> GenerationState<F> {
         self.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from_iter(
             jumpdest_table.into_iter().map(|(ctx, jumpdest_table)| {
                 let code = self.get_code(ctx).unwrap();
-                trace!(
-                    "ctx: {ctx}, code_hash: {:?} code: {:?}",
-                    keccak(code.clone()),
-                    code
-                );
+                let code_hash = keccak(code.clone());
+                trace!("ctx: {ctx}, code_hash: {:?} code: {:?}", code_hash, code);
                 for offset in jumpdest_table.clone() {
-                    jdtw.insert(keccak(code.clone()), ctx, offset);
+                    jdtw.insert(code_hash, ctx, offset);
                 }
                 if let Some(&largest_address) = jumpdest_table.last() {
                     let proofs = get_proofs_and_jumpdests(&code, largest_address, jumpdest_table);

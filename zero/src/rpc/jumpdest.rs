@@ -65,11 +65,12 @@ where
     TransportT: Transport + Clone,
 {
     // Optimization: It may be a better default to pull the stack immediately.
-    let light_structlog_trace = provider
-        .debug_trace_transaction(*tx_hash, structlog_tracing_options(false, false, false))
+    let stackonly_structlog_trace = provider
+        .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
         .await?;
 
-    let structlogs_opt: Option<Vec<StructLog>> = normalize_structlog(light_structlog_trace).await;
+    let structlogs_opt: Option<Vec<StructLog>> =
+        normalize_structlog(stackonly_structlog_trace).await;
 
     let need_memory = structlogs_opt.is_some_and(trace_contains_create2);
     trace!("Need structlog with memory: {need_memory}");
@@ -107,7 +108,7 @@ pub(crate) fn generate_jumpdest_table(
 
     let mut jumpdest_table = JumpDestTableWitness::default();
 
-    // This does not contain `initcodes`.
+    // This map does not contain `initcodes`.
     let callee_addr_to_code_hash: HashMap<Address, H256> = tx_traces
         .iter()
         .map(|(callee_addr, trace)| (callee_addr, &trace.code_usage))
@@ -192,22 +193,24 @@ pub(crate) fn generate_jumpdest_table(
                 };
 
                 let callee_address = {
-                    // Clear the upper half of the operand.
                     let callee_raw = *address;
-                    // let (callee_raw, _overflow) = callee_raw.overflowing_shl(128);
-                    // let (callee_raw, _overflow) = callee_raw.overflowing_shr(128);
-
                     ensure!(callee_raw <= U256::from(U160::MAX));
                     let lower_20_bytes = U160::from(callee_raw);
                     Address::from(lower_20_bytes)
                 };
 
+                if callee_addr_to_code_hash.contains_key(&callee_address) {
+                    let next_code_hash = callee_addr_to_code_hash[&callee_address];
+                    call_stack.push((next_code_hash, next_ctx_available));
+                };
+
                 if precompiles().contains(&callee_address) {
                     trace!("Called precompile at address {}.", &callee_address);
-                } else if callee_addr_to_code_hash.contains_key(&callee_address) {
-                    let code_hash = callee_addr_to_code_hash[&callee_address];
-                    call_stack.push((code_hash, next_ctx_available));
-                } else {
+                };
+
+                if callee_addr_to_code_hash.contains_key(&callee_address).not()
+                    && precompiles().contains(&callee_address).not()
+                {
                     // This case happens if calling an EOA. This is described
                     // under opcode `STOP`: https://www.evm.codes/#00?fork=cancun
                     trace!(
@@ -303,13 +306,6 @@ pub(crate) fn generate_jumpdest_table(
                 let [jump_target, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                // ensure!(
-                //     *counter <= U256::from(u64::MAX),
-                //     "Operand for {op} caused overflow:  counter: {} is larger than u64::MAX
-                // {}",     *counter,
-                //     u64::MAX
-                // );
-                // let jump_target: u64 = counter.to();
 
                 prev_jump = Some(*jump_target);
             }
@@ -326,13 +322,6 @@ pub(crate) fn generate_jumpdest_table(
                 let [jump_target, condition, ..] = evm_stack[..] else {
                     unreachable!()
                 };
-                // ensure!(
-                //     *counter <= U256::from(u64::MAX),
-                //     "Operand for {op} caused overflow:  counter: {} is larger than u64::MAX
-                // {}",     *counter,
-                //     u64::MAX
-                // );
-                // let jump_target: u64 = counter.to();
                 let jump_condition = condition.is_zero().not();
 
                 prev_jump = if jump_condition {
@@ -347,7 +336,7 @@ pub(crate) fn generate_jumpdest_table(
                 } else {
                     false
                 };
-                let jumpdest_offset = entry.pc as usize;
+                let jumpdest_offset = TryInto::<usize>::try_into(entry.pc)?;
                 if jumped_here {
                     jumpdest_table.insert(*code_hash, *ctx, jumpdest_offset);
                 }

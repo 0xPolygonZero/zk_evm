@@ -60,7 +60,6 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 mod type1;
 // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 //                add backend/prod support for type 2
-mod jumpdest;
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;

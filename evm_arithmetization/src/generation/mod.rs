@@ -111,7 +111,7 @@ pub struct GenerationInputs<F: RichField> {
 
     /// A table listing each JUMPDESTs reached in each call context under
     /// associated code hash.
-    pub jumpdest_tables: Option<JumpDestTableWitness>,
+    pub jumpdest_table: Option<JumpDestTableWitness>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
@@ -165,7 +165,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// A list of tables listing each JUMPDESTs reached in each call context
     /// under associated code hash.
-    pub jumpdest_tables: Option<JumpDestTableWitness>,
+    pub jumpdest_table: Option<JumpDestTableWitness>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -240,7 +240,7 @@ impl<F: RichField> GenerationInputs<F> {
             burn_addr: self.burn_addr,
             block_metadata: self.block_metadata.clone(),
             block_hashes: self.block_hashes.clone(),
-            jumpdest_tables: self.jumpdest_tables.clone(),
+            jumpdest_table: self.jumpdest_table.clone(),
         }
     }
 }

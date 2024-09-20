@@ -22,7 +22,7 @@ use anyhow::{Context as _, Ok};
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
-use tracing::debug;
+use tracing::info;
 
 use crate::rpc::jumpdest::{self, get_normalized_structlog};
 use crate::rpc::Compat;
@@ -86,10 +86,19 @@ where
     let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_logs| {
         jumpdest::generate_jumpdest_table(tx, &struct_logs, &tx_traces).map_or_else(
             |error| {
-                debug!("JumpDestTable generation failed with reason: {}", error);
+                info!(
+                    "{:#?}: JumpDestTable generation failed with reason: {}",
+                    tx.hash, error
+                );
                 None
             },
-            Some,
+            |jdt| {
+                info!(
+                    "{:#?}: JumpDestTable generation succeeded with result: {}",
+                    tx.hash, jdt
+                );
+                Some(jdt)
+            },
         )
     });
 

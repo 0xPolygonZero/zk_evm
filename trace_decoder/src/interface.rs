@@ -170,7 +170,7 @@ pub enum ContractCodeUsage {
     /// contract code will not appear in the [`BlockTrace`] map.
     Write(#[serde(with = "crate::hex")] Vec<u8>),
 }
-// Question: Why has this has been removed upstream. Proably unused.
+// Review: Re-adding this. It has been removed upstream.
 impl ContractCodeUsage {
     /// Get code hash from a read or write operation of contract code.
     pub fn get_code_hash(&self) -> H256 {

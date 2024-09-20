@@ -163,15 +163,10 @@ TIP=688
 NUMRANDOMBLOCKS=10
 RANDOMBLOCKS=`shuf --input-range=0-$TIP -n $NUMRANDOMBLOCKS | sort`
 
-# CIBLOCKS="$KNOWNFAILED $ROBIN $RANDOMBLOCKS $CIBLOCKS"
-#BLOCKS="$ROBIN $RANDOMBLOCKS $CIBLOCKS"
-#BLOCKS=`echo $CIBLOCKS | sed 's/\s/\n/g'`
-#BLOCKS="$CIBLOCKS $KNOWNFAILED $RANDOMBLOCKS"
-#BLOCKS="$CREATE2 $DECODING $CONTAINSKEY $USEDTOFAIL $STILLFAIL $CIBLOCKS $JUMPI"
-BLOCKS="$ROUND2"
+BLOCKS="$CREATE2 $DECODING $CONTAINSKEY $USEDTOFAIL $STILLFAIL $CIBLOCKS $JUMPI $ROUND2 $RANDOMBLOCKS"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
-#echo "Testing:  $BLOCKS"
+echo "Testing:  $BLOCKS"
 printf "githash       block verdict\n" | tee -a witnesses/jerigon_results.txt
 echo "---------------------------" | tee -a witnesses/jerigon_results.txt
 
@@ -194,5 +189,3 @@ for BLOCK in $BLOCKS; do
   fi
   printf "%s %10i %s\n" $GITHASH $BLOCK $RESULT | tee -a witnesses/jerigon_results.txt
 done
-
-exit 0

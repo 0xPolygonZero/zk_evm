@@ -118,9 +118,9 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
+    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
     pub(crate) accounts: BTreeMap<U256, usize>,
     pub(crate) storage: BTreeMap<(U256, U256), usize>,
-    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
     pub(crate) next_txn_index: usize,
 }
 

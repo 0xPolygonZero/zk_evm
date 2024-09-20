@@ -51,18 +51,11 @@ impl JumpDestTableWitness {
     /// Creates the required `ctx` keys and `code_hash`. Idempotent.
     pub fn insert(&mut self, code_hash: H256, ctx: usize, offset: usize) {
         (*self).entry(code_hash).or_default().insert(ctx, offset);
-
-        // TODO(einar) remove before publishing PR.
-        assert!(self.0.contains_key(&code_hash));
-        assert!(self.0[&code_hash].0.contains_key(&ctx));
-        assert!(self.0[&code_hash].0[&ctx].contains(&offset));
     }
 
     pub fn extend(mut self, other: &Self, prev_max_ctx: usize) -> (Self, usize) {
         let mut curr_max_ctx = prev_max_ctx;
 
-        // TODO:  Opportunity for optimization:  Simulate to generate only missing
-        // JUMPDEST tables.
         for (code_hash, ctx_tbl) in (*other).iter() {
             for (ctx, jumpdests) in ctx_tbl.0.iter() {
                 let batch_ctx = prev_max_ctx + ctx;
@@ -70,12 +63,7 @@ impl JumpDestTableWitness {
 
                 for offset in jumpdests {
                     self.insert(*code_hash, batch_ctx, *offset);
-
-                    assert!(self.0.contains_key(code_hash));
-                    assert!(self.0[code_hash].0.contains_key(&batch_ctx));
-                    assert!(self.0[code_hash].0[&batch_ctx].contains(offset));
                 }
-                // dbg!(&self);
             }
         }
 
@@ -90,7 +78,7 @@ impl JumpDestTableWitness {
 
 impl Display for JumpDestTableWitness {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "=== JumpDestTableWitness ===")?;
+        writeln!(f, "\n=== JumpDestTableWitness ===")?;
 
         for (code, ctxtbls) in &self.0 {
             write!(f, "codehash: {:#x}\n{}", code, ctxtbls)?;
@@ -115,7 +103,7 @@ impl Display for ContextJumpDests {
 
 impl Display for JumpDestTableProcessed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "=== JumpDestTableProcessed ===")?;
+        writeln!(f, "\n=== JumpDestTableProcessed ===")?;
 
         let v = sorted(self.0.clone());
         for (ctx, code) in v {

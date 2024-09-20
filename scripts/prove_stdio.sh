@@ -21,6 +21,9 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel)
 PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
 
+BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
+echo "Block batch size: $BLOCK_BATCH_SIZE"
+
 BATCH_SIZE=${BATCH_SIZE:=1}
 echo "Batch size: $BATCH_SIZE"
 
@@ -28,15 +31,13 @@ OUTPUT_LOG="${REPO_ROOT}/output.log"
 PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
 TEST_OUT_PATH="${REPO_ROOT}/test.out"
 
-BLOCK_BATCH_SIZE=${BLOCK_BATCH_SIZE:=1}
-
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
 
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=full
-export RUST_LOG=trace
+export RUST_LOG=info
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Z linker-features=-lld'
@@ -103,7 +104,7 @@ if [[ $TEST_ONLY == "test_only" ]]; then
         rm $TEST_OUT_PATH
         exit
     else
-         echo "Failed to create proof witnesses. See \"zk_evm/zero_bin/tools/test.out\" for more details."
+         echo "Failed to create proof witnesses. See \"zk_evm/test.out\" for more details."
         exit 1
     fi
 fi

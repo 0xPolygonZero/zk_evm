@@ -207,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
         .with(
             tracing_subscriber::fmt::layer()
                 // With the default configuration trace information is written
-                // to stdout, but we already use to write our payload (the witness).
+                // to stdout, but we already use stdout to write our payload (the witness).
                 .with_writer(std::io::stderr)
                 .with_ansi(false)
                 .compact()

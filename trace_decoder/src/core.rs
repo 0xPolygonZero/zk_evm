@@ -77,7 +77,6 @@ pub fn entrypoint(
         withdrawals,
     )?;
 
-    dbg!(&batches.first().unwrap().jumpdest_tables);
     let mut running_gas_used = 0;
     Ok(batches
         .into_iter()
@@ -117,32 +116,35 @@ pub fn entrypoint(
                 checkpoint_state_trie_root,
                 checkpoint_consolidated_hash,
                 contract_code: {
-                    let cc = contract_code.into_iter();
-
                     let initcodes =
                         byte_code
                             .iter()
-                            .filter_map(|nonempty_txn_raw| -> Option<Vec<u8>> {
+                            .filter_map(|nonempty_txn_bytes| -> Option<Vec<u8>> {
                                 let tx_envelope =
-                                    TxEnvelope::decode(&mut &nonempty_txn_raw[..]).unwrap();
+                                    TxEnvelope::decode(&mut &nonempty_txn_bytes[..]).unwrap();
                                 match tx_envelope.to() {
                                     TxKind::Create => Some(tx_envelope.input().to_vec()),
                                     TxKind::Call(_address) => None,
                                 }
                             });
 
-                    cc.chain(initcodes)
+                    contract_code
+                        .into_iter()
+                        .chain(initcodes)
                         .map(|it| (keccak_hash::keccak(&it), it))
                         .collect()
                 },
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
                 burn_addr,
-                jumpdest_tables: {
+                jumpdest_table: {
+                    // Note that this causes any batch containing just a single `None` to collapse
+                    // into a `None`, which causing failover to simulating jumpdest analysis for the
+                    // whole batch. There is an optimization opportunity here.
                     jumpdest_tables
                         .into_iter()
                         .collect::<Option<Vec<_>>>()
-                        .map(|vj| JumpDestTableWitness::merge(vj.iter()).0)
+                        .map(|jdt| JumpDestTableWitness::merge(jdt.iter()).0)
                 },
             },
         )

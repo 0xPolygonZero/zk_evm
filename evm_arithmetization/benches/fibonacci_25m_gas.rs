@@ -193,7 +193,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
-        jumpdest_tables: Default::default(),
+        jumpdest_table: Default::default(),
     })
 }
 

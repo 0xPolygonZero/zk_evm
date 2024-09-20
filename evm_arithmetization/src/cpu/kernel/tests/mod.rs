@@ -28,7 +28,6 @@ mod transient_storage;
 
 use std::{ops::Range, str::FromStr};
 
-use ::core::iter::Iterator as _;
 use anyhow::Result;
 use ethereum_types::U256;
 use plonky2::hash::hash_types::RichField;

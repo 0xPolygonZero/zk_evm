@@ -15,8 +15,7 @@ use crate::provider::CachedProvider;
 mod state;
 mod txn;
 
-pub use txn::process_transaction;
-pub use txn::process_transactions;
+pub use txn::{process_transaction, process_transactions};
 
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
