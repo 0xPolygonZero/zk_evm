@@ -110,6 +110,7 @@ where
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+    pub by_table_without_keccak_ctls: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
 }
 
 /// Data for the EVM root circuit, which is used to combine each STARK's shrunk
@@ -747,6 +748,36 @@ where
             }
         };
 
+        let by_table_without_keccak_ctls = match skip_tables {
+            true => (0..NUM_TABLES)
+                .map(|_| RecursiveCircuitsForTable {
+                    by_stark_size: BTreeMap::default(),
+                })
+                .collect_vec()
+                .try_into()
+                .unwrap(),
+            false => {
+                // Tricky use of MaybeUninit to remove the need for implementing Debug
+                // for all underlying types, necessary to convert a by_table Vec to an array.
+                let mut by_table: [MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES] =
+                    unsafe { MaybeUninit::uninit().assume_init() };
+                for table in &mut by_table[..] {
+                    let value = RecursiveCircuitsForTable::from_buffer(
+                        &mut buffer,
+                        gate_serializer,
+                        generator_serializer,
+                    )?;
+                    *table = MaybeUninit::new(value);
+                }
+                unsafe {
+                    mem::transmute::<
+                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
+                        [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+                    >(by_table)
+                }
+            }
+        };
+
         Ok(Self {
             root,
             root_no_keccak_tables,
@@ -756,6 +787,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            by_table_without_keccak_ctls,
         })
     }
 
@@ -785,77 +817,30 @@ where
         // Sanity check on the provided config
         assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
 
-        let arithmetic = RecursiveCircuitsForTable::new(
-            Table::Arithmetic,
-            &all_stark.arithmetic_stark,
-            degree_bits_ranges[*Table::Arithmetic].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let byte_packing = RecursiveCircuitsForTable::new(
-            Table::BytePacking,
-            &all_stark.byte_packing_stark,
-            degree_bits_ranges[*Table::BytePacking].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let cpu = RecursiveCircuitsForTable::new(
-            Table::Cpu,
-            &all_stark.cpu_stark,
-            degree_bits_ranges[*Table::Cpu].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let keccak = RecursiveCircuitsForTable::new(
-            Table::Keccak,
-            &all_stark.keccak_stark,
-            degree_bits_ranges[*Table::Keccak].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let keccak_sponge = RecursiveCircuitsForTable::new(
-            Table::KeccakSponge,
-            &all_stark.keccak_sponge_stark,
-            degree_bits_ranges[*Table::KeccakSponge].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let logic = RecursiveCircuitsForTable::new(
-            Table::Logic,
-            &all_stark.logic_stark,
-            degree_bits_ranges[*Table::Logic].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let memory = RecursiveCircuitsForTable::new(
-            Table::Memory,
-            &all_stark.memory_stark,
-            degree_bits_ranges[*Table::Memory].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let mem_before = RecursiveCircuitsForTable::new(
-            Table::MemBefore,
-            &all_stark.mem_before_stark,
-            degree_bits_ranges[*Table::MemBefore].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let mem_after = RecursiveCircuitsForTable::new(
-            Table::MemAfter,
-            &all_stark.mem_after_stark,
-            degree_bits_ranges[*Table::MemAfter].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
+        let cross_table_lookups = all_cross_table_lookups(true);
+
+        macro_rules! create_recursive_circuits {
+            ($table:ident, $stark_field:ident) => {
+                RecursiveCircuitsForTable::new(
+                    Table::$table,
+                    &all_stark.$stark_field,
+                    degree_bits_ranges[*Table::$table].clone(),
+                    &cross_table_lookups,
+                    stark_config,
+                )
+            };
+        }
+        let arithmetic = create_recursive_circuits!(Arithmetic, arithmetic_stark);
+        let byte_packing = create_recursive_circuits!(BytePacking, byte_packing_stark);
+        let cpu = create_recursive_circuits!(Cpu, cpu_stark);
+        let keccak = create_recursive_circuits!(Keccak, keccak_stark);
+        let keccak_sponge = create_recursive_circuits!(KeccakSponge, keccak_sponge_stark);
+        let logic = create_recursive_circuits!(Logic, logic_stark);
+        let memory = create_recursive_circuits!(Memory, memory_stark);
+        let mem_before = create_recursive_circuits!(MemBefore, mem_before_stark);
+        let mem_after = create_recursive_circuits!(MemAfter, mem_after_stark);
         #[cfg(feature = "cdk_erigon")]
-        let poseidon = RecursiveCircuitsForTable::new(
-            Table::Poseidon,
-            &all_stark.poseidon_stark,
-            degree_bits_ranges[*Table::Poseidon].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
+        let poseidon = create_recursive_circuits!(Poseidon, poseidon_stark);
 
         let by_table = [
             arithmetic,
@@ -870,8 +855,49 @@ where
             #[cfg(feature = "cdk_erigon")]
             poseidon,
         ];
+
+        // TODO(sai): modify CTL logic to avoid extra set of circuits
+        let cross_table_lookups = all_cross_table_lookups(true);
+
+        macro_rules! create_recursive_circuits {
+            ($table:ident, $stark_field:ident) => {
+                RecursiveCircuitsForTable::new(
+                    Table::$table,
+                    &all_stark.$stark_field,
+                    degree_bits_ranges[*Table::$table].clone(),
+                    &cross_table_lookups,
+                    stark_config,
+                )
+            };
+        }
+        let arithmetic = create_recursive_circuits!(Arithmetic, arithmetic_stark);
+        let byte_packing = create_recursive_circuits!(BytePacking, byte_packing_stark);
+        let cpu = create_recursive_circuits!(Cpu, cpu_stark);
+        let keccak = create_recursive_circuits!(Keccak, keccak_stark);
+        let keccak_sponge = create_recursive_circuits!(KeccakSponge, keccak_sponge_stark);
+        let logic = create_recursive_circuits!(Logic, logic_stark);
+        let memory = create_recursive_circuits!(Memory, memory_stark);
+        let mem_before = create_recursive_circuits!(MemBefore, mem_before_stark);
+        let mem_after = create_recursive_circuits!(MemAfter, mem_after_stark);
+        #[cfg(feature = "cdk_erigon")]
+        let poseidon = create_recursive_circuits!(Poseidon, poseidon_stark);
+
+        let by_table_without_keccak_ctls = [
+            arithmetic,
+            byte_packing,
+            cpu,
+            keccak,
+            keccak_sponge,
+            logic,
+            memory,
+            mem_before,
+            mem_after,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon,
+        ];
+
         let root = Self::create_segment_circuit(&by_table, stark_config, true);
-        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, false);
+        let root_no_keccak_tables = Self::create_segment_circuit(&by_table_without_keccak_ctls, stark_config, false);
         let segment_aggregation =
             Self::create_segment_aggregation_circuit(&root, &root_no_keccak_tables);
         let txn_aggregation =
@@ -888,6 +914,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            by_table_without_keccak_ctls,
         }
     }
 

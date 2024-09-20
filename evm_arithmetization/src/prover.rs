@@ -20,7 +20,7 @@ use starky::proof::{MultiProof, StarkProofWithMetadata};
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, MEMORY_CTL_IDX, NUM_TABLES};
+use crate::all_stark::{all_cross_table_lookups, AllStark, Table, MEMORY_CTL_IDX, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{
@@ -85,6 +85,9 @@ where
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
+    let enable_keccak_tables =
+        trace_poly_values[*Table::Keccak].is_some() && trace_poly_values[*Table::KeccakSponge].is_some();
+
     // For each STARK, we compute the polynomial commitments for the polynomials
     // interpolating its trace.
     let trace_commitments = timed!(
@@ -125,6 +128,8 @@ where
     observe_public_values::<F, C, D>(&mut challenger, public_values)
         .map_err(|_| anyhow::Error::msg("Invalid conversion of public values."))?;
 
+    let cross_table_lookups = all_cross_table_lookups(enable_keccak_tables);
+
     // For each STARK, compute its cross-table lookup Z polynomials and get the
     // associated `CtlData`.
     let (ctl_challenges, ctl_data_per_table) = timed!(
@@ -133,7 +138,7 @@ where
         get_ctl_data::<F, C, D, NUM_TABLES>(
             config,
             &trace_poly_values,
-            &all_stark.cross_table_lookups,
+            &cross_table_lookups,
             &mut challenger,
             all_stark.arithmetic_stark.constraint_degree()
         )
@@ -192,6 +197,8 @@ where
 
         use crate::verifier::debug_utils::get_memory_extra_looking_values;
 
+
+
         let mut extra_values = HashMap::new();
         extra_values.insert(
             MEMORY_CTL_IDX,
@@ -199,7 +206,7 @@ where
         );
         check_ctls(
             &trace_poly_values,
-            &all_stark.cross_table_lookups,
+            &cross_table_lookups,
             &extra_values,
         );
     }

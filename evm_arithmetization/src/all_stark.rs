@@ -45,7 +45,6 @@ pub struct AllStark<F: RichField + Extendable<D>, const D: usize> {
     pub(crate) mem_after_stark: MemoryContinuationStark<F, D>,
     #[cfg(feature = "cdk_erigon")]
     pub(crate) poseidon_stark: PoseidonStark<F, D>,
-    pub(crate) cross_table_lookups: Vec<CrossTableLookup<F>>,
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
@@ -64,7 +63,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
             mem_after_stark: MemoryContinuationStark::default(),
             #[cfg(feature = "cdk_erigon")]
             poseidon_stark: PoseidonStark::default(),
-            cross_table_lookups: all_cross_table_lookups(true),
         }
     }
 }

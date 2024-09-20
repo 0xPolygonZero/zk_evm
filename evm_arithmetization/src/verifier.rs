@@ -16,7 +16,9 @@ use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, MEMORY_CTL_IDX, NUM_TABLES};
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, MEMORY_CTL_IDX, NUM_TABLES,
+};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
@@ -144,18 +146,20 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         mem_after_stark,
         #[cfg(feature = "cdk_erigon")]
         poseidon_stark,
-        cross_table_lookups,
     } = all_stark;
+
+    let stark_proofs = &all_proof.multi_proof.stark_proofs;
+    let enable_keccak_tables =
+        stark_proofs[*Table::Keccak].is_some() && stark_proofs[*Table::KeccakSponge].is_some();
+    let cross_table_lookups = all_cross_table_lookups(enable_keccak_tables);
 
     let ctl_vars_per_table = get_ctl_vars_from_proofs(
         &all_proof.multi_proof,
-        cross_table_lookups,
+        &cross_table_lookups,
         &ctl_challenges,
         &num_lookup_columns,
         all_stark.arithmetic_stark.constraint_degree(),
     );
-
-    let stark_proofs = &all_proof.multi_proof.stark_proofs;
 
     macro_rules! verify_stark_proof {
         ($table:expr, $stark:expr) => {
@@ -170,6 +174,8 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
                     &[],
                     config,
                 )?;
+            } else if !(enable_keccak_tables && KECCAK_TABLES_INDICES.contains(&*$table)) {
+                panic!("Missing proofs");
             }
         };
     }
@@ -215,7 +221,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
     });
 
     verify_cross_table_lookups::<F, D, NUM_TABLES>(
-        cross_table_lookups,
+        &cross_table_lookups,
         ctl_zs_first,
         &extra_looking_sums,
         config,
