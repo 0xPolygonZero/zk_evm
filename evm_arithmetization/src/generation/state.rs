@@ -8,7 +8,6 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
-use super::linked_list::{AccountsLinkedList, StorageLinkedList};
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -454,9 +453,6 @@ impl<F: RichField> GenerationState<F> {
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
 
-        state.insert_all_accounts_in_memory();
-        state.insert_all_slots_in_memory();
-
         state.trie_root_ptrs = trie_root_ptrs;
         Ok(state)
     }
@@ -594,50 +590,6 @@ impl<F: RichField> GenerationState<F> {
             check_overflow: false,
             ..segment_data.registers_before
         };
-    }
-
-    /// Insert all the slots stored in the `StorageLinkedList`` segment into
-    /// the accounts `BtreeMap`.
-    pub(crate) fn insert_all_slots_in_memory(&mut self) {
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        self.storage_pointers.extend(
-            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
-                .expect("There must be at least an empty storage linked list")
-                .tuple_windows()
-                .enumerate()
-                .map_while(
-                    |(i, ([prev_account_key, .., ptr], [account_key, slot_key, ..]))| {
-                        if i != 0 && prev_account_key == U256::MAX {
-                            None
-                        } else {
-                            Some((
-                                (account_key, slot_key),
-                                u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
-                            ))
-                        }
-                    },
-                ),
-        );
-    }
-
-    pub(crate) fn insert_all_accounts_in_memory(&mut self) {
-        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        self.accounts_pointers.extend(
-            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
-                .expect("There must be at least an empty accounts linked list")
-                .tuple_windows()
-                .enumerate()
-                .map_while(|(i, ([prev_account_key, .., ptr], [account_key, ..]))| {
-                    if i != 0 && prev_account_key == U256::MAX {
-                        None
-                    } else {
-                        Some((
-                            account_key,
-                            u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
-                        ))
-                    }
-                }),
-        );
     }
 }
 

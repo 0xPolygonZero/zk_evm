@@ -48,9 +48,6 @@ pub(crate) fn initialize_mpts<F: RichField>(
         trie_data.clone();
     interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
 
-    interpreter.generation_state.insert_all_slots_in_memory();
-    interpreter.generation_state.insert_all_accounts_in_memory();
-
     if trie_root_ptrs.state_root_ptr.is_none() {
         trie_root_ptrs.state_root_ptr = Some(
             load_state_mpt(
@@ -197,36 +194,30 @@ pub(crate) fn prepare_interpreter<F: RichField>(
         interpreter.stack()
     );
 
-    // Set initial tries.
+    // Now, set the payload.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(0.into()) // Initial nibbles
-        .expect("The stack should not overflow");
-    interpreter
-        .push(0.into()) // Initial number of nibbles
-        .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::StorageLinkedList as usize + 8).into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::AccountsLinkedList as usize + 6).into())
+        .push((Segment::StorageLinkedList as usize + 5).into())
         .expect("The stack should not overflow");
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .unwrap();
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 4).into())
         .expect("The stack should not overflow");
 
     // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["mpt_set_payload"];
+        KERNEL.global_labels["insert_all_initial_accounts"];
 
     interpreter.run()?;
 
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+    assert_eq!(interpreter.stack_len(), 1);
+
+    let state_root = interpreter.pop().expect("The stack should not be empty");
+    interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
     // Now, execute `mpt_hash_state_trie`.
     state_trie.insert(k, rlp::encode(account).to_vec())?;
@@ -417,43 +408,30 @@ fn prepare_interpreter_all_accounts<F: RichField>(
         KERNEL.global_labels["store_initial_slots"];
     interpreter.run()?;
 
-    // Set the pointers to the initial payloads.
+    // Now, set the payload.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(0.into()) // Initial nibbles
-        .expect("The stack should not overflow");
-    interpreter
-        .push(0.into()) // Initial number of nibbles
-        .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::StorageLinkedList as usize + 8).into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::AccountsLinkedList as usize + 6).into())
+        .push((Segment::StorageLinkedList as usize + 5).into())
         .expect("The stack should not overflow");
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .unwrap();
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 4).into())
         .expect("The stack should not overflow");
 
-    // Now, set the payloads in the state trie leaves.
+    // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["mpt_set_payload"];
+        KERNEL.global_labels["insert_all_initial_accounts"];
 
     interpreter.run()?;
 
-    assert_eq!(
-        interpreter.stack().len(),
-        2,
-        "Expected 2 items on stack after setting the initial trie payloads, found {:?}",
-        interpreter.stack()
-    );
+    assert_eq!(interpreter.stack_len(), 1);
 
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+    let state_root = interpreter.pop().expect("The stack should not be empty");
+    interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = 0;

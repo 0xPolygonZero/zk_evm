@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -455,38 +456,39 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
+                    state_mask.insert(TrieKey::from_address(addr));
+                } else {
+                    // Simple state access
+
+                    fn is_precompile(addr: H160) -> bool {
+                        let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
+                            address!("0000000000000000000000000000000000000001")
+                                ..address!("000000000000000000000000000000000000000a")
+                        } else {
+                            // Remove KZG Peval for non-Eth mainnet networks
+                            address!("0000000000000000000000000000000000000001")
+                                ..address!("0000000000000000000000000000000000000009")
+                        };
+
+                        precompiled_addresses.contains(&addr.compat())
+                            || (cfg!(feature = "polygon_pos")
+                            // Include P256Verify for Polygon PoS
+                            && addr.compat()
+                                == address!("0000000000000000000000000000000000000100"))
+                    }
+
+                    if receipt.status || !is_precompile(addr) {
+                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
+                        //                masking like this SHOULD be a space-saving optimization,
+                        //                BUT if it's omitted, we actually get state root mismatches
+                        state_mask.insert(TrieKey::from_address(addr));
+                    }
                 }
 
                 if self_destructed {
                     storage_tries.remove(&keccak_hash::keccak(addr));
                     state_mask.extend(state_trie.reporting_remove(addr)?)
                 }
-
-                fn is_precompile(addr: H160) -> bool {
-                    let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
-                        address!("0000000000000000000000000000000000000001")
-                            ..address!("000000000000000000000000000000000000000a")
-                    } else {
-                        // Remove KZG Peval for non-Eth mainnet networks
-                        address!("0000000000000000000000000000000000000001")
-                            ..address!("0000000000000000000000000000000000000009")
-                    };
-
-                    precompiled_addresses.contains(&addr.compat())
-                        || (cfg!(feature = "polygon_pos")
-                            // Include P256Verify for Polygon PoS
-                            && addr.compat()
-                                == address!("0000000000000000000000000000000000000100"))
-                }
-
-                if !is_precompile(addr) {
-                    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
-                    //                masking like this SHOULD be a space-saving optimization,
-                    //                BUT if it's omitted, we actually get state root mismatches
-                    state_mask.insert(TrieKey::from_address(addr));
-                } // else we don't even need to include them,
-                  // because nodes will only emit a precompiled address if
-                  // the transaction calling them reverted.
             }
 
             if do_increment_txn_ix {
