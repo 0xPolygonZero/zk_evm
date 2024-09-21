@@ -239,157 +239,38 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let (arithmetic_proof, _) = timed!(
-        timing,
-        "prove Arithmetic STARK",
-        prove_single_table(
-            &all_stark.arithmetic_stark,
-            config,
-            &trace_poly_values[*Table::Arithmetic],
-            &trace_commitments[*Table::Arithmetic],
-            &ctl_data_per_table[*Table::Arithmetic],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (byte_packing_proof, _) = timed!(
-        timing,
-        "prove byte packing STARK",
-        prove_single_table(
-            &all_stark.byte_packing_stark,
-            config,
-            &trace_poly_values[*Table::BytePacking],
-            &trace_commitments[*Table::BytePacking],
-            &ctl_data_per_table[*Table::BytePacking],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (cpu_proof, _) = timed!(
-        timing,
-        "prove CPU STARK",
-        prove_single_table(
-            &all_stark.cpu_stark,
-            config,
-            &trace_poly_values[*Table::Cpu],
-            &trace_commitments[*Table::Cpu],
-            &ctl_data_per_table[*Table::Cpu],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (keccak_proof, _) = timed!(
-        timing,
-        "prove Keccak STARK",
-        prove_single_table(
-            &all_stark.keccak_stark,
-            config,
-            &trace_poly_values[*Table::Keccak],
-            &trace_commitments[*Table::Keccak],
-            &ctl_data_per_table[*Table::Keccak],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (keccak_sponge_proof, _) = timed!(
-        timing,
-        "prove Keccak sponge STARK",
-        prove_single_table(
-            &all_stark.keccak_sponge_stark,
-            config,
-            &trace_poly_values[*Table::KeccakSponge],
-            &trace_commitments[*Table::KeccakSponge],
-            &ctl_data_per_table[*Table::KeccakSponge],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (logic_proof, _) = timed!(
-        timing,
-        "prove logic STARK",
-        prove_single_table(
-            &all_stark.logic_stark,
-            config,
-            &trace_poly_values[*Table::Logic],
-            &trace_commitments[*Table::Logic],
-            &ctl_data_per_table[*Table::Logic],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (memory_proof, _) = timed!(
-        timing,
-        "prove memory STARK",
-        prove_single_table(
-            &all_stark.memory_stark,
-            config,
-            &trace_poly_values[*Table::Memory],
-            &trace_commitments[*Table::Memory],
-            &ctl_data_per_table[*Table::Memory],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (mem_before_proof, mem_before_cap) = timed!(
-        timing,
-        "prove mem_before STARK",
-        prove_single_table(
-            &all_stark.mem_before_stark,
-            config,
-            &trace_poly_values[*Table::MemBefore],
-            &trace_commitments[*Table::MemBefore],
-            &ctl_data_per_table[*Table::MemBefore],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
-    let (mem_after_proof, mem_after_cap) = timed!(
-        timing,
-        "prove mem_after STARK",
-        prove_single_table(
-            &all_stark.mem_after_stark,
-            config,
-            &trace_poly_values[*Table::MemAfter],
-            &trace_commitments[*Table::MemAfter],
-            &ctl_data_per_table[*Table::MemAfter],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal.clone(),
-        )?
-    );
+    macro_rules! prove_table {
+        ($stark:ident, $table:expr) => {
+            timed!(
+                timing,
+                &format!("prove {} STARK", stringify!($stark)),
+                prove_single_table(
+                    &all_stark.$stark,
+                    config,
+                    &trace_poly_values[*$table],
+                    &trace_commitments[*$table],
+                    &ctl_data_per_table[*$table],
+                    ctl_challenges,
+                    challenger,
+                    timing,
+                    abort_signal.clone(),
+                )?
+            )
+        };
+    }
+
+    let (arithmetic_proof, _) = prove_table!(arithmetic_stark, Table::Arithmetic);
+    let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
+    let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
+    let (keccak_proof, _) = prove_table!(keccak_stark, Table::Keccak);
+    let (keccak_sponge_proof, _) = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
+    let (logic_proof, _) = prove_table!(logic_stark, Table::Logic);
+    let (memory_proof, _) = prove_table!(memory_stark, Table::Memory);
+    let (mem_before_proof, mem_before_cap) = prove_table!(mem_before_stark, Table::MemBefore);
+    let (mem_after_proof, mem_after_cap) = prove_table!(mem_after_stark, Table::MemAfter);
+
     #[cfg(feature = "cdk_erigon")]
-    let (poseidon_proof, _) = timed!(
-        timing,
-        "prove poseidon STARK",
-        prove_single_table(
-            &all_stark.poseidon_stark,
-            config,
-            &trace_poly_values[*Table::Poseidon],
-            &trace_commitments[*Table::Poseidon],
-            &ctl_data_per_table[*Table::Poseidon],
-            ctl_challenges,
-            challenger,
-            timing,
-            abort_signal,
-        )?
-    );
+    let (poseidon_proof, _) = prove_table!(poseidon_stark, Table::Poseidon);
 
     Ok((
         [
