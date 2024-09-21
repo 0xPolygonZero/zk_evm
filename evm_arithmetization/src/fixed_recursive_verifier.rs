@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
+use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
@@ -227,6 +228,7 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
+    // pub circuit: [CircuitData<F, C, D>; NUM_ROOT_CIRCUITS],
     pub circuit: CircuitData<F, C, D>,
     lhs: AggregationChildTarget<D, NUM_ROOT_CIRCUITS>,
     rhs: AggregationChildWithDummyTarget<D, NUM_ROOT_CIRCUITS>,
@@ -857,19 +859,8 @@ where
         ];
 
         // TODO(sai): modify CTL logic to avoid extra set of circuits
-        let cross_table_lookups = all_cross_table_lookups(true);
+        let cross_table_lookups = all_cross_table_lookups::<F>(false);
 
-        macro_rules! create_recursive_circuits {
-            ($table:ident, $stark_field:ident) => {
-                RecursiveCircuitsForTable::new(
-                    Table::$table,
-                    &all_stark.$stark_field,
-                    degree_bits_ranges[*Table::$table].clone(),
-                    &cross_table_lookups,
-                    stark_config,
-                )
-            };
-        }
         let arithmetic = create_recursive_circuits!(Arithmetic, arithmetic_stark);
         let byte_packing = create_recursive_circuits!(BytePacking, byte_packing_stark);
         let cpu = create_recursive_circuits!(Cpu, cpu_stark);
@@ -897,7 +888,8 @@ where
         ];
 
         let root = Self::create_segment_circuit(&by_table, stark_config, true);
-        let root_no_keccak_tables = Self::create_segment_circuit(&by_table_without_keccak_ctls, stark_config, false);
+        let root_no_keccak_tables = Self::create_segment_circuit(&by_table, stark_config, false);
+
         let segment_aggregation =
             Self::create_segment_aggregation_circuit(&root, &root_no_keccak_tables);
         let txn_aggregation =
@@ -2073,8 +2065,12 @@ where
         )?;
         let mut root_inputs = PartialWitness::new();
 
+        let stark_proofs = &all_proof.multi_proof.stark_proofs;
+        let enable_keccak_tables = stark_proofs[*Table::Keccak].is_some();
+
         for table in 0..NUM_TABLES {
-            if let Some(stark_proof) = &all_proof.multi_proof.stark_proofs[table] {
+            if let Some(stark_proof) = &stark_proofs[table] {
+                info!("set proof inputs {table}");
                 let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
                 let table_circuits = &self.by_table[table];
                 let shrunk_proof = table_circuits
@@ -2093,14 +2089,25 @@ where
                     .keys()
                     .position(|&size| size == original_degree_bits)
                     .unwrap();
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table].unwrap(),
-                    F::from_canonical_usize(index_verifier_data),
-                );
-                root_inputs.set_proof_with_pis_target(
-                    &self.root.proof_with_pis[table].clone().unwrap(),
-                    &shrunk_proof,
-                );
+                if enable_keccak_tables {
+                    root_inputs.set_target(
+                        self.root.index_verifier_data[table].unwrap(),
+                        F::from_canonical_usize(index_verifier_data),
+                    );
+                    root_inputs.set_proof_with_pis_target(
+                        &self.root.proof_with_pis[table].clone().unwrap(),
+                        &shrunk_proof,
+                    );
+                } else {
+                    root_inputs.set_target(
+                        self.root_no_keccak_tables.index_verifier_data[table].unwrap(),
+                        F::from_canonical_usize(index_verifier_data),
+                    );
+                    root_inputs.set_proof_with_pis_target(
+                        &self.root_no_keccak_tables.proof_with_pis[table].clone().unwrap(),
+                        &shrunk_proof,
+                    );
+                }
 
                 check_abort_signal(abort_signal.clone())?;
             }
@@ -2236,9 +2243,12 @@ where
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
         let mut root_inputs = PartialWitness::new();
 
+        let stark_proofs = &all_proof.multi_proof.stark_proofs;
+        let enable_keccak_tables = stark_proofs[*Table::Keccak].is_some();
+
         for table in 0..NUM_TABLES {
             if let (Some(stark_proof), Some((table_circuit, index_verifier_data))) = (
-                &all_proof.multi_proof.stark_proofs[table],
+                &stark_proofs[table],
                 &table_circuits[table],
             ) {
                 let shrunk_proof =
@@ -2256,6 +2266,7 @@ where
             }
         }
 
+        // if (enable_keccak_tables)
         root_inputs.set_verifier_data_target(
             &self.root.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
