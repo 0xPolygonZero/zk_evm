@@ -36,6 +36,7 @@ use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
+use crate::all_stark::Table::Keccak;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
@@ -1816,6 +1817,8 @@ where
             timing,
             abort_signal.clone(),
         )?;
+        dbg!(&all_proof.multi_proof.stark_proofs[*Table::Keccak].proof.trace_cap);
+        dbg!(&all_proof.multi_proof.stark_proofs[*Table::KeccakSponge].proof.trace_cap);
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
@@ -2943,4 +2946,41 @@ where
 {
     circuit.verifier_only.circuit_digest.elements.len()
         + (1 << circuit.common.config.fri_config.cap_height) * NUM_HASH_OUT_ELTS
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::plonk::config::PoseidonGoldilocksConfig;
+
+    use super::*;
+    use crate::testing_utils::{dummy_payload, init_logger};
+
+    type F = GoldilocksField;
+    const D: usize = 2;
+    type C = PoseidonGoldilocksConfig;
+
+    #[test]
+    #[ignore]
+    fn test_root_proof_generation() -> anyhow::Result<()> {
+        init_logger();
+
+        let all_stark = AllStark::<F, D>::default();
+        let config = StarkConfig::standard_fast_config();
+
+        let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+            &all_stark,
+            &[16..17, 8..9, 9..10, 4..9, 8..9, 4..7, 17..18, 17..18, 7..18],
+            &config,
+        );
+        let dummy = dummy_payload(100, true)?;
+
+        let timing = &mut TimingTree::new(&format!("Blockproof"), log::Level::Info);
+        let dummy_proof =
+            all_circuits.prove_all_segments(&all_stark, &config, dummy, 9, timing, None)?;
+        all_circuits.verify_root(dummy_proof[0].proof_with_pis.clone())?;
+        timing.print();
+
+        Ok(())
+    }
 }
