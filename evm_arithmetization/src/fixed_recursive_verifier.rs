@@ -35,8 +35,10 @@ use starky::lookup::{get_grand_product_challenge_set_target, GrandProductChallen
 use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::all_stark::Table::Keccak;
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
@@ -129,6 +131,8 @@ where
     /// for EVM root proofs; the circuit has them just to match the
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
+    /// We can skip verifying Keccak tables when they are not in use.
+    enable_keccak_tables: BoolTarget,
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -785,6 +789,7 @@ where
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
+        let enable_keccak_tables = builder.add_virtual_bool_target_safe();
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -884,11 +889,20 @@ where
             let inner_verifier_data =
                 builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
 
-            builder.verify_proof::<C>(
-                &recursive_proofs[i],
-                &inner_verifier_data,
-                inner_common_data[i],
-            );
+            if KECCAK_TABLES_INDICES.contains(&i) {
+                builder.conditionally_verify_proof_or_dummy::<C>(
+                    enable_keccak_tables,
+                    &recursive_proofs[i],
+                    &inner_verifier_data,
+                    inner_common_data[i],
+                )?;
+            } else {
+                builder.verify_proof::<C>(
+                    &recursive_proofs[i],
+                    &inner_verifier_data,
+                    inner_common_data[i],
+                );
+            }
         }
 
         let merkle_before =
@@ -919,6 +933,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
+            enable_keccak_tables,
         }
     }
 
@@ -1817,8 +1832,16 @@ where
             timing,
             abort_signal.clone(),
         )?;
-        dbg!(&all_proof.multi_proof.stark_proofs[*Table::Keccak].proof.trace_cap);
-        dbg!(&all_proof.multi_proof.stark_proofs[*Table::KeccakSponge].proof.trace_cap);
+        dbg!(
+            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
+                .proof
+                .trace_cap
+        );
+        dbg!(
+            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
+                .proof
+                .trace_cap
+        );
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
