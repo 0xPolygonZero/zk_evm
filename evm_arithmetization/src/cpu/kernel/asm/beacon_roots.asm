@@ -18,7 +18,6 @@ global set_beacon_root:
     %slot_to_storage_key
     // stack: timestamp_slot_key, timestamp, retdest
     PUSH @BEACON_ROOTS_CONTRACT_STATE_KEY
-    %addr_to_state_key
     %parent_beacon_block_root
     // stack: calldata, state_key, timestamp_slot_key, timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH

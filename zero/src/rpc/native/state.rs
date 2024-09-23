@@ -65,8 +65,9 @@ pub fn process_states_access(
 ) -> anyhow::Result<HashMap<Address, HashSet<StorageKey>>> {
     let mut state_access = HashMap::<Address, HashSet<StorageKey>>::new();
 
-    #[cfg(feature = "eth_mainnet")]
-    insert_beacon_roots_update(&mut state_access, block)?;
+    if cfg!(feature = "eth_mainnet") {
+        insert_beacon_roots_update(&mut state_access, block)?;
+    }
 
     if let Some(w) = block.withdrawals.as_ref() {
         w.iter().for_each(|w| {
@@ -89,7 +90,6 @@ pub fn process_states_access(
     Ok(state_access)
 }
 
-#[cfg(feature = "eth_mainnet")]
 /// Cancun HF specific, see <https://eips.ethereum.org/EIPS/eip-4788>.
 fn insert_beacon_roots_update(
     state_access: &mut HashMap<Address, HashSet<StorageKey>>,
@@ -97,7 +97,7 @@ fn insert_beacon_roots_update(
 ) -> anyhow::Result<()> {
     use alloy::primitives::U256;
     use evm_arithmetization::testing_utils::{
-        BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH,
+        BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
     };
 
     let timestamp = U256::from(block.header.timestamp);
@@ -107,7 +107,7 @@ fn insert_beacon_roots_update(
         (timestamp % chunk).into(),           // timestamp_idx
         ((timestamp % chunk) + chunk).into(), // root_idx
     ]);
-    state_access.insert(BEACON_ROOTS_CONTRACT_STATE_KEY.1.into(), keys);
+    state_access.insert(BEACON_ROOTS_CONTRACT_ADDRESS.as_fixed_bytes().into(), keys);
 
     Ok(())
 }
