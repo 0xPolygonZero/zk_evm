@@ -87,8 +87,6 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             log::debug!("Simulating CPU for jumpdest analysis.");
 
-            log::debug!("el bt = {:?}", interpreter.generation_state.access_lists_ptrs.accounts);
-
             let _ = interpreter.run();
 
             log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);

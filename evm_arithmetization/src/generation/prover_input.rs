@@ -11,7 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::{
-    LinkedList, LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE
+    LinkedList, LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
