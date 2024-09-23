@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
-use evm_arithmetization::{Field, ProofWithPublicInputs};
+use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use hashbrown::HashMap;
 use num_traits::ToPrimitive as _;
@@ -199,20 +199,21 @@ impl BlockProverInput {
             None => None,
         };
 
-        pub fn dummy_proof() -> Result<ProofWithPublicInputs> {
+        // Build a dummy proof for output type consistency
+        let dummy_proof = {
             let mut builder = CircuitBuilder::new(CircuitConfig::default());
             builder.add_gate(NoopGate, vec![]);
             let circuit_data = builder.build::<_>();
 
-            plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())
-        }
+            plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())?
+        };
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
             b_height: block_number
                 .to_u64()
                 .expect("Block number should fit in a u64"),
-            intern: dummy_proof()?,
+            intern: dummy_proof,
         })
     }
 }
