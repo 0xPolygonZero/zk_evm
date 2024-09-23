@@ -124,7 +124,7 @@ fn get_test_block_proof(
     let dummy0_proof =
         all_circuits.prove_segment_aggregation(false, &dummy1_proof[0], false, &dummy1_proof[1])?;
 
-    let (agg_proof, pv) = all_circuits.prove_transaction_aggregation(
+    let (agg_proof, pv) = all_circuits.prove_batch_aggregation(
         false,
         &inputs0_proof.proof_with_pis,
         inputs0_proof.public_values,
