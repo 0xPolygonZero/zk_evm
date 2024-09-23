@@ -2,14 +2,12 @@ zk_evm_common::check_chain_features!();
 
 use std::time::Instant;
 
-use evm_arithmetization::generation::TrimmedGenerationInputs;
-use evm_arithmetization::proof::PublicValues;
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
+use evm_arithmetization::{Field, PublicValues, TrimmedGenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
-use proof_gen::types::Field;
 use proof_gen::{
     proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
     proof_types::{
@@ -30,7 +28,7 @@ pub struct SegmentProof {
 }
 
 impl Operation for SegmentProof {
-    type Input = evm_arithmetization::AllData<Field>;
+    type Input = evm_arithmetization::AllData;
     type Output = proof_gen::proof_types::SegmentAggregatableProof;
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
@@ -75,7 +73,7 @@ pub struct SegmentProofTestOnly {
 }
 
 impl Operation for SegmentProofTestOnly {
-    type Input = (GenerationInputs<Field>, usize);
+    type Input = (GenerationInputs, usize);
     type Output = ();
 
     fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
@@ -116,7 +114,7 @@ struct SegmentProofSpan {
 
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
-    fn get_id(ir: &TrimmedGenerationInputs<Field>, segment_index: usize) -> String {
+    fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
         if ir.txn_hashes.len() == 1 {
             format!(
                 "b{} - {} ({})",
@@ -137,7 +135,7 @@ impl SegmentProofSpan {
     ///
     /// Either the first 8 characters of the hex-encoded hash of the first and
     /// last transactions, or "Dummy" if there is no transaction.
-    fn get_descriptor(ir: &TrimmedGenerationInputs<Field>) -> String {
+    fn get_descriptor(ir: &TrimmedGenerationInputs) -> String {
         if ir.txn_hashes.is_empty() {
             "Dummy".to_string()
         } else if ir.txn_hashes.len() == 1 {
@@ -160,7 +158,7 @@ impl SegmentProofSpan {
     /// Create a new transaction proof span.
     ///
     /// When dropped, it logs the time taken by the transaction proof.
-    fn new(ir: &TrimmedGenerationInputs<Field>, segment_index: usize) -> Self {
+    fn new(ir: &TrimmedGenerationInputs, segment_index: usize) -> Self {
         let id = Self::get_id(ir, segment_index);
         let span = info_span!("p_gen", id).entered();
         let start = Instant::now();
@@ -189,7 +187,7 @@ pub struct SegmentAggProof {
     pub save_inputs_on_error: bool,
 }
 
-fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValues<Field> {
+fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValues {
     match elem {
         SegmentAggregatableProof::Seg(info) => info.p_vals,
         SegmentAggregatableProof::Agg(info) => info.p_vals,
@@ -233,7 +231,7 @@ impl Monoid for SegmentAggProof {
 pub struct BatchAggProof {
     pub save_inputs_on_error: bool,
 }
-fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues<Field> {
+fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
     match elem {
         BatchAggregatableProof::Segment(info) => info.p_vals,
         BatchAggregatableProof::Txn(info) => info.p_vals,

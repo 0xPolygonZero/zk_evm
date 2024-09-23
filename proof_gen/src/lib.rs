@@ -140,7 +140,6 @@ pub(crate) mod constants;
 pub mod proof_gen;
 pub mod proof_types;
 pub mod prover_state;
-pub mod types;
 pub mod verifier_state;
 
 // Re-exports

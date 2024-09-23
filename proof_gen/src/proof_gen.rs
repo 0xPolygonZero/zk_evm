@@ -4,8 +4,8 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs, AllStark,
-    GenerationSegmentData, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, AllStark, GenerationSegmentData,
+    ProofWithPublicInputs, StarkConfig, TrimmedGenerationInputs,
 };
 use hashbrown::HashMap;
 use plonky2::{
@@ -21,7 +21,6 @@ use crate::{
         SegmentAggregatableProof,
     },
     prover_state::ProverState,
-    types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -50,7 +49,7 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_segment_proof(
     p_state: &ProverState,
-    gen_inputs: TrimmedGenerationInputs<Field>,
+    gen_inputs: TrimmedGenerationInputs,
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedSegmentProof> {
@@ -197,8 +196,8 @@ pub fn generate_agg_block_proof(
 
 /// Generates a dummy proof for a dummy circuit doing nothing.
 /// This is useful for testing purposes only.
-pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
-    let mut builder = CircuitBuilder::<Field, EXTENSION_DEGREE>::new(CircuitConfig::default());
+pub fn dummy_proof() -> ProofGenResult<ProofWithPublicInputs> {
+    let mut builder = CircuitBuilder::new(CircuitConfig::default());
     builder.add_gate(NoopGate, vec![]);
     let circuit_data = builder.build::<_>();
 

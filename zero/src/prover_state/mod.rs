@@ -15,13 +15,10 @@ use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
-    proof::AllProof, prover::prove, AllStark, GenerationSegmentData, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllStark,
+    GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig, TrimmedGenerationInputs,
 };
-use plonky2::{
-    field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
-    util::timing::TimingTree,
-};
+use plonky2::util::timing::TimingTree;
 use proof_gen::{proof_types::GeneratedSegmentProof, prover_state::ProverState, VerifierState};
 use tracing::info;
 
@@ -34,18 +31,6 @@ use crate::prover_state::persistence::{
 pub mod circuit;
 pub mod cli;
 pub mod persistence;
-
-// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
-pub(crate) type Config = PoseidonGoldilocksConfig;
-pub(crate) type Field = GoldilocksField;
-pub(crate) const SIZE: usize = 2;
-
-pub(crate) type RecursiveCircuitsForTableSize =
-    evm_arithmetization::fixed_recursive_verifier::RecursiveCircuitsForTableSize<
-        Field,
-        Config,
-        SIZE,
-    >;
 
 /// The global prover state.
 ///
@@ -149,7 +134,7 @@ impl ProverStateManager {
     fn load_table_circuits(
         &self,
         config: &StarkConfig,
-        all_proof: &AllProof<Field, Config, SIZE>,
+        all_proof: &AllProof,
     ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
         let degrees = all_proof.degree_bits(config);
 
@@ -196,7 +181,7 @@ impl ProverStateManager {
     /// and finally aggregating them to a final transaction proof.
     fn segment_proof_on_demand(
         &self,
-        input: TrimmedGenerationInputs<Field>,
+        input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let config = StarkConfig::standard_fast_config();
@@ -225,7 +210,7 @@ impl ProverStateManager {
     /// circuit.
     fn segment_proof_monolithic(
         &self,
-        input: TrimmedGenerationInputs<Field>,
+        input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let p_out = p_state().state.prove_segment(
@@ -257,7 +242,7 @@ impl ProverStateManager {
     ///   needed.
     pub fn generate_segment_proof(
         &self,
-        input: (TrimmedGenerationInputs<Field>, GenerationSegmentData),
+        input: (TrimmedGenerationInputs, GenerationSegmentData),
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let (generation_inputs, mut segment_data) = input;
 

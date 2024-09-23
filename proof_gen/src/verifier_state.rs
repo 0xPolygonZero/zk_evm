@@ -3,13 +3,13 @@
 
 use core::borrow::Borrow;
 
+use evm_arithmetization::{ProofWithPublicInputs, VerifierData};
 use log::info;
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 
 use crate::proof_gen::ProofGenResult;
+use crate::prover_state::ProverState;
 use crate::prover_state::ProverStateBuilder;
-use crate::types::PlonkyProofIntern;
-use crate::{prover_state::ProverState, types::VerifierData};
 
 /// Plonky2 verifier state.
 ///
@@ -53,7 +53,7 @@ impl<T: Borrow<ProverState>> From<T> for VerifierState {
 
 impl VerifierState {
     /// Verifies a `block_proof`.
-    pub fn verify(&self, block_proof: &PlonkyProofIntern) -> ProofGenResult<()> {
+    pub fn verify(&self, block_proof: &ProofWithPublicInputs) -> ProofGenResult<()> {
         // Proof verification
         self.state
             .verify(block_proof.clone())

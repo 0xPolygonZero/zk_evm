@@ -102,7 +102,7 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
 
 fn get_test_block_proof(
     timestamp: u64,
-    all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>,
+    all_circuits: &AllRecursiveCircuits,
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
 ) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
@@ -172,7 +172,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+    let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
         &[
             16..17,
