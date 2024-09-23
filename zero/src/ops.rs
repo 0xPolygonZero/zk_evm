@@ -2,22 +2,22 @@ zk_evm_common::check_chain_features!();
 
 use std::time::Instant;
 
+use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use evm_arithmetization::{Field, PublicValues, TrimmedGenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
-use proof_gen::{
-    proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
-    proof_types::{
-        BatchAggregatableProof, GeneratedBlockProof, GeneratedTxnAggProof, SegmentAggregatableProof,
-    },
-};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use tracing::{event, info_span, Level};
 
+use crate::proof_types::{
+    BatchAggregatableProof, GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedTxnAggProof,
+    SegmentAggregatableProof,
+};
+use crate::prover_state::ProverState;
 use crate::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
@@ -29,11 +29,11 @@ pub struct SegmentProof {
 
 impl Operation for SegmentProof {
     type Input = evm_arithmetization::AllData;
-    type Output = proof_gen::proof_types::SegmentAggregatableProof;
+    type Output = crate::proof_types::SegmentAggregatableProof;
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
         let all_data =
-            all_data.map_err(|err| FatalError::from_str(&err.0, FatalStrategy::Terminate))?;
+            all_data.map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?;
 
         let input = all_data.0.clone();
         let segment_index = all_data.1.segment_index();
@@ -41,7 +41,7 @@ impl Operation for SegmentProof {
         let proof = if self.save_inputs_on_error {
             crate::prover_state::p_manager()
                 .generate_segment_proof(all_data)
-                .map_err(|err| {
+                .map_err(|e| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
                             "b{}_txns_{}..{}-({})_input.json",
@@ -55,12 +55,12 @@ impl Operation for SegmentProof {
                         error!("Failed to save txn proof input to disk: {:?}", write_err);
                     }
 
-                    FatalError::from_anyhow(err, FatalStrategy::Terminate)
+                    FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
                 })?
         } else {
             crate::prover_state::p_manager()
                 .generate_segment_proof(all_data)
-                .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?
+                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
         };
 
         Ok(proof.into())
@@ -78,7 +78,7 @@ impl Operation for SegmentProofTestOnly {
 
     fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
         if self.save_inputs_on_error {
-            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|err| {
+            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|e| {
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
                         "b{}_txns_{}..{}_input.json",
@@ -91,11 +91,11 @@ impl Operation for SegmentProofTestOnly {
                     error!("Failed to save txn proof input to disk: {:?}", write_err);
                 }
 
-                FatalError::from_anyhow(err, FatalStrategy::Terminate)
+                FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
             })?
         } else {
             simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
-                .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?;
         }
 
         Ok(())
@@ -194,6 +194,49 @@ fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValu
     }
 }
 
+/// Generates an aggregation proof from two child proofs.
+///
+/// Note that the child proofs may be either transaction or aggregation proofs.
+///
+/// If a transaction only contains a single segment, this function must still be
+/// called to generate a `GeneratedSegmentAggProof`. In that case, you can set
+/// `has_dummy` to `true`, and provide an arbitrary proof for the right child.
+pub fn generate_segment_agg_proof(
+    p_state: &ProverState,
+    lhs_child: &SegmentAggregatableProof,
+    rhs_child: &SegmentAggregatableProof,
+    has_dummy: bool,
+) -> anyhow::Result<GeneratedSegmentAggProof> {
+    if has_dummy {
+        assert!(
+            !lhs_child.is_agg(),
+            "Cannot have a dummy segment with an aggregation."
+        );
+    }
+
+    let lhs_prover_output_data = ProverOutputData {
+        is_dummy: false,
+        proof_with_pis: lhs_child.intern().clone(),
+        public_values: lhs_child.public_values(),
+    };
+    let rhs_prover_output_data = ProverOutputData {
+        is_dummy: has_dummy,
+        proof_with_pis: rhs_child.intern().clone(),
+        public_values: rhs_child.public_values(),
+    };
+    let agg_output_data = p_state.state.prove_segment_aggregation(
+        lhs_child.is_agg(),
+        &lhs_prover_output_data,
+        rhs_child.is_agg(),
+        &rhs_prover_output_data,
+    )?;
+
+    let p_vals = agg_output_data.public_values;
+    let intern = agg_output_data.proof_with_pis;
+
+    Ok(GeneratedSegmentAggProof { p_vals, intern })
+}
+
 impl Monoid for SegmentAggProof {
     type Elem = SegmentAggregatableProof;
 
@@ -215,7 +258,7 @@ impl Monoid for SegmentAggProof {
                 }
             }
 
-            FatalError::from(e)
+            FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
         })?;
 
         Ok(result.into())
@@ -251,7 +294,7 @@ impl Monoid for BatchAggProof {
                     &SegmentAggregatableProof::from(segment),
                     true,
                 )
-                .map_err(FatalError::from)?,
+                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
             ),
             _ => a,
         };
@@ -264,32 +307,46 @@ impl Monoid for BatchAggProof {
                     &SegmentAggregatableProof::from(segment),
                     true,
                 )
-                .map_err(FatalError::from)?,
+                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
             ),
             _ => b,
         };
 
-        let result = generate_transaction_agg_proof(p_state(), &lhs, &rhs).map_err(|e| {
-            if self.save_inputs_on_error {
-                let pv = vec![
-                    get_agg_proof_public_values(lhs),
-                    get_agg_proof_public_values(rhs),
-                ];
-                if let Err(write_err) = save_inputs_to_disk(
-                    format!(
-                        "b{}_agg_lhs_rhs_inputs.json",
-                        pv[0].block_metadata.block_number
-                    ),
-                    pv,
-                ) {
-                    error!("Failed to save agg proof inputs to disk: {:?}", write_err);
+        let (proof, p_vals) = p_state()
+            .state
+            .prove_batch_aggregation(
+                lhs.is_agg(),
+                lhs.intern(),
+                lhs.public_values(),
+                rhs.is_agg(),
+                rhs.intern(),
+                rhs.public_values(),
+            )
+            .map_err(|e| {
+                if self.save_inputs_on_error {
+                    let pv = vec![
+                        get_agg_proof_public_values(lhs),
+                        get_agg_proof_public_values(rhs),
+                    ];
+                    if let Err(write_err) = save_inputs_to_disk(
+                        format!(
+                            "b{}_agg_lhs_rhs_inputs.json",
+                            pv[0].block_metadata.block_number
+                        ),
+                        pv,
+                    ) {
+                        error!("Failed to save agg proof inputs to disk: {:?}", write_err);
+                    }
                 }
-            }
 
-            FatalError::from(e)
-        })?;
+                FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
+            })?;
 
-        Ok(result.into())
+        Ok(GeneratedTxnAggProof {
+            p_vals,
+            intern: proof,
+        }
+        .into())
     }
 
     fn empty(&self) -> Self::Elem {
@@ -309,8 +366,13 @@ impl Operation for BlockProof {
     type Output = GeneratedBlockProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        Ok(
-            generate_block_proof(p_state(), self.prev.as_ref(), &input).map_err(|e| {
+        let b_height = input.p_vals.block_metadata.block_number.low_u64();
+        let parent_intern = self.prev.as_ref().map(|p| &p.intern);
+
+        let (b_proof_intern, _) = p_state()
+            .state
+            .prove_block(parent_intern, &input.intern, input.p_vals.clone())
+            .map_err(|e| {
                 if self.save_inputs_on_error {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
@@ -323,8 +385,12 @@ impl Operation for BlockProof {
                     }
                 }
 
-                FatalError::from(e)
-            })?,
-        )
+                FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
+            })?;
+
+        Ok(GeneratedBlockProof {
+            b_height,
+            intern: b_proof_intern,
+        })
     }
 }

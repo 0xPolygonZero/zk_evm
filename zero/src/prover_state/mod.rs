@@ -11,18 +11,22 @@
 //!   [`evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits`].
 //! - Global prover state management via the [`P_STATE`] static and the
 //!   [`set_prover_state_from_config`] function.
+use std::borrow::Borrow;
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllStark,
-    GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig, TrimmedGenerationInputs,
+    fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
+    AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
+    TrimmedGenerationInputs,
 };
+use evm_arithmetization::{ProofWithPublicInputs, VerifierData};
+use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::util::timing::TimingTree;
-use proof_gen::{proof_types::GeneratedSegmentProof, prover_state::ProverState, VerifierState};
 use tracing::info;
 
 use self::circuit::{CircuitConfig, NUM_TABLES};
+use crate::proof_types::GeneratedSegmentProof;
 use crate::prover_state::persistence::{
     BaseProverResource, DiskResource, MonolithicProverResource, RecursiveCircuitResource,
     VerifierResource,
@@ -31,6 +35,42 @@ use crate::prover_state::persistence::{
 pub mod circuit;
 pub mod cli;
 pub mod persistence;
+
+/// zkEVM proving state, needed to generate succinct block proofs for EVM-based
+/// chains.
+pub struct ProverState {
+    /// The set of pre-processed circuits to recursively prove blocks.
+    pub state: AllRecursiveCircuits,
+}
+
+/// zkEVM verifier state, useful for verifying generated block proofs.
+///
+/// This requires much less memory than its prover counterpart.
+pub struct VerifierState {
+    /// The verification circuit data associated to the block proof layer of the
+    /// zkEVM prover state.
+    pub state: VerifierData,
+}
+
+/// Extracts the verifier state from the entire prover state.
+impl<T: Borrow<ProverState>> From<T> for VerifierState {
+    fn from(prover_state: T) -> Self {
+        VerifierState {
+            state: prover_state.borrow().state.final_verifier_data(),
+        }
+    }
+}
+
+impl VerifierState {
+    /// Verifies a `block_proof`.
+    pub fn verify(&self, block_proof: &ProofWithPublicInputs) -> anyhow::Result<()> {
+        // Proof verification
+        self.state.verify(block_proof.clone())?;
+
+        // Verifier data verification
+        check_cyclic_proof_verifier_data(block_proof, &self.state.verifier_only, &self.state.common)
+    }
+}
 
 /// The global prover state.
 ///

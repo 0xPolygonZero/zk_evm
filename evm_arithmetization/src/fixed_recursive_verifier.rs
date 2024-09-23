@@ -2157,7 +2157,7 @@ where
     /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
     /// its [`PublicValues`]. Only the proof with public inputs is necessary
     /// for a verifier to assert correctness of the computation.
-    pub fn prove_transaction_aggregation(
+    pub fn prove_batch_aggregation(
         &self,
         lhs_is_agg: bool,
         lhs_proof: &ProofWithPublicInputs<F, C, D>,

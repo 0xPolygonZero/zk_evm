@@ -10,9 +10,12 @@ use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
+use hashbrown::HashMap;
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
+use plonky2::gates::noop::NoopGate;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::circuit_data::CircuitConfig;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
@@ -22,6 +25,7 @@ use tracing::{error, info};
 
 use crate::fs::generate_block_proof_file_name;
 use crate::ops;
+use crate::proof_types::GeneratedBlockProof;
 
 // All proving tasks are executed concurrently, which can cause issues for large
 // block intervals, where distant future blocks may be proven first.
@@ -108,7 +112,7 @@ impl BlockProverInput {
                     .fold(&seg_agg_ops)
                     .run(&runtime)
                     .map(move |e| {
-                        e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
+                        e.map(|p| (idx, crate::proof_types::BatchAggregatableProof::from(p)))
                     })
             })
             .collect();
@@ -119,7 +123,7 @@ impl BlockProverInput {
                 .run(&runtime)
                 .await?;
 
-        if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
+        if let crate::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
@@ -195,12 +199,21 @@ impl BlockProverInput {
             None => None,
         };
 
+        // Build a dummy proof for output type consistency
+        let dummy_proof = {
+            let mut builder = CircuitBuilder::new(CircuitConfig::default());
+            builder.add_gate(NoopGate, vec![]);
+            let circuit_data = builder.build::<_>();
+
+            plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())?
+        };
+
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
             b_height: block_number
                 .to_u64()
                 .expect("Block number should fit in a u64"),
-            intern: proof_gen::proof_gen::dummy_proof()?,
+            intern: dummy_proof,
         })
     }
 }

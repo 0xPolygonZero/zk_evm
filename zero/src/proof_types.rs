@@ -194,6 +194,8 @@ impl AggregatableBlockProof {
         }
     }
 
+    // TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/387
+    #[allow(unused)]
     pub(crate) const fn is_agg(&self) -> bool {
         match self {
             AggregatableBlockProof::Block(_) => false,
@@ -201,6 +203,8 @@ impl AggregatableBlockProof {
         }
     }
 
+    // TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/387
+    #[allow(unused)]
     pub(crate) const fn intern(&self) -> &ProofWithPublicInputs {
         match self {
             AggregatableBlockProof::Block(info) => &info.intern,
