@@ -195,10 +195,7 @@ understood by the zkEVM prover.</p>
 It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/plonky2.</p>
 </li>
 <li>
-<p><a href="./proof_gen/README.html">proof_gen</a>: A convenience library for generating proofs from inputs already in Intermediate Representation (IR) format.</p>
-</li>
-<li>
-<p><a href="./zero_bin/README.html">zero_bin</a>: A composition of <a href="https://github.com/0xPolygonZero/paladin"><code>paladin</code></a> and <a href="./proof_gen/README.html"><code>proof_gen</code></a> to generate
+<p><a href="./zero_bin/README.html">zero_bin</a>: A composition of <a href="https://github.com/0xPolygonZero/paladin"><code>paladin</code></a> and <a href="./evm_arithmetization/README.html"><code>evm_arithmetization</code></a> to generate
 EVM block proofs.</p>
 </li>
 </ul>
@@ -220,18 +217,14 @@ flowchart LR
     B[mpt_trie]
     C[evm_arithmetization]
     D[trace_decoder]
-    E[proof_gen]
 
     B --&gt; C
     B ---&gt; D
     C ---&gt; D
-    C --&gt; E
-    D --&gt; E
 
     F{zero-bin}
     C --&gt; F
     D --&gt; F
-    E --&gt; F
     end
 </pre>
 <h2 id="documentation"><a class="header" href="#documentation">Documentation</a></h2>
