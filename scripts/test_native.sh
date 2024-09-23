@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -uxo pipefail
+set -uo pipefail
 
 export RPC=
 if [ -z $RPC ]; then
