@@ -22,8 +22,8 @@ use zk_evm_common::gwei_to_wei;
 use crate::{
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    Field, OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage,
-    SeparateTriePreImages, TxnInfo, TxnMeta, TxnTrace,
+    OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
+    TxnInfo, TxnMeta, TxnTrace,
 };
 
 /// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -31,7 +31,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
+) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
 
     let BlockTrace {
@@ -87,7 +87,7 @@ pub fn entrypoint(
                      },
                  after,
                  withdrawals,
-             }| GenerationInputs::<Field> {
+             }| GenerationInputs {
                 txn_number_before: first_txn_ix.into(),
                 gas_used_before: running_gas_used.into(),
                 gas_used_after: {

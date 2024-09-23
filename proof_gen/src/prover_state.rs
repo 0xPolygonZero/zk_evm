@@ -5,12 +5,11 @@
 
 use std::ops::Range;
 
-use evm_arithmetization::{AllStark, StarkConfig};
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, StarkConfig};
 use log::info;
 use paste::paste;
 
 use crate::constants::*;
-use crate::types::AllRecursiveCircuits;
 
 /// Plonky2 proving state. Note that this is generally going to be massive in
 /// terms of memory and has a long spin-up time,

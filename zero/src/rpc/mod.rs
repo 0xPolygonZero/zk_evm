@@ -12,9 +12,11 @@ use alloy::{
 use anyhow::{anyhow, Context as _};
 use clap::ValueEnum;
 use compat::Compat;
-use evm_arithmetization::proof::{consolidate_hashes, BlockHashes, BlockMetadata};
+use evm_arithmetization::{
+    proof::{consolidate_hashes, BlockHashes, BlockMetadata},
+    Field, Hasher,
+};
 use futures::{StreamExt as _, TryStreamExt as _};
-use proof_gen::types::{Field, Hasher};
 use serde_json::json;
 use trace_decoder::{BlockLevelData, OtherBlockData};
 use tracing::warn;

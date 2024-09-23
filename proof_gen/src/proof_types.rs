@@ -3,22 +3,19 @@
 
 use evm_arithmetization::{
     fixed_recursive_verifier::{extract_block_final_public_values, extract_two_to_one_block_hash},
-    proof::PublicValues,
-    BlockHeight,
+    BlockHeight, Hash, Hasher, ProofWithPublicInputs, PublicValues,
 };
 use plonky2::plonk::config::Hasher as _;
 use serde::{Deserialize, Serialize};
-
-use crate::types::{Field, Hash, Hasher, PlonkyProofIntern};
 
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedSegmentProof {
     /// Public values of this transaction proof.
-    pub p_vals: PublicValues<Field>,
+    pub p_vals: PublicValues,
     /// Underlying plonky2 proof.
-    pub intern: PlonkyProofIntern,
+    pub intern: ProofWithPublicInputs,
 }
 
 /// A segment aggregation proof along with its public values, for proper
@@ -29,9 +26,9 @@ pub struct GeneratedSegmentProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedSegmentAggProof {
     /// Public values of this aggregation proof.
-    pub p_vals: PublicValues<Field>,
+    pub p_vals: PublicValues,
     /// Underlying plonky2 proof.
-    pub intern: PlonkyProofIntern,
+    pub intern: ProofWithPublicInputs,
 }
 
 /// A transaction aggregation proof along with its public values, for proper
@@ -42,9 +39,9 @@ pub struct GeneratedSegmentAggProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedTxnAggProof {
     /// Public values of this transaction aggregation proof.
-    pub p_vals: PublicValues<Field>,
+    pub p_vals: PublicValues,
     /// Underlying plonky2 proof.
-    pub intern: PlonkyProofIntern,
+    pub intern: ProofWithPublicInputs,
 }
 
 /// A block proof along with the block height against which this proof ensures
@@ -54,7 +51,7 @@ pub struct GeneratedBlockProof {
     /// Associated block height.
     pub b_height: BlockHeight,
     /// Underlying plonky2 proof.
-    pub intern: PlonkyProofIntern,
+    pub intern: ProofWithPublicInputs,
 }
 
 /// An aggregation block proof along with its hashed public values, for proper
@@ -65,7 +62,7 @@ pub struct GeneratedBlockProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedAggBlockProof {
     /// Underlying plonky2 proof.
-    pub intern: PlonkyProofIntern,
+    pub intern: ProofWithPublicInputs,
 }
 
 /// Sometimes we don't care about the underlying proof type and instead only if
@@ -94,7 +91,7 @@ pub enum BatchAggregatableProof {
 }
 
 impl SegmentAggregatableProof {
-    pub(crate) fn public_values(&self) -> PublicValues<Field> {
+    pub(crate) fn public_values(&self) -> PublicValues {
         match self {
             SegmentAggregatableProof::Seg(info) => info.p_vals.clone(),
             SegmentAggregatableProof::Agg(info) => info.p_vals.clone(),
@@ -108,7 +105,7 @@ impl SegmentAggregatableProof {
         }
     }
 
-    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
+    pub(crate) const fn intern(&self) -> &ProofWithPublicInputs {
         match self {
             SegmentAggregatableProof::Seg(info) => &info.intern,
             SegmentAggregatableProof::Agg(info) => &info.intern,
@@ -117,7 +114,7 @@ impl SegmentAggregatableProof {
 }
 
 impl BatchAggregatableProof {
-    pub(crate) fn public_values(&self) -> PublicValues<Field> {
+    pub(crate) fn public_values(&self) -> PublicValues {
         match self {
             BatchAggregatableProof::Segment(info) => info.p_vals.clone(),
             BatchAggregatableProof::Txn(info) => info.p_vals.clone(),
@@ -133,7 +130,7 @@ impl BatchAggregatableProof {
         }
     }
 
-    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
+    pub(crate) const fn intern(&self) -> &ProofWithPublicInputs {
         match self {
             BatchAggregatableProof::Segment(info) => &info.intern,
             BatchAggregatableProof::Txn(info) => &info.intern,
@@ -204,7 +201,7 @@ impl AggregatableBlockProof {
         }
     }
 
-    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
+    pub(crate) const fn intern(&self) -> &ProofWithPublicInputs {
         match self {
             AggregatableBlockProof::Block(info) => &info.intern,
             AggregatableBlockProof::Agg(info) => &info.intern,

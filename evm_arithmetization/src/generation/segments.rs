@@ -5,13 +5,13 @@ use anyhow::Result;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
+use super::TrimmedGenerationInputs;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::State;
 use crate::generation::{debug_inputs, GenerationInputs};
 use crate::witness::memory::MemoryState;
 use crate::witness::state::RegistersState;
-use crate::AllData;
 
 /// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -168,6 +168,10 @@ impl<F: RichField> SegmentDataIterator<F> {
         }
     }
 }
+
+/// Returned type from a `SegmentDataIterator`, needed to prove all segments in
+/// a transaction batch.
+pub type AllData<F> = Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), SegmentError>;
 
 impl<F: RichField> Iterator for SegmentDataIterator<F> {
     type Item = AllData<F>;

@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
+use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
@@ -100,10 +101,8 @@ impl BlockProverInput {
             .iter()
             .enumerate()
             .map(|(idx, txn_batch)| {
-                let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
-                    txn_batch,
-                    Some(max_cpu_len_log),
-                );
+                let segment_data_iterator =
+                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log));
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
