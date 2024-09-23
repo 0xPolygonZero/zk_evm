@@ -2959,8 +2959,8 @@ mod tests {
     type C = PoseidonGoldilocksConfig;
 
     #[test]
-    fn test_root_proof_generation_without_keccak() -> anyhow::Result<()> {
-        let timing = &mut TimingTree::new(&format!("segment proof"), log::Level::Info);
+    fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
+        let timing = &mut TimingTree::new("Segment Proof Generation", log::Level::Info);
         init_logger();
 
         let all_stark = AllStark::<F, D>::default();
@@ -2969,7 +2969,7 @@ mod tests {
         let all_circuits = timed!(
             timing,
             log::Level::Info,
-            "create all circuits.",
+            "Create all recursive circuits",
             AllRecursiveCircuits::<F, C, D>::new(
                 &all_stark,
                 &[
@@ -2986,48 +2986,56 @@ mod tests {
                 &config,
             )
         );
-        let dummy = timed!(
+
+        // Generate a dummy payload for testing
+        let dummy_payload = timed!(
             timing,
             log::Level::Info,
-            "generate dummy payload.",
+            "Generate dummy payload",
             dummy_payload(100, true)?
         );
 
         let max_cpu_len_log = 9;
-        let segment_iterator = SegmentDataIterator::<F>::new(&dummy, Some(max_cpu_len_log));
+        let segment_iterator = SegmentDataIterator::<F>::new(&dummy_payload, Some(max_cpu_len_log));
 
-        let mut dummy_proof = vec![];
+        let mut proofs_without_keccak = vec![];
 
-        let proof_without_keccak_index = 3;
+        let skip_proofs_before_index = 3;
         for (i, segment_run) in segment_iterator.enumerate() {
-            if i < proof_without_keccak_index {
+            if i < skip_proofs_before_index {
                 continue;
             }
-            let (_, mut next_data) =
+
+            // Process and prove segment
+            let (_, mut segment_data) =
                 segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
-            let proof = timed!(
+            let segment_proof = timed!(
                 timing,
                 log::Level::Info,
-                "prove the segment.",
+                "Prove segment",
                 all_circuits.prove_segment(
                     &all_stark,
                     &config,
-                    dummy.trim(),
-                    &mut next_data,
+                    dummy_payload.trim(),
+                    &mut segment_data,
                     timing,
                     None,
                 )?
             );
-            dummy_proof.push(proof);
-            break;
+
+            proofs_without_keccak.push(segment_proof);
+            break; // Process only one proof
         }
 
+        // Verify the generated segment proof
         timed!(
             timing,
             log::Level::Info,
-            "verify segment proofs.",
-            all_circuits.verify_root(dummy_proof[0].proof_with_pis.clone())?
+            "Verify segment proof",
+            all_circuits.verify_root(proofs_without_keccak[0].proof_with_pis.clone())?
         );
+
+        // Print timing details
         timing.print();
 
         Ok(())
