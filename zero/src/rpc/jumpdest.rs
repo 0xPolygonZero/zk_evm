@@ -30,7 +30,7 @@ use tracing::trace;
 
 /// The maximum time we are willing to wait for a structlog before failing over
 /// to simulating the JumpDest analysis.
-const TIMEOUT_LIMIT: Duration = Duration::from_secs(10);
+const TIMEOUT_LIMIT: Duration = Duration::from_secs(2*60);
 
 /// Structure of Etheruem memory
 type Word = [u8; 32];
@@ -51,7 +51,7 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
     }
 }
 
-fn trace_contains_create2(structlog: &[StructLog]) -> bool {
+fn trace_contains_create(structlog: &[StructLog]) -> bool {
     structlog
         .iter()
         .any(|entry| entry.op == "CREATE" || entry.op == "CREATE2")
@@ -77,7 +77,7 @@ where
 
         let need_memory = stackonly_structlog_opt
             .as_deref()
-            .is_some_and(trace_contains_create2);
+            .is_some_and(trace_contains_create);
         trace!("Need structlog with memory: {need_memory}");
 
         if need_memory.not() {

@@ -2068,7 +2068,6 @@ dependencies = [
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "plonky2_util",
- "primitive-types 0.12.2",
  "rand",
  "rand_chacha",
  "ripemd",

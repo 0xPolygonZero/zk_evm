@@ -767,7 +767,7 @@ impl<F: RichField> GenerationState<F> {
         // skipping the validate table call
 
         info!("Generating JUMPDEST tables");
-        dbg!(&self.inputs.jumpdest_table);
+        // dbg!(&self.inputs.jumpdest_table);
         // w for witness
         // let txn_idx = self.next_txn_index - 1;
         // let rpcw = self.inputs.jumpdest_tables[txn_idx].as_ref();contract_code
