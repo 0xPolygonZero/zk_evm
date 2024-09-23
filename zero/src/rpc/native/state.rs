@@ -65,8 +65,9 @@ pub fn process_states_access(
 ) -> anyhow::Result<HashMap<Address, HashSet<StorageKey>>> {
     let mut state_access = HashMap::<Address, HashSet<StorageKey>>::new();
 
-    #[cfg(feature = "eth_mainnet")]
-    insert_beacon_roots_update(&mut state_access, block)?;
+    if cfg!(feature = "eth_mainnet") {
+        insert_beacon_roots_update(&mut state_access, block)?;
+    }
 
     if let Some(w) = block.withdrawals.as_ref() {
         w.iter().for_each(|w| {
@@ -89,7 +90,6 @@ pub fn process_states_access(
     Ok(state_access)
 }
 
-#[cfg(feature = "eth_mainnet")]
 /// Cancun HF specific, see <https://eips.ethereum.org/EIPS/eip-4788>.
 fn insert_beacon_roots_update(
     state_access: &mut HashMap<Address, HashSet<StorageKey>>,

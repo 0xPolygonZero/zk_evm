@@ -548,7 +548,6 @@ fn middle<StateTrieT: StateTrie + Clone>(
     Ok(out)
 }
 
-#[allow(unused_variables)]
 /// Performs all the pre-txn execution rules of the targeted network.
 fn do_pre_execution<StateTrieT: StateTrie + Clone>(
     block: &BlockMetadata,
@@ -559,30 +558,31 @@ fn do_pre_execution<StateTrieT: StateTrie + Clone>(
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()> {
     // Ethereum mainnet: EIP-4788
-    #[cfg(feature = "eth_mainnet")]
-    do_beacon_hook(
-        block.block_timestamp,
-        storage,
-        trim_storage,
-        block.parent_beacon_block_root,
-        trim_state,
-        state_trie,
-    )?;
+    if cfg!(feature = "eth_mainnet") {
+        return do_beacon_hook(
+            block.block_timestamp,
+            storage,
+            trim_storage,
+            block.parent_beacon_block_root,
+            trim_state,
+            state_trie,
+        );
+    }
 
-    #[cfg(feature = "cdk_erigon")]
-    do_scalable_hook(
-        block,
-        ger_data,
-        storage,
-        trim_storage,
-        trim_state,
-        state_trie,
-    )?;
+    if cfg!(feature = "cdk_erigon") {
+        return do_scalable_hook(
+            block,
+            ger_data,
+            storage,
+            trim_storage,
+            trim_state,
+            state_trie,
+        );
+    }
 
     Ok(())
 }
 
-#[cfg(feature = "cdk_erigon")]
 /// Updates the storage of the Scalable and GER contracts, according to
 /// <https://docs.polygon.technology/zkEVM/architecture/proving-system/processing-l2-blocks/#etrog-upgrade-fork-id-6>.
 ///
@@ -683,7 +683,6 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     Ok(())
 }
 
-#[cfg(feature = "eth_mainnet")]
 /// Updates the storage of the beacon block root contract,
 /// according to <https://eips.ethereum.org/EIPS/eip-4788>
 ///
