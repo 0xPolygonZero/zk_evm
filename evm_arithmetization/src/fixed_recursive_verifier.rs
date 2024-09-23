@@ -831,32 +831,30 @@ where
         );
         // Check that the correct CTL challenges are used in every proof.
         for (i, pi) in pis.iter().enumerate() {
-            if KECCAK_TABLES_INDICES.contains(&i) {
-                // Ensures that the correct CTL challenges are used in Keccak tables when
-                // `enable_keccak_tables` is true.
-                for i in 0..stark_config.num_challenges {
+            for j in 0..stark_config.num_challenges {
+                if KECCAK_TABLES_INDICES.contains(&i) {
+                    // Ensures that the correct CTL challenges are used in Keccak tables when
+                    // `enable_keccak_tables` is true.
                     let beta_diff = builder.sub(
-                        ctl_challenges.challenges[i].beta,
-                        pi.ctl_challenges.challenges[i].beta,
+                        ctl_challenges.challenges[j].beta,
+                        pi.ctl_challenges.challenges[j].beta,
                     );
                     let gamma_diff = builder.sub(
-                        ctl_challenges.challenges[i].gamma,
-                        pi.ctl_challenges.challenges[i].gamma,
+                        ctl_challenges.challenges[j].gamma,
+                        pi.ctl_challenges.challenges[j].gamma,
                     );
                     let beta_check = builder.mul(enable_keccak_tables.target, beta_diff);
                     let gamma_check = builder.mul(enable_keccak_tables.target, gamma_diff);
                     builder.assert_zero(beta_check);
                     builder.assert_zero(gamma_check);
-                }
-            } else {
-                for i in 0..stark_config.num_challenges {
+                } else {
                     builder.connect(
-                        ctl_challenges.challenges[i].beta,
-                        pi.ctl_challenges.challenges[i].beta,
+                        ctl_challenges.challenges[j].beta,
+                        pi.ctl_challenges.challenges[j].beta,
                     );
                     builder.connect(
-                        ctl_challenges.challenges[i].gamma,
-                        pi.ctl_challenges.challenges[i].gamma,
+                        ctl_challenges.challenges[j].gamma,
+                        pi.ctl_challenges.challenges[j].gamma,
                     );
                 }
             }
@@ -906,8 +904,8 @@ where
             .collect_vec();
 
         // When Keccak Tables are disabled, Keccak Tables' ctl_zs_first should be 0s.
-        for &tbl in KECCAK_TABLES_INDICES.iter() {
-            for &t in pis[tbl].ctl_zs_first.iter() {
+        for &i in KECCAK_TABLES_INDICES.iter() {
+            for &t in pis[i].ctl_zs_first.iter() {
                 let ctl_check = builder.mul(disable_keccak_tables.target, t);
                 builder.assert_zero(ctl_check);
             }
@@ -3132,7 +3130,7 @@ mod tests {
             );
 
             proofs_without_keccak.push(segment_proof);
-            // break; // Process only one proof
+            break; // Process only one proof
         }
 
         // Verify the generated segment proof
