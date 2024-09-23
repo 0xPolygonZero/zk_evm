@@ -30,7 +30,7 @@ use tracing::trace;
 
 /// The maximum time we are willing to wait for a structlog before failing over
 /// to simulating the JumpDest analysis.
-const TIMEOUT_LIMIT: Duration = Duration::from_secs(2*60);
+const TIMEOUT_LIMIT: Duration = Duration::from_secs(2 * 60);
 
 /// Structure of Etheruem memory
 type Word = [u8; 32];
@@ -51,13 +51,15 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
     }
 }
 
+/// Predicate that determines whether a `StructLog` that includes memory is
+/// required.
 fn trace_contains_create(structlog: &[StructLog]) -> bool {
     structlog
         .iter()
         .any(|entry| entry.op == "CREATE" || entry.op == "CREATE2")
 }
 
-// Gets the lightest possible structlog for transcation `tx_hash`.
+/// Gets the lightest possible structlog for transcation `tx_hash`.
 pub(crate) async fn get_normalized_structlog<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
