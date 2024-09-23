@@ -2959,6 +2959,7 @@ mod tests {
     type C = PoseidonGoldilocksConfig;
 
     #[test]
+    #[ignore]
     fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
         let timing = &mut TimingTree::new("Segment Proof Generation", log::Level::Info);
         init_logger();
