@@ -132,8 +132,8 @@ where
     /// for EVM root proofs; the circuit has them just to match the
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
-    // We can skip verifying Keccak tables when they are not in use.
-    // enable_keccak_tables: BoolTarget,
+    /// We can skip verifying Keccak tables when they are not in use.
+    enable_keccak_tables: BoolTarget,
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -844,6 +844,19 @@ where
             ) {
                 builder.connect(before, after);
             }
+            if KECCAK_TABLES_INDICES.contains(&i) {
+                for (&before, &after) in zip_eq(
+                    pis[i].challenger_state_before.as_ref(),
+                    pis[i].challenger_state_after.as_ref(),
+                ) {
+                    // Ensure that the challenger state remains consistent before and after Keccak
+                    // tables.
+                    let state_difference = builder.sub(before, after);
+                    let keccak_consistency_check =
+                        builder.mul(disable_keccak_tables.target, state_difference);
+                    builder.assert_zero(keccak_consistency_check);
+                }
+            }
         }
 
         // Extra sums to add to the looked last value.
@@ -899,20 +912,20 @@ where
             let inner_verifier_data =
                 builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
 
-            // if KECCAK_TABLES_INDICES.contains(&i) {
-            //     builder.conditionally_verify_proof_or_dummy::<C>(
-            //         enable_keccak_tables,
-            //         &recursive_proofs[i],
-            //         &inner_verifier_data,
-            //         inner_common_data[i],
-            //     )?;
-            // } else {
-            builder.verify_proof::<C>(
-                &recursive_proofs[i],
-                &inner_verifier_data,
-                inner_common_data[i],
-            );
-            // }
+            if KECCAK_TABLES_INDICES.contains(&i) {
+                builder.conditionally_verify_proof_or_dummy::<C>(
+                    enable_keccak_tables,
+                    &recursive_proofs[i],
+                    &inner_verifier_data,
+                    inner_common_data[i],
+                )?;
+            } else {
+                builder.verify_proof::<C>(
+                    &recursive_proofs[i],
+                    &inner_verifier_data,
+                    inner_common_data[i],
+                );
+            }
         }
 
         let merkle_before =
@@ -943,7 +956,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
-            // enable_keccak_tables,
+            enable_keccak_tables,
         }
     }
 
