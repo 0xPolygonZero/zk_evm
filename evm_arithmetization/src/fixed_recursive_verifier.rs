@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
+use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
@@ -35,7 +36,10 @@ use starky::lookup::{get_grand_product_challenge_set_target, GrandProductChallen
 use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
+use crate::all_stark::Table::Keccak;
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
@@ -128,6 +132,8 @@ where
     /// for EVM root proofs; the circuit has them just to match the
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
+    // We can skip verifying Keccak tables when they are not in use.
+    // enable_keccak_tables: BoolTarget,
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -784,6 +790,8 @@ where
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
+        let enable_keccak_tables = builder.add_virtual_bool_target_safe();
+        let disable_keccak_tables = builder.not(enable_keccak_tables);
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -854,6 +862,14 @@ where
             })
             .collect_vec();
 
+        // When Keccak Tables are disabled, Keccak Tables' ctl_zs_first should be 0s.
+        for &tbl in KECCAK_TABLES_INDICES.iter() {
+            for &t in pis[tbl].ctl_zs_first.iter() {
+                let keccak_ctl_check = builder.mul(disable_keccak_tables.target, t);
+                builder.assert_zero(keccak_ctl_check);
+            }
+        }
+
         // Verify the CTL checks.
         verify_cross_table_lookups_circuit::<F, D, NUM_TABLES>(
             &mut builder,
@@ -883,11 +899,20 @@ where
             let inner_verifier_data =
                 builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
 
+            // if KECCAK_TABLES_INDICES.contains(&i) {
+            //     builder.conditionally_verify_proof_or_dummy::<C>(
+            //         enable_keccak_tables,
+            //         &recursive_proofs[i],
+            //         &inner_verifier_data,
+            //         inner_common_data[i],
+            //     )?;
+            // } else {
             builder.verify_proof::<C>(
                 &recursive_proofs[i],
                 &inner_verifier_data,
                 inner_common_data[i],
             );
+            // }
         }
 
         let merkle_before =
@@ -918,6 +943,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
+            // enable_keccak_tables,
         }
     }
 
@@ -1816,6 +1842,46 @@ where
             timing,
             abort_signal.clone(),
         )?;
+        info!(
+            "Debugging trace_cap.0[0]: {:?}",
+            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
+                .proof
+                .trace_cap
+                .0[0]
+        );
+
+        info!(
+            "Debugging openings.ctl_zs_first: {:?}",
+            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
+                .proof
+                .openings
+                .ctl_zs_first
+        );
+
+        info!(
+            "Debugging trace_cap.0[0] for KeccakSponge: {:?}",
+            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
+                .proof
+                .trace_cap
+                .0[0]
+        );
+
+        info!(
+            "Debugging openings.ctl_zs_first for KeccakSponge: {:?}",
+            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
+                .proof
+                .openings
+                .ctl_zs_first
+        );
+
+        info!(
+            "Debugging openings.ctl_zs_first for Logic: {:?}",
+            &all_proof.multi_proof.stark_proofs[*Table::Logic]
+                .proof
+                .openings
+                .ctl_zs_first
+        );
+
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
