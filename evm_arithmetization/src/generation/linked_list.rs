@@ -26,9 +26,6 @@ pub(crate) struct Bounded;
 impl LinkedListType for Cyclic {}
 impl LinkedListType for Bounded {}
 
-pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
-pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
-
 // A linked list implemented using a vector `access_list_mem`.
 // In this representation, the values of nodes are stored in the range
 // `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
@@ -47,7 +44,7 @@ where
 // Provides quick access to pointers that reference the memory location
 // of a storage or accounts linked list node, containing a specific key.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub(crate) struct LinkedListPtrs {
+pub(crate) struct LinkedListsPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.

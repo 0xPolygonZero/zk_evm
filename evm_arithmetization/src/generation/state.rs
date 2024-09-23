@@ -8,7 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
-use super::linked_list::{AccountsLinkedList, LinkedListPtrs, StorageLinkedList};
+use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -378,11 +378,11 @@ pub struct GenerationState<F: RichField> {
 
     // Provides quick access to pointers that reference the memory location
     // of an accounts or storage access list node containing a specific key.
-    pub(crate) access_lists_ptrs: LinkedListPtrs,
+    pub(crate) access_lists_ptrs: LinkedListsPtrs,
 
     // Provides quick access to pointers that reference the memory location
     // of a accounts or storage linked list node containing a specific key.
-    pub(crate) state_ptrs: LinkedListPtrs,
+    pub(crate) state_ptrs: LinkedListsPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -445,15 +445,12 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            access_lists_ptrs: LinkedListPtrs::default(),
-            state_ptrs: LinkedListPtrs::default(),
+            access_lists_ptrs: LinkedListsPtrs::default(),
+            state_ptrs: LinkedListsPtrs::default(),
             ger_prover_inputs,
         };
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
-
-        state.insert_all_accounts_in_memory();
-        state.insert_all_slots_in_memory();
 
         state.trie_root_ptrs = trie_root_ptrs;
         Ok(state)
@@ -465,6 +462,8 @@ impl<F: RichField> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: trimmed_inputs.clone(),
+            state_ptrs: segment_data.extra_data.state_ptrs.clone(),
+            access_lists_ptrs: segment_data.extra_data.access_lists_ptrs.clone(),
             ..Default::default()
         };
 
@@ -580,10 +579,10 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.state_ptrs.accounts
-            .clone_from(&segment_data.extra_data.accounts);
-        self.state_ptrs.storage
-            .clone_from(&segment_data.extra_data.storage);
+        self.state_ptrs
+            .clone_from(&segment_data.extra_data.state_ptrs);
+        self.access_lists_ptrs
+            .clone_from(&segment_data.extra_data.access_lists_ptrs);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,
@@ -592,50 +591,6 @@ impl<F: RichField> GenerationState<F> {
             check_overflow: false,
             ..segment_data.registers_before
         };
-    }
-
-    /// Insert all the slots stored in the `StorageLinkedList`` segment into
-    /// the accounts `BtreeMap`.
-    pub(crate) fn insert_all_slots_in_memory(&mut self) {
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        self.state_ptrs.storage.extend(
-            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
-                .expect("There must be at least an empty storage linked list")
-                .tuple_windows()
-                .enumerate()
-                .map_while(
-                    |(i, ([prev_account_key, .., ptr], [account_key, slot_key, ..]))| {
-                        if i != 0 && prev_account_key == U256::MAX {
-                            None
-                        } else {
-                            Some((
-                                (account_key, slot_key),
-                                u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
-                            ))
-                        }
-                    },
-                ),
-        );
-    }
-
-    pub(crate) fn insert_all_accounts_in_memory(&mut self) {
-        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        self.state_ptrs.accounts.extend(
-            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
-                .expect("There must be at least an empty accounts linked list")
-                .tuple_windows()
-                .enumerate()
-                .map_while(|(i, ([prev_account_key, .., ptr], [account_key, ..]))| {
-                    if i != 0 && prev_account_key == U256::MAX {
-                        None
-                    } else {
-                        Some((
-                            account_key,
-                            u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
-                        ))
-                    }
-                }),
-        );
     }
 }
 

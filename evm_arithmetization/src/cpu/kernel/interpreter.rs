@@ -5,7 +5,7 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
@@ -19,6 +19,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::linked_list::LinkedListsPtrs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -117,8 +118,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    pub(crate) accounts: BTreeMap<U256, usize>,
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) access_lists_ptrs: LinkedListsPtrs,
+    pub(crate) state_ptrs: LinkedListsPtrs,
     pub(crate) next_txn_index: usize,
 }
 
@@ -260,10 +261,6 @@ impl<F: RichField> Interpreter<F> {
             preinit_accounts_ll_segment,
         );
         self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
-
-        // Initialize the accounts and storage BTrees.
-        self.generation_state.insert_all_slots_in_memory();
-        self.generation_state.insert_all_accounts_in_memory();
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);

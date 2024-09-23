@@ -581,7 +581,8 @@ pub(crate) struct CpuStark<F, const D: usize> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for CpuStark<F, D> {
-    type EvaluationFrame<FE, P, const D2: usize> = EvmStarkFrame<P, FE, NUM_CPU_COLUMNS>
+    type EvaluationFrame<FE, P, const D2: usize>
+        = EvmStarkFrame<P, FE, NUM_CPU_COLUMNS>
     where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>;

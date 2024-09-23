@@ -11,7 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::{
-    LinkedList, LinkedListPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE
+    LinkedList, LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE
 };
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -506,7 +506,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     fn run_reset(&mut self) -> Result<U256, ProgramError> {
-        self.access_lists_ptrs = LinkedListPtrs::default();
+        self.access_lists_ptrs = LinkedListsPtrs::default();
         Ok(U256::zero())
     }
 
