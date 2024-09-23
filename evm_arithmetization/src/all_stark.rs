@@ -126,10 +126,6 @@ pub const NUM_TABLES: usize = if cfg!(feature = "cdk_erigon") {
     Table::MemAfter as usize + 1
 };
 
-/// Indices of Keccak Tables
-pub const KECCAK_TABLES_INDICES: [usize; 2] =
-    [Table::Keccak as usize, Table::KeccakSponge as usize];
-
 impl Table {
     /// Returns all STARK table indices.
     pub(crate) const fn all() -> [Self; NUM_TABLES] {
