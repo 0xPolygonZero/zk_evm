@@ -117,7 +117,7 @@ where
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
     for (i, cap) in trace_caps.iter().enumerate() {
-        if KECCAK_TABLES_INDICES.contains(&i) {
+        if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
             let zero_merkle_cap = cap.flatten().iter().map(|_| F::ZERO).collect::<Vec<F>>();
             challenger.observe_elements(&zero_merkle_cap);
         } else {
