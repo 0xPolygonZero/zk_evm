@@ -17,11 +17,14 @@ mod txn;
 
 pub use txn::{process_transaction, process_transactions};
 
+use super::JumpdestSrc;
+
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
     provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
     checkpoint_block_number: u64,
+    jumpdest_src: JumpdestSrc,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,

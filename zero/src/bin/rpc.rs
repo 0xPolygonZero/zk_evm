@@ -25,6 +25,7 @@ struct FetchParams {
     pub end_block: u64,
     pub checkpoint_block_number: Option<u64>,
     pub rpc_type: RpcType,
+    pub jumpdest_src: JumpdestSrc,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -105,6 +106,7 @@ where
             block_id,
             checkpoint_block_number,
             params.rpc_type,
+            params.jumpdest_src,
         )
         .await?;
 
@@ -133,6 +135,7 @@ impl Cli {
                     end_block,
                     checkpoint_block_number,
                     rpc_type: self.config.rpc_type,
+                    jumpdest_src: self.config.jumpdest_src,
                 };
 
                 let block_prover_inputs =
@@ -159,6 +162,7 @@ impl Cli {
                             end_block: block_number,
                             checkpoint_block_number: None,
                             rpc_type: self.config.rpc_type,
+                            jumpdest_src: self.config.jumpdest_src,
                         };
 
                         let block_prover_inputs =

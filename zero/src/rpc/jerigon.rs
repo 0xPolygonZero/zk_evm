@@ -1,6 +1,8 @@
+use core::iter::Iterator;
 use std::collections::BTreeMap;
 use std::ops::Deref as _;
 
+use __compat_primitive_types::H160;
 use alloy::{
     providers::Provider,
     rpc::types::{eth::BlockId, trace::geth::StructLog, Block, BlockTransactionsKind, Transaction},
@@ -21,6 +23,7 @@ use tracing::info;
 use super::{
     fetch_other_block_data,
     jumpdest::{self, get_normalized_structlog},
+    JumpdestSrc,
 };
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
@@ -36,6 +39,7 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: std::sync::Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
     checkpoint_block_number: u64,
+    jumpdest_src: JumpdestSrc,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
@@ -65,17 +69,18 @@ where
         .get_block(target_block_id, BlockTransactionsKind::Full)
         .await?;
 
-    let tx_traces: Vec<&BTreeMap<__compat_primitive_types::H160, TxnTrace>> = tx_results
-        .iter()
-        .map(|TxnInfo { traces, meta: _ }| traces)
-        .collect::<Vec<_>>();
-
-    let jdts: Vec<Option<JumpDestTableWitness>> = process_transactions(
-        &block,
-        cached_provider.get_provider().await?.deref(),
-        &tx_traces,
-    )
-    .await?;
+    let jdts: Vec<Option<JumpDestTableWitness>> = match jumpdest_src {
+        JumpdestSrc::Simulation => vec![None; tx_results.len()],
+        JumpdestSrc::Zero => {
+            process_transactions(
+                &block,
+                cached_provider.get_provider().await?.deref(),
+                tx_results.iter().map(|TxnInfo { traces, meta: _ }| traces), // &tx_traces,
+            )
+            .await?
+        }
+        JumpdestSrc::Jerigon => todo!(),
+    };
 
     // weave in the JDTs
     let txn_info = tx_results
@@ -124,14 +129,15 @@ where
 }
 
 /// Processes the transactions in the given block and updates the code db.
-pub async fn process_transactions<ProviderT, TransportT>(
+pub async fn process_transactions<'i, I, ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
-    tx_traces: &[&BTreeMap<__compat_primitive_types::H160, TxnTrace>],
+    tx_traces: I,
 ) -> anyhow::Result<Vec<Option<JumpDestTableWitness>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
+    I: Iterator<Item = &'i BTreeMap<H160, TxnTrace>>,
 {
     let futures = block
         .transactions
@@ -139,7 +145,7 @@ where
         .context("No transactions in block")?
         .iter()
         .zip(tx_traces)
-        .map(|(tx, &tx_trace)| process_transaction(provider, tx, tx_trace))
+        .map(|(tx, tx_trace)| process_transaction(provider, tx, tx_trace))
         .collect::<FuturesOrdered<_>>();
 
     let vec_of_res = futures.collect::<Vec<_>>().await;
@@ -151,7 +157,7 @@ where
 pub async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
-    tx_trace: &BTreeMap<__compat_primitive_types::H160, TxnTrace>,
+    tx_trace: &BTreeMap<H160, TxnTrace>,
 ) -> anyhow::Result<Option<JumpDestTableWitness>>
 where
     ProviderT: Provider<TransportT>,

@@ -4,7 +4,7 @@ use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueHint};
 use zero::prover::cli::CliProverConfig;
 use zero::prover_state::cli::CliProverStateConfig;
-use zero::rpc::RpcType;
+use zero::rpc::{JumpdestSrc, RpcType};
 
 /// zero-bin leader config
 #[derive(Parser)]
@@ -43,6 +43,9 @@ pub(crate) enum Command {
         // The node RPC type (jerigon / native).
         #[arg(long, short = 't', default_value = "jerigon")]
         rpc_type: RpcType,
+        /// The source of jumpdest tables.
+        #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "simulation"), ("rpc_type", "native", "zero")], required = false)]
+        jumpdest_src: JumpdestSrc,
         /// The block interval for which to generate a proof.
         #[arg(long, short = 'i')]
         block_interval: String,

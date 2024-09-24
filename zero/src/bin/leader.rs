@@ -72,6 +72,7 @@ async fn main() -> Result<()> {
         Command::Rpc {
             rpc_url,
             rpc_type,
+            jumpdest_src,
             block_interval,
             checkpoint_block_number,
             previous_proof,
@@ -91,6 +92,7 @@ async fn main() -> Result<()> {
                     backoff,
                     max_retries,
                     block_time,
+                    jumpdest_src,
                 },
                 block_interval,
                 LeaderConfig {

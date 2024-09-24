@@ -53,6 +53,7 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     block_id: BlockId,
     checkpoint_block_number: u64,
     rpc_type: RpcType,
+    jumpdest_src: JumpdestSrc,
 ) -> Result<BlockProverInput, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -60,10 +61,22 @@ where
 {
     match rpc_type {
         RpcType::Jerigon => {
-            jerigon::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
+            jerigon::block_prover_input(
+                cached_provider,
+                block_id,
+                checkpoint_block_number,
+                jumpdest_src,
+            )
+            .await
         }
         RpcType::Native => {
-            native::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
+            native::block_prover_input(
+                cached_provider,
+                block_id,
+                checkpoint_block_number,
+                jumpdest_src,
+            )
+            .await
         }
     }
 }
