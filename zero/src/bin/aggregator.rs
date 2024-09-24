@@ -88,8 +88,8 @@ async fn main() -> Result<()> {
                 stdio::stdio_aggregate(runtime, Arc::new(prover_config)).await?
             }
         }
-        Command::Rpc {} => todo!(),
-        Command::Http {} => todo!(),
+        Command::Rpc {} => todo!(), // TODO(Robin): Do we want to support RPC input source?
+        Command::Http {} => todo!(), // TODO(Robin): Do we want to support RPC input source?
     }
 
     Ok(())

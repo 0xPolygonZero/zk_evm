@@ -10,7 +10,8 @@ use zero::{
     prover::ProverConfig,
 };
 
-/// The main function for the stdio mode.
+// TODO(Robin): This should probably live in `leader` binary
+/// Wrapping function for the stdio mode.
 pub(crate) async fn stdio_wrap(
     runtime: Arc<Runtime>,
     prover_config: Arc<ProverConfig>,
@@ -65,7 +66,7 @@ pub(crate) async fn stdio_wrap(
     Ok(())
 }
 
-/// The main function for the stdio mode.
+/// Aggregation function for the stdio mode.
 pub(crate) async fn stdio_aggregate(
     runtime: Arc<Runtime>,
     prover_config: Arc<ProverConfig>,

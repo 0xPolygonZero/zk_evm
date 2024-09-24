@@ -108,6 +108,10 @@ where
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
 }
 
+// TODO(Robin): This should be refactored in two distinct states, chain-specific
+// (i.e. current `AllRecursiveCircuits` up to block circuit), and cross-chain
+// specific (the 2-to-1 aggregation piece).
+// cf: https://github.com/0xPolygonZero/zk_evm/issues/622
 pub struct AllVerifierData<F, C, const D: usize>
 where
     F: RichField + Extendable<D>,
