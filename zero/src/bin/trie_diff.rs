@@ -5,6 +5,11 @@
 //! decoder and `test_only` mode of the prover. On the first error that happens
 //! trace decoder and prover tries are compared, and the details of the trie
 //! differences are printed.
+//!
+//! Example usage:
+//! ```
+//! RUST_LOG=info cargo run --bin trie_diff -- --batch-size 2 < ./artifacts/witness_b19807080.json
+//! ```
 
 use std::io::Read;
 use std::iter::repeat;

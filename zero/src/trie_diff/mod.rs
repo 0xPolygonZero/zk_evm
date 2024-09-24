@@ -1,6 +1,6 @@
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::DebugOutputTries;
-use mpt_trie::debug_tools::diff::create_diff_between_tries;
+use mpt_trie::debug_tools::diff::{create_diff_between_tries, DiffPoint};
 use mpt_trie::utils::TrieNodeType;
 use tracing::info;
 
@@ -18,94 +18,100 @@ pub fn compare_tries(
         .b_meta
         .block_number
         .low_u64();
-    let state_trie_diff = create_diff_between_tries(&left.state_trie, &right.state_trie);
-    if let Some(ref state_trie_diff_point) = state_trie_diff.latest_diff_res {
-        if state_trie_diff_point.a_info.node_type == TrieNodeType::Leaf {
-            if let Some(ref td_account_value) = state_trie_diff_point.a_info.value {
-                let td_account_data = rlp::decode::<AccountRlp>(td_account_value)?;
-                info!("Trace decoder state trie block {block_number} batch {batch_index} account address hash: {} account data: {:#?}",
-                    state_trie_diff_point.a_info.key, td_account_data);
-            } else {
-                info!("Trace decoder state trie block {block_number} batch {batch_index}, skip account printout as diff is not at the leaf node level.");
-            }
-        }
-        if state_trie_diff_point.b_info.node_type == TrieNodeType::Leaf {
-            if let Some(ref prover_account_value) = state_trie_diff_point.b_info.value {
-                let prover_account_data = rlp::decode::<AccountRlp>(prover_account_value)?;
-                info!("Prover state trie block {block_number} batch {batch_index} account address hash: {} account data: {:#?}",
-                    state_trie_diff_point.b_info.key, prover_account_data);
-            } else {
-                info!("Prover state trie block {block_number} batch {batch_index}, skip account printout as diff is not at the leaf node level.");
-            }
-        }
 
-        info!(
-            "State trie block {block_number} batch {batch_index} diff: {:#?}",
-            state_trie_diff_point
-        );
-    } else {
-        info!("State trie for block {block_number} batch {batch_index} matches.");
+    fn compare_tries_and_output_results<
+        K: rlp::Decodable + std::fmt::Debug,
+        V: rlp::Decodable + std::fmt::Debug,
+    >(
+        trie_name: &str,
+        diff_point: Option<DiffPoint>,
+        block_number: u64,
+        batch_index: usize,
+        decode_key: bool,
+        decode_data: bool,
+    ) -> anyhow::Result<()> {
+        if let Some(ref trie_diff_point) = diff_point {
+            if trie_diff_point.a_info.node_type == TrieNodeType::Leaf {
+                if let Some(ref td_value) = trie_diff_point.a_info.value {
+                    let td_key_str: &str = if decode_key {
+                        &format!(
+                            "index: {:#?}",
+                            rlp::decode::<K>(trie_diff_point.a_info.key.as_byte_slice())?
+                        )
+                    } else {
+                        &format!("key: {}", trie_diff_point.a_info.key)
+                    };
+                    let td_data_str: &str = if decode_data {
+                        &format!("{:#?}", rlp::decode::<V>(td_value)?)
+                    } else {
+                        &hex::encode(td_value)
+                    };
+                    info!("Trace decoder {trie_name} block {block_number} batch {batch_index} {td_key_str} data: {td_data_str}");
+                } else {
+                    info!("Trace decoder {trie_name} block {block_number} batch {batch_index}, skip data printout as diff is not at the leaf node level.");
+                }
+            }
+            if trie_diff_point.b_info.node_type == TrieNodeType::Leaf {
+                if let Some(ref prover_value) = trie_diff_point.b_info.value {
+                    let prover_key_str: &str = if decode_key {
+                        &format!(
+                            "index: {:#?}",
+                            rlp::decode::<K>(trie_diff_point.b_info.key.as_byte_slice())?
+                        )
+                    } else {
+                        &format!("key: {}", trie_diff_point.b_info.key)
+                    };
+                    let prover_data_str: &str = if decode_data {
+                        &format!("{:#?}", rlp::decode::<V>(prover_value)?)
+                    } else {
+                        &hex::encode(prover_value)
+                    };
+                    info!("Prover {trie_name} block {block_number} batch {batch_index} {prover_key_str} data: {prover_data_str}");
+                } else {
+                    info!("Prover {trie_name} block {block_number} batch {batch_index}, skip data printout as diff is not at the leaf node level.");
+                }
+            }
+
+            info!(
+                "{trie_name} block {block_number} batch {batch_index} diff: {:#?}",
+                trie_diff_point
+            );
+        } else {
+            info!("{trie_name} for block {block_number} batch {batch_index} matches.");
+        }
+        Ok(())
     }
+
+    let state_trie_diff = create_diff_between_tries(&left.state_trie, &right.state_trie);
+    compare_tries_and_output_results::<usize, AccountRlp>(
+        "state trie",
+        state_trie_diff.latest_diff_res,
+        block_number,
+        batch_index,
+        false,
+        true,
+    )?;
 
     let transaction_trie_diff =
         create_diff_between_tries(&left.transaction_trie, &right.transaction_trie);
-    if let Some(ref transaction_trie_diff_point) = transaction_trie_diff.latest_diff_res {
-        if transaction_trie_diff_point.a_info.node_type == TrieNodeType::Leaf {
-            let tx_index =
-                rlp::decode::<usize>(transaction_trie_diff_point.a_info.key.as_byte_slice())?;
-            info!("Trace decoder transaction trie block {block_number} batch {batch_index} transaction index {tx_index} rlp bytecode: {:?}",
-                    transaction_trie_diff_point.a_info.value.as_ref().map(hex::encode));
-        } else {
-            info!("Trace decoder transaction trie block {block_number} batch {batch_index}, skip tx printout as diff is not at the leaf node level.");
-        }
-        if transaction_trie_diff_point.b_info.node_type == TrieNodeType::Leaf {
-            let tx_index =
-                rlp::decode::<usize>(transaction_trie_diff_point.b_info.key.as_byte_slice())?;
-            info!("Prover transaction trie block {block_number} batch {batch_index} transaction index {tx_index} rlp bytecode: {:?}",
-                        transaction_trie_diff_point.b_info.value.as_ref().map(hex::encode));
-        } else {
-            info!("Prover transaction trie block {block_number} batch {batch_index}, skip tx printout as diff is not at the leaf node level.");
-        }
-
-        info!(
-            "Transactions trie block {block_number} batch {batch_index} diff: {:#?}",
-            transaction_trie_diff_point
-        );
-    } else {
-        info!("Transaction trie for block {block_number} batch {batch_index} matches.");
-    }
+    compare_tries_and_output_results::<usize, u8>(
+        "transaction trie",
+        transaction_trie_diff.latest_diff_res,
+        block_number,
+        batch_index,
+        false,
+        true,
+    )?;
 
     let receipt_trie_diff = create_diff_between_tries(&left.receipt_trie, &right.receipt_trie);
-    if let Some(ref receipt_trie_diff_point) = receipt_trie_diff.latest_diff_res {
-        if receipt_trie_diff_point.a_info.node_type == TrieNodeType::Leaf {
-            if let Some(ref td_receipt_value) = receipt_trie_diff_point.a_info.value {
-                let tx_index =
-                    rlp::decode::<usize>(receipt_trie_diff_point.a_info.key.as_byte_slice())?;
-                let td_receipt_data = rlp::decode::<LegacyReceiptRlp>(td_receipt_value)?;
-                info!("Trace decoder receipt trie block {block_number} batch {batch_index} output tx index: {tx_index} receipt data: {:#?}", td_receipt_data);
-            } else {
-                info!("Trace decoder receipt trie block {block_number} batch {batch_index}, skip printout as diff is not at the leaf node level.");
-            }
-        }
-
-        if receipt_trie_diff_point.b_info.node_type == TrieNodeType::Leaf {
-            if let Some(ref prover_receipt_value) = receipt_trie_diff_point.b_info.value {
-                let tx_index =
-                    rlp::decode::<usize>(receipt_trie_diff_point.b_info.key.as_byte_slice())?;
-                let prover_receipt_data = rlp::decode::<LegacyReceiptRlp>(prover_receipt_value)?;
-                info!("Prover receipt trie block {block_number} batch {batch_index} output tx index: {tx_index} receipt data: {:#?}", prover_receipt_data);
-            } else {
-                info!("Prover receipt trie block {block_number} batch {batch_index}, skip receipt printout as diff is not at the leaf node level.");
-            }
-        }
-
-        println!(
-            "Receipt trie block {block_number} batch {batch_index} diff: {:#?}",
-            receipt_trie_diff
-        );
-    } else {
-        println!("Receipt trie block {block_number} batch {batch_index} matches.");
-    }
+    compare_tries_and_output_results::<usize, LegacyReceiptRlp>(
+        "receipt trie",
+        receipt_trie_diff.latest_diff_res,
+        block_number,
+        batch_index,
+        true,
+        true,
+    )?;
 
     Ok(())
 }
