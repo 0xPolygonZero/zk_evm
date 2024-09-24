@@ -160,7 +160,7 @@ if [ "$RUN_VERIFICATION" = true ]; then
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
   echo "Verifying the proof of the latest block in the interval:" $proof_file_name
-  cargo r --release --package zero --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
+  cargo r --release --package zero --bin verifier -- block -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
   if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
       echo "$proof_file_name verified successfully!";

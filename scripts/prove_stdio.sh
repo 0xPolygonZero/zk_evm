@@ -125,7 +125,7 @@ cat $PROOFS_FILE_LIST | while read proof_file;
 do
   echo "Verifying proof file $proof_file"
   verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee $verify_file
+  "${REPO_ROOT}/target/release/verifier" block -f $proof_file | tee $verify_file
   if grep -q 'All proofs verified successfully!' $verify_file; then
       echo "Proof verification for file $proof_file successful";
       rm $verify_file # we keep the generated proof for potential reuse

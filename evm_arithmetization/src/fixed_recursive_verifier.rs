@@ -108,6 +108,83 @@ where
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
 }
 
+pub struct AllVerifierData<F, C, const D: usize>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    C::Hasher: AlgebraicHasher<F>,
+{
+    /// Verifier data used to verify block proofs.
+    block_data: VerifierCircuitData<F, C, D>,
+    /// Verifier data used to verify wrapped block proofs.
+    wrapped_block_data: VerifierCircuitData<F, C, D>,
+    /// Verifier data used to verify aggregated block proofs.
+    aggregated_block_data: VerifierCircuitData<F, C, D>,
+}
+
+impl<F, C, const D: usize> AllVerifierData<F, C, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    C::Hasher: AlgebraicHasher<F>,
+{
+    pub fn verify_block(&self, proof: ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {
+        // Verifier data verification
+        check_cyclic_proof_verifier_data(
+            &proof,
+            &self.block_data.verifier_only,
+            &self.block_data.common,
+        )?;
+
+        // Proof verification
+        self.block_data.verify(proof)
+    }
+
+    pub fn verify_block_wrapper(
+        &self,
+        proof: ProofWithPublicInputs<F, C, D>,
+    ) -> anyhow::Result<()> {
+        // Proof verification
+        self.wrapped_block_data.verify(proof)
+    }
+
+    pub fn verify_block_aggreg(&self, proof: ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {
+        // Verifier data verification
+        check_cyclic_proof_verifier_data(
+            &proof,
+            &self.aggregated_block_data.verifier_only,
+            &self.aggregated_block_data.common,
+        )?;
+
+        // Proof verification
+        self.aggregated_block_data.verify(proof)
+    }
+
+    pub fn to_bytes(&self, gate_serializer: &dyn GateSerializer<F, D>) -> IoResult<Vec<u8>> {
+        let mut buffer = Vec::new();
+        buffer.write_verifier_circuit_data(&self.block_data, gate_serializer)?;
+        buffer.write_verifier_circuit_data(&self.wrapped_block_data, gate_serializer)?;
+        buffer.write_verifier_circuit_data(&self.aggregated_block_data, gate_serializer)?;
+        Ok(buffer)
+    }
+
+    pub fn from_bytes(
+        bytes: Vec<u8>,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<Self> {
+        let mut buffer = Buffer::new(&bytes);
+        let block_data = buffer.read_verifier_circuit_data(gate_serializer)?;
+        let wrapped_block_data = buffer.read_verifier_circuit_data(gate_serializer)?;
+        let aggregated_block_data = buffer.read_verifier_circuit_data(gate_serializer)?;
+
+        Ok(Self {
+            block_data,
+            wrapped_block_data,
+            aggregated_block_data,
+        })
+    }
+}
+
 /// Data for the EVM root circuit, which is used to combine each STARK's shrunk
 /// wrapper proof into a single proof.
 #[derive(Eq, PartialEq, Debug)]
@@ -771,8 +848,12 @@ where
     /// // Verify a provided block proof
     /// assert!(verifier_state.verify(&block_proof).is_ok());
     /// ```
-    pub fn final_verifier_data(&self) -> VerifierCircuitData<F, C, D> {
-        self.block.circuit.verifier_data()
+    pub fn final_verifier_data(&self) -> AllVerifierData<F, C, D> {
+        AllVerifierData {
+            block_data: self.block.circuit.verifier_data(),
+            wrapped_block_data: self.block_wrapper.circuit.verifier_data(),
+            aggregated_block_data: self.two_to_one_block.circuit.verifier_data(),
+        }
     }
 
     fn create_segment_circuit(

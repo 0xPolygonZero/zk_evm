@@ -70,4 +70,4 @@ pub type RecursiveCircuitsForTableSize =
 /// [`VerifierData`] is much lighter, allowing anyone to verify block proofs,
 /// regardless of the underlying hardware.
 pub type VerifierData =
-    plonky2::plonk::circuit_data::VerifierCircuitData<Field, RecursionConfig, EXTENSION_DEGREE>;
+    crate::fixed_recursive_verifier::AllVerifierData<Field, RecursionConfig, EXTENSION_DEGREE>;
