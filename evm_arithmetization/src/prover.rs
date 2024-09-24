@@ -59,7 +59,7 @@ where
         all_stark,
         config,
         tables_with_pvs.tables,
-        tables_with_pvs.empty_keccak_tables,
+        tables_with_pvs.use_keccak_tables,
         &mut tables_with_pvs.public_values,
         timing,
         abort_signal,
@@ -73,7 +73,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    empty_keccak_tables: bool,
+    use_keccak_tables: bool,
     public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -213,7 +213,7 @@ where
             ctl_challenges,
         },
         public_values: public_values.clone(),
-        empty_keccak_tables,
+        use_keccak_tables,
     })
 }
 

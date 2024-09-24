@@ -32,9 +32,9 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues<F>,
     /// A flag indicating whether the Keccak and KeccakSponge tables contain
-    /// only padding values (i.e., no meaningful data). This is set when no
-    /// actual Keccak operations were performed.
-    pub empty_keccak_tables: bool,
+    /// only padding values (i.e., no meaningful data). This is set to false
+    /// when no actual Keccak operations were performed.
+    pub use_keccak_tables: bool,
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {

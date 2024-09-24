@@ -455,7 +455,7 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
 
 pub struct TablesWithPVsAndFinalMem<F: RichField> {
     pub tables: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    pub empty_keccak_tables: bool,
+    pub use_keccak_tables: bool,
     pub public_values: PublicValues<F>,
 }
 
@@ -554,8 +554,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
-    let empty_keccak_tables =
-        state.traces.keccak_inputs.is_empty() && state.traces.keccak_sponge_ops.is_empty();
+    let use_keccak_tables =
+        !state.traces.keccak_inputs.is_empty() || !state.traces.keccak_sponge_ops.is_empty();
 
     let tables = timed!(
         timing,
@@ -572,7 +572,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     Ok(TablesWithPVsAndFinalMem {
         tables,
-        empty_keccak_tables,
+        use_keccak_tables,
         public_values,
     })
 }

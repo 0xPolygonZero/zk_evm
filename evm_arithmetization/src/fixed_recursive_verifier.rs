@@ -132,7 +132,7 @@ where
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
     /// We can skip verifying Keccak tables when they are not in use.
-    enable_keccak_tables: BoolTarget,
+    use_keccak_tables: BoolTarget,
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -155,7 +155,7 @@ where
         }
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
-        buffer.write_target_bool(self.enable_keccak_tables)?;
+        buffer.write_target_bool(self.use_keccak_tables)?;
         Ok(())
     }
 
@@ -175,7 +175,7 @@ where
         }
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
-        let enable_keccak_tables = buffer.read_target_bool()?;
+        let use_keccak_tables = buffer.read_target_bool()?;
 
         Ok(Self {
             circuit,
@@ -183,7 +183,7 @@ where
             index_verifier_data: index_verifier_data.try_into().unwrap(),
             public_values,
             cyclic_vk,
-            enable_keccak_tables,
+            use_keccak_tables,
         })
     }
 }
@@ -986,7 +986,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
-            enable_keccak_tables,
+            use_keccak_tables: enable_keccak_tables,
         }
     }
 
@@ -1929,7 +1929,7 @@ where
 
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
-            if KECCAK_TABLES_INDICES.contains(&table) && all_proof.empty_keccak_tables {
+            if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
                 let index_verifier_data = table_circuits
                     .by_stark_size
                     .keys()
@@ -1982,10 +1982,7 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(
-            self.root.enable_keccak_tables,
-            all_proof.empty_keccak_tables,
-        );
+        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2099,7 +2096,7 @@ where
 
         for table in 0..NUM_TABLES {
             let (table_circuit, index_verifier_data) = &table_circuits[table];
-            if KECCAK_TABLES_INDICES.contains(&table) && all_proof.empty_keccak_tables {
+            if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
@@ -2134,10 +2131,7 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(
-            self.root.enable_keccak_tables,
-            all_proof.empty_keccak_tables,
-        );
+        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
