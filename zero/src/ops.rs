@@ -505,10 +505,10 @@ impl Monoid for BlockAggProof {
                 FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
             })?;
 
-        let p_vals = HashOrPV::Sequence(vec![
-            HashOrPV::Hash(a.public_values().hash()),
-            HashOrPV::Hash(b.public_values().hash()),
-        ]);
+        // Unhashed public values are 112 bytes long, i.e. small enough to be aggregated
+        // in the clear. This will allow the verifier to easily perform
+        // additional verification on the *claimed* chain data to be verified.
+        let p_vals = HashOrPV::Sequence(vec![a.public_values(), b.public_values()]);
 
         Ok(GeneratedAggBlockProof {
             p_vals,
