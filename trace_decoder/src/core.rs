@@ -6,10 +6,9 @@ use std::{
     mem,
 };
 
-use alloy::primitives::address;
 use alloy::{
     consensus::{Transaction, TxEnvelope},
-    primitives::TxKind,
+    primitives::{address, TxKind},
     rlp::Decodable as _,
 };
 use alloy_compat::Compat as _;
@@ -138,6 +137,7 @@ pub fn entrypoint(
                 block_hashes: b_hashes.clone(),
                 burn_addr,
                 jumpdest_table: {
+                    // TODO See the issue Simulate to get jumpdests on a per-transaction basis #653.
                     // Note that this causes any batch containing just a single `None` to collapse
                     // into a `None`, which causing failover to simulating jumpdest analysis for the
                     // whole batch. There is an optimization opportunity here.

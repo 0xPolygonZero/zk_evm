@@ -39,6 +39,14 @@ pub enum RpcType {
     Native,
 }
 
+/// The Jumpdest source type.
+#[derive(ValueEnum, Clone, Debug, Copy)]
+pub enum JumpdestSrc {
+    Simulation,
+    Zero,
+    Jerigon,
+}
+
 /// Obtain the prover input for one block
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,

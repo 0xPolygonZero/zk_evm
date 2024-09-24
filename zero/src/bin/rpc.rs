@@ -15,6 +15,7 @@ use zero::block_interval::BlockIntervalStream;
 use zero::prover::BlockProverInput;
 use zero::provider::CachedProvider;
 use zero::rpc;
+use zero::rpc::JumpdestSrc;
 
 use self::rpc::{retry::build_http_retry_provider, RpcType};
 
@@ -34,6 +35,9 @@ struct RpcToolConfig {
     /// The RPC Tracer Type.
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
+    /// The source of jumpdest tables.
+    #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "simulation"), ("rpc_type", "native", "zero")], required = false)]
+    jumpdest_src: JumpdestSrc,
     /// Backoff in milliseconds for retry requests.
     #[arg(long, default_value_t = 0)]
     backoff: u64,
