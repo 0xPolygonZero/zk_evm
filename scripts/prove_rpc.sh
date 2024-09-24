@@ -47,6 +47,7 @@ NODE_RPC_TYPE=$4
 IGNORE_PREVIOUS_PROOFS=$5
 BACKOFF=${6:-0}
 RETRIES=${7:-0}
+TEST_ONLY=$8
 
 # Sometimes we need to override file logging, e.g. in the CI run
 OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
@@ -106,7 +107,7 @@ fi
 # If we set test_only flag, we'll generate a dummy
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
-if [[ $8 == "test_only" ]]; then
+if [[ $TEST_ONLY == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
     command='cargo r --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL  $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
@@ -160,7 +161,7 @@ if [ "$RUN_VERIFICATION" = true ]; then
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
   echo "Verifying the proof of the latest block in the interval:" $proof_file_name
-  cargo r --release --package zero --bin verifier -- block -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
+  cargo r --release --package zero --bin verifier -- -f $proof_file_name block > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
   if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
       echo "$proof_file_name verified successfully!";

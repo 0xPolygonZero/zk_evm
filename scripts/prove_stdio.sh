@@ -9,6 +9,7 @@ set -exo pipefail
 # Args:
 # 1 --> Input witness json file
 # 2 --> Test run only flag `test_only` (optional)
+# 3 --> Flag `wrap` for wrapping the final block proof (optional)
 
 # We're going to set the parallelism in line with the total cpu count
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -41,6 +42,7 @@ export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 INPUT_FILE=$1
 TEST_ONLY=$2
+WRAP_PROOF=$3
 
 if [[ $INPUT_FILE == "" ]]; then
     echo "Please provide witness json input file, e.g. artifacts/witness_b19240705.json"
@@ -125,10 +127,20 @@ cat $PROOFS_FILE_LIST | while read proof_file;
 do
   echo "Verifying proof file $proof_file"
   verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  "${REPO_ROOT}/target/release/verifier" block -f $proof_file | tee $verify_file
+  "${REPO_ROOT}/target/release/verifier" -f $proof_file block | tee $verify_file
   if grep -q 'All proofs verified successfully!' $verify_file; then
-      echo "Proof verification for file $proof_file successful";
-      rm $verify_file # we keep the generated proof for potential reuse
+    echo "Proof verification for file $proof_file successful";
+    rm $verify_file # we keep the generated proof for potential reuse
+
+    if [[ $WRAP_PROOF == "wrap" ]]; then
+      "${REPO_ROOT}/target/release/aggregator" --runtime in-memory --load-strategy on-demand stdio < $proof_file
+
+      "${REPO_ROOT}/target/release/verifier" -f $proof_file wrapped-block | tee $verify_file
+      if grep -q 'All proofs verified successfully!' $verify_file; then
+        echo "Wrapper proof verification for file $proof_file successful";
+        rm $verify_file # we keep the generated proof for potential reuse
+      fi
+    fi
   else
       echo "there was an issue with proof verification";
       exit 1
