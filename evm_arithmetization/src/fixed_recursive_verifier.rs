@@ -24,7 +24,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::cyclic_base_proof;
+use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -1934,36 +1934,52 @@ where
                     .by_stark_size
                     .keys()
                     .min()
-                    .expect("No valid size found in the shrinking circuits");
+                    .expect("No valid size in shrinking circuits");
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(*index_verifier_data),
                 );
-                continue;
+                let common_date = &table_circuits
+                    .by_stark_size
+                    .get(index_verifier_data)
+                    .expect("No valid size in shrinking circuits")
+                    .shrinking_wrappers
+                    .last()
+                    .expect("No shrinking circuits")
+                    .circuit
+                    .common;
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
+                let dummy_pis = HashMap::new();
+                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
+            } else {
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
+                let shrunk_proof = table_circuits
+                    .by_stark_size
+                    .get(&original_degree_bits)
+                    .ok_or_else(|| {
+                        anyhow!(format!(
+                            "Missing preprocessed circuits for {:?} table with size {}.",
+                            Table::all()[table],
+                            original_degree_bits,
+                        ))
+                    })?
+                    .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                let index_verifier_data = table_circuits
+                    .by_stark_size
+                    .keys()
+                    .position(|&size| size == original_degree_bits)
+                    .unwrap();
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(index_verifier_data),
+                );
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
             }
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-            let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
-            let shrunk_proof = table_circuits
-                .by_stark_size
-                .get(&original_degree_bits)
-                .ok_or_else(|| {
-                    anyhow!(format!(
-                        "Missing preprocessed circuits for {:?} table with size {}.",
-                        Table::all()[table],
-                        original_degree_bits,
-                    ))
-                })?
-                .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            let index_verifier_data = table_circuits
-                .by_stark_size
-                .keys()
-                .position(|&size| size == original_degree_bits)
-                .unwrap();
-            root_inputs.set_target(
-                self.root.index_verifier_data[table],
-                F::from_canonical_usize(index_verifier_data),
-            );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -2101,18 +2117,30 @@ where
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
                 );
-                continue;
+                let common_date = &table_circuit
+                    .shrinking_wrappers
+                    .last()
+                    .expect("")
+                    .circuit
+                    .common;
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
+                let dummy_pis = HashMap::new();
+                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
+            } else {
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+
+                let shrunk_proof =
+                    table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_u8(*index_verifier_data),
+                );
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
             }
-
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-
-            let shrunk_proof =
-                table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            root_inputs.set_target(
-                self.root.index_verifier_data[table],
-                F::from_canonical_u8(*index_verifier_data),
-            );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
 
             check_abort_signal(abort_signal.clone())?;
         }
