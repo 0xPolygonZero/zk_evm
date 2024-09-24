@@ -309,7 +309,7 @@ pub async fn prove(
                         || prover_config.keep_intermediate_proofs
                         || is_block_batch_finished)
                 {
-                    write_proof_to_dir(&prover_config.proof_output_dir, proof.clone())
+                    write_proof_to_dir(&prover_config.proof_output_dir, proof.clone(), None)
                         .await
                         .inspect_err(|e| error!("failed to output proof for block {block_number} to directory {e:?}"))?;
                 }

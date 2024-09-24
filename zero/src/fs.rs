@@ -6,9 +6,22 @@ use tokio::io::AsyncWriteExt;
 
 use crate::proof_types::{GeneratedBlockProof, WritableProof};
 
-pub fn generate_block_proof_file_name(directory: &Option<&str>, block_height: u64) -> PathBuf {
+pub fn generate_block_proof_file_name(
+    directory: &Option<&str>,
+    block_height: Option<u64>,
+    extra_info: &Option<String>,
+) -> PathBuf {
+    let prefix = if let Some(height) = block_height {
+        format!("b{}", height)
+    } else {
+        "".to_string()
+    };
     let mut path = PathBuf::from(directory.unwrap_or(""));
-    path.push(format!("b{}.zkproof", block_height));
+    path.push(prefix);
+    if let Some(info) = extra_info {
+        path.push(info);
+    }
+    path.push(".zkproof");
     path
 }
 
@@ -33,6 +46,7 @@ pub fn get_previous_proof(path: Option<PathBuf>) -> anyhow::Result<Option<Genera
 pub async fn write_proof_to_dir<P: WritableProof>(
     output_dir: &Path,
     proof: P,
+    extra_info: Option<String>,
 ) -> anyhow::Result<()> {
     // Check if output directory exists, and create one if it doesn't.
     if !output_dir.exists() {
@@ -40,10 +54,8 @@ pub async fn write_proof_to_dir<P: WritableProof>(
         std::fs::create_dir(output_dir)?;
     }
 
-    let block_proof_file_path = generate_block_proof_file_name(
-        &output_dir.to_str(),
-        proof.block_height().unwrap_or_default(),
-    );
+    let block_proof_file_path =
+        generate_block_proof_file_name(&output_dir.to_str(), proof.block_height(), &extra_info);
 
     // Serialize as a single element array to match the expected format.
     let proof_serialized = serde_json::to_vec(&vec![proof])?;

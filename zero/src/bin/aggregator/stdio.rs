@@ -52,11 +52,15 @@ pub(crate) async fn stdio_wrap(
 
     runtime.close().await?;
 
-    write_proof_to_dir(&prover_config.proof_output_dir, proof)
-        .await
-        .inspect_err(|e| {
-            error!("failed to output wrapped proof for block {block_number} to directory {e:?}")
-        })?;
+    write_proof_to_dir(
+        &prover_config.proof_output_dir,
+        proof,
+        Some("_wrapper".to_string()),
+    )
+    .await
+    .inspect_err(|e| {
+        error!("failed to output wrapped proof for block {block_number} to directory {e:?}")
+    })?;
 
     Ok(())
 }
@@ -95,9 +99,13 @@ pub(crate) async fn stdio_aggregate(
 
     runtime.close().await?;
 
-    write_proof_to_dir(&prover_config.proof_output_dir, proof)
-        .await
-        .inspect_err(|e| error!("failed to output aggregated block proof to directory {e:?}"))?;
+    write_proof_to_dir(
+        &prover_config.proof_output_dir,
+        proof,
+        Some("block_aggreg".to_string()),
+    )
+    .await
+    .inspect_err(|e| error!("failed to output aggregated block proof to directory {e:?}"))?;
 
     Ok(())
 }
