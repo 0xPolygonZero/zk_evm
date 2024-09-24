@@ -453,7 +453,11 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues<F>);
+pub(crate) struct TablesWithPVsAndFinalMem<F: RichField> {
+    pub tables: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    pub empty_keccak_tables: bool,
+    pub public_values: PublicValues<F>,
+}
 
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -550,6 +554,9 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
+    let empty_keccak_tables =
+        state.traces.keccak_inputs.is_empty() && state.traces.keccak_sponge_ops.is_empty();
+
     let tables = timed!(
         timing,
         "convert trace data to tables",
@@ -562,7 +569,12 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
             timing
         )
     );
-    Ok((tables, public_values))
+
+    Ok(TablesWithPVsAndFinalMem {
+        tables,
+        empty_keccak_tables,
+        public_values,
+    })
 }
 
 fn simulate_cpu<F: RichField>(

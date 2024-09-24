@@ -20,8 +20,9 @@ use starky::proof::{MultiProof, StarkProofWithMetadata};
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::constants::trie_type::PartialTrieType::Hash;
 use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
@@ -47,7 +48,7 @@ where
 
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
 
-    let (traces, mut public_values) = timed!(
+    let mut tables_with_pvs = timed!(
         timing,
         "generate all traces",
         generate_traces(all_stark, &inputs, config, segment_data, timing)?
@@ -58,8 +59,9 @@ where
     let proof = prove_with_traces(
         all_stark,
         config,
-        traces,
-        &mut public_values,
+        tables_with_pvs.tables,
+        tables_with_pvs.empty_keccak_tables,
+        &mut tables_with_pvs.public_values,
         timing,
         abort_signal,
     )?;
@@ -72,6 +74,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    empty_keccak_tables: bool,
     public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -114,8 +117,13 @@ where
         .map(|c| c.merkle_tree.cap.clone())
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
-    for cap in &trace_caps {
-        challenger.observe_cap(cap);
+    for (i, cap) in trace_caps.iter().enumerate() {
+        if KECCAK_TABLES_INDICES.contains(&i) {
+            let zero_merkle_cap = cap.flatten().iter().map(|_| F::ZERO).collect::<Vec<F>>();
+            challenger.observe_elements(&zero_merkle_cap);
+        } else {
+            challenger.observe_cap(cap);
+        }
     }
 
     observe_public_values::<F, C, D>(&mut challenger, public_values)
@@ -206,6 +214,7 @@ where
             ctl_challenges,
         },
         public_values: public_values.clone(),
+        empty_keccak_tables,
     })
 }
 
