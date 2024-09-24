@@ -386,7 +386,7 @@ pub(crate) fn generate_jumpdest_table(
     Ok(jumpdest_table)
 }
 
-/// This module exists as a workaround for parsing `StrucLog`.  The `error`
+/// This module exists as a workaround for parsing `StructLog`.  The `error`
 /// field is a string in Alloy but an object in Erigon.
 pub mod structlogprime {
     use core::option::Option::None;
