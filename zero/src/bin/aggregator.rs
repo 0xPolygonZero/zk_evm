@@ -35,7 +35,7 @@ pub async fn wrap(
         .run(&runtime)
         .await?;
 
-    info!("Successfully proved block {block_number}");
+    info!("Successfully wrapped proof for block {block_number}");
     Ok(block_proof.0)
 }
 
@@ -46,6 +46,12 @@ async fn main() -> Result<()> {
     zero::tracing::init();
 
     let args = cli::Cli::parse();
+
+    if let paladin::config::Runtime::InMemory = args.paladin.runtime {
+        args.prover_state_config
+            .into_prover_state_manager()
+            .initialize()?;
+    }
 
     let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
     let prover_config: ProverConfig = args.prover_config.into();

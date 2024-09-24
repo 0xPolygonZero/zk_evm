@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use zero::prover::cli::CliProverConfig;
+use zero::{prover::cli::CliProverConfig, prover_state::cli::CliProverStateConfig};
 
 /// zero-bin leader config
 #[derive(Parser)]
@@ -18,6 +18,11 @@ pub(crate) struct Cli {
 
     #[clap(flatten)]
     pub(crate) prover_config: CliProverConfig,
+
+    // Note this is only relevant for the aggregator when running in in-memory
+    // mode.
+    #[clap(flatten)]
+    pub(crate) prover_state_config: CliProverStateConfig,
 }
 
 #[derive(Subcommand)]
