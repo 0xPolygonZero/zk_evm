@@ -223,6 +223,15 @@ impl From<GeneratedWrappedBlockProof> for AggregatableBlockProof {
     }
 }
 
+impl From<AggregatableBlockProof> for GeneratedAggBlockProof {
+    fn from(v: AggregatableBlockProof) -> Self {
+        GeneratedAggBlockProof {
+            p_vals: v.public_values(),
+            intern: v.intern().clone(),
+        }
+    }
+}
+
 impl From<GeneratedAggBlockProof> for AggregatableBlockProof {
     fn from(v: GeneratedAggBlockProof) -> Self {
         Self::Agg(v)
@@ -248,5 +257,14 @@ impl WritableProof for GeneratedWrappedBlockProof {
 impl WritableProof for GeneratedAggBlockProof {
     fn block_height(&self) -> Option<u64> {
         None
+    }
+}
+
+impl WritableProof for AggregatableBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        match self {
+            AggregatableBlockProof::Block(block) => Some(block.b_height),
+            AggregatableBlockProof::Agg(_) => None,
+        }
     }
 }

@@ -5,12 +5,14 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
-use paladin::directive::Directive;
+use paladin::directive::{Directive, IndexedStream};
 use paladin::runtime::Runtime;
 use tracing::info;
 use zero::env::load_dotenvy_vars_if_present;
-use zero::ops::{register, WrappedBlockProof};
-use zero::proof_types::{GeneratedBlockProof, GeneratedWrappedBlockProof};
+use zero::ops::{register, BlockAggProof, WrappedBlockProof};
+use zero::proof_types::{
+    AggregatableBlockProof, GeneratedAggBlockProof, GeneratedBlockProof, GeneratedWrappedBlockProof,
+};
 use zero::prover::ProverConfig;
 use zero::prover_state::persistence::set_circuit_cache_dir_env_if_not_set;
 
@@ -39,6 +41,25 @@ pub async fn wrap(
     Ok(block_proof.0)
 }
 
+pub async fn aggregate(
+    proofs: Vec<AggregatableBlockProof>,
+    runtime: Arc<Runtime>,
+    prover_config: Arc<ProverConfig>,
+) -> Result<GeneratedAggBlockProof> {
+    info!("Aggregating wrapped block proofs");
+
+    let agg_proof = IndexedStream::from(proofs)
+        .fold(&BlockAggProof {
+            save_inputs_on_error: prover_config.save_inputs_on_error,
+        })
+        .run(&runtime)
+        .await?;
+
+    info!("Successfully aggregated block proofs");
+
+    Ok(agg_proof.into())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
@@ -64,7 +85,7 @@ async fn main() -> Result<()> {
             if args.wrap {
                 stdio::stdio_wrap(runtime, Arc::new(prover_config)).await?
             } else {
-                todo!()
+                stdio::stdio_aggregate(runtime, Arc::new(prover_config)).await?
             }
         }
         Command::Rpc {} => todo!(),
