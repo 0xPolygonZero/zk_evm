@@ -1928,9 +1928,21 @@ where
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
+            let table_circuits = &self.by_table[table];
+            if KECCAK_TABLES_INDICES.contains(&table) && all_proof.empty_keccak_tables {
+                let index_verifier_data = table_circuits
+                    .by_stark_size
+                    .keys()
+                    .min()
+                    .expect("No valid size found in the shrinking circuits");
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(*index_verifier_data),
+                );
+                continue;
+            }
             let stark_proof = &all_proof.multi_proof.stark_proofs[table];
             let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
-            let table_circuits = &self.by_table[table];
             let shrunk_proof = table_circuits
                 .by_stark_size
                 .get(&original_degree_bits)
@@ -1970,8 +1982,10 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        // TODO(sdeng): Set to false when this segment contains no Keccak operations.
-        root_inputs.set_bool_target(self.root.enable_keccak_tables, true);
+        root_inputs.set_bool_target(
+            self.root.enable_keccak_tables,
+            all_proof.empty_keccak_tables,
+        );
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2085,6 +2099,13 @@ where
 
         for table in 0..NUM_TABLES {
             let (table_circuit, index_verifier_data) = &table_circuits[table];
+            if KECCAK_TABLES_INDICES.contains(&table) && all_proof.empty_keccak_tables {
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_u8(*index_verifier_data),
+                );
+                continue;
+            }
 
             let stark_proof = &all_proof.multi_proof.stark_proofs[table];
 
@@ -2113,8 +2134,10 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        // TODO(sdeng): Set to false when this segment contains no Keccak operations.
-        root_inputs.set_bool_target(self.root.enable_keccak_tables, true);
+        root_inputs.set_bool_target(
+            self.root.enable_keccak_tables,
+            all_proof.empty_keccak_tables,
+        );
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 

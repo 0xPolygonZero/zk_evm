@@ -22,7 +22,6 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::trie_type::PartialTrieType::Hash;
 use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;

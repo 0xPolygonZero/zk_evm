@@ -453,7 +453,7 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-pub(crate) struct TablesWithPVsAndFinalMem<F: RichField> {
+pub struct TablesWithPVsAndFinalMem<F: RichField> {
     pub tables: [Vec<PolynomialValues<F>>; NUM_TABLES],
     pub empty_keccak_tables: bool,
     pub public_values: PublicValues<F>,
