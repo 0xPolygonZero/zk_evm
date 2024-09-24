@@ -31,7 +31,7 @@ where
     TransportT: Transport + Clone,
 {
     let (block_trace, other_data) = try_join!(
-        process_block_trace(provider.clone(), block_number),
+        process_block_trace(provider.clone(), block_number, jumpdest_src),
         crate::rpc::fetch_other_block_data(provider.clone(), block_number, checkpoint_block_number)
     )?;
 
@@ -45,6 +45,7 @@ where
 pub(crate) async fn process_block_trace<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
+    jumpdest_src: JumpdestSrc,
 ) -> anyhow::Result<BlockTrace>
 where
     ProviderT: Provider<TransportT>,
@@ -54,8 +55,12 @@ where
         .get_block(block_number, BlockTransactionsKind::Full)
         .await?;
 
-    let (code_db, txn_info) =
-        txn::process_transactions(&block, cached_provider.get_provider().await?.deref()).await?;
+    let (code_db, txn_info) = txn::process_transactions(
+        &block,
+        cached_provider.get_provider().await?.deref(),
+        jumpdest_src,
+    )
+    .await?;
     let trie_pre_images = state::process_state_witness(cached_provider, block, &txn_info).await?;
 
     Ok(BlockTrace {

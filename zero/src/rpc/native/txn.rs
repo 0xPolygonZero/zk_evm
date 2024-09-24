@@ -1,3 +1,4 @@
+use core::option::Option::None;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use __compat_primitive_types::{H256, U256};
@@ -24,13 +25,17 @@ use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 use tracing::info;
 
-use crate::rpc::jumpdest::{self, get_normalized_structlog};
 use crate::rpc::Compat;
+use crate::rpc::{
+    jumpdest::{self, get_normalized_structlog},
+    JumpdestSrc,
+};
 
 /// Processes the transactions in the given block and updates the code db.
 pub async fn process_transactions<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
+    jumpdest_src: JumpdestSrc,
 ) -> anyhow::Result<(CodeDb, Vec<TxnInfo>)>
 where
     ProviderT: Provider<TransportT>,
@@ -41,7 +46,7 @@ where
         .as_transactions()
         .context("No transactions in block")?
         .iter()
-        .map(|tx| process_transaction(provider, tx))
+        .map(|tx| process_transaction(provider, tx, jumpdest_src))
         .collect::<FuturesOrdered<_>>()
         .try_fold(
             (BTreeSet::new(), Vec::new()),
@@ -59,13 +64,14 @@ where
 pub async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
+    jumpdest_src: JumpdestSrc,
 ) -> anyhow::Result<(CodeDb, TxnInfo)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
     let (tx_receipt, pre_trace, diff_trace, structlog_opt) =
-        fetch_tx_data(provider, &tx.hash).await?;
+        fetch_tx_data(provider, &tx.hash, jumpdest_src).await?;
     let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
@@ -125,6 +131,7 @@ where
 async fn fetch_tx_data<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
+    jumpdest_src: JumpdestSrc,
 ) -> anyhow::Result<(
     <Ethereum as Network>::ReceiptResponse,
     GethTrace,
@@ -138,14 +145,24 @@ where
     let tx_receipt_fut = provider.get_transaction_receipt(*tx_hash);
     let pre_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(false));
     let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
-    let structlog_trace_fut = get_normalized_structlog(provider, tx_hash);
 
-    let (tx_receipt, pre_trace, diff_trace, structlog_trace) = futures::try_join!(
-        tx_receipt_fut,
-        pre_trace_fut,
-        diff_trace_fut,
-        structlog_trace_fut,
-    )?;
+    let (tx_receipt, pre_trace, diff_trace, structlog_trace) = match jumpdest_src {
+        JumpdestSrc::Zero => {
+            let structlog_trace_fut = get_normalized_structlog(provider, tx_hash);
+            futures::try_join!(
+                tx_receipt_fut,
+                pre_trace_fut,
+                diff_trace_fut,
+                structlog_trace_fut,
+            )?
+        }
+        JumpdestSrc::Simulation => {
+            let (tx_receipt, pre_trace, diff_trace) =
+                futures::try_join!(tx_receipt_fut, pre_trace_fut, diff_trace_fut,)?;
+            (tx_receipt, pre_trace, diff_trace, None)
+        }
+        JumpdestSrc::Jerigon => todo!(),
+    };
 
     Ok((
         tx_receipt.context("Transaction receipt not found.")?,
