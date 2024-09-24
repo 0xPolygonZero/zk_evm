@@ -792,8 +792,8 @@ where
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
-        let enable_keccak_tables = builder.add_virtual_bool_target_safe();
-        let disable_keccak_tables = builder.not(enable_keccak_tables);
+        let use_keccak_tables = builder.add_virtual_bool_target_safe();
+        let skip_keccak_tables = builder.not(use_keccak_tables);
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -816,7 +816,7 @@ where
         for i in KECCAK_TABLES_INDICES {
             for h in &pis[i].trace_cap {
                 for t in h {
-                    let trace_cap_check = builder.mul(disable_keccak_tables.target, *t);
+                    let trace_cap_check = builder.mul(skip_keccak_tables.target, *t);
                     builder.assert_zero(trace_cap_check);
                 }
             }
@@ -843,8 +843,8 @@ where
                         ctl_challenges.challenges[j].gamma,
                         pi.ctl_challenges.challenges[j].gamma,
                     );
-                    let beta_check = builder.mul(enable_keccak_tables.target, beta_diff);
-                    let gamma_check = builder.mul(enable_keccak_tables.target, gamma_diff);
+                    let beta_check = builder.mul(use_keccak_tables.target, beta_diff);
+                    let gamma_check = builder.mul(use_keccak_tables.target, gamma_diff);
                     builder.assert_zero(beta_check);
                     builder.assert_zero(gamma_check);
                 } else {
@@ -881,7 +881,7 @@ where
                 ) {
                     let state_difference = builder.sub(before, after);
                     let challenger_state_check =
-                        builder.mul(disable_keccak_tables.target, state_difference);
+                        builder.mul(skip_keccak_tables.target, state_difference);
                     builder.assert_zero(challenger_state_check);
                 }
             }
@@ -906,7 +906,7 @@ where
         // When Keccak Tables are disabled, Keccak Tables' ctl_zs_first should be 0s.
         for &i in KECCAK_TABLES_INDICES.iter() {
             for &t in pis[i].ctl_zs_first.iter() {
-                let ctl_check = builder.mul(disable_keccak_tables.target, t);
+                let ctl_check = builder.mul(skip_keccak_tables.target, t);
                 builder.assert_zero(ctl_check);
             }
         }
@@ -943,7 +943,7 @@ where
             if KECCAK_TABLES_INDICES.contains(&i) {
                 builder
                     .conditionally_verify_proof_or_dummy::<C>(
-                        enable_keccak_tables,
+                        use_keccak_tables,
                         &recursive_proofs[i],
                         &inner_verifier_data,
                         inner_common_data[i],
@@ -986,7 +986,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
-            use_keccak_tables: enable_keccak_tables,
+            use_keccak_tables,
         }
     }
 
