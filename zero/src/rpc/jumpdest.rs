@@ -26,6 +26,7 @@ use keccak_hash::keccak;
 use structlogprime::normalize_structlog;
 use tokio::time::timeout;
 use trace_decoder::TxnTrace;
+use trace_decoder::PRECOMPILE_ADDRESSES;
 use tracing::trace;
 
 /// The maximum time we are willing to wait for a structlog before failing over
@@ -145,7 +146,9 @@ pub(crate) fn generate_jumpdest_table(
     );
 
     let entrypoint_code_hash: H256 = match tx.to {
-        Some(to_address) if precompiles().contains(&to_address) => return Ok(jumpdest_table),
+        Some(to_address) if PRECOMPILE_ADDRESSES.contains(&to_address) => {
+            return Ok(jumpdest_table)
+        }
         Some(to_address) if callee_addr_to_code_hash.contains_key(&to_address).not() => {
             return Ok(jumpdest_table)
         }
@@ -201,11 +204,13 @@ pub(crate) fn generate_jumpdest_table(
                 ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
                 // We reverse the stack, so the order matches our assembly code.
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
-                let operands_used = 2; // actually 6 or 7.
+                // These opcodes expect 6 or 7 operands on the stack, but for jumpdest-table
+                // generation we only use 2, and failures will be handled in
+                // next iteration by popping the stack accordingly.
+                let operands_used = 2;
 
                 if evm_stack.len() < operands_used {
                     trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len());
-                    // maybe increment ctx here
                     continue;
                 }
                 // This is the same stack index (i.e. 2nd) for all four opcodes. See https://ethervm.io/#F1
@@ -304,9 +309,6 @@ pub(crate) fn generate_jumpdest_table(
 
                 let init_code = &memory[offset..offset + size];
                 let init_code_hash = keccak(init_code);
-                // let contract_address = tx.from.create2_from_code(salt, init_code);
-                // ensure!(callee_addr_to_code_hash.contains_key(&contract_address));
-                // let code_hash = callee_addr_to_code_hash[&contract_address];
                 call_stack.push((init_code_hash, next_ctx_available));
 
                 next_ctx_available += 1;

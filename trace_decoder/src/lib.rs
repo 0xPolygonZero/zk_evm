@@ -67,6 +67,7 @@ mod typed_mpt;
 mod wire;
 
 pub use core::entrypoint;
+pub use core::PRECOMPILE_ADDRESSES;
 
 mod core;
 
