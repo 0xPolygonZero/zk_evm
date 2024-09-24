@@ -3,11 +3,11 @@ zk_evm_common::check_chain_features!();
 pub mod cli;
 
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use alloy::primitives::U256;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use hashbrown::HashMap;
@@ -17,14 +17,13 @@ use plonky2::gates::noop::NoopGate;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{oneshot, Semaphore};
 use trace_decoder::observer::DummyObserver;
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 
-use crate::fs::generate_block_proof_file_name;
+use crate::fs::write_proof_to_dir;
 use crate::ops;
 use crate::proof_types::GeneratedBlockProof;
 
@@ -337,35 +336,5 @@ pub async fn prove(
     while let Some(res) = task_set.join_next().await {
         let _proved_block_height = res???;
     }
-    Ok(())
-}
-
-/// Write the proof to the `output_dir` directory.
-async fn write_proof_to_dir(output_dir: &Path, proof: GeneratedBlockProof) -> Result<()> {
-    // Check if output directory exists, and create one if it doesn't.
-    if !output_dir.exists() {
-        info!("Created output directory {:?}", output_dir.display());
-        std::fs::create_dir(output_dir)?;
-    }
-
-    let block_proof_file_path =
-        generate_block_proof_file_name(&output_dir.to_str(), proof.b_height);
-
-    // Serialize as a single element array to match the expected format.
-    let proof_serialized = serde_json::to_vec(&vec![proof])?;
-
-    if let Some(parent) = block_proof_file_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-
-    let mut f = tokio::fs::File::create(block_proof_file_path.clone()).await?;
-    f.write_all(&proof_serialized)
-        .await
-        .context("Failed to write proof to disk")?;
-
-    info!(
-        "Successfully wrote to disk proof file {}",
-        block_proof_file_path.display()
-    );
     Ok(())
 }

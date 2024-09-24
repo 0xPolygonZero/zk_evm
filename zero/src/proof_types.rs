@@ -2,9 +2,9 @@
 //! generation process.
 
 use evm_arithmetization::{
-    proof::FinalPublicValues, BlockHeight, ChainID, HashOrPV, ProofWithPublicInputs, PublicValues,
+    BlockHeight, ChainID, FinalPublicValues, HashOrPV, ProofWithPublicInputs, PublicValues,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
@@ -226,5 +226,27 @@ impl From<GeneratedWrappedBlockProof> for AggregatableBlockProof {
 impl From<GeneratedAggBlockProof> for AggregatableBlockProof {
     fn from(v: GeneratedAggBlockProof) -> Self {
         Self::Agg(v)
+    }
+}
+
+pub trait WritableProof: Serialize + DeserializeOwned {
+    fn block_height(&self) -> Option<u64>;
+}
+
+impl WritableProof for GeneratedBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        Some(self.b_height)
+    }
+}
+
+impl WritableProof for GeneratedWrappedBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        Some(self.b_height)
+    }
+}
+
+impl WritableProof for GeneratedAggBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        None
     }
 }

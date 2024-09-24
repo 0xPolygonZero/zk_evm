@@ -424,7 +424,6 @@ impl Operation for BlockProof {
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct WrappedBlockProof {
-    pub prev: Option<GeneratedAggBlockProof>,
     pub save_inputs_on_error: bool,
 }
 

@@ -218,6 +218,7 @@ pub mod util;
 
 // Public definitions and re-exports
 mod public_types;
+pub use proof::FinalPublicValues;
 pub use public_types::*;
 pub use starky::config::StarkConfig;
 
