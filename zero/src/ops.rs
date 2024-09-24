@@ -4,8 +4,9 @@ use std::time::Instant;
 
 use anyhow::anyhow;
 use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
+use evm_arithmetization::proof::FinalPublicValues;
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
-use evm_arithmetization::{Field, PublicValues, TrimmedGenerationInputs};
+use evm_arithmetization::{Field, HashOrPV, PublicValues, TrimmedGenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
@@ -16,7 +17,8 @@ use tracing::{event, info_span, Level};
 
 use crate::debug_utils::save_tries_to_disk;
 use crate::proof_types::{
-    BatchAggregatableProof, GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedTxnAggProof,
+    AggregatableBlockProof, BatchAggregatableProof, GeneratedAggBlockProof, GeneratedBatchAggProof,
+    GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedWrappedBlockProof,
     SegmentAggregatableProof,
 };
 use crate::prover_state::ProverState;
@@ -302,6 +304,7 @@ impl Monoid for SegmentAggProof {
 pub struct BatchAggProof {
     pub save_inputs_on_error: bool,
 }
+
 fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
     match elem {
         BatchAggregatableProof::Segment(info) => info.p_vals,
@@ -370,7 +373,7 @@ impl Monoid for BatchAggProof {
                 FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
             })?;
 
-        Ok(GeneratedTxnAggProof {
+        Ok(GeneratedBatchAggProof {
             p_vals,
             intern: proof,
         }
@@ -390,7 +393,7 @@ pub struct BlockProof {
 }
 
 impl Operation for BlockProof {
-    type Input = GeneratedTxnAggProof;
+    type Input = GeneratedBatchAggProof;
     type Output = GeneratedBlockProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
@@ -402,13 +405,9 @@ impl Operation for BlockProof {
             .prove_block(parent_intern, &input.intern, input.p_vals.clone())
             .map_err(|e| {
                 if self.save_inputs_on_error {
-                    if let Err(write_err) = save_inputs_to_disk(
-                        format!(
-                            "b{}_block_input.json",
-                            input.p_vals.block_metadata.block_number
-                        ),
-                        input.p_vals,
-                    ) {
+                    if let Err(write_err) =
+                        save_inputs_to_disk(format!("b{}_block_input.json", b_height), input.p_vals)
+                    {
                         error!("Failed to save block proof input to disk: {:?}", write_err);
                     }
                 }
@@ -420,5 +419,107 @@ impl Operation for BlockProof {
             b_height,
             intern: b_proof_intern,
         })
+    }
+}
+
+#[derive(Deserialize, Serialize, RemoteExecute)]
+pub struct WrappedBlockProof {
+    pub prev: Option<GeneratedAggBlockProof>,
+    pub save_inputs_on_error: bool,
+}
+
+impl Operation for WrappedBlockProof {
+    type Input = GeneratedBlockProof;
+    type Output = GeneratedWrappedBlockProof;
+
+    fn execute(&self, input: Self::Input) -> Result<Self::Output> {
+        let b_height = input.b_height;
+        let p_vals = PublicValues::from_public_inputs(&input.intern.public_inputs);
+        let chain_id = p_vals.block_metadata.block_chain_id.low_u64();
+
+        let (b_proof_intern, _) = p_state()
+            .state
+            .prove_block_wrapper(&input.intern, p_vals.clone())
+            .map_err(|e| {
+                if self.save_inputs_on_error {
+                    if let Err(write_err) =
+                        save_inputs_to_disk(format!("b{}_block_input.json", b_height), p_vals)
+                    {
+                        error!(
+                            "Failed to save wrapped block proof input to disk: {:?}",
+                            write_err
+                        );
+                    }
+                }
+
+                FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
+            })?;
+
+        Ok(GeneratedWrappedBlockProof {
+            b_height,
+            chain_id,
+            intern: b_proof_intern,
+        })
+    }
+}
+
+#[derive(Deserialize, Serialize, RemoteExecute)]
+pub struct BlockAggProof {
+    pub save_inputs_on_error: bool,
+}
+
+fn get_block_agg_proof_public_values(elem: AggregatableBlockProof) -> HashOrPV {
+    match elem {
+        AggregatableBlockProof::Block(info) => {
+            FinalPublicValues::from_public_inputs(&info.intern.public_inputs).into()
+        }
+        AggregatableBlockProof::Agg(info) => info.p_vals,
+    }
+}
+
+impl Monoid for BlockAggProof {
+    type Elem = AggregatableBlockProof;
+
+    fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
+        let proof = p_state()
+            .state
+            .prove_two_to_one_block(a.intern(), a.is_agg(), b.intern(), b.is_agg())
+            .map_err(|e| {
+                if self.save_inputs_on_error {
+                    let pv = vec![
+                        get_block_agg_proof_public_values(a.clone()),
+                        get_block_agg_proof_public_values(b.clone()),
+                    ];
+
+                    if let Err(write_err) = save_inputs_to_disk(
+                        format!(
+                            "block_agg_{:?}_{:?}_inputs.json",
+                            pv[0].hash(),
+                            pv[1].hash(),
+                        ),
+                        pv,
+                    ) {
+                        error!("Failed to save agg proof inputs to disk: {:?}", write_err);
+                    }
+                }
+
+                FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
+            })?;
+
+        let p_vals = HashOrPV::Sequence(vec![
+            HashOrPV::Hash(a.public_values().hash()),
+            HashOrPV::Hash(b.public_values().hash()),
+        ]);
+
+        Ok(GeneratedAggBlockProof {
+            p_vals,
+            intern: proof,
+        }
+        .into())
+    }
+
+    fn empty(&self) -> Self::Elem {
+        // Expect that empty blocks are padded.
+        unimplemented!("empty agg proof")
     }
 }

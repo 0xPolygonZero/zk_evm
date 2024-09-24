@@ -14,7 +14,7 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofChallenges};
 
 use crate::all_stark::NUM_TABLES;
-use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
+use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u, u256_to_u32};
 use crate::witness::state::RegistersState;
 
 /// The default cap height used for our zkEVM STARK proofs.
@@ -75,18 +75,6 @@ pub struct PublicValues<F: RichField> {
 }
 
 impl<F: RichField> PublicValues<F> {
-    fn to_field_elements(&self) -> Vec<F> {
-        let mut out = Vec::with_capacity(PublicValuesTarget::SIZE);
-
-        out.extend(&self.trie_roots_before.to_field_elements());
-        out.extend(&self.trie_roots_after.to_field_elements());
-        out.extend(&self.block_metadata.to_field_elements());
-        out.extend(&self.block_hashes.to_field_elements());
-        out.extend(&self.extra_block_data.to_field_elements());
-
-        out
-    }
-
     /// Extracts public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
@@ -164,6 +152,18 @@ pub struct FinalPublicValues<F: RichField, H: Hasher<F>> {
 }
 
 impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
+    fn to_field_elements(&self) -> Vec<F> {
+        let mut out = Vec::with_capacity(FinalPublicValuesTarget::SIZE);
+
+        out.push(u256_to_u32(self.chain_id).expect("Chain ID should fit in a u32"));
+        out.extend(&h256_limbs(self.checkpoint_state_trie_root));
+        out.extend(&h256_limbs(self.new_state_trie_root));
+        out.extend(&self.checkpoint_consolidated_hash);
+        out.extend(&self.new_consolidated_hash);
+
+        out
+    }
+
     /// Extracts final public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
@@ -309,13 +309,19 @@ impl FinalPublicValuesTarget {
 #[serde(bound = "")]
 pub enum HashOrPV<F: RichField, H: Hasher<F>> {
     /// Some `PublicValues` associated to a proof.
-    Val(PublicValues),
+    Val(FinalPublicValues<F, H>),
 
     /// The hash of some `PublicValues`.
     Hash(H::Hash),
 
     /// An arbitrary sequence of `HashorPV` values, useful for nested sequences.
     Sequence(Vec<HashOrPV<F, H>>),
+}
+
+impl<F: RichField, H: Hasher<F>> From<FinalPublicValues<F, H>> for HashOrPV<F, H> {
+    fn from(values: FinalPublicValues<F, H>) -> Self {
+        Self::Val(values)
+    }
 }
 
 impl<F: RichField, H: Hasher<F>> HashOrPV<F, H> {
@@ -370,16 +376,6 @@ pub struct TrieRoots {
 }
 
 impl TrieRoots {
-    pub(crate) fn to_field_elements<F: RichField>(&self) -> Vec<F> {
-        let mut out = Vec::with_capacity(TrieRootsTarget::SIZE);
-
-        out.extend(&h256_limbs(self.state_root));
-        out.extend(&h256_limbs(self.transactions_root));
-        out.extend(&h256_limbs(self.receipts_root));
-
-        out
-    }
-
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == TrieRootsTarget::SIZE);
 
@@ -423,17 +419,6 @@ impl Default for BlockHashes {
 }
 
 impl BlockHashes {
-    pub(crate) fn to_field_elements<F: RichField>(&self) -> Vec<F> {
-        let mut out = Vec::with_capacity(BlockHashesTarget::SIZE);
-
-        for &hash in &self.prev_hashes {
-            out.extend(&h256_limbs(hash));
-        }
-        out.extend(&h256_limbs(self.cur_hash));
-
-        out
-    }
-
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == BlockHashesTarget::SIZE);
 
@@ -495,36 +480,6 @@ pub struct BlockMetadata {
 }
 
 impl BlockMetadata {
-    pub(crate) fn to_field_elements<F: RichField>(&self) -> Vec<F> {
-        let mut out = Vec::with_capacity(BlockMetadataTarget::SIZE);
-
-        out.extend(&h160_limbs(self.block_beneficiary));
-        out.push(u256_to_u32(self.block_timestamp).expect("Block timestamp should fit in a u32"));
-        out.push(u256_to_u32(self.block_number).expect("Block number should fit in a u32"));
-        out.push(u256_to_u32(self.block_difficulty).expect("Block difficulty should fit in a u32"));
-        out.extend(&h256_limbs(self.block_random));
-        out.push(u256_to_u32(self.block_gaslimit).expect("Block gas limit should fit in a u32"));
-        out.push(u256_to_u32(self.block_chain_id).expect("Block chainId should fit in a u32"));
-        let basefee = u256_to_u64(self.block_base_fee).expect("Block base fee should fit in a u64");
-        out.push(basefee.0);
-        out.push(basefee.1);
-        out.push(u256_to_u32(self.block_gas_used).expect("Block gas used should fit in a u32"));
-        let blob_gas_used =
-            u256_to_u64(self.block_blob_gas_used).expect("Block blob gas used should fit in a u64");
-        out.push(blob_gas_used.0);
-        out.push(blob_gas_used.1);
-        let excess_blob_gas = u256_to_u64(self.block_excess_blob_gas)
-            .expect("Block excess blob gas should fit in a u64");
-        out.push(excess_blob_gas.0);
-        out.push(excess_blob_gas.1);
-        out.extend(&h256_limbs(self.parent_beacon_block_root));
-        for i in 0..8 {
-            out.extend(&u256_limbs(self.block_bloom[i]));
-        }
-
-        out
-    }
-
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == BlockMetadataTarget::SIZE);
 
@@ -610,18 +565,6 @@ pub const EMPTY_CONSOLIDATED_BLOCKHASH: [u64; NUM_HASH_OUT_ELTS] = [
 ];
 
 impl<F: RichField> ExtraBlockData<F> {
-    fn to_field_elements(&self) -> Vec<F> {
-        let mut out = Vec::with_capacity(ExtraBlockDataTarget::SIZE);
-
-        out.extend(&h256_limbs(self.checkpoint_state_trie_root));
-        out.push(u256_to_u32(self.txn_number_before).expect("Txn number should fit in a u32"));
-        out.push(u256_to_u32(self.txn_number_after).expect("Txn number should fit in a u32"));
-        out.push(u256_to_u32(self.gas_used_before).expect("Gas used should fit in a u32"));
-        out.push(u256_to_u32(self.gas_used_after).expect("Gas used should fit in a u32"));
-
-        out
-    }
-
     pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() == ExtraBlockDataTarget::SIZE);
 
