@@ -11,17 +11,16 @@ pub fn generate_block_proof_file_name(
     block_height: Option<u64>,
     extra_info: &Option<String>,
 ) -> PathBuf {
-    let prefix = if let Some(height) = block_height {
+    let mut path = PathBuf::from(directory.unwrap_or(""));
+    let mut filename = if let Some(height) = block_height {
         format!("b{}", height)
     } else {
         "".to_string()
     };
-    let mut path = PathBuf::from(directory.unwrap_or(""));
-    path.push(prefix);
     if let Some(info) = extra_info {
-        path.push(info);
+        filename = filename + info;
     }
-    path.push(".zkproof");
+    path.push(filename + ".zkproof");
     path
 }
 

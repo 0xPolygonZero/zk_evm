@@ -133,13 +133,23 @@ do
     rm $verify_file # we keep the generated proof for potential reuse
 
     if $WRAP_PROOF ; then
-      "${REPO_ROOT}/target/release/aggregator" --runtime in-memory --load-strategy on-demand stdio < $proof_file
-
-      "${REPO_ROOT}/target/release/verifier" -f $proof_file wrapped-block | tee $verify_file
-      if grep -q 'All proofs verified successfully!' $verify_file; then
-        echo "Wrapper proof verification for file $proof_file successful";
-        rm $verify_file # we keep the generated proof for potential reuse
+      "${REPO_ROOT}/target/release/aggregator" --runtime in-memory --load-strategy on-demand --wrap stdio < $proof_file &> $OUTPUT_LOG
+      cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+      if [ ! -s "$PROOFS_FILE_LIST" ]; then
+        echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
+        exit 1
       fi
+
+      cat $PROOFS_FILE_LIST | while read proof_file;
+      do 
+        echo "Verifying wrapped proof file $proof_file"
+        verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
+        "${REPO_ROOT}/target/release/verifier" -f $proof_file wrapped-block | tee $verify_file
+        if grep -q 'All proofs verified successfully!' $verify_file; then
+          echo "Wrapper proof verification for file $proof_file successful";
+          rm $verify_file # we keep the generated proof for potential reuse
+        fi
+      done
     fi
   else
       echo "there was an issue with proof verification";
