@@ -209,7 +209,7 @@ impl AggregatableBlockProof {
         }
     }
 
-    pub(crate) const fn intern(&self) -> &ProofWithPublicInputs {
+    pub const fn intern(&self) -> &ProofWithPublicInputs {
         match self {
             AggregatableBlockProof::Block(info) => &info.intern,
             AggregatableBlockProof::Agg(info) => &info.intern,
