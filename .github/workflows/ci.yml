@@ -157,7 +157,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
+        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json true
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -168,7 +168,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json test_only
+        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json false test_only
 
   multi_blocks_proof_regular:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
@@ -179,7 +179,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
+        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json true
 
   lints:
     name: Rustdoc, Formatting and Clippy

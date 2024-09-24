@@ -8,8 +8,8 @@ set -exo pipefail
 
 # Args:
 # 1 --> Input witness json file
-# 2 --> Test run only flag `test_only` (optional)
-# 3 --> Flag `wrap` for wrapping the final block proof (optional)
+# 2 --> Wrapping flag for the final block proof (boolean)
+# 3 --> Test run only flag `test_only` (optional)
 
 # We're going to set the parallelism in line with the total cpu count
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -41,8 +41,8 @@ export RUST_LOG=info
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 INPUT_FILE=$1
-TEST_ONLY=$2
-WRAP_PROOF=$3
+WRAP_PROOF=$2
+TEST_ONLY=$3
 
 if [[ $INPUT_FILE == "" ]]; then
     echo "Please provide witness json input file, e.g. artifacts/witness_b19240705.json"
@@ -132,7 +132,7 @@ do
     echo "Proof verification for file $proof_file successful";
     rm $verify_file # we keep the generated proof for potential reuse
 
-    if [[ $WRAP_PROOF == "wrap" ]]; then
+    if $WRAP_PROOF ; then
       "${REPO_ROOT}/target/release/aggregator" --runtime in-memory --load-strategy on-demand stdio < $proof_file
 
       "${REPO_ROOT}/target/release/verifier" -f $proof_file wrapped-block | tee $verify_file
