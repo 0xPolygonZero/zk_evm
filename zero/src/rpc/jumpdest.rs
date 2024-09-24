@@ -3,9 +3,7 @@ use core::option::Option::None;
 use core::time::Duration;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::ops::Not as _;
-use std::sync::OnceLock;
 
 use __compat_primitive_types::H256;
 use alloy::primitives::Address;
@@ -103,15 +101,6 @@ where
         )))),
         Ok(structlog_res) => Ok(structlog_res?),
     }
-}
-
-/// Provides a way to check in constant time if an address points to a
-/// precompile.
-fn precompiles() -> &'static HashSet<Address> {
-    static PRECOMPILES: OnceLock<HashSet<Address>> = OnceLock::new();
-    PRECOMPILES.get_or_init(|| {
-        HashSet::<Address>::from_iter((1..=0xa).map(|x| Address::from(U160::from(x))))
-    })
 }
 
 /// Generate at JUMPDEST table by simulating the call stack in EVM,
@@ -234,12 +223,12 @@ pub(crate) fn generate_jumpdest_table(
                     call_stack.push((next_code_hash, next_ctx_available));
                 };
 
-                if precompiles().contains(&callee_address) {
+                if PRECOMPILE_ADDRESSES.contains(&callee_address) {
                     trace!("Called precompile at address {}.", &callee_address);
                 };
 
                 if callee_addr_to_code_hash.contains_key(&callee_address).not()
-                    && precompiles().contains(&callee_address).not()
+                    && PRECOMPILE_ADDRESSES.contains(&callee_address).not()
                 {
                     // This case happens if calling an EOA. This is described
                     // under opcode `STOP`: https://www.evm.codes/#00?fork=cancun
