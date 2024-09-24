@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{oneshot, Semaphore};
+use trace_decoder::observer::DummyObserver;
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 
@@ -48,6 +49,7 @@ pub struct ProverConfig {
     pub keep_intermediate_proofs: bool,
     pub block_batch_size: usize,
     pub block_pool_size: usize,
+    pub save_tries_on_error: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -81,8 +83,12 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let block_generation_inputs =
-            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
+        let block_generation_inputs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
+            batch_size,
+            &mut DummyObserver::new(),
+        )?;
 
         // Create segment proof.
         let seg_prove_ops = ops::SegmentProof {
@@ -163,24 +169,34 @@ impl BlockProverInput {
             max_cpu_len_log,
             batch_size,
             save_inputs_on_error,
+            save_tries_on_error,
             ..
         } = *prover_config;
 
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let block_generation_inputs =
-            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
+        let block_generation_inputs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
+            batch_size,
+            &mut DummyObserver::new(),
+        )?;
 
         let seg_ops = ops::SegmentProofTestOnly {
             save_inputs_on_error,
+            save_tries_on_error,
         };
 
         let simulation = Directive::map(
             IndexedStream::from(
                 block_generation_inputs
                     .into_iter()
-                    .zip(repeat(max_cpu_len_log)),
+                    .enumerate()
+                    .zip(repeat(max_cpu_len_log))
+                    .map(|((batch_index, txn_batch), max_cpu_len_log)| {
+                        (txn_batch, max_cpu_len_log, batch_index)
+                    }),
             ),
             &seg_ops,
         );

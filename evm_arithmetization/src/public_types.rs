@@ -39,7 +39,10 @@ pub type ProofWithPublicInputs =
 /// proofs.
 pub type PublicValues = crate::proof::PublicValues<Field>;
 
-pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), SegmentError>;
+pub type AllData = Result<
+    (TrimmedGenerationInputs, GenerationSegmentData),
+    crate::generation::ErrorWithTries<SegmentError>,
+>;
 
 /// Returned type from the zkEVM STARK prover, before recursive verification.
 pub type AllProof = crate::proof::AllProof<Field, RecursionConfig, EXTENSION_DEGREE>;

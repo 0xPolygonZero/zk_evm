@@ -6,6 +6,7 @@
 //! for a total of 24,479,837 gas.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use trace_decoder::observer::DummyObserver;
 use trace_decoder::{BlockTrace, OtherBlockData};
 
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -33,7 +34,13 @@ fn criterion_benchmark(c: &mut Criterion) {
                      block_trace,
                      other_data,
                  }| {
-                    trace_decoder::entrypoint(block_trace, other_data, batch_size).unwrap()
+                    trace_decoder::entrypoint(
+                        block_trace,
+                        other_data,
+                        batch_size,
+                        &mut DummyObserver::new(),
+                    )
+                    .unwrap()
                 },
                 BatchSize::LargeInput,
             )

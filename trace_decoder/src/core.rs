@@ -19,6 +19,7 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
+use crate::observer::Observer;
 use crate::{
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -31,6 +32,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
+    observer: &mut impl Observer<StateMpt>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
 
@@ -67,6 +69,7 @@ pub fn entrypoint(
         &b_meta,
         ger_data,
         withdrawals,
+        observer,
     )?;
 
     let mut running_gas_used = 0;
@@ -261,7 +264,7 @@ struct Batch<StateTrieT> {
 /// [`evm_arithmetization::generation::TrieInputs`],
 /// generic over state trie representation.
 #[derive(Debug)]
-struct IntraBlockTries<StateTrieT> {
+pub struct IntraBlockTries<StateTrieT> {
     pub state: StateTrieT,
     pub storage: BTreeMap<H256, StorageTrie>,
     pub transaction: TransactionTrie,
@@ -269,6 +272,7 @@ struct IntraBlockTries<StateTrieT> {
 }
 
 /// Does the main work mentioned in the [module documentation](super).
+#[allow(clippy::too_many_arguments)]
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
@@ -282,6 +286,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
+    // called with the untrimmed tries after each batch
+    observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
@@ -306,7 +312,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
     let mut txn_ix = 0; // incremented for non-dummy transactions
     let mut loop_ix = 0; // always incremented
     let loop_len = batches.iter().flatten().count();
-    for batch in batches {
+    for (batch_index, batch) in batches.into_iter().enumerate() {
         let batch_first_txn_ix = txn_ix; // GOTCHA: if there are no transactions in this batch
         let mut batch_gas_used = 0;
         let mut batch_byte_code = vec![];
@@ -543,6 +549,15 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 receipts_root: receipt_trie.root(),
             },
         });
+
+        observer.collect_tries(
+            block.block_number,
+            batch_index,
+            &state_trie,
+            &storage_tries,
+            &transaction_trie,
+            &receipt_trie,
+        )
     } // batch in batches
 
     Ok(out)

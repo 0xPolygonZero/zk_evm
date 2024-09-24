@@ -60,6 +60,7 @@ impl From<CliProverConfig> for super::ProverConfig {
             keep_intermediate_proofs: cli.keep_intermediate_proofs,
             block_batch_size: cli.block_batch_size,
             block_pool_size: cli.block_pool_size,
+            save_tries_on_error: false,
         }
     }
 }
