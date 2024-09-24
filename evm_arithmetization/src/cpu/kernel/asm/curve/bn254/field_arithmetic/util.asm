@@ -96,7 +96,7 @@
     // stack: x, y, y_==x_
     EQ
     // stack: x==y, y_==x_
-    AND
+    MUL // AND
 %endmacro
 
 %macro add_fp254_2

@@ -76,14 +76,14 @@ ecdsa_after_precompute:
     PUSH 0 PUSH 0 PUSH 129 // 129 is the bit length of the GLV exponents
     // stack: i, accx, accy, a0, a1, b0, b1, retdest
 ecdsa_after_precompute_loop:
-    %stack (i, accx, accy, a0, a1, b0, b1, retdest) -> (i, b1, i, accx, accy, a0, a1, b0, b1, retdest)
-    SHR %and_const(1)
-    %stack (bit_b1, i, accx, accy, a0, a1, b0, b1, retdest) -> (i, b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest)
-    SHR %and_const(1)
-    %stack (bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest) -> (i, a1, bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest)
-    SHR %and_const(1)
-    %stack (bit_a1, bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest) -> (i, a0, bit_a1, bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest)
-    SHR %and_const(1)
+    %stack (i, accx, accy, a0, a1, b0, b1, retdest) -> (i, b1, 2, i, accx, accy, a0, a1, b0, b1, retdest)
+    SHR MOD // mod 2
+    %stack (bit_b1, i, accx, accy, a0, a1, b0, b1, retdest) -> (i, b0, 2, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest)
+    SHR MOD // mod 2
+    %stack (bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest) -> (i, a1, 2, bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest)
+    SHR MOD // mod 2
+    %stack (bit_a1, bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest) -> (i, a0, 2, bit_a1, bit_b0, bit_b1, i, accx, accy, a0, a1, b0, b1, retdest)
+    SHR MOD // mod 2
     %mul_const(2) ADD %mul_const(2) ADD %mul_const(2) ADD
     %stack (index, i, accx, accy, a0, a1, b0, b1, retdest) -> (index, index, i, accx, accy, a0, a1, b0, b1, retdest)
     %mul_const(2) %add_const(1)
@@ -147,7 +147,7 @@ pubkey_to_addr:
     // stack: (r >= N || r==0 || s >= N || s==0), (v==28 || v==27), hash, v, r, s, retdest
     ISZERO
     // stack: (r < N & r!=0 & s < N & s!=0), (v==28 || v==27), hash, v, r, s, retdest
-    AND
+    MUL // AND
     // stack: r < N & r!=0 & s < N & s!=0 & (v==28 || v==27), hash, v, r, s, retdest
 %endmacro
 

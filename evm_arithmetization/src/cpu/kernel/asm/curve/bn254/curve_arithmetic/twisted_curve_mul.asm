@@ -34,14 +34,14 @@ bn_twisted_mul_loop:
     // stack: X1, Y1, X, Y, s, n, retdest
     %bn_twisted_double
     // stack: X2, Y2, X, Y, s, n, retdest
-    DUP9
-    // stack: s, X2, Y2, X, Y, s, n, retdest
-    PUSH 1 DUP12 SUB
-    // stack: n - 1, s, X2, Y2, X, Y, s, n, retdest
+    PUSH 2
+    DUP10
+    // stack: s, 2, X2, Y2, X, Y, s, n, retdest
+    PUSH 1 DUP13 SUB
+    // stack: n - 1, s, 2, X2, Y2, X, Y, s, n, retdest
     SHR
-    // stack: s >> n - 1, X2, Y2, X, Y, s, n, retdest
-    PUSH 1
-    AND
+    // stack: s >> n - 1, 2, X2, Y2, X, Y, s, n, retdest
+    MOD
     // stack: nth_bit, X2, Y2, X, Y, s, n, retdest
     %jumpi(bn_twisted_mul_add_base)
     // stack: X2, Y2, X, Y, s, n, retdest

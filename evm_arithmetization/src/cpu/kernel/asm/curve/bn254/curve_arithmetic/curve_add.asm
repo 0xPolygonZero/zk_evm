@@ -222,7 +222,7 @@ global bn_double:
     // stack:         x , N, y < N, x, y
     LT
     // stack:         x < N, y < N, x, y
-    AND
+    MUL // AND
     // stack:                range, x, y
     SWAP2
     // stack:                y, x, range
@@ -249,9 +249,9 @@ global bn_double:
     // stack:       ident , curve, range
     SWAP2
     // stack:       range , curve, ident
-    AND
+    MUL // AND
     // stack:       range & curve, ident
-    OR
+    ADD // OR
     // stack:                   is_valid
 %endmacro
 
