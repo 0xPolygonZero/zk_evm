@@ -7,7 +7,7 @@ use clap::Parser;
 use dotenvy::dotenv;
 use serde_json::Deserializer;
 use tracing::info;
-use zero::proof_types::{GeneratedBlockProof, GeneratedWrappedBlockProof};
+use zero::proof_types::{GeneratedAggBlockProof, GeneratedBlockProof, GeneratedWrappedBlockProof};
 use zero::prover_state::persistence::set_circuit_cache_dir_env_if_not_set;
 
 use self::verifier::*;
@@ -52,10 +52,27 @@ fn main() -> Result<()> {
 
             if input_proofs.into_iter().all(|block_proof| {
                 verifier
-                    .verify_block_aggreg(&block_proof.intern)
+                    .verify_block_wrapper(&block_proof.intern)
                     .map_err(|e| {
                         info!(
                             "Wrapped block proof verification failed with error: {:?}",
+                            e
+                        );
+                    })
+                    .is_ok()
+            }) {
+                info!("All proofs verified successfully!");
+            };
+        }
+        cli::Command::AggBlock => {
+            let input_proofs: Vec<GeneratedAggBlockProof> = serde_path_to_error::deserialize(des)?;
+
+            if input_proofs.into_iter().all(|block_proof| {
+                verifier
+                    .verify_block_aggreg(&block_proof.intern)
+                    .map_err(|e| {
+                        info!(
+                            "Aggregated block proof verification failed with error: {:?}",
                             e
                         );
                     })

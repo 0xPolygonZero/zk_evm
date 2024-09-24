@@ -20,8 +20,10 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
-    /// Deletes all the previously cached circuits.
+    /// Verifies a provided block proof.
     Block,
-    /// Reads input from stdin and writes output to stdout.
+    /// Verifies a provided wrapped block proof.
     WrappedBlock,
+    /// Verifies a provided aggregated block proof.
+    AggBlock,
 }
