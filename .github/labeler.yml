@@ -13,11 +13,6 @@
 - changed-files:
   - any-glob-to-any-file: trace_decoder/**
 
-# Add 'crate: proof_gen' label to any changes within 'proof_gen' folder.
-'crate: proof_gen':
-- changed-files:
-  - any-glob-to-any-file: proof_gen/**
-
 # Add 'crate: zero_bin' label to any changes within 'zero' folder.
 'crate: zero_bin':
 - changed-files:

@@ -10,6 +10,7 @@ use common::{cases, Case};
 use itertools::Itertools;
 use libtest_mimic::{Arguments, Trial};
 use mpt_trie::partial_trie::PartialTrie as _;
+use trace_decoder::observer::DummyObserver;
 
 fn main() -> anyhow::Result<()> {
     let mut trials = vec![];
@@ -23,8 +24,13 @@ fn main() -> anyhow::Result<()> {
         } in cases()?
         {
             trials.push(Trial::test(format!("{name}@{batch_size}"), move || {
-                let gen_inputs = trace_decoder::entrypoint(trace, other.clone(), batch_size)
-                    .map_err(|e| format!("{e:?}"))?; // get the full cause chain
+                let gen_inputs = trace_decoder::entrypoint(
+                    trace,
+                    other.clone(),
+                    batch_size,
+                    &mut DummyObserver::new(),
+                )
+                .map_err(|e| format!("{e:?}"))?; // get the full cause chain
                 check!(gen_inputs.len() >= 2);
                 check!(
                     Some(other.checkpoint_state_trie_root)

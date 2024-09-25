@@ -11,21 +11,22 @@
 //!   [`evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits`].
 //! - Global prover state management via the [`P_STATE`] static and the
 //!   [`set_prover_state_from_config`] function.
+use std::borrow::Borrow;
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
-    proof::AllProof, prover::prove, AllStark, GenerationSegmentData, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
+    AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
+    TrimmedGenerationInputs,
 };
-use plonky2::{
-    field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
-    util::timing::TimingTree,
-};
-use proof_gen::{proof_types::GeneratedSegmentProof, prover_state::ProverState, VerifierState};
+use evm_arithmetization::{ProofWithPublicInputs, VerifierData};
+use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
+use plonky2::util::timing::TimingTree;
 use tracing::info;
 
 use self::circuit::{CircuitConfig, NUM_TABLES};
+use crate::proof_types::GeneratedSegmentProof;
 use crate::prover_state::persistence::{
     BaseProverResource, DiskResource, MonolithicProverResource, RecursiveCircuitResource,
     VerifierResource,
@@ -35,17 +36,41 @@ pub mod circuit;
 pub mod cli;
 pub mod persistence;
 
-// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
-pub(crate) type Config = PoseidonGoldilocksConfig;
-pub(crate) type Field = GoldilocksField;
-pub(crate) const SIZE: usize = 2;
+/// zkEVM proving state, needed to generate succinct block proofs for EVM-based
+/// chains.
+pub struct ProverState {
+    /// The set of pre-processed circuits to recursively prove blocks.
+    pub state: AllRecursiveCircuits,
+}
 
-pub(crate) type RecursiveCircuitsForTableSize =
-    evm_arithmetization::fixed_recursive_verifier::RecursiveCircuitsForTableSize<
-        Field,
-        Config,
-        SIZE,
-    >;
+/// zkEVM verifier state, useful for verifying generated block proofs.
+///
+/// This requires much less memory than its prover counterpart.
+pub struct VerifierState {
+    /// The verification circuit data associated to the block proof layer of the
+    /// zkEVM prover state.
+    pub state: VerifierData,
+}
+
+/// Extracts the verifier state from the entire prover state.
+impl<T: Borrow<ProverState>> From<T> for VerifierState {
+    fn from(prover_state: T) -> Self {
+        VerifierState {
+            state: prover_state.borrow().state.final_verifier_data(),
+        }
+    }
+}
+
+impl VerifierState {
+    /// Verifies a `block_proof`.
+    pub fn verify(&self, block_proof: &ProofWithPublicInputs) -> anyhow::Result<()> {
+        // Proof verification
+        self.state.verify(block_proof.clone())?;
+
+        // Verifier data verification
+        check_cyclic_proof_verifier_data(block_proof, &self.state.verifier_only, &self.state.common)
+    }
+}
 
 /// The global prover state.
 ///
@@ -149,7 +174,7 @@ impl ProverStateManager {
     fn load_table_circuits(
         &self,
         config: &StarkConfig,
-        all_proof: &AllProof<Field, Config, SIZE>,
+        all_proof: &AllProof,
     ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
         let degrees = all_proof.degree_bits(config);
 
@@ -196,7 +221,7 @@ impl ProverStateManager {
     /// and finally aggregating them to a final transaction proof.
     fn segment_proof_on_demand(
         &self,
-        input: TrimmedGenerationInputs<Field>,
+        input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let config = StarkConfig::standard_fast_config();
@@ -225,7 +250,7 @@ impl ProverStateManager {
     /// circuit.
     fn segment_proof_monolithic(
         &self,
-        input: TrimmedGenerationInputs<Field>,
+        input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let p_out = p_state().state.prove_segment(
@@ -257,7 +282,7 @@ impl ProverStateManager {
     ///   needed.
     pub fn generate_segment_proof(
         &self,
-        input: (TrimmedGenerationInputs<Field>, GenerationSegmentData),
+        input: (TrimmedGenerationInputs, GenerationSegmentData),
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let (generation_inputs, mut segment_data) = input;
 

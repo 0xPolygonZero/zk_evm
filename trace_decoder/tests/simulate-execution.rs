@@ -8,6 +8,7 @@ use anyhow::Context as _;
 use common::{cases, Case};
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use trace_decoder::observer::DummyObserver;
 
 fn main() -> anyhow::Result<()> {
     let mut trials = vec![];
@@ -19,9 +20,11 @@ fn main() -> anyhow::Result<()> {
             other,
         } in cases()?
         {
-            let gen_inputs = trace_decoder::entrypoint(trace, other, batch_size).context(
-                format!("error in `trace_decoder` for {name} at batch size {batch_size}"),
-            )?;
+            let gen_inputs =
+                trace_decoder::entrypoint(trace, other, batch_size, &mut DummyObserver::new())
+                    .context(format!(
+                        "error in `trace_decoder` for {name} at batch size {batch_size}"
+                    ))?;
             for (ix, gi) in gen_inputs.into_iter().enumerate() {
                 trials.push(Trial::test(
                     format!("{name}@{batch_size}/{ix}"),
