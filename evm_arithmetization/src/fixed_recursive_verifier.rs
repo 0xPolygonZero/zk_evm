@@ -2992,8 +2992,7 @@ mod tests {
 
         for segment_run in segment_iterator {
             // Process and prove segment
-            let (_, mut segment_data) =
-                segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
+            let (_, mut segment_data) = segment_run?;
             let segment_proof = timed!(
                 timing,
                 log::Level::Info,
