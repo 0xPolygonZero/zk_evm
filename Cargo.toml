@@ -6,7 +6,6 @@ members = [
   "mpt_trie",
   "proc_macro",
   "smt_trie",
-  "trace_decoder",
   "zero",
 ]
 resolver = "2"
@@ -104,7 +103,6 @@ winnow = "0.6.13"
 evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0", default-features = false }
 mpt_trie = { path = "mpt_trie", version = "0.4.1" }
 smt_trie = { path = "smt_trie", version = "0.1.1" }
-trace_decoder = { path = "trace_decoder", version = "0.6.0", default-features = false }
 zk_evm_common = { path = "common", version = "0.1.0" }
 zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 zero = { path = "zero", default-features = false }

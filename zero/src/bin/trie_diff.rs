@@ -23,8 +23,8 @@ use futures::{future, TryStreamExt};
 use paladin::directive::{Directive, IndexedStream};
 use paladin::runtime::Runtime;
 use regex::Regex;
-use trace_decoder::observer::TriesObserver;
 use tracing::{error, info};
+use zero::intra_block_tries::TriesObserver;
 use zero::ops::register;
 use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
 
@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
             .b_meta
             .block_number
             .low_u64();
-        let block_generation_inputs = trace_decoder::entrypoint(
+        let block_generation_inputs = zero::intra_block_tries::entrypoint(
             block_prover_input.block_trace.clone(),
             block_prover_input.other_data.clone(),
             prover_config.batch_size,

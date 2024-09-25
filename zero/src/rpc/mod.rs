@@ -18,10 +18,10 @@ use evm_arithmetization::{
 };
 use futures::{StreamExt as _, TryStreamExt as _};
 use serde_json::json;
-use trace_decoder::{BlockLevelData, OtherBlockData};
 use tracing::warn;
 
 use crate::prover::BlockProverInput;
+use crate::trace_decoder::{BlockLevelData, OtherBlockData};
 
 pub mod jerigon;
 pub mod native;

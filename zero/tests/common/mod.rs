@@ -4,8 +4,8 @@ use alloy::rpc::types::Header;
 use anyhow::{ensure, Context as _};
 use camino::Utf8Path;
 use serde::de::DeserializeOwned;
-use trace_decoder::{BlockTrace, OtherBlockData};
 use zero::prover::BlockProverInput;
+use zero::trace_decoder::{BlockTrace, OtherBlockData};
 
 pub fn cases() -> anyhow::Result<Vec<Case>> {
     print!("loading test vectors...");

@@ -8,10 +8,10 @@ use alloy::{
     transports::Transport,
 };
 use futures::try_join;
-use trace_decoder::BlockTrace;
 
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
+use crate::trace_decoder::BlockTrace;
 
 mod state;
 mod txn;

@@ -10,7 +10,7 @@ use common::{cases, Case};
 use itertools::Itertools;
 use libtest_mimic::{Arguments, Trial};
 use mpt_trie::partial_trie::PartialTrie as _;
-use trace_decoder::observer::DummyObserver;
+use zero::intra_block_tries::DummyObserver;
 
 fn main() -> anyhow::Result<()> {
     let mut trials = vec![];
@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
         } in cases()?
         {
             trials.push(Trial::test(format!("{name}@{batch_size}"), move || {
-                let gen_inputs = trace_decoder::entrypoint(
+                let gen_inputs = zero::intra_block_tries::entrypoint(
                     trace,
                     other.clone(),
                     batch_size,
