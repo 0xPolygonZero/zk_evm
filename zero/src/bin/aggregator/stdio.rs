@@ -26,8 +26,7 @@ pub(crate) async fn stdio_wrap(
 
     ensure!(
         block_proof.len() == 1,
-        "Expected one and only one block proof to be wrapped, got {:?}",
-        block_proof.len()
+        "Expected only one block proof to be wrapped",
     );
     let block_proof = block_proof[0].clone();
     let block_number = block_proof.b_height;
