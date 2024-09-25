@@ -415,7 +415,7 @@ fn get_state_and_storage_leaves(
             state_leaves.push(Some(addr_key));
             // Set `value_ptr_ptr`.
             state_leaves.push(Some(trie_data.len().into()));
-            // Set counter.
+            // Push something on the original `value_ptr_ptr` (to be set later in the kernel).
             state_leaves.push(Some(0.into()));
             // Set the next node as the initial node.
             state_leaves.push(Some((Segment::AccountsLinkedList as usize).into()));
@@ -530,21 +530,18 @@ where
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type LinkedListsAndTrieData = (
-    Vec<Option<U256>>,
-    Vec<Option<U256>>,
-    Vec<Option<U256>>,
-);
+type LinkedListsAndTrieData = (Vec<Option<U256>>, Vec<Option<U256>>, Vec<Option<U256>>);
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     trie_inputs: &TrieInputs,
 ) -> Result<LinkedListsAndTrieData, ProgramError> {
     let mut state_leaves =
-        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
+        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList as usize).to_vec();
     let mut storage_leaves =
-        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
+        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList as usize).to_vec();
     let mut trie_data = vec![Some(U256::zero())];
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
@@ -567,13 +564,10 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &storage_tries_by_state_key,
     )?;
 
-    Ok((
-        state_leaves,
-        storage_leaves,
-        trie_data,
-    ))
+    Ok((state_leaves, storage_leaves, trie_data))
 }
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,
@@ -596,16 +590,22 @@ pub(crate) fn load_state_mpt(
     )
 }
 
-pub(crate) fn load_transactions_mpt(transactions_trie: &HashedPartialTrie, trie_data: &mut Vec<Option<U256>>) {
+pub(crate) fn load_transactions_mpt(
+    transactions_trie: &HashedPartialTrie,
+    trie_data: &mut Vec<Option<U256>>,
+) -> Result<usize, ProgramError> {
     load_mpt(transactions_trie, trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];
         parsed_txn.extend(rlp.iter().copied().map(U256::from));
         Ok(parsed_txn)
-    })?;
+    })
 }
 
-pub(crate) fn load_receipts_mpt(receipts_trie: &HashedPartialTrie, trie_data: &mut Vec<Option<U256>>) {
-    load_mpt(receipts_trie, trie_data, &parse_receipts)?;
+pub(crate) fn load_receipts_mpt(
+    receipts_trie: &HashedPartialTrie,
+    trie_data: &mut Vec<Option<U256>>,
+) -> Result<usize, ProgramError> {
+    load_mpt(receipts_trie, trie_data, &parse_receipts)
 }
 
 pub mod transaction_testing {

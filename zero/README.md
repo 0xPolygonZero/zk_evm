@@ -1,6 +1,6 @@
 # Zero Bin
 
-A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`proof_gen`](../proof_gen/README.md).
+A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`evm_arithmetization`](../evm_arithmetization/README.md).
 Given the [proof generation protocol](./prover/src/lib.rs) as input, generate a proof.
 The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/paladin), and as such can distribute proof generation across multiple worker machines.
 

@@ -697,77 +697,30 @@ where
         // Sanity check on the provided config
         assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
 
-        let arithmetic = RecursiveCircuitsForTable::new(
-            Table::Arithmetic,
-            &all_stark.arithmetic_stark,
-            degree_bits_ranges[*Table::Arithmetic].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let byte_packing = RecursiveCircuitsForTable::new(
-            Table::BytePacking,
-            &all_stark.byte_packing_stark,
-            degree_bits_ranges[*Table::BytePacking].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let cpu = RecursiveCircuitsForTable::new(
-            Table::Cpu,
-            &all_stark.cpu_stark,
-            degree_bits_ranges[*Table::Cpu].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let keccak = RecursiveCircuitsForTable::new(
-            Table::Keccak,
-            &all_stark.keccak_stark,
-            degree_bits_ranges[*Table::Keccak].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let keccak_sponge = RecursiveCircuitsForTable::new(
-            Table::KeccakSponge,
-            &all_stark.keccak_sponge_stark,
-            degree_bits_ranges[*Table::KeccakSponge].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let logic = RecursiveCircuitsForTable::new(
-            Table::Logic,
-            &all_stark.logic_stark,
-            degree_bits_ranges[*Table::Logic].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let memory = RecursiveCircuitsForTable::new(
-            Table::Memory,
-            &all_stark.memory_stark,
-            degree_bits_ranges[*Table::Memory].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let mem_before = RecursiveCircuitsForTable::new(
-            Table::MemBefore,
-            &all_stark.mem_before_stark,
-            degree_bits_ranges[*Table::MemBefore].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
-        let mem_after = RecursiveCircuitsForTable::new(
-            Table::MemAfter,
-            &all_stark.mem_after_stark,
-            degree_bits_ranges[*Table::MemAfter].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
+        macro_rules! create_recursive_circuit {
+            ($table_enum:expr, $stark_field:ident) => {
+                RecursiveCircuitsForTable::new(
+                    $table_enum,
+                    &all_stark.$stark_field,
+                    degree_bits_ranges[*$table_enum].clone(),
+                    &all_stark.cross_table_lookups,
+                    stark_config,
+                )
+            };
+        }
+
+        let arithmetic = create_recursive_circuit!(Table::Arithmetic, arithmetic_stark);
+        let byte_packing = create_recursive_circuit!(Table::BytePacking, byte_packing_stark);
+        let cpu = create_recursive_circuit!(Table::Cpu, cpu_stark);
+        let keccak = create_recursive_circuit!(Table::Keccak, keccak_stark);
+        let keccak_sponge = create_recursive_circuit!(Table::KeccakSponge, keccak_sponge_stark);
+        let logic = create_recursive_circuit!(Table::Logic, logic_stark);
+        let memory = create_recursive_circuit!(Table::Memory, memory_stark);
+        let mem_before = create_recursive_circuit!(Table::MemBefore, mem_before_stark);
+        let mem_after = create_recursive_circuit!(Table::MemAfter, mem_after_stark);
+
         #[cfg(feature = "cdk_erigon")]
-        let poseidon = RecursiveCircuitsForTable::new(
-            Table::Poseidon,
-            &all_stark.poseidon_stark,
-            degree_bits_ranges[*Table::Poseidon].clone(),
-            &all_stark.cross_table_lookups,
-            stark_config,
-        );
+        let poseidon = create_recursive_circuit!(Table::Poseidon, poseidon_stark);
 
         let by_table = [
             arithmetic,
@@ -782,6 +735,7 @@ where
             #[cfg(feature = "cdk_erigon")]
             poseidon,
         ];
+
         let root = Self::create_segment_circuit(&by_table, stark_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let txn_aggregation =
@@ -789,6 +743,7 @@ where
         let block = Self::create_block_circuit(&txn_aggregation);
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
+
         Self {
             root,
             segment_aggregation,
@@ -1378,6 +1333,13 @@ where
             agg_pv.extra_block_data,
         );
 
+        // Check that the paent block's timestamp is less than the current block's.
+        Self::check_block_timestamp(
+            &mut builder,
+            parent_pv.block_metadata.block_timestamp,
+            agg_pv.block_metadata.block_timestamp,
+        );
+
         // Connect the burn address targets.
         #[cfg(feature = "cdk_erigon")]
         {
@@ -1420,6 +1382,17 @@ where
         }
     }
 
+    fn check_block_timestamp(
+        builder: &mut CircuitBuilder<F, D>,
+        prev_timestamp: Target,
+        timestamp: Target,
+    ) {
+        // We check that timestamp >= prev_timestamp.
+        // In other words, we range-check `diff = timestamp - prev_timestamp`
+        // is between 0 and 2ˆ32.
+        let diff = builder.sub(timestamp, prev_timestamp);
+        builder.range_check(diff, 32);
+    }
     fn connect_extra_public_values(
         builder: &mut CircuitBuilder<F, D>,
         pvs: &ExtraBlockDataTarget,
@@ -2184,7 +2157,7 @@ where
     /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
     /// its [`PublicValues`]. Only the proof with public inputs is necessary
     /// for a verifier to assert correctness of the computation.
-    pub fn prove_transaction_aggregation(
+    pub fn prove_batch_aggregation(
         &self,
         lhs_is_agg: bool,
         lhs_proof: &ProofWithPublicInputs<F, C, D>,

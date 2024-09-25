@@ -38,6 +38,9 @@ async fn main() -> Result<()> {
 
     let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
     let prover_config: ProverConfig = args.prover_config.into();
+    if prover_config.block_pool_size == 0 {
+        panic!("block-pool-size must be greater than 0");
+    }
 
     // If not in test_only mode and running in emulation mode, we'll need to
     // initialize the prover state here.

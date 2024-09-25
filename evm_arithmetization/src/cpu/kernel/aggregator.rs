@@ -41,7 +41,7 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/create_receipt.asm"),
     include_str!("asm/core/gas.asm"),
     include_str!("asm/core/intrinsic_gas.asm"),
-    #[cfg(not(feature = "cdk_erigon"))]
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/core/jumpdest_analysis.asm"),
     include_str!("asm/core/nonce.asm"),
     include_str!("asm/core/process_txn.asm"),

@@ -7,11 +7,10 @@ use std::{
 use alloy::primitives::address;
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H160, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
-    proof::TrieRoots,
-    testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH},
+    proof::{BlockMetadata, TrieRoots},
     GenerationInputs,
 };
 use itertools::Itertools as _;
@@ -23,8 +22,8 @@ use zk_evm_common::gwei_to_wei;
 use crate::{
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    Field, OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage,
-    SeparateTriePreImages, TxnInfo, TxnMeta, TxnTrace,
+    OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
+    TxnInfo, TxnMeta, TxnTrace,
 };
 
 /// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -32,7 +31,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
+) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
 
     let BlockTrace {
@@ -53,6 +52,7 @@ pub fn entrypoint(
         checkpoint_state_trie_root,
         checkpoint_consolidated_hash,
         burn_addr,
+        ger_data,
     } = other;
 
     for (_, amt) in &mut withdrawals {
@@ -64,8 +64,8 @@ pub fn entrypoint(
         storage,
         batch(txn_info, batch_size_hint),
         &mut code,
-        b_meta.block_timestamp,
-        b_meta.parent_beacon_block_root,
+        &b_meta,
+        ger_data,
         withdrawals,
     )?;
 
@@ -87,7 +87,7 @@ pub fn entrypoint(
                      },
                  after,
                  withdrawals,
-             }| GenerationInputs::<Field> {
+             }| GenerationInputs {
                 txn_number_before: first_txn_ix.into(),
                 gas_used_before: running_gas_used.into(),
                 gas_used_after: {
@@ -96,7 +96,7 @@ pub fn entrypoint(
                 },
                 signed_txns: byte_code.into_iter().map(Into::into).collect(),
                 withdrawals,
-                ger_data: None,
+                ger_data,
                 tries: TrieInputs {
                     state_trie: state.into(),
                     transactions_trie: transaction.into(),
@@ -278,8 +278,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
     // all batches SHOULD not be empty
     batches: Vec<Vec<Option<TxnInfo>>>,
     code: &mut Hash2Code,
-    block_timestamp: U256,
-    parent_beacon_block_root: H256,
+    block: &BlockMetadata,
+    ger_data: Option<(H256, H256)>,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
@@ -326,11 +326,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
         let mut state_mask = BTreeSet::new();
 
         if txn_ix == 0 {
-            do_beacon_hook(
-                block_timestamp,
+            do_pre_execution(
+                block,
+                ger_data,
                 &mut storage_tries,
                 &mut storage_masks,
-                parent_beacon_block_root,
                 &mut state_mask,
                 &mut state_trie,
             )?;
@@ -455,24 +455,39 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
+                    state_mask.insert(TrieKey::from_address(addr));
+                } else {
+                    // Simple state access
+
+                    fn is_precompile(addr: H160) -> bool {
+                        let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
+                            address!("0000000000000000000000000000000000000001")
+                                ..address!("000000000000000000000000000000000000000a")
+                        } else {
+                            // Remove KZG Peval for non-Eth mainnet networks
+                            address!("0000000000000000000000000000000000000001")
+                                ..address!("0000000000000000000000000000000000000009")
+                        };
+
+                        precompiled_addresses.contains(&addr.compat())
+                            || (cfg!(feature = "polygon_pos")
+                            // Include P256Verify for Polygon PoS
+                            && addr.compat()
+                                == address!("0000000000000000000000000000000000000100"))
+                    }
+
+                    if receipt.status || !is_precompile(addr) {
+                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
+                        //                masking like this SHOULD be a space-saving optimization,
+                        //                BUT if it's omitted, we actually get state root mismatches
+                        state_mask.insert(TrieKey::from_address(addr));
+                    }
                 }
 
                 if self_destructed {
                     storage_tries.remove(&keccak_hash::keccak(addr));
                     state_mask.extend(state_trie.reporting_remove(addr)?)
                 }
-
-                let precompiled_addresses = address!("0000000000000000000000000000000000000001")
-                    ..address!("000000000000000000000000000000000000000a");
-
-                if !precompiled_addresses.contains(&addr.compat()) {
-                    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
-                    //                masking like this SHOULD be a space-saving optimization,
-                    //                BUT if it's omitted, we actually get state root mismatches
-                    state_mask.insert(TrieKey::from_address(addr));
-                } // else we don't even need to include them,
-                  // because nodes will only emit a precompiled address if
-                  // the transaction calling them reverted.
             }
 
             if do_increment_txn_ix {
@@ -533,10 +548,145 @@ fn middle<StateTrieT: StateTrie + Clone>(
     Ok(out)
 }
 
+/// Performs all the pre-txn execution rules of the targeted network.
+fn do_pre_execution<StateTrieT: StateTrie + Clone>(
+    block: &BlockMetadata,
+    ger_data: Option<(H256, H256)>,
+    storage: &mut BTreeMap<H256, StorageTrie>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
+    trim_state: &mut BTreeSet<TrieKey>,
+    state_trie: &mut StateTrieT,
+) -> anyhow::Result<()> {
+    // Ethereum mainnet: EIP-4788
+    if cfg!(feature = "eth_mainnet") {
+        return do_beacon_hook(
+            block.block_timestamp,
+            storage,
+            trim_storage,
+            block.parent_beacon_block_root,
+            trim_state,
+            state_trie,
+        );
+    }
+
+    if cfg!(feature = "cdk_erigon") {
+        return do_scalable_hook(
+            block,
+            ger_data,
+            storage,
+            trim_storage,
+            trim_state,
+            state_trie,
+        );
+    }
+
+    Ok(())
+}
+
+/// Updates the storage of the Scalable and GER contracts, according to
+/// <https://docs.polygon.technology/zkEVM/architecture/proving-system/processing-l2-blocks/#etrog-upgrade-fork-id-6>.
+///
+/// This is Polygon-CDK-specific, and runs at the start of the block,
+/// before any transactions (as per the Etrog specification).
+fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
+    block: &BlockMetadata,
+    ger_data: Option<(H256, H256)>,
+    storage: &mut BTreeMap<H256, StorageTrie>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
+    trim_state: &mut BTreeSet<TrieKey>,
+    state_trie: &mut StateTrieT,
+) -> anyhow::Result<()> {
+    use evm_arithmetization::testing_utils::{
+        ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
+        GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS, LAST_BLOCK_STORAGE_POS,
+        STATE_ROOT_STORAGE_POS, TIMESTAMP_STORAGE_POS,
+    };
+
+    if block.block_number.is_zero() {
+        return Err(anyhow!("Attempted to prove the Genesis block!"));
+    }
+    let scalable_storage = storage
+        .get_mut(&ADDRESS_SCALABLE_L2_ADDRESS_HASHED)
+        .context("missing scalable contract storage trie")?;
+    let scalable_trim = trim_storage.entry(ADDRESS_SCALABLE_L2).or_default();
+
+    let timestamp_slot_key = TrieKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
+
+    let timestamp = scalable_storage
+        .get(&timestamp_slot_key)
+        .map(rlp::decode::<U256>)
+        .unwrap_or(Ok(0.into()))?;
+    let timestamp = core::cmp::max(timestamp, block.block_timestamp);
+
+    // Store block number and largest timestamp
+
+    for (ix, u) in [
+        (U256::from(LAST_BLOCK_STORAGE_POS.1), block.block_number),
+        (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
+    ] {
+        let slot = TrieKey::from_slot_position(ix);
+
+        // These values are never 0.
+        scalable_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+        scalable_trim.insert(slot);
+    }
+
+    // Store previous block root hash
+
+    let prev_block_root_hash = state_trie.root();
+    let mut arr = [0; 64];
+    (block.block_number - 1).to_big_endian(&mut arr[0..32]);
+    U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
+    let slot = TrieKey::from_hash(keccak_hash::keccak(arr));
+
+    scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
+    scalable_trim.insert(slot);
+
+    trim_state.insert(TrieKey::from_address(ADDRESS_SCALABLE_L2));
+    let mut scalable_acct = state_trie
+        .get_by_address(ADDRESS_SCALABLE_L2)
+        .context("missing scalable contract address")?;
+    scalable_acct.storage_root = scalable_storage.root();
+    state_trie
+        .insert_by_address(ADDRESS_SCALABLE_L2, scalable_acct)
+        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+        //                Add an entry API
+        .expect("insert must succeed with the same key as a successful `get`");
+
+    // Update GER contract's storage if necessary
+    if let Some((root, l1blockhash)) = ger_data {
+        let ger_storage = storage
+            .get_mut(&GLOBAL_EXIT_ROOT_ADDRESS_HASHED)
+            .context("missing GER contract storage trie")?;
+        let ger_trim = trim_storage.entry(GLOBAL_EXIT_ROOT_ADDRESS).or_default();
+
+        let mut arr = [0; 64];
+        arr[0..32].copy_from_slice(&root.0);
+        U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
+        let slot = TrieKey::from_hash(keccak_hash::keccak(arr));
+
+        ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
+        ger_trim.insert(slot);
+
+        trim_state.insert(TrieKey::from_address(GLOBAL_EXIT_ROOT_ADDRESS));
+        let mut ger_acct = state_trie
+            .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
+            .context("missing GER contract address")?;
+        ger_acct.storage_root = ger_storage.root();
+        state_trie
+            .insert_by_address(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
+            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+            //                Add an entry API
+            .expect("insert must succeed with the same key as a successful `get`");
+    }
+
+    Ok(())
+}
+
 /// Updates the storage of the beacon block root contract,
 /// according to <https://eips.ethereum.org/EIPS/eip-4788>
 ///
-/// This is cancun-specific, and runs at the start of the block,
+/// This is Cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
 fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     block_timestamp: U256,
@@ -546,24 +696,27 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     trim_state: &mut BTreeSet<TrieKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()> {
-    let history_timestamp = block_timestamp % HISTORY_BUFFER_LENGTH.value;
-    let history_timestamp_next = history_timestamp + HISTORY_BUFFER_LENGTH.value;
+    use evm_arithmetization::testing_utils::{
+        BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
+    };
+
+    let timestamp_idx = block_timestamp % HISTORY_BUFFER_LENGTH.value;
+    let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
     let beacon_storage = storage
-        .get_mut(&keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS))
+        .get_mut(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
         .context("missing beacon contract storage trie")?;
     let beacon_trim = trim_storage
         .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
         .or_default();
+
     for (ix, u) in [
-        (history_timestamp, block_timestamp),
+        (timestamp_idx, block_timestamp),
         (
-            history_timestamp_next,
+            root_idx,
             U256::from_big_endian(parent_beacon_block_root.as_bytes()),
         ),
     ] {
-        let mut h = [0; 32];
-        ix.to_big_endian(&mut h);
-        let slot = TrieKey::from_hash(keccak_hash::keccak(H256::from_slice(&h)));
+        let slot = TrieKey::from_slot_position(ix);
         beacon_trim.insert(slot);
 
         match u.is_zero() {

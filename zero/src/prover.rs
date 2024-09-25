@@ -8,10 +8,14 @@ use std::sync::Arc;
 
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
+use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
+use hashbrown::HashMap;
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
+use plonky2::gates::noop::NoopGate;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::circuit_data::CircuitConfig;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
@@ -21,6 +25,7 @@ use tracing::{error, info};
 
 use crate::fs::generate_block_proof_file_name;
 use crate::ops;
+use crate::proof_types::GeneratedBlockProof;
 
 // All proving tasks are executed concurrently, which can cause issues for large
 // block intervals, where distant future blocks may be proven first.
@@ -31,9 +36,7 @@ use crate::ops;
 //
 // While proving a block interval, we will output proofs corresponding to block
 // batches as soon as they are generated.
-const PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE: usize = 16;
-static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore =
-    Semaphore::const_new(PARALLEL_BLOCK_PROVING_PERMIT_POOL_SIZE);
+static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore = Semaphore::const_new(0);
 
 #[derive(Debug, Clone)]
 pub struct ProverConfig {
@@ -44,6 +47,7 @@ pub struct ProverConfig {
     pub proof_output_dir: PathBuf,
     pub keep_intermediate_proofs: bool,
     pub block_batch_size: usize,
+    pub block_pool_size: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -101,16 +105,14 @@ impl BlockProverInput {
             .iter()
             .enumerate()
             .map(|(idx, txn_batch)| {
-                let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
-                    txn_batch,
-                    Some(max_cpu_len_log),
-                );
+                let segment_data_iterator =
+                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log));
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
                     .run(&runtime)
                     .map(move |e| {
-                        e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
+                        e.map(|p| (idx, crate::proof_types::BatchAggregatableProof::from(p)))
                     })
             })
             .collect();
@@ -121,7 +123,7 @@ impl BlockProverInput {
                 .run(&runtime)
                 .await?;
 
-        if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
+        if let crate::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
@@ -197,12 +199,21 @@ impl BlockProverInput {
             None => None,
         };
 
+        // Build a dummy proof for output type consistency
+        let dummy_proof = {
+            let mut builder = CircuitBuilder::new(CircuitConfig::default());
+            builder.add_gate(NoopGate, vec![]);
+            let circuit_data = builder.build::<_>();
+
+            plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())?
+        };
+
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
             b_height: block_number
                 .to_u64()
                 .expect("Block number should fit in a u64"),
-            intern: proof_gen::proof_gen::dummy_proof()?,
+            intern: dummy_proof,
         })
     }
 }
@@ -242,6 +253,9 @@ pub async fn prove(
     let mut task_set: JoinSet<
         std::result::Result<std::result::Result<u64, anyhow::Error>, anyhow::Error>,
     > = JoinSet::new();
+
+    PARALLEL_BLOCK_PROVING_PERMIT_POOL.add_permits(prover_config.block_pool_size);
+
     while let Some((block_prover_input, is_last_block)) = block_receiver.recv().await {
         block_counter += 1;
         let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();

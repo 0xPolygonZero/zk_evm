@@ -186,7 +186,7 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
         );
 
         row.preinitialized_segments_aux = (next_segment
-            - F::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
+            - F::from_canonical_usize(Segment::StorageLinkedList.unscale()))
             * (next_segment - F::from_canonical_usize(Segment::StorageLinkedList.unscale()));
 
         row.preinitialized_segments = (next_segment
@@ -463,7 +463,8 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F, D> {
-    type EvaluationFrame<FE, P, const D2: usize> = EvmStarkFrame<P, FE, NUM_COLUMNS>
+    type EvaluationFrame<FE, P, const D2: usize>
+        = EvmStarkFrame<P, FE, NUM_COLUMNS>
     where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>;

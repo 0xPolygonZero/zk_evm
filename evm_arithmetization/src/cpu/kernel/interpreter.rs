@@ -13,13 +13,15 @@ use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::smt::hash_serialize_u256;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
-use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
+use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
@@ -115,8 +117,12 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) accounts: BTreeMap<U256, usize>,
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) state: BTreeMap<U256, usize>,
     pub(crate) next_txn_index: usize,
 }
 
@@ -232,20 +238,9 @@ impl<F: RichField> Interpreter<F> {
         // Set state's inputs. We trim unnecessary components.
         self.generation_state.inputs = inputs.trim();
 
-        // Initialize the MPT's pointers.
-        let (state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.accounts_pointers,
-                &mut self.generation_state.storage_pointers,
-                &inputs.tries,
-            )
-            .expect("Invalid MPT data for preinitialization");
-
-            let trie_root_ptrs = TrieRootPtrs {
-                state_root_ptr: None,
-                txn_root_ptr : load_transactions_mpt(&input.tries.transactions_trie, &mut trie_data),
-                receipt_root_ptr: load_receipts_mpt(&input.tries.transactions_trie, &mut trie_data),
-            };
+        let trie_root_ptrs = self
+            .generation_state
+            .preinitialize_trie_data_and_get_trie_ptrs(tries);
 
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
@@ -304,7 +299,11 @@ impl<F: RichField> Interpreter<F> {
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
+                // TODO: We should reuse the serilized trie in memory.
+                #[cfg(feature = "eth_mainnet")]
                 h2u(tries.state_trie.hash()),
+                #[cfg(feature = "cdk_erigon")]
+                hash_serialize_u256(&tries.state_trie.to_vec()),
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,

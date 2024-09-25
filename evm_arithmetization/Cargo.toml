@@ -58,11 +58,9 @@ hex = { workspace = true }
 ripemd = { workspace = true }
 
 [features]
-default = ["eth_mainnet"]
 asmtools = ["hex"]
 polygon_pos = []
 cdk_erigon = ["smt_trie"]
-type2 = ["smt_trie"]
 eth_mainnet = []
 
 [[bin]]

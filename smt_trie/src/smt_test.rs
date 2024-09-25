@@ -25,7 +25,7 @@ fn test_add_and_rem() {
     smt.set(k, U256::zero());
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -51,7 +51,7 @@ fn test_add_and_rem_hermez() {
     smt.set(k, U256::zero());
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -68,7 +68,7 @@ fn test_update_element_1() {
     smt.set(k, v1);
     assert_eq!(smt.root, root);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -87,7 +87,7 @@ fn test_add_shared_element_2() {
     smt.set(k2, U256::zero());
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -109,7 +109,7 @@ fn test_add_shared_element_3() {
     smt.set(k3, U256::zero());
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -133,7 +133,7 @@ fn test_add_remove_128() {
     }
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -156,7 +156,7 @@ fn test_should_read_random() {
         assert_eq!(smt.get(k), v);
     }
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -182,7 +182,7 @@ fn test_add_element_similar_key() {
     .map(F::from_canonical_u64);
     assert_eq!(smt.root.elements, expected_root);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -259,7 +259,7 @@ fn test_leaf_one_level_depth() {
     .map(F::from_canonical_u64);
     assert_eq!(smt.root.elements, expected_root);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -275,7 +275,7 @@ fn test_no_write_0() {
     smt.set(k2, U256::zero());
     assert_eq!(smt.root, root);
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 }
 
@@ -320,7 +320,7 @@ fn test_set_hash_first_level() {
 
     assert_eq!(smt.root, hash_smt.root);
 
-    let ser = hash_smt.serialize();
+    let ser = hash_smt.to_vec();
     assert_eq!(hash_serialize(&ser), hash_smt.root);
 }
 
@@ -365,7 +365,7 @@ fn test_set_hash_order() {
 
     assert_eq!(smt.root, second_smt.root);
 
-    let ser = second_smt.serialize();
+    let ser = second_smt.to_vec();
     assert_eq!(hash_serialize(&ser), second_smt.root);
 }
 
@@ -379,7 +379,7 @@ fn test_serialize_and_prune() {
         smt.set(k, v);
     }
 
-    let ser = smt.serialize();
+    let ser = smt.to_vec();
     assert_eq!(hash_serialize(&ser), smt.root);
 
     let subset = {

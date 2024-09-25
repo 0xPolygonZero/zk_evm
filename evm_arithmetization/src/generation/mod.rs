@@ -12,13 +12,13 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
     StateTrieRootDigestBefore, TransactionTrieRootDigestAfter, TransactionTrieRootDigestBefore,
 };
-#[cfg(feature = "cdk_erigon")]
-use smt_trie::smt::Smt;
 
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
@@ -163,18 +163,15 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 #[cfg(feature = "cdk_erigon")]
 type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
 
-#[cfg(feature = "cdk_erigon")]
-pub type TrieInputs = AbstractTrieInputs<SmtTrie>;
-
-#[cfg(not(feature = "cdk_erigon"))]
-pub type TrieInputs = AbstractTrieInputs<HashedPartialTrie>;
-
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct AbstractTrieInputs<T> {
+pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
-    /// transactions. 
-    pub state_trie: T,
+    /// transactions.
+    #[cfg(feature = "eth_mainnet")]
+    pub state_trie: HashedPartialTrie,
+    #[cfg(feature = "cdk_erigon")]
+    pub state_trie: SmtTrie,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -189,35 +186,42 @@ pub struct AbstractTrieInputs<T> {
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, T)>,
+    #[cfg(feature = "eth_mainnet")]
+    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
-#[cfg(feature = "cdk_erigon")]
-pub type TrimmedTrieInputs = AbstractTrimmedTrieInputs<SmtTrie>;
-
-#[cfg(not(feature = "cdk_erigon"))]
-pub type TrimmedTrieInputs = AbstractTrimmedTrieInputs<HashedPartialTrie>;
-
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct AbstractTrimmedTrieInputs<T> {
+pub struct TrimmedTrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    pub state_trie: T,
+    #[cfg(feature = "eth_mainnet")]
+    pub state_trie: HashedPartialTrie,
+    #[cfg(feature = "cdk_erigon")]
+    pub state_trie: SmtTrie,
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
+    #[cfg(feature = "eth_mainnet")]
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
 impl TrieInputs {
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) fn trim(&self) -> TrimmedTrieInputs {
         TrimmedTrieInputs {
             state_trie: self.state_trie.clone(),
             storage_tries: self.storage_tries.clone(),
         }
     }
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) fn trim(&self) -> TrimmedTrieInputs {
+        TrimmedTrieInputs {
+            state_trie: self.state_trie.clone(),
+        }
+    }
 }
+
 impl<F: RichField> GenerationInputs<F> {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
@@ -229,6 +233,16 @@ impl<F: RichField> GenerationInputs<F> {
             .map(|tx_bytes| keccak(&tx_bytes[..]))
             .collect();
 
+        let mut state_root = H256::zero();
+        #[cfg(feature = "eth_mainnet")]
+        {
+            state_root = self.tries.state_trie.hash();
+        }
+        #[cfg(feature = "cdk_erigon")]
+        {
+            state_root = H256::from_uint(&hash_serialize_u256(&self.tries.state_trie.to_vec()).into());
+        }
+
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),
             txn_number_before: self.txn_number_before,
@@ -236,7 +250,7 @@ impl<F: RichField> GenerationInputs<F> {
             gas_used_after: self.gas_used_after,
             txn_hashes,
             trie_roots_before: TrieRoots {
-                state_root: self.tries.state_trie.hash(),
+                state_root,
                 transactions_root: self.tries.transactions_trie.hash(),
                 receipts_root: self.tries.receipts_trie.hash(),
             },
@@ -423,6 +437,7 @@ pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
         &inputs.tries.transactions_trie
     );
     log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
+    #[cfg(feature = "eth_mainnet")]
     log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }

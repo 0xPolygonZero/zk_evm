@@ -5,13 +5,13 @@ use anyhow::Result;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
+use super::TrimmedGenerationInputs;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::State;
 use crate::generation::{debug_inputs, GenerationInputs};
 use crate::witness::memory::MemoryState;
 use crate::witness::state::RegistersState;
-use crate::AllData;
 
 /// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -40,6 +40,7 @@ impl GenerationSegmentData {
 
 /// Builds a new `GenerationSegmentData`.
 #[allow(clippy::unwrap_or_default)]
+#[cfg(feature = "eth_mainnet")]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
     registers_before: Option<RegistersState>,
@@ -76,6 +77,48 @@ fn build_segment_data<F: RichField>(
             next_txn_index: interpreter.generation_state.next_txn_index,
             accounts: interpreter.generation_state.accounts_pointers.clone(),
             storage: interpreter.generation_state.storage_pointers.clone(),
+        },
+    }
+}
+
+/// Builds a new `GenerationSegmentData`.
+#[allow(clippy::unwrap_or_default)]
+#[cfg(feature = "cdk_erigon")]
+fn build_segment_data<F: RichField>(
+    segment_index: usize,
+    registers_before: Option<RegistersState>,
+    registers_after: Option<RegistersState>,
+    memory: Option<MemoryState>,
+    interpreter: &Interpreter<F>,
+) -> GenerationSegmentData {
+    GenerationSegmentData {
+        segment_index,
+        registers_before: registers_before.unwrap_or(RegistersState::new()),
+        registers_after: registers_after.unwrap_or(RegistersState::new()),
+        memory: memory.unwrap_or(MemoryState {
+            preinitialized_segments: interpreter
+                .generation_state
+                .memory
+                .preinitialized_segments
+                .clone(),
+            ..Default::default()
+        }),
+        max_cpu_len_log: interpreter.get_max_cpu_len_log(),
+        extra_data: ExtraSegmentData {
+            bignum_modmul_result_limbs: interpreter
+                .generation_state
+                .bignum_modmul_result_limbs
+                .clone(),
+            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+            withdrawal_prover_inputs: interpreter
+                .generation_state
+                .withdrawal_prover_inputs
+                .clone(),
+            ger_prover_inputs: interpreter.generation_state.ger_prover_inputs.clone(),
+            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            next_txn_index: interpreter.generation_state.next_txn_index,
+            state: interpreter.generation_state.state_pointers.clone(),
         },
     }
 }
@@ -168,6 +211,10 @@ impl<F: RichField> SegmentDataIterator<F> {
         }
     }
 }
+
+/// Returned type from a `SegmentDataIterator`, needed to prove all segments in
+/// a transaction batch.
+pub type AllData<F> = Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), SegmentError>;
 
 impl<F: RichField> Iterator for SegmentDataIterator<F> {
     type Item = AllData<F>;

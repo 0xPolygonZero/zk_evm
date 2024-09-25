@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Serialize, Deserialize};
+
 use crate::smt::{Key, Node};
 
 pub trait Db: Default {
@@ -7,7 +9,7 @@ pub trait Db: Default {
     fn set_node(&mut self, key: Key, value: Node);
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MemoryDb {
     pub db: HashMap<Key, Node>,
 }

@@ -20,6 +20,7 @@ clap = { workspace = true, features = ["derive", "string"] }
 directories = "5.0.1"
 dotenvy = { workspace = true }
 futures = { workspace = true }
+hashbrown = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 keccak-hash = { workspace = true }
@@ -45,7 +46,6 @@ url = { workspace = true }
 compat = { workspace = true }
 evm_arithmetization = { workspace = true }
 mpt_trie = { workspace = true }
-proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
 zk_evm_common = { workspace = true }
 
@@ -61,9 +61,9 @@ vergen-git2 = { version = "1.0.0", features = ["build"] }
 
 [features]
 default = ["eth_mainnet"]
-eth_mainnet = ["evm_arithmetization/eth_mainnet", "proof_gen/eth_mainnet"]
-cdk_erigon = ["evm_arithmetization/cdk_erigon", "proof_gen/cdk_erigon"]
-polygon_pos = ["evm_arithmetization/polygon_pos", "proof_gen/polygon_pos"]
+eth_mainnet = ["evm_arithmetization/eth_mainnet", "trace_decoder/eth_mainnet"]
+cdk_erigon = ["evm_arithmetization/cdk_erigon", "trace_decoder/cdk_erigon"]
+polygon_pos = ["evm_arithmetization/polygon_pos", "trace_decoder/polygon_pos"]
 
 [lints]
 workspace = true

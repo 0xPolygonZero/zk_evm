@@ -8,7 +8,6 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
-use super::linked_list::{AccountsLinkedList, StorageLinkedList};
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -16,7 +15,10 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
+use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
+#[cfg(feature = "eth_mainnet")]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
+use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
@@ -39,8 +41,6 @@ use crate::witness::transition::{
 };
 use crate::witness::util::{fill_channel_with_value, stack_peek};
 use crate::{arithmetic, keccak, logic};
-use crate::generation::mpt::{load_transactions_mpt, load_receipts_mpt};
-use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
 /// a `GenerationState`.
@@ -381,42 +381,52 @@ pub struct GenerationState<F: RichField> {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) accounts_pointers: BTreeMap<U256, usize>,
 
     /// Each entry contains the pair ((account_key, slot_key), ptr) where
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
+
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) state_pointers: BTreeMap<U256, usize>,
 }
 
 impl<F: RichField> GenerationState<F> {
-    fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
+    pub(crate) fn preinitialize_trie_data_and_get_trie_ptrs(
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        let mut trie_data = vec![];
-        if cfg!(not(feature = "cdk_erigon")) {
-            trie_data = self.preinitialize_linked_lists_and_get_trie_data(trie_inputs);
-        } else {
-            trie_data = self.preinitialize_linked_lists_and_get_smt_data(trie_inputs);
-        }
+        self.preinitialize_linked_lists(trie_inputs);
 
-            let trie_root_ptrs = TrieRootPtrs {
-                state_root_ptr: None,
-                txn_root_ptr : load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data),
-                receipt_root_ptr: load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data),
-            };
+        let mut trie_data = self.memory.get_preinit_memory(Segment::TrieData);
+
+        let txn_root_ptr =
+            load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+        let receipt_root_ptr =
+            load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+        self.memory.insert_preinitialized_segment(
+            Segment::TrieData,
+            crate::witness::memory::MemorySegmentState { content: trie_data },
+        );
+        TrieRootPtrs {
+            state_root_ptr: None,
+            txn_root_ptr,
+            receipt_root_ptr,
+        }
     }
 
-    fn preinitialize_linked_lists_and_get_trie_data(&mut self, trie_inputs: &super::AbstractTrieInputs<mpt_trie::partial_trie::HashedPartialTrie>) -> Vec<Option<U256>> {
+    #[cfg(feature = "eth_mainnet")]
+    fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
-        let (state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut generation_state.accounts_pointers,
-                &mut generation_state.storage_pointers,
-                trie_inputs,
-            )
-            .expect("Invalid MPT data for preinitialization");
+        let (state_leaves, storage_leaves, trie_data) = load_linked_lists_and_txn_and_receipt_mpts(
+            &mut generation_state.accounts_pointers,
+            &mut generation_state.storage_pointers,
+            trie_inputs,
+        )
+        .expect("Invalid MPT data for preinitialization");
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
@@ -433,27 +443,32 @@ impl<F: RichField> GenerationState<F> {
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },
         );
-        trie_data
     }
-    
-    fn preinitialize_linked_lists_and_get_smt_data(
-        &mut self,
-        trie_inputs: &TrieInputs,
-    ) -> Vec<Option<U256>> {
+
+    #[cfg(feature = "cdk_erigon")]
+    fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
-        let mut state_linked_list_data = 
-        empty_list_mem::<STATE_LINKED_LIST_NODE_SIZE>(Segment::StateLinkedList).to_vec();
-            let smt_data = trie_inputs.state_trie.serialize_with_linked_lists(&mut state_linked_list_data);
-            self.memory.insert_preinitialized_segment(
-                Segment::StateLinkedList,
-                crate::witness::memory::MemorySegmentState {
-                    content: state_linked_list_data,
-                },
+        let mut smt_data = vec![Some(U256::zero()); 2]; // For empty hash node.
+        let mut state_linked_list_data =
+            empty_list_mem::<STATE_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList as usize)
+                .to_vec();
+        trie_inputs
+            .state_trie
+            .load_linked_list_data::<{ Segment::AccountsLinkedList as usize }>(
+                &mut state_linked_list_data,
+                &mut self.state_pointers,
             );
-            self.memory.insert_preinitialized_segment(
-                Segment::TrieData,
-                crate::witness::memory::MemorySegmentState { content: smt_data },
-            );
+
+        self.memory.insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            crate::witness::memory::MemorySegmentState {
+                content: state_linked_list_data,
+            },
+        );
+        self.memory.insert_preinitialized_segment(
+            Segment::TrieData,
+            crate::witness::memory::MemorySegmentState { content: smt_data },
+        );
     }
 
     pub(crate) fn new(
@@ -465,35 +480,61 @@ impl<F: RichField> GenerationState<F> {
         let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
         let bignum_modmul_result_limbs = Vec::new();
 
-        let mut state = Self {
-            inputs: inputs.trim(),
-            registers: Default::default(),
-            memory: MemoryState::new(kernel_code),
-            traces: Traces::default(),
-            next_txn_index: 0,
-            stale_contexts: Vec::new(),
-            rlp_prover_inputs,
-            withdrawal_prover_inputs,
-            state_key_to_address: HashMap::new(),
-            bignum_modmul_result_limbs,
-            trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: Some(0),
-                txn_root_ptr: 0,
-                receipt_root_ptr: 0,
-            },
-            jumpdest_table: None,
-            accounts_pointers: BTreeMap::new(),
-            storage_pointers: BTreeMap::new(),
-            ger_prover_inputs,
-        };
-        let trie_root_ptrs =
-            state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
+        #[cfg(feature = "eth_mainnet")]
+        {
+            let mut state = Self {
+                inputs: inputs.trim(),
+                registers: Default::default(),
+                memory: MemoryState::new(kernel_code),
+                traces: Traces::default(),
+                next_txn_index: 0,
+                stale_contexts: Vec::new(),
+                rlp_prover_inputs,
+                withdrawal_prover_inputs,
+                state_key_to_address: HashMap::new(),
+                bignum_modmul_result_limbs,
+                trie_root_ptrs: TrieRootPtrs {
+                    state_root_ptr: Some(0),
+                    txn_root_ptr: 0,
+                    receipt_root_ptr: 0,
+                },
+                jumpdest_table: None,
+                accounts_pointers: BTreeMap::new(),
+                storage_pointers: BTreeMap::new(),
+                ger_prover_inputs,
+            };
+            let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
 
-        state.insert_all_accounts_in_memory();
-        state.insert_all_slots_in_memory();
+            state.trie_root_ptrs = trie_root_ptrs;
+            Ok(state)
+        }
+        #[cfg(feature = "cdk_erigon")]
+        {
+            let mut state = Self {
+                inputs: inputs.trim(),
+                registers: Default::default(),
+                memory: MemoryState::new(kernel_code),
+                traces: Traces::default(),
+                next_txn_index: 0,
+                stale_contexts: Vec::new(),
+                rlp_prover_inputs,
+                withdrawal_prover_inputs,
+                state_key_to_address: HashMap::new(),
+                bignum_modmul_result_limbs,
+                trie_root_ptrs: TrieRootPtrs {
+                    state_root_ptr: Some(0),
+                    txn_root_ptr: 0,
+                    receipt_root_ptr: 0,
+                },
+                jumpdest_table: None,
+                state_pointers: BTreeMap::new(),
+                ger_prover_inputs,
+            };
+            let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
 
-        state.trie_root_ptrs = trie_root_ptrs;
-        Ok(state)
+            state.trie_root_ptrs = trie_root_ptrs;
+            Ok(state)
+        }
     }
 
     pub(crate) fn new_with_segment_data(
@@ -580,6 +621,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Clones everything but the traces.
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) fn soft_clone(&self) -> GenerationState<F> {
         Self {
             inputs: self.inputs.clone(), // inputs have already been trimmed here
@@ -604,6 +646,32 @@ impl<F: RichField> GenerationState<F> {
         }
     }
 
+    /// Clones everything but the traces.
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) fn soft_clone(&self) -> GenerationState<F> {
+        Self {
+            inputs: self.inputs.clone(), // inputs have already been trimmed here
+            registers: self.registers,
+            memory: self.memory.clone(),
+            traces: Traces::default(),
+            next_txn_index: 0,
+            stale_contexts: Vec::new(),
+            rlp_prover_inputs: self.rlp_prover_inputs.clone(),
+            state_key_to_address: self.state_key_to_address.clone(),
+            bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
+            withdrawal_prover_inputs: self.withdrawal_prover_inputs.clone(),
+            ger_prover_inputs: self.ger_prover_inputs.clone(),
+            trie_root_ptrs: TrieRootPtrs {
+                state_root_ptr: Some(0),
+                txn_root_ptr: 0,
+                receipt_root_ptr: 0,
+            },
+            jumpdest_table: None,
+            state_pointers: self.state_pointers.clone(),
+        }
+    }
+
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
         self.bignum_modmul_result_limbs
             .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
@@ -631,48 +699,30 @@ impl<F: RichField> GenerationState<F> {
         };
     }
 
-    /// Insert all the slots stored in the `StorageLinkedList`` segment into
-    /// the accounts `BtreeMap`.
-    pub(crate) fn insert_all_slots_in_memory(&mut self) {
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        self.storage_pointers.extend(
-            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
-                .expect("There must be at least an empty storage linked list")
-                .tuple_windows()
-                .enumerate()
-                .map_while(
-                    |(i, ([prev_account_key, .., ptr], [account_key, slot_key, ..]))| {
-                        if i != 0 && prev_account_key == U256::MAX {
-                            None
-                        } else {
-                            Some((
-                                (account_key, slot_key),
-                                u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
-                            ))
-                        }
-                    },
-                ),
-        );
-    }
-
-    pub(crate) fn insert_all_accounts_in_memory(&mut self) {
-        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        self.accounts_pointers.extend(
-            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
-                .expect("There must be at least an empty accounts linked list")
-                .tuple_windows()
-                .enumerate()
-                .map_while(|(i, ([prev_account_key, .., ptr], [account_key, ..]))| {
-                    if i != 0 && prev_account_key == U256::MAX {
-                        None
-                    } else {
-                        Some((
-                            account_key,
-                            u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
-                        ))
-                    }
-                }),
-        );
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
+        self.bignum_modmul_result_limbs
+            .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
+        self.rlp_prover_inputs
+            .clone_from(&segment_data.extra_data.rlp_prover_inputs);
+        self.withdrawal_prover_inputs
+            .clone_from(&segment_data.extra_data.withdrawal_prover_inputs);
+        self.ger_prover_inputs
+            .clone_from(&segment_data.extra_data.ger_prover_inputs);
+        self.trie_root_ptrs
+            .clone_from(&segment_data.extra_data.trie_root_ptrs);
+        self.jumpdest_table
+            .clone_from(&segment_data.extra_data.jumpdest_table);
+        self.state_pointers
+            .clone_from(&segment_data.extra_data.state);
+        self.next_txn_index = segment_data.extra_data.next_txn_index;
+        self.registers = RegistersState {
+            program_counter: self.registers.program_counter,
+            is_kernel: self.registers.is_kernel,
+            is_stack_top_read: false,
+            check_overflow: false,
+            ..segment_data.registers_before
+        };
     }
 }
 

@@ -12,9 +12,11 @@ use alloy::{
 use anyhow::{anyhow, Context as _};
 use clap::ValueEnum;
 use compat::Compat;
-use evm_arithmetization::proof::{consolidate_hashes, BlockHashes, BlockMetadata};
+use evm_arithmetization::{
+    proof::{consolidate_hashes, BlockHashes, BlockMetadata},
+    Field, Hasher,
+};
 use futures::{StreamExt as _, TryStreamExt as _};
-use proof_gen::types::{Field, Hasher};
 use serde_json::json;
 use trace_decoder::{BlockLevelData, OtherBlockData};
 use tracing::warn;
@@ -309,6 +311,13 @@ where
             // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
             //       Retrieve the actual burn address from `cdk-erigon`.
             Some(Address::ZERO.compat())
+        } else {
+            None
+        },
+        ger_data: if cfg!(feature = "cdk_erigon") {
+            // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+            //       Retrieve the actual GER data from `cdk-erigon`.
+            None
         } else {
             None
         },

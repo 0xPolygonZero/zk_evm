@@ -1,4 +1,4 @@
-use proof_gen::proof_types::GeneratedBlockProof;
+use crate::proof_types::GeneratedBlockProof;
 
 pub fn check_previous_proof_and_checkpoint(
     checkpoint_block_number: u64,

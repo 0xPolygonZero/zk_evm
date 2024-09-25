@@ -4,11 +4,11 @@ use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::transports::http::reqwest::Url;
 use anyhow::{anyhow, Result};
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
 use tokio::sync::mpsc;
 use tracing::info;
 use zero::block_interval::{BlockInterval, BlockIntervalStream};
 use zero::pre_checks::check_previous_proof_and_checkpoint;
+use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
 use zero::rpc;
 use zero::rpc::{retry::build_http_retry_provider, RpcType};
@@ -38,6 +38,8 @@ pub(crate) async fn client_main(
 ) -> Result<()> {
     use futures::StreamExt;
 
+    let test_only = leader_config.prover_config.test_only;
+
     let cached_provider = Arc::new(zero::provider::CachedProvider::new(
         build_http_retry_provider(
             rpc_params.rpc_url.clone(),
@@ -45,17 +47,20 @@ pub(crate) async fn client_main(
             rpc_params.max_retries,
         )?,
     ));
-    check_previous_proof_and_checkpoint(
-        leader_config.checkpoint_block_number,
-        &leader_config.previous_proof,
-        block_interval.get_start_block()?,
-    )?;
+
+    if !test_only {
+        // For actual proof runs, perform a sanity check on the provided inputs.
+        check_previous_proof_and_checkpoint(
+            leader_config.checkpoint_block_number,
+            &leader_config.previous_proof,
+            block_interval.get_start_block()?,
+        )?;
+    }
 
     // Create a channel for block prover input and use it to send prover input to
     // the proving task. The second element of the tuple is a flag indicating
     // whether the block is the last one in the interval.
     let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
-    let test_only = leader_config.prover_config.test_only;
 
     // Run proving task
     let runtime_ = runtime.clone();

@@ -44,12 +44,12 @@ where
     _marker: PhantomData<T>,
 }
 
-pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>; N] {
+pub(crate) fn empty_list_mem<const N: usize>(offset: usize) -> [Option<U256>; N] {
     std::array::from_fn(|i| {
         if i == 0 {
             Some(U256::MAX)
         } else if i == N - 1 {
-            Some((segment as usize).into())
+            Some(U256::from(offset))
         } else {
             Some(U256::zero())
         }

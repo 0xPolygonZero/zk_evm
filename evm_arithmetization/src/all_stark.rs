@@ -111,7 +111,7 @@ impl Deref for Table {
     fn deref(&self) -> &Self::Target {
         // Hacky way to implement `Deref` for `Table` so that we don't have to
         // call `Table::Foo as usize`, but perhaps too ugly to be worth it.
-        #[cfg(not(feature = "cdk_erigon"))]
+        #[cfg(feature = "eth_mainnet")]
         return [&0, &1, &2, &3, &4, &5, &6, &7, &8][*self as TableIdx];
 
         #[cfg(feature = "cdk_erigon")]
