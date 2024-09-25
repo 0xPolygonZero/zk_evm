@@ -37,11 +37,6 @@ jobs:
 
       - name: Test in mpt_trie subdirectory
         run: cargo test --manifest-path mpt_trie/Cargo.toml
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
 
   test_evm_arithmetization:
     name: Test evm_arithmetization
@@ -62,11 +57,6 @@ jobs:
 
       - name: Test in evm_arithmetization subdirectory
         run: cargo test --manifest-path evm_arithmetization/Cargo.toml
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
 
   test_zero_bin:
     name: Test zero_bin
@@ -89,12 +79,6 @@ jobs:
         run: |
           cargo test --manifest-path zero/Cargo.toml
 
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
-
   test_zk_evm_proc_macro:
     name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
@@ -114,11 +98,6 @@ jobs:
 
       - name: Test in proc_macro subdirectory
         run: cargo test --manifest-path proc_macro/Cargo.toml
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
 
   simple_proof_regular:
     name: Execute bash script to generate and verify a proof for a small block.
