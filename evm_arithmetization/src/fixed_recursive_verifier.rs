@@ -39,7 +39,7 @@ use crate::all_stark::{
     all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
 };
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
+use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
@@ -1992,8 +1992,7 @@ where
         let mut proofs = vec![];
 
         for segment_run in segment_iterator {
-            let (_, mut next_data) =
-                segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
+            let (_, mut next_data) = segment_run?;
             let proof = self.prove_segment(
                 all_stark,
                 config,
@@ -2282,7 +2281,7 @@ where
     /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
     /// its [`PublicValues`]. Only the proof with public inputs is necessary
     /// for a verifier to assert correctness of the computation.
-    pub fn prove_transaction_aggregation(
+    pub fn prove_batch_aggregation(
         &self,
         lhs_is_agg: bool,
         lhs_proof: &ProofWithPublicInputs<F, C, D>,
@@ -3118,8 +3117,7 @@ mod tests {
 
         for segment_run in segment_iterator {
             // Process and prove segment
-            let (_, mut segment_data) =
-                segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
+            let (_, mut segment_data) = segment_run?;
             let segment_proof = timed!(
                 timing,
                 log::Level::Info,

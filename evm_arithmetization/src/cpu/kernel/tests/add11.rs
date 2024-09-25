@@ -10,7 +10,6 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
-use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
@@ -21,7 +20,7 @@ use crate::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
-use crate::GenerationInputs;
+use crate::{GenerationInputs, EMPTY_CONSOLIDATED_BLOCKHASH};
 
 #[test]
 fn test_add11_yml() {
@@ -176,7 +175,7 @@ fn test_add11_yml() {
         receipts_root: receipts_trie.hash(),
     };
 
-    let inputs = GenerationInputs::<F> {
+    let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
         burn_addr: None,
         withdrawals: vec![],
@@ -186,7 +185,7 @@ fn test_add11_yml() {
         contract_code: contract_code.clone(),
         block_metadata,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
-        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: gas_used,
@@ -363,7 +362,7 @@ fn test_add11_yml_with_exception() {
         contract_code: contract_code.clone(),
         block_metadata,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
-        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: txn_gas_limit.into(),

@@ -8,18 +8,17 @@ use std::{
 use alloy::hex;
 use anyhow::anyhow;
 use directories::ProjectDirs;
-use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
+use evm_arithmetization::{
+    cpu::kernel::aggregator::KERNEL, AllRecursiveCircuits, RecursionConfig,
+    RecursiveCircuitsForTableSize, VerifierData, EXTENSION_DEGREE,
+};
 use once_cell::sync::Lazy;
 use plonky2::util::serialization::{
     Buffer, DefaultGateSerializer, DefaultGeneratorSerializer, IoError,
 };
-use proof_gen::types::{AllRecursiveCircuits, VerifierData};
 use thiserror::Error;
 
-use super::{
-    circuit::{Circuit, CircuitConfig},
-    Config, RecursiveCircuitsForTableSize, SIZE,
-};
+use super::circuit::{Circuit, CircuitConfig};
 
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
@@ -46,10 +45,10 @@ pub static KERNEL_HASH: Lazy<&'static str> = Lazy::new(|| {
 
 fn get_serializers() -> (
     DefaultGateSerializer,
-    DefaultGeneratorSerializer<Config, SIZE>,
+    DefaultGeneratorSerializer<RecursionConfig, EXTENSION_DEGREE>,
 ) {
     let gate_serializer = DefaultGateSerializer;
-    let witness_serializer: DefaultGeneratorSerializer<Config, SIZE> =
+    let witness_serializer: DefaultGeneratorSerializer<RecursionConfig, EXTENSION_DEGREE> =
         DefaultGeneratorSerializer::default();
 
     (gate_serializer, witness_serializer)

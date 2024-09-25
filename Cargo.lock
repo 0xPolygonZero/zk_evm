@@ -3854,19 +3854,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proof_gen"
-version = "0.4.0"
-dependencies = [
- "evm_arithmetization",
- "hashbrown",
- "log",
- "paste",
- "plonky2",
- "serde",
- "zk_evm_common",
-]
-
-[[package]]
 name = "proptest"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5790,6 +5777,7 @@ dependencies = [
  "dotenvy",
  "evm_arithmetization",
  "futures",
+ "hashbrown",
  "hex",
  "itertools 0.13.0",
  "jemallocator",
@@ -5802,7 +5790,8 @@ dependencies = [
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.12.2",
- "proof_gen",
+ "regex",
+ "rlp",
  "ruint",
  "serde",
  "serde_json",

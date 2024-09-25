@@ -389,13 +389,10 @@ pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
+    use crate::generation::ErrorWithTries;
     use crate::{
         cpu::kernel::interpreter::Interpreter,
-        generation::{
-            output_debug_tries,
-            segments::{SegmentDataIterator, SegmentError},
-            state::State,
-        },
+        generation::segments::{SegmentDataIterator, SegmentError},
     };
 
     /// Simulates the zkEVM CPU execution.
@@ -407,13 +404,7 @@ pub mod testing {
         let initial_offset = KERNEL.global_labels["init"];
         let mut interpreter: Interpreter<F> =
             Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
-        let result = interpreter.run();
-
-        if result.is_err() {
-            output_debug_tries(interpreter.get_generation_state())?;
-        }
-
-        result?;
+        interpreter.run()?;
         Ok(())
     }
 
@@ -434,8 +425,7 @@ pub mod testing {
         let mut proofs = vec![];
 
         for segment_run in segment_data_iterator {
-            let (_, mut next_data) =
-                segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
+            let (_, mut next_data) = segment_run?;
             let proof = prove(
                 all_stark,
                 config,
@@ -453,16 +443,14 @@ pub mod testing {
     pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-    ) -> Result<()>
+    ) -> Result<(), ErrorWithTries<SegmentError>>
     where
         F: RichField,
     {
         features_check(&inputs.clone().trim());
 
         for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
-            if let Err(e) = segment {
-                return Err(anyhow::format_err!(e));
-            }
+            segment?;
         }
 
         Ok(())
