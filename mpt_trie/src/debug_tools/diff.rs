@@ -46,8 +46,7 @@ fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-/// The difference between two Tries, represented as the highest
-/// array of `DiffPoint`s.
+/// The difference between two Tries, represented as the array of `DiffPoint`s.
 pub struct TrieDiff {
     /// Diff points between the two tries.
     pub diff_points: Vec<DiffPoint>,
@@ -147,7 +146,7 @@ pub struct NodeInfo {
 
 impl Display for NodeInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "NodeInfo {{ Key: 0x{:x}, ", self.key)?;
+        write!(f, "NodeInfo {{ Key: {:x}, ", self.key)?;
 
         match &self.value {
             Some(v) => write!(f, "Value: 0x{}, ", hex::encode(v))?,
@@ -173,8 +172,7 @@ impl NodeInfo {
     }
 }
 
-/// Create a diff between two tries. Will perform both types of diff searches
-/// (top-down & bottom-up). It will not stop on first difference.
+/// Create a diff between two tries. It will try to find all the differences.
 pub fn create_full_diff_between_tries(a: &HashedPartialTrie, b: &HashedPartialTrie) -> TrieDiff {
     TrieDiff {
         diff_points: find_all_diff_points_between_tries(a, b),
@@ -458,6 +456,8 @@ mod tests {
     use rlp_derive::{RlpDecodable, RlpEncodable};
 
     use super::create_full_diff_between_tries;
+    use crate::trie_ops::ValOrHash;
+    use crate::utils::TryFromIterator;
     use crate::{
         debug_tools::diff::{DiffPoint, NodeInfo},
         nibbles::Nibbles,
@@ -466,10 +466,17 @@ mod tests {
         utils::{TrieNodeType, TriePath},
     };
 
+    fn create_trie<K, V>(data: impl IntoIterator<Item = (K, V)>) -> TrieOpResult<HashedPartialTrie>
+    where
+        K: Into<Nibbles>,
+        V: Into<ValOrHash>,
+    {
+        HashedPartialTrie::try_from_iter(data)
+    }
+
     #[test]
-    fn depth_single_node_hash_diffs_work() -> TrieOpResult<()> {
-        let mut a = HashedPartialTrie::default();
-        a.insert(0x1234, vec![0])?;
+    fn single_node_diff_works() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![(0x1234, vec![0])])?;
         let a_hash = a.hash();
 
         let mut b = a.clone();
@@ -505,7 +512,205 @@ mod tests {
     }
 
     #[test]
-    fn depth_multi_node_diff_works() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn multi_node_single_diff_works() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1112")?, 0x02u8),
+            (Nibbles::from_str("0x3333")?, 0x03u8),
+            (Nibbles::from_str("0x4444")?, 0x04u8),
+        ])?;
+
+        let b = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1112")?, 0x03u8),
+            (Nibbles::from_str("0x3333")?, 0x03u8),
+            (Nibbles::from_str("0x4444")?, 0x04u8),
+        ])?;
+
+        let diff = create_full_diff_between_tries(&a, &b);
+
+        assert_eq!(diff.diff_points.len(), 1);
+        assert_eq!(diff.diff_points[0].a_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1112")?);
+        assert_eq!(diff.diff_points[0].a_info.value, Some(vec![0x02u8]));
+        assert_eq!(diff.diff_points[0].b_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("0x1112")?);
+        assert_eq!(diff.diff_points[0].b_info.value, Some(vec![0x03u8]));
+
+        Ok(())
+    }
+
+    #[test]
+    fn multi_node_single_diff_works_2() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1122")?, 0x02u8),
+            (Nibbles::from_str("0x3333")?, 0x03u8),
+            (Nibbles::from_str("0x4444")?, 0x04u8),
+        ])?;
+
+        let mut b = a.clone();
+        b.insert(Nibbles::from_str("0x3334")?, 0x05u8)?;
+
+        let diff = create_full_diff_between_tries(&a, &b);
+
+        assert_eq!(diff.diff_points.len(), 1);
+        assert_eq!(diff.diff_points[0].a_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x3333")?);
+        assert_eq!(
+            diff.diff_points[0].b_info.node_type,
+            TrieNodeType::Extension
+        );
+        assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("0x333")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn multi_node_single_diff_works_3() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1122")?, 0x02u8),
+        ])?;
+
+        let b = create_trie(vec![
+            (Nibbles::from_str("0x3333")?, 0x03u8),
+            (Nibbles::from_str("0x4444")?, 0x04u8),
+        ])?;
+
+        let diff = create_full_diff_between_tries(&a, &b);
+
+        println!("Diff is: {}", diff);
+
+        assert_eq!(diff.diff_points.len(), 1);
+        assert_eq!(
+            diff.diff_points[0].a_info.node_type,
+            TrieNodeType::Extension
+        );
+        assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x11")?);
+        assert_eq!(diff.diff_points[0].b_info.node_type, TrieNodeType::Branch);
+        assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn multi_node_multi_diff_works() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1122")?, 0x02u8),
+            (Nibbles::from_str("0x3333")?, 0x03u8),
+            (Nibbles::from_str("0x4444")?, 0x04u8),
+        ])?;
+
+        let mut b = a.clone();
+        b.insert(Nibbles::from_str("0x1113")?, 0x05u8)?;
+        b.insert(Nibbles::from_str("0x3334")?, 0x06u8)?;
+
+        let diff = create_full_diff_between_tries(&a, &b);
+        println!("Diff is: {}", diff);
+        assert_eq!(diff.diff_points.len(), 2);
+        assert_eq!(diff.diff_points[0].a_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1111")?);
+        assert_eq!(diff.diff_points[0].b_info.node_type, TrieNodeType::Branch);
+        assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("0x111")?);
+
+        assert_eq!(diff.diff_points[1].a_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[1].a_info.key, Nibbles::from_str("0x3333")?);
+        assert_eq!(
+            diff.diff_points[1].b_info.node_type,
+            TrieNodeType::Extension
+        );
+        assert_eq!(diff.diff_points[1].b_info.key, Nibbles::from_str("0x333")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn multi_node_multi_diff_works_2() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1122")?, 0x02u8),
+            (Nibbles::from_str("0x3333")?, 0x03u8),
+            (Nibbles::from_str("0x4444")?, 0x04u8),
+        ])?;
+
+        let b = create_trie(vec![
+            (Nibbles::from_str("0x1112")?, 0x01u8),
+            (Nibbles::from_str("0x1123")?, 0x02u8),
+            (Nibbles::from_str("0x3334")?, 0x03u8),
+            (Nibbles::from_str("0x4445")?, 0x04u8),
+        ])?;
+
+        let diff = create_full_diff_between_tries(&a, &b);
+        println!("Diff is: {}", diff);
+        assert_eq!(diff.diff_points.len(), 4);
+        assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1111")?);
+        assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("0x1112")?);
+        assert_eq!(diff.diff_points[1].a_info.key, Nibbles::from_str("0x1122")?);
+        assert_eq!(diff.diff_points[1].b_info.key, Nibbles::from_str("0x1123")?);
+        assert_eq!(diff.diff_points[2].a_info.key, Nibbles::from_str("0x3333")?);
+        assert_eq!(diff.diff_points[2].b_info.key, Nibbles::from_str("0x3334")?);
+        assert_eq!(diff.diff_points[3].a_info.key, Nibbles::from_str("0x4444")?);
+        assert_eq!(diff.diff_points[3].b_info.key, Nibbles::from_str("0x4445")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn multi_node_multi_diff_works_3() -> Result<(), Box<dyn std::error::Error>> {
+        let a = create_trie(vec![
+            (Nibbles::from_str("0x1111")?, 0x01u8),
+            (Nibbles::from_str("0x1112")?, 0x02u8),
+            (Nibbles::from_str("0x1113")?, 0x03u8),
+            (Nibbles::from_str("0x1114")?, 0x04u8),
+            (Nibbles::from_str("0x2221")?, 0x06u8),
+            (Nibbles::from_str("0x2222")?, 0x07u8),
+            (Nibbles::from_str("0x2223")?, 0x08u8),
+            (Nibbles::from_str("0x2224")?, 0x09u8),
+        ])?;
+
+        let b = create_trie(vec![
+            (Nibbles::from_str("0x1114")?, 0x04u8),
+            (Nibbles::from_str("0x1115")?, 0x06u8),
+            (Nibbles::from_str("0x1116")?, 0x07u8),
+            (Nibbles::from_str("0x1117")?, 0x08u8),
+            (Nibbles::from_str("0x2224")?, 0x09u8),
+            (Nibbles::from_str("0x2225")?, 0x07u8),
+            (Nibbles::from_str("0x2226")?, 0x08u8),
+            (Nibbles::from_str("0x2227")?, 0x09u8),
+        ])?;
+
+        let diff = create_full_diff_between_tries(&a, &b);
+        assert_eq!(diff.diff_points.len(), 12);
+
+        assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1111")?);
+        assert_eq!(diff.diff_points[0].a_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("0x1111")?);
+        assert_eq!(diff.diff_points[0].b_info.node_type, TrieNodeType::Empty);
+
+        assert_eq!(diff.diff_points[4].a_info.key, Nibbles::from_str("0x1116")?);
+        assert_eq!(diff.diff_points[4].a_info.node_type, TrieNodeType::Empty);
+        assert_eq!(diff.diff_points[4].b_info.key, Nibbles::from_str("0x1116")?);
+        assert_eq!(diff.diff_points[4].b_info.node_type, TrieNodeType::Leaf);
+
+        assert_eq!(
+            diff.diff_points[11].a_info.key,
+            Nibbles::from_str("0x2227")?
+        );
+        assert_eq!(diff.diff_points[11].a_info.node_type, TrieNodeType::Empty);
+        assert_eq!(
+            diff.diff_points[11].b_info.key,
+            Nibbles::from_str("0x2227")?
+        );
+        assert_eq!(diff.diff_points[11].b_info.node_type, TrieNodeType::Leaf);
+
+        Ok(())
+    }
+
+    #[test]
+    /// Do one real world test where we change the values of the accounts.
+    fn multi_node_multi_diff_works_accounts() -> Result<(), Box<dyn std::error::Error>> {
         use ethereum_types::{H256, U256};
         use keccak_hash::keccak;
         #[derive(
@@ -581,42 +786,5 @@ mod tests {
         assert_eq!(&diff.diff_points[1].key.to_string(), "0x55");
 
         Ok(())
-    }
-
-    // TODO: Will finish these tests later (low-priority).
-    #[test]
-    #[ignore]
-    fn depth_multi_node_single_node_hash_diffs_work() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn depth_multi_node_single_node_node_diffs_work() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn depth_massive_single_node_diff_tests() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn depth_multi_node_multi_node_hash_diffs_work() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn depth_multi_node_multi_node_node_diffs_work() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn depth_massive_multi_node_diff_tests() {
-        todo!()
     }
 }
