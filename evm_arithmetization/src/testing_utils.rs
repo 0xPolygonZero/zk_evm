@@ -10,8 +10,7 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
-use plonky2::field::goldilocks_field::GoldilocksField;
-
+use plonky2::hash::hash_types::RichField;
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
 use crate::generation::TrieInputs;
@@ -168,10 +167,10 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
 
 /// Get `GenerationInputs` for a dummy payload, where the block has the given
 /// timestamp.
-pub fn dummy_payload(
+pub fn dummy_payload<F: RichField>(
     timestamp: u64,
     is_first_payload: bool,
-) -> Result<GenerationInputs<GoldilocksField>> {
+) -> Result<GenerationInputs<F>> {
     let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
     let block_metadata = BlockMetadata {
