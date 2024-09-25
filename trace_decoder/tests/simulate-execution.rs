@@ -6,11 +6,14 @@ mod common;
 
 use anyhow::Context as _;
 use common::{cases, Case};
+use evm_arithmetization::testing_utils::init_logger;
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use trace_decoder::observer::DummyObserver;
 
 fn main() -> anyhow::Result<()> {
+    init_logger();
+
     let mut trials = vec![];
     for batch_size in [1, 3] {
         for Case {
