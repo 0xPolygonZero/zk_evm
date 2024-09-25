@@ -57,20 +57,19 @@ global update_scalable_l1blockhash:
     // stack: retdest
     PROVER_INPUT(ger)
     // stack: l1blockhash?, retdest
-    DUP1 %eq_const(@U256_MAX) %jumpi(skip_and_exit)
-    // stack: l1blockhash, retdest
+    PUSH @SEGMENT_KERNEL_GENERAL
+    DUP2 %eq_const(@U256_MAX) %jumpi(skip_and_exit)
+    // stack: addr, l1blockhash, retdest
     PUSH @GLOBAL_EXIT_ROOT_STORAGE_POS
     PROVER_INPUT(ger)
-    // stack: root, GLOBAL_EXIT_ROOT_STORAGE_POS, l1blockhash, retdest
-    PUSH @SEGMENT_KERNEL_GENERAL
-    // stack: addr, root, GLOBAL_EXIT_ROOT_STORAGE_POS, l1blockhash, retdest
+    // stack: root, GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
+    DUP3
+    // stack: addr', root, GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
     MSTORE_32BYTES_32
-    // stack: addr, GLOBAL_EXIT_ROOT_STORAGE_POS, l1blockhash, retdest
+    // stack: addr'', GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
     MSTORE_32BYTES_32
-    // stack: addr, l1blockhash, retdest
-    POP
-    // stack: l1blockhash, retdest
-    PUSH 64 PUSH @SEGMENT_KERNEL_GENERAL
+    // stack: addr'', addr, l1blockhash, retdest
+    %stack (addr_2, addr) -> (addr, 64)
     // stack: addr, len, l1blockhash, retdest
     KECCAK_GENERAL
     // stack: slot, l1blockhash, retdest
@@ -83,8 +82,8 @@ global update_scalable_l1blockhash:
     JUMP
 
 skip_and_exit:
-    // stack: null, retdest
-    POP
+    // stack: garbage, null, retdest
+    %pop2
     JUMP
 
 global update_scalable_timestamp:
