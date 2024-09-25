@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
-use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
@@ -865,24 +864,25 @@ where
             builder.connect(before, s);
         }
         // Check that the challenger state is consistent between proofs.
+        let mut prev_state = pis[0].challenger_state_after.as_ref().to_vec();
+        let state_len = prev_state.len();
         for i in 1..NUM_TABLES {
-            for (&before, &after) in zip_eq(
-                pis[i].challenger_state_before.as_ref(),
-                pis[i - 1].challenger_state_after.as_ref(),
-            ) {
-                builder.connect(before, after);
-            }
-            if KECCAK_TABLES_INDICES.contains(&i) {
-                // Ensure that the challenger state remains consistent before and after Keccak
-                // tables.
-                for (&before, &after) in zip_eq(
-                    pis[i].challenger_state_before.as_ref(),
-                    pis[i].challenger_state_after.as_ref(),
-                ) {
-                    let state_difference = builder.sub(before, after);
-                    let challenger_state_check =
-                        builder.mul(skip_keccak_tables.target, state_difference);
-                    builder.assert_zero(challenger_state_check);
+            let current_state_before = pis[i].challenger_state_before.as_ref();
+            let current_state_after = pis[i].challenger_state_after.as_ref();
+            for j in 0..state_len {
+                if KECCAK_TABLES_INDICES.contains(&i) {
+                    // Ensure that the challenger state:
+                    // 1) prev == current_before, when using keccak
+                    let diff = builder.sub(prev_state[j], current_state_before[j]);
+                    let check = builder.mul(use_keccak_tables.target, diff);
+                    builder.assert_zero(check);
+                    // 2) prev <- current_after, when using keccak
+                    // 3) prev <- prev, when skipping using keccak
+                    prev_state[j] =
+                        builder.select(use_keccak_tables, current_state_after[j], prev_state[j]);
+                } else {
+                    builder.connect(prev_state[j], current_state_before[j]);
+                    prev_state[j] = current_state_after[j];
                 }
             }
         }
@@ -1885,45 +1885,6 @@ where
             timing,
             abort_signal.clone(),
         )?;
-        info!(
-            "Debugging trace_cap.0[0]: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
-                .proof
-                .trace_cap
-                .0[0]
-        );
-
-        info!(
-            "Debugging openings.ctl_zs_first: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
-                .proof
-                .openings
-                .ctl_zs_first
-        );
-
-        info!(
-            "Debugging trace_cap.0[0] for KeccakSponge: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
-                .proof
-                .trace_cap
-                .0[0]
-        );
-
-        info!(
-            "Debugging openings.ctl_zs_first for KeccakSponge: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
-                .proof
-                .openings
-                .ctl_zs_first
-        );
-
-        info!(
-            "Debugging openings.ctl_zs_first for Logic: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::Logic]
-                .proof
-                .openings
-                .ctl_zs_first
-        );
 
         let mut root_inputs = PartialWitness::new();
 
