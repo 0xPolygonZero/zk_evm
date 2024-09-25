@@ -24,7 +24,12 @@ use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
 #[cfg(feature = "cdk_erigon")]
 use crate::poseidon::poseidon_stark::PoseidonOp;
-use crate::util::u256_to_usize;
+use crate::testing_utils::{
+    ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, BEACON_ROOTS_CONTRACT_ADDRESS,
+    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
+    GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+};
+use crate::util::{u256_to_usize, u2h};
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
 use crate::witness::memory::MemoryOpKind;
@@ -227,6 +232,10 @@ pub(crate) trait State<F: RichField> {
                         Level::Info,
                         format!("CPU halted after {} cycles", self.get_clock()),
                     );
+
+                    if final_registers.program_counter == KERNEL.global_labels["halt"] {
+                        self.get_generation_state().search_residual_trie_leaves();
+                    }
                     return Ok((final_registers, final_mem));
                 }
             }
@@ -378,12 +387,12 @@ pub struct GenerationState<F: RichField> {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
-    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
+    pub(crate) accounts_pointers: BTreeMap<U256, (usize, bool)>,
 
     /// Each entry contains the pair ((account_key, slot_key), ptr) where
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
-    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
+    pub(crate) storage_pointers: BTreeMap<(U256, U256), (usize, bool)>,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -420,6 +429,53 @@ impl<F: RichField> GenerationState<F> {
         trie_roots_ptrs
     }
 
+    fn search_residual_trie_leaves(&self) {
+        for (state_key, (_, touched)) in self
+            .accounts_pointers
+            .iter()
+            // Filter out U256::MAX used for end-detection
+            .filter(|(&address, _)| address != U256::MAX)
+        {
+            if !touched {
+                let state_key = u2h(*state_key);
+                log::warn!(
+                    "Block {:?}, txns {:?}: Account at {} has not been touched!",
+                    self.inputs.block_metadata.block_number,
+                    self.inputs.txn_number_before
+                        ..(self.inputs.txn_number_before + self.inputs.txn_hashes.len()),
+                    if let Some(addr) = self.state_key_to_address.get(&state_key) {
+                        format!("address {:?}", addr)
+                    } else {
+                        format!("state key {:?}", state_key)
+                    },
+                );
+            }
+        }
+
+        for ((state_key, slot), (_, touched)) in self
+            .storage_pointers
+            .iter()
+            // Filter out U256::MAX used for end-detection
+            .filter(|(&(key, _), _)| key != U256::MAX)
+        {
+            if !touched {
+                let state_key = u2h(*state_key);
+                log::warn!(
+                    "Block {:?}, txns {:?}: Slot key {:?} for account at {} has not been touched!",
+                    self.inputs.block_metadata.block_number,
+                    self.inputs.txn_number_before
+                        ..(self.inputs.txn_number_before + self.inputs.txn_hashes.len()),
+                    u2h(*slot),
+                    if let Some(addr) = self.state_key_to_address.get(&state_key) {
+                        format!("address {:?}", addr)
+                    } else {
+                        format!("state key {:?}", state_key)
+                    },
+                );
+            }
+        }
+    }
+
     pub(crate) fn new(
         inputs: &GenerationInputs<F>,
         kernel_code: &[u8],
@@ -438,7 +494,21 @@ impl<F: RichField> GenerationState<F> {
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
-            state_key_to_address: HashMap::new(),
+            state_key_to_address: if cfg!(feature = "eth_mainnet") {
+                HashMap::from([(
+                    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+                    BEACON_ROOTS_CONTRACT_ADDRESS,
+                )])
+            } else if cfg!(feature = "cdk_erigon") {
+                let mut map =
+                    HashMap::from([(ADDRESS_SCALABLE_L2_ADDRESS_HASHED, ADDRESS_SCALABLE_L2)]);
+                if ger_prover_inputs.len() == 2 {
+                    map.insert(GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS);
+                }
+                map
+            } else {
+                HashMap::new()
+            },
             bignum_modmul_result_limbs,
             trie_root_ptrs: TrieRootPtrs {
                 state_root_ptr: Some(0),

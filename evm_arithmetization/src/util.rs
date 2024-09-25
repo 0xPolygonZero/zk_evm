@@ -214,6 +214,12 @@ pub(crate) fn h2u(h: H256) -> U256 {
     U256::from_big_endian(&h.0)
 }
 
+pub(crate) fn u2h(u: U256) -> H256 {
+    let mut bytes = [0u8; 32];
+    u.to_big_endian(&mut bytes);
+    H256(bytes)
+}
+
 pub(crate) fn get_h160<F: RichField>(slice: &[F]) -> H160 {
     H160::from_slice(
         &slice

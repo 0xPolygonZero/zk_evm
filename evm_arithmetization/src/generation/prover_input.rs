@@ -488,19 +488,26 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_insert_account(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
-        let (&pred_addr, &pred_ptr) = self
+        let (pred_addr, (pred_ptr, _)) = self
             .accounts_pointers
-            .range(..=addr)
+            .range_mut(..=addr)
+            .map(|(&addr, (ptr, touched))| {
+                *touched = true;
+                (addr, (*ptr, *touched))
+            })
             .next_back()
-            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+            .unwrap_or((U256::MAX, (Segment::AccountsLinkedList as usize, true)));
 
         if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
             self.accounts_pointers.insert(
                 addr,
-                u256_to_usize(
-                    self.memory
-                        .read_global_metadata(GlobalMetadata::AccountsLinkedListNextAvailable),
-                )?,
+                (
+                    u256_to_usize(
+                        self.memory
+                            .read_global_metadata(GlobalMetadata::AccountsLinkedListNextAvailable),
+                    )?,
+                    true,
+                ),
             );
         }
 
@@ -515,21 +522,39 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
 
-        let (&(pred_addr, pred_slot_key), &pred_ptr) = self
+        // Mark the address as touched in the account pointers list.
+        let _ = self
+            .accounts_pointers
+            .range_mut(..=addr)
+            .map(|(&addr, (ptr, touched))| {
+                *touched = true;
+                (addr, (*ptr, *touched))
+            })
+            .next_back()
+            .unwrap_or((U256::MAX, (Segment::AccountsLinkedList as usize, true)));
+
+        let ((pred_addr, pred_slot_key), (pred_ptr, _)) = self
             .storage_pointers
-            .range(..=(addr, key))
+            .range_mut(..=(addr, key))
+            .map(|(&(addr, key), (ptr, touched))| {
+                *touched = true;
+                ((addr, key), (*ptr, *touched))
+            })
             .next_back()
             .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
+                (U256::MAX, U256::zero()),
+                (Segment::StorageLinkedList as usize, true),
             ));
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
             self.storage_pointers.insert(
                 (addr, key),
-                u256_to_usize(
-                    self.memory
-                        .read_global_metadata(GlobalMetadata::StorageLinkedListNextAvailable),
-                )?,
+                (
+                    u256_to_usize(
+                        self.memory
+                            .read_global_metadata(GlobalMetadata::StorageLinkedListNextAvailable),
+                    )?,
+                    true,
+                ),
             );
         }
         Ok(U256::from(
@@ -543,11 +568,11 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
-        let (_, &ptr) = self
+        let (_, &(ptr, _)) = self
             .accounts_pointers
             .range(..addr)
             .next_back()
-            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize, true)));
         self.accounts_pointers
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
@@ -563,13 +588,13 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
 
-        let (_, &ptr) = self
+        let (_, &(ptr, _)) = self
             .storage_pointers
             .range(..(addr, key))
             .next_back()
             .unwrap_or((
                 &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
+                &(Segment::StorageLinkedList as usize, true),
             ));
         self.storage_pointers
             .remove(&(addr, key))
@@ -587,13 +612,13 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_remove_address_slots(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
-        let (_, &pred_ptr) = self
+        let (_, &(pred_ptr, _)) = self
             .storage_pointers
             .range(..(addr, U256::zero()))
             .next_back()
             .unwrap_or((
                 &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
+                &(Segment::StorageLinkedList as usize, true),
             ));
 
         Ok(U256::from(

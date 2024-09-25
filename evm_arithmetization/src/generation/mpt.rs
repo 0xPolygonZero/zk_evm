@@ -336,8 +336,8 @@ fn get_state_and_storage_leaves(
     state_leaves: &mut Vec<Option<U256>>,
     storage_leaves: &mut Vec<Option<U256>>,
     trie_data: &mut Vec<Option<U256>>,
-    accounts_pointers: &mut BTreeMap<U256, usize>,
-    storage_pointers: &mut BTreeMap<(U256, U256), usize>,
+    accounts_pointers: &mut BTreeMap<U256, (usize, bool)>,
+    storage_pointers: &mut BTreeMap<(U256, U256), (usize, bool)>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
     match trie.deref() {
@@ -435,7 +435,10 @@ fn get_state_and_storage_leaves(
                 &parse_storage_value,
             )?;
 
-            accounts_pointers.insert(addr_key, Segment::AccountsLinkedList as usize + len);
+            accounts_pointers.insert(
+                addr_key,
+                (Segment::AccountsLinkedList as usize + len, false),
+            );
 
             Ok(())
         }
@@ -448,7 +451,7 @@ pub(crate) fn get_storage_leaves<F>(
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
-    storage_pointers: &mut BTreeMap<(U256, U256), usize>,
+    storage_pointers: &mut BTreeMap<(U256, U256), (usize, bool)>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -517,7 +520,7 @@ where
 
             storage_pointers.insert(
                 (addr_key, slot_key),
-                Segment::StorageLinkedList as usize + len,
+                (Segment::StorageLinkedList as usize + len, false),
             );
 
             Ok(())
@@ -539,8 +542,8 @@ type TriePtrsLinkedLists = (
 );
 
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
-    accounts_pointers: &mut BTreeMap<U256, usize>,
-    storage_pointers: &mut BTreeMap<(U256, U256), usize>,
+    accounts_pointers: &mut BTreeMap<U256, (usize, bool)>,
+    storage_pointers: &mut BTreeMap<(U256, U256), (usize, bool)>,
     trie_inputs: &TrieInputs,
 ) -> Result<TriePtrsLinkedLists, ProgramError> {
     let mut state_leaves =
