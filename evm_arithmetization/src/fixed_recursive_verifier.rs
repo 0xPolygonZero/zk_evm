@@ -812,6 +812,7 @@ where
             }
         }
 
+        // Ensures that the trace cap is set to 0 when skipping Keccak tables.
         for i in KECCAK_TABLES_INDICES {
             for h in &pis[i].trace_cap {
                 for t in h {
@@ -871,13 +872,13 @@ where
             let current_state_after = pis[i].challenger_state_after.as_ref();
             for j in 0..state_len {
                 if KECCAK_TABLES_INDICES.contains(&i) {
-                    // Ensure that the challenger state:
-                    // 1) prev == current_before, when using keccak
+                    // Ensure the challenger state:
+                    // 1) prev == current_before when using Keccak
                     let diff = builder.sub(prev_state[j], current_state_before[j]);
                     let check = builder.mul(use_keccak_tables.target, diff);
                     builder.assert_zero(check);
-                    // 2) prev <- current_after, when using keccak
-                    // 3) prev <- prev, when skipping using keccak
+                    // 2) Update prev <- current_after when using Keccak
+                    // 3) Keep prev <- prev when skipping Keccak
                     prev_state[j] =
                         builder.select(use_keccak_tables, current_state_after[j], prev_state[j]);
                 } else {
@@ -903,7 +904,8 @@ where
             })
             .collect_vec();
 
-        // When Keccak Tables are disabled, Keccak Tables' ctl_zs_first should be 0s.
+        // Ensure that when Keccak tables are skipped, the Keccak tables' ctl_zs_first
+        // are all zeros.
         for &i in KECCAK_TABLES_INDICES.iter() {
             for &t in pis[i].ctl_zs_first.iter() {
                 let ctl_check = builder.mul(skip_keccak_tables.target, t);
