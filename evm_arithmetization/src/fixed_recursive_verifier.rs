@@ -3112,12 +3112,7 @@ mod tests {
 
         let mut proofs_without_keccak = vec![];
 
-        let skip_proofs_before_index = 3;
         for (i, segment_run) in segment_iterator.enumerate() {
-            if i < skip_proofs_before_index {
-                continue;
-            }
-
             // Process and prove segment
             let (_, mut segment_data) =
                 segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
@@ -3136,7 +3131,6 @@ mod tests {
             );
 
             proofs_without_keccak.push(segment_proof);
-            break; // Process only one proof
         }
 
         // Verify the generated segment proof

@@ -150,6 +150,7 @@ where
             config,
             &trace_poly_values,
             trace_commitments,
+            use_keccak_tables,
             ctl_data_per_table,
             &mut challenger,
             &ctl_challenges,
@@ -237,6 +238,7 @@ fn prove_with_commitments<F, C, const D: usize>(
     config: &StarkConfig,
     trace_poly_values: &[Vec<PolynomialValues<F>>; NUM_TABLES],
     trace_commitments: Vec<PolynomialBatch<F, C, D>>,
+    use_keccak_tables: bool,
     ctl_data_per_table: [CtlData<F>; NUM_TABLES],
     challenger: &mut Challenger<F, C::Hasher>,
     ctl_challenges: &GrandProductChallengeSet<F>,
@@ -270,8 +272,15 @@ where
     let (arithmetic_proof, _) = prove_table!(arithmetic_stark, Table::Arithmetic);
     let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
     let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
+    let challenger_after_cpu = challenger.clone();
+    // TODO: We still need Keccak proofs for CTLs, etc.
     let (keccak_proof, _) = prove_table!(keccak_stark, Table::Keccak);
     let (keccak_sponge_proof, _) = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
+    if !use_keccak_tables {
+        // We need to connect the challenger state of Logic and CPU tables when the
+        // Keccak tables are not in use.
+        *challenger = challenger_after_cpu;
+    }
     let (logic_proof, _) = prove_table!(logic_stark, Table::Logic);
     let (memory_proof, _) = prove_table!(memory_stark, Table::Memory);
     let (mem_before_proof, mem_before_cap) = prove_table!(mem_before_stark, Table::MemBefore);
