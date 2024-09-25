@@ -1,5 +1,3 @@
-#![feature(used_with_arg)]
-
 zk_evm_common::check_chain_features!();
 
 pub mod block_interval;
