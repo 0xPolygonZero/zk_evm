@@ -20,6 +20,7 @@ use alloy_primitives::B256;
 use alloy_primitives::U256;
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
+use evm_arithmetization::CodeDb;
 use keccak_hash::keccak;
 use structlogprime::normalize_structlog;
 use tokio::time::timeout;
@@ -109,10 +110,11 @@ pub(crate) fn generate_jumpdest_table(
     tx: &Transaction,
     struct_log: &[StructLog],
     tx_traces: &BTreeMap<Address, TxnTrace>,
-) -> anyhow::Result<JumpDestTableWitness> {
+) -> anyhow::Result<(JumpDestTableWitness, CodeDb)> {
     trace!("Generating JUMPDEST table for tx: {}", tx.hash);
 
     let mut jumpdest_table = JumpDestTableWitness::default();
+    let mut code_db = CodeDb::default();
 
     // This map does not contain `initcodes`.
     let callee_addr_to_code_hash: HashMap<Address, H256> = tx_traces
@@ -136,10 +138,10 @@ pub(crate) fn generate_jumpdest_table(
 
     let entrypoint_code_hash: H256 = match tx.to {
         Some(to_address) if PRECOMPILE_ADDRESSES.contains(&to_address) => {
-            return Ok(jumpdest_table)
+            return Ok((jumpdest_table, code_db))
         }
         Some(to_address) if callee_addr_to_code_hash.contains_key(&to_address).not() => {
-            return Ok(jumpdest_table)
+            return Ok((jumpdest_table, code_db))
         }
         Some(to_address) => callee_addr_to_code_hash[&to_address],
         None => {
@@ -297,6 +299,7 @@ pub(crate) fn generate_jumpdest_table(
                 let memory: Vec<u8> = mem_res.unwrap().concat();
 
                 let init_code = &memory[offset..offset + size];
+                code_db.insert(init_code.to_vec());
                 let init_code_hash = keccak(init_code);
                 call_stack.push((init_code_hash, next_ctx_available));
 
@@ -374,7 +377,7 @@ pub(crate) fn generate_jumpdest_table(
             }
         }
     }
-    Ok(jumpdest_table)
+    Ok((jumpdest_table, code_db))
 }
 
 /// This module exists as a workaround for parsing `StructLog`.  The `error`

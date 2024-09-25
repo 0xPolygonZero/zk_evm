@@ -173,9 +173,10 @@ pub(crate) fn set_jumpdest_analysis_inputs_rpc(
                 &vec![]
             };
             trace!(
-                "code: {:?}, code_addr: {:?} <============",
+                "code: {:?}, code_addr: {:?}, {:?} <============",
                 &code,
-                &code_addr
+                &code_addr,
+                code_map.contains_key(code_addr),
             );
             trace!("code_map: {:?}", &code_map);
             prove_context_jumpdests(code, ctx_jumpdests)

@@ -132,11 +132,24 @@ pub fn entrypoint(
                                 }
                             });
 
-                    contract_code
+                    let initmap: HashMap<_, _> = initcodes
                         .into_iter()
-                        .chain(initcodes)
                         .map(|it| (keccak_hash::keccak(&it), it))
-                        .collect()
+                        .collect();
+
+                    let contractmap: HashMap<_, _> = contract_code
+                        .into_iter()
+                        .map(|it| (keccak_hash::keccak(&it), it))
+                        .collect();
+
+                    log::trace!("Initmap {:?}", initmap);
+                    log::trace!("Contractmap {:?}", contractmap);
+                    //log::trace!("DECODER: {:#?}", res);
+
+                    let mut c = code.inner.clone();
+                    c.extend(contractmap);
+                    c.extend(initmap);
+                    c
                 },
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
@@ -643,9 +656,10 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// trace.
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
+#[derive(Clone)]
 struct Hash2Code {
     /// Key must always be [`hash`] of value.
-    inner: HashMap<H256, Vec<u8>>,
+    pub inner: HashMap<H256, Vec<u8>>,
 }
 
 impl Hash2Code {

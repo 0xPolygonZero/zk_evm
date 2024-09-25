@@ -10,14 +10,12 @@ use alloy::{
 };
 use alloy_primitives::Address;
 use anyhow::Context as _;
-use evm_arithmetization::jumpdest::JumpDestTableWitness;
+use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::FuturesOrdered;
 use futures::StreamExt as _;
 use serde::Deserialize;
 use serde_json::json;
-use trace_decoder::{
-    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo, TxnMeta, TxnTrace,
-};
+use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo, TxnTrace};
 use tracing::info;
 
 use super::{
@@ -69,7 +67,7 @@ where
         .get_block(target_block_id, BlockTransactionsKind::Full)
         .await?;
 
-    let jdts: Vec<Option<JumpDestTableWitness>> = match jumpdest_src {
+    let jdts: Vec<Option<(JumpDestTableWitness, CodeDb)>> = match jumpdest_src {
         JumpdestSrc::Simulation => vec![None; tx_results.len()],
         JumpdestSrc::Zero => {
             process_transactions(
@@ -107,7 +105,7 @@ where
                     .context("invalid hex returned from call to eth_getWitness")?,
             }),
             txn_info,
-            code_db: Default::default(),
+            code_db,
         },
         other_data,
     })
@@ -118,7 +116,7 @@ pub async fn process_transactions<'i, I, ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
     tx_traces: I,
-) -> anyhow::Result<Vec<Option<JumpDestTableWitness>>>
+) -> anyhow::Result<Vec<Option<(JumpDestTableWitness, CodeDb)>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -146,7 +144,7 @@ pub async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
     tx_trace: &BTreeMap<H160, TxnTrace>,
-) -> anyhow::Result<Option<JumpDestTableWitness>>
+) -> anyhow::Result<Option<(JumpDestTableWitness, CodeDb)>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -161,7 +159,7 @@ where
         .ok()
         .flatten();
 
-    let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_log| {
+    let jc: Option<(JumpDestTableWitness, CodeDb)> = structlog_opt.and_then(|struct_log| {
         jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces).map_or_else(
             |error| {
                 info!(
@@ -170,15 +168,18 @@ where
                 );
                 None
             },
-            |jdt| {
+            |(jdt, code_db)| {
                 info!(
                     "{:#?}: JumpDestTable generation succeeded with result: {}",
                     tx.hash, jdt
                 );
-                Some(jdt)
+                Some((jdt, code_db))
             },
         )
     });
 
-    Ok(jumpdest_table)
+    // TODO
+    // let jumpdest_table = jc.map(|(j, c)| j);
+
+    Ok(jc)
 }

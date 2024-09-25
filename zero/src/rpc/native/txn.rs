@@ -76,11 +76,14 @@ where
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
 
-    let (code_db, mut tx_traces) = match (pre_trace, diff_trace) {
+    let (mut code_db, mut tx_traces) = match (pre_trace, diff_trace) {
         (
             GethTrace::PreStateTracer(PreStateFrame::Default(read)),
             GethTrace::PreStateTracer(PreStateFrame::Diff(diff)),
-        ) => process_tx_traces(access_list, read, diff).await?,
+        ) => {
+            info!("{:?} {:?} {:?}", tx.hash, read, diff);
+            process_tx_traces(access_list, read, diff).await?
+        }
         _ => unreachable!(),
     };
 
@@ -89,7 +92,7 @@ where
         tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
     };
 
-    let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_logs| {
+    let jc: Option<(JumpDestTableWitness, CodeDb)> = structlog_opt.and_then(|struct_logs| {
         jumpdest::generate_jumpdest_table(tx, &struct_logs, &tx_traces).map_or_else(
             |error| {
                 info!(
@@ -98,14 +101,19 @@ where
                 );
                 None
             },
-            |jdt| {
+            |(jdt, code_db)| {
                 info!(
                     "{:#?}: JumpDestTable generation succeeded with result: {}",
                     tx.hash, jdt
                 );
-                Some(jdt)
+                Some((jdt, code_db))
             },
         )
+    });
+
+    let jumpdest_table = jc.map(|(j, c)| {
+        code_db.extend(c);
+        j
     });
 
     let tx_meta = TxnMeta {
