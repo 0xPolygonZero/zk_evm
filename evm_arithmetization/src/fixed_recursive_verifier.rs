@@ -1893,6 +1893,7 @@ where
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
+                // generate and set a dummy `index_verifier_data` and `proof_with_pis`
                 let index_verifier_data = table_circuits
                     .by_stark_size
                     .keys()
@@ -2080,6 +2081,7 @@ where
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
                 );
+                // generate and set a dummy `proof_with_pis`
                 let common_date = &table_circuit
                     .shrinking_wrappers
                     .last()
