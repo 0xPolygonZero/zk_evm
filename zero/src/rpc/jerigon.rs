@@ -79,36 +79,21 @@ where
             )
             .await?
         }
-        JumpdestSrc::Jerigon => todo!(),
+        JumpdestSrc::Jerigon => todo!("hybrid server bulk struct log retrieval/local jumpdest table generation not yet implemented"),
     };
 
+    let mut code_db = CodeDb::default();
     // weave in the JDTs
     let txn_info = tx_results
         .into_iter()
         .zip(jdts)
-        .map(
-            |(
-                TxnInfo {
-                    traces,
-                    meta:
-                        TxnMeta {
-                            byte_code,
-                            new_receipt_trie_node_byte,
-                            gas_used,
-                            jumpdest_table: _,
-                        },
-                },
-                jdt,
-            )| TxnInfo {
-                traces,
-                meta: TxnMeta {
-                    byte_code,
-                    new_receipt_trie_node_byte,
-                    gas_used,
-                    jumpdest_table: jdt,
-                },
-            },
-        )
+        .map(|(mut tx_info, jdt)| {
+            tx_info.meta.jumpdest_table = jdt.map(|(j, c)| {
+                code_db.extend(c);
+                j
+            });
+            tx_info
+        })
         .collect();
 
     let other_data =
@@ -148,8 +133,11 @@ where
         .map(|(tx, tx_trace)| process_transaction(provider, tx, tx_trace))
         .collect::<FuturesOrdered<_>>();
 
-    let vec_of_res = futures.collect::<Vec<_>>().await;
-    vec_of_res.into_iter().collect::<Result<Vec<_>, _>>()
+    futures
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
 }
 
 /// Processes the transaction with the given transaction hash and updates the
