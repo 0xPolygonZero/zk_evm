@@ -1,2 +1,2 @@
 [build]
-rustflags = []
+rustflags = ["-C", "link-dead-code"]
