@@ -1,3 +1,2 @@
 [build]
-# https://github.com/dtolnay/linkme/issues/94
-rustflags = ["-C", "link-args=-znostart-stop-gc"]
+rustflags = []
