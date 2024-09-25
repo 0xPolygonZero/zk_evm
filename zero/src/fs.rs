@@ -2,7 +2,8 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use anyhow::anyhow;
-use proof_gen::proof_types::GeneratedBlockProof;
+
+use crate::proof_types::GeneratedBlockProof;
 
 pub fn generate_block_proof_file_name(directory: &Option<&str>, block_height: u64) -> PathBuf {
     let mut path = PathBuf::from(directory.unwrap_or(""));

@@ -4,10 +4,10 @@ use alloy::primitives::U256;
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
+use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{BlockProverInput, ProverConfig};
 
 /// The main function for the HTTP mode.

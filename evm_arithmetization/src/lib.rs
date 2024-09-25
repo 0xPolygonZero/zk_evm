@@ -216,22 +216,10 @@ pub mod extension_tower;
 pub mod testing_utils;
 pub mod util;
 
-use generation::segments::SegmentError;
-use generation::TrimmedGenerationInputs;
-use mpt_trie::partial_trie::HashedPartialTrie;
-
 // Public definitions and re-exports
-
-pub type Node = mpt_trie::partial_trie::Node<HashedPartialTrie>;
-/// A type alias for `u64` of a block height.
-pub type BlockHeight = u64;
-
-pub use all_stark::{AllStark, NUM_TABLES};
-pub use fixed_recursive_verifier::AllRecursiveCircuits;
-pub use generation::segments::{GenerationSegmentData, SegmentDataIterator};
-pub use generation::GenerationInputs;
+mod public_types;
+pub use public_types::*;
 pub use starky::config::StarkConfig;
 
-/// Returned type from a `SegmentDataIterator`, needed to prove all segments in
-/// a transaction batch.
-pub type AllData<F> = Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), SegmentError>;
+pub use crate::all_stark::{AllStark, NUM_TABLES};
+pub use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
