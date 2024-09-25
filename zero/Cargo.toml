@@ -30,6 +30,7 @@ hashbrown = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 keccak-hash = { workspace = true }
+linkme = { version = "0.3.28", features = ["used_linker"] }
 lru = { workspace = true }
 num-traits = { workspace = true }
 nunny = { workspace = true }

@@ -5729,6 +5729,7 @@ dependencies = [
  "jemallocator",
  "keccak-hash 0.10.0",
  "libtest-mimic",
+ "linkme",
  "lru",
  "mpt_trie",
  "num-traits",
