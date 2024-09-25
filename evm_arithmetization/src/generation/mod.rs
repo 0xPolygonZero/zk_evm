@@ -25,7 +25,9 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::{GenerationState, State};
-use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
+#[cfg(feature = "eth_mainnet")]
+use crate::generation::trie_extractor::get_state_trie;
+use crate::generation::trie_extractor::{get_receipt_trie, get_txn_trie};
 use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES};
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
@@ -653,6 +655,7 @@ pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> an
                 .read_global_metadata(GlobalMetadata::StateTrieRoot),
         )
         .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
+        #[cfg(feature = "eth_mainnet")]
         log::debug!(
             "Computed state trie: {:?}",
             get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)

@@ -22,10 +22,20 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg(feature = "eth_mainnet")]
 pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,
     pub storage_root: H256,
+    pub code_hash: H256,
+}
+
+#[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg(feature = "cdk_erigon")]
+pub struct AccountRlp {
+    pub nonce: U256,
+    pub balance: U256,
+    pub code_length: U256,
     pub code_hash: H256,
 }
 
@@ -37,11 +47,21 @@ pub struct TrieRootPtrs {
 }
 
 impl Default for AccountRlp {
+    #[cfg(feature = "eth_mainnet")]
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: keccak([]),
+        }
+    }
+    #[cfg(feature = "cdk_erigon")]
+    fn default() -> Self {
+        Self {
+            nonce: U256::zero(),
+            balance: U256::zero(),
+            code_length: U256::zero(),
             code_hash: keccak([]),
         }
     }
@@ -222,6 +242,7 @@ where
     }
 }
 
+#[cfg(feature = "eth_mainnet")]
 fn load_state_trie(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -330,6 +351,7 @@ fn load_state_trie(
     }
 }
 
+#[cfg(feature = "eth_mainnet")]
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,

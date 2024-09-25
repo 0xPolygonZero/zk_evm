@@ -89,6 +89,7 @@ pub(crate) fn read_logs(
         .collect()
 }
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn read_state_rlp_value(
     memory: &MemoryState,
     slice: &MemoryValues,
@@ -130,6 +131,7 @@ pub(crate) fn read_receipt_rlp_value(
     Ok(bytes)
 }
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn get_state_trie<N: PartialTrie>(
     memory: &MemoryState,
     ptr: usize,

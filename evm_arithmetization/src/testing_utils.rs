@@ -72,6 +72,7 @@ pub fn update_beacon_roots_account_storage(
 }
 
 /// Returns the beacon roots contract account from its provided storage trie.
+#[cfg(feature = "eth_mainnet")]
 pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
     AccountRlp {
         storage_root: storage_trie.hash(),
@@ -148,16 +149,10 @@ pub fn update_scalable_account_storage(
     insert_storage(storage_trie, slot.into_uint(), h2u(initial_trie_hash))
 }
 
+#[cfg(feature = "eth_mainnet")]
 pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
     AccountRlp {
         storage_root: storage_trie.hash(),
         ..GLOBAL_EXIT_ROOT_ACCOUNT
-    }
-}
-
-pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
-        storage_root: storage_trie.hash(),
-        ..Default::default()
     }
 }
