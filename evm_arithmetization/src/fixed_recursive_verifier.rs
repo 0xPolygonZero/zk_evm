@@ -3116,7 +3116,7 @@ mod tests {
 
         let mut proofs_without_keccak = vec![];
 
-        for (_i, segment_run) in segment_iterator.enumerate() {
+        for segment_run in segment_iterator {
             // Process and prove segment
             let (_, mut segment_data) =
                 segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
