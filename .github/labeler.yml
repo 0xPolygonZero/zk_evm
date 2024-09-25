@@ -8,11 +8,6 @@
 - changed-files:
   - any-glob-to-any-file: evm_arithmetization/**
 
-# Add 'crate: trace_decoder' label to any changes within 'trace_decoder' folder.
-'crate: trace_decoder':
-- changed-files:
-  - any-glob-to-any-file: trace_decoder/**
-
 # Add 'crate: zero_bin' label to any changes within 'zero' folder.
 'crate: zero_bin':
 - changed-files:

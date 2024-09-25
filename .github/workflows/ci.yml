@@ -43,34 +43,6 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-  test_trace_decoder:
-    name: Test trace_decoder
-    runs-on: zero-ci
-    timeout-minutes: 30
-    env:
-      RUST_LOG: info
-      CARGO_INCREMENTAL: 1
-      RUST_BACKTRACE: 1
-
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: build # build separately so test logs are actually nice
-        run: cargo build --tests --manifest-path trace_decoder/Cargo.toml
-
-      - name: test
-        run: cargo test --release --manifest-path trace_decoder/Cargo.toml -- --nocapture
-
   test_evm_arithmetization:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
