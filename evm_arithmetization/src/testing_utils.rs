@@ -11,6 +11,7 @@ use mpt_trie::{
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
 use plonky2::hash::hash_types::RichField;
+
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
 use crate::generation::TrieInputs;
