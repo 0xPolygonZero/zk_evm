@@ -2973,17 +2973,7 @@ mod tests {
             "Create all recursive circuits",
             AllRecursiveCircuits::<F, C, D>::new(
                 &all_stark,
-                &[
-                    16..17,
-                    8..9,
-                    9..10,
-                    4..5,
-                    8..9,
-                    4..5,
-                    17..18,
-                    17..18,
-                    17..18
-                ],
+                &[16..17, 8..9, 9..10, 4..9, 8..9, 4..7, 17..18, 17..18, 7..18],
                 &config,
             )
         );
@@ -3001,12 +2991,7 @@ mod tests {
 
         let mut proofs_without_keccak = vec![];
 
-        let skip_proofs_before_index = 3;
-        for (i, segment_run) in segment_iterator.enumerate() {
-            if i < skip_proofs_before_index {
-                continue;
-            }
-
+        for segment_run in segment_iterator {
             // Process and prove segment
             let (_, mut segment_data) =
                 segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
@@ -3025,7 +3010,6 @@ mod tests {
             );
 
             proofs_without_keccak.push(segment_proof);
-            break; // Process only one proof
         }
 
         // Verify the generated segment proof
