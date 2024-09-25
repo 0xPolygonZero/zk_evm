@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
-use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
@@ -132,7 +131,7 @@ where
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
     /// We can skip verifying Keccak tables when they are not in use.
-    enable_keccak_tables: BoolTarget,
+    use_keccak_tables: BoolTarget,
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -155,7 +154,7 @@ where
         }
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
-        buffer.write_target_bool(self.enable_keccak_tables)?;
+        buffer.write_target_bool(self.use_keccak_tables)?;
         Ok(())
     }
 
@@ -175,7 +174,7 @@ where
         }
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
-        let enable_keccak_tables = buffer.read_target_bool()?;
+        let use_keccak_tables = buffer.read_target_bool()?;
 
         Ok(Self {
             circuit,
@@ -183,7 +182,7 @@ where
             index_verifier_data: index_verifier_data.try_into().unwrap(),
             public_values,
             cyclic_vk,
-            enable_keccak_tables,
+            use_keccak_tables,
         })
     }
 }
@@ -792,8 +791,8 @@ where
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
-        let enable_keccak_tables = builder.add_virtual_bool_target_safe();
-        let disable_keccak_tables = builder.not(enable_keccak_tables);
+        let use_keccak_tables = builder.add_virtual_bool_target_safe();
+        let skip_keccak_tables = builder.not(use_keccak_tables);
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -816,7 +815,7 @@ where
         for i in KECCAK_TABLES_INDICES {
             for h in &pis[i].trace_cap {
                 for t in h {
-                    let trace_cap_check = builder.mul(disable_keccak_tables.target, *t);
+                    let trace_cap_check = builder.mul(skip_keccak_tables.target, *t);
                     builder.assert_zero(trace_cap_check);
                 }
             }
@@ -843,8 +842,8 @@ where
                         ctl_challenges.challenges[j].gamma,
                         pi.ctl_challenges.challenges[j].gamma,
                     );
-                    let beta_check = builder.mul(enable_keccak_tables.target, beta_diff);
-                    let gamma_check = builder.mul(enable_keccak_tables.target, gamma_diff);
+                    let beta_check = builder.mul(use_keccak_tables.target, beta_diff);
+                    let gamma_check = builder.mul(use_keccak_tables.target, gamma_diff);
                     builder.assert_zero(beta_check);
                     builder.assert_zero(gamma_check);
                 } else {
@@ -865,24 +864,25 @@ where
             builder.connect(before, s);
         }
         // Check that the challenger state is consistent between proofs.
+        let mut prev_state = pis[0].challenger_state_after.as_ref().to_vec();
+        let state_len = prev_state.len();
         for i in 1..NUM_TABLES {
-            for (&before, &after) in zip_eq(
-                pis[i].challenger_state_before.as_ref(),
-                pis[i - 1].challenger_state_after.as_ref(),
-            ) {
-                builder.connect(before, after);
-            }
-            if KECCAK_TABLES_INDICES.contains(&i) {
-                // Ensure that the challenger state remains consistent before and after Keccak
-                // tables.
-                for (&before, &after) in zip_eq(
-                    pis[i].challenger_state_before.as_ref(),
-                    pis[i].challenger_state_after.as_ref(),
-                ) {
-                    let state_difference = builder.sub(before, after);
-                    let challenger_state_check =
-                        builder.mul(disable_keccak_tables.target, state_difference);
-                    builder.assert_zero(challenger_state_check);
+            let current_state_before = pis[i].challenger_state_before.as_ref();
+            let current_state_after = pis[i].challenger_state_after.as_ref();
+            for j in 0..state_len {
+                if KECCAK_TABLES_INDICES.contains(&i) {
+                    // Ensure that the challenger state:
+                    // 1) prev == current_before, when using keccak
+                    let diff = builder.sub(prev_state[j], current_state_before[j]);
+                    let check = builder.mul(use_keccak_tables.target, diff);
+                    builder.assert_zero(check);
+                    // 2) prev <- current_after, when using keccak
+                    // 3) prev <- prev, when skipping using keccak
+                    prev_state[j] =
+                        builder.select(use_keccak_tables, current_state_after[j], prev_state[j]);
+                } else {
+                    builder.connect(prev_state[j], current_state_before[j]);
+                    prev_state[j] = current_state_after[j];
                 }
             }
         }
@@ -906,7 +906,7 @@ where
         // When Keccak Tables are disabled, Keccak Tables' ctl_zs_first should be 0s.
         for &i in KECCAK_TABLES_INDICES.iter() {
             for &t in pis[i].ctl_zs_first.iter() {
-                let ctl_check = builder.mul(disable_keccak_tables.target, t);
+                let ctl_check = builder.mul(skip_keccak_tables.target, t);
                 builder.assert_zero(ctl_check);
             }
         }
@@ -943,7 +943,7 @@ where
             if KECCAK_TABLES_INDICES.contains(&i) {
                 builder
                     .conditionally_verify_proof_or_dummy::<C>(
-                        enable_keccak_tables,
+                        use_keccak_tables,
                         &recursive_proofs[i],
                         &inner_verifier_data,
                         inner_common_data[i],
@@ -986,7 +986,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
-            enable_keccak_tables,
+            use_keccak_tables,
         }
     }
 
@@ -1885,45 +1885,6 @@ where
             timing,
             abort_signal.clone(),
         )?;
-        info!(
-            "Debugging trace_cap.0[0]: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
-                .proof
-                .trace_cap
-                .0[0]
-        );
-
-        info!(
-            "Debugging openings.ctl_zs_first: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::Keccak]
-                .proof
-                .openings
-                .ctl_zs_first
-        );
-
-        info!(
-            "Debugging trace_cap.0[0] for KeccakSponge: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
-                .proof
-                .trace_cap
-                .0[0]
-        );
-
-        info!(
-            "Debugging openings.ctl_zs_first for KeccakSponge: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::KeccakSponge]
-                .proof
-                .openings
-                .ctl_zs_first
-        );
-
-        info!(
-            "Debugging openings.ctl_zs_first for Logic: {:?}",
-            &all_proof.multi_proof.stark_proofs[*Table::Logic]
-                .proof
-                .openings
-                .ctl_zs_first
-        );
 
         let mut root_inputs = PartialWitness::new();
 
@@ -1971,7 +1932,7 @@ where
         })?;
 
         // TODO(sdeng): Set to false when this segment contains no Keccak operations.
-        root_inputs.set_bool_target(self.root.enable_keccak_tables, true);
+        root_inputs.set_bool_target(self.root.use_keccak_tables, true);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2114,7 +2075,7 @@ where
         })?;
 
         // TODO(sdeng): Set to false when this segment contains no Keccak operations.
-        root_inputs.set_bool_target(self.root.enable_keccak_tables, true);
+        root_inputs.set_bool_target(self.root.use_keccak_tables, true);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
