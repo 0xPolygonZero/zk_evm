@@ -26,7 +26,7 @@ global ec_twisted_double_retself:
 // Check if (x,y)==(0,0)
 %macro ec_isidentity
     // stack: x, y
-    ADD // OR
+    OR
     // stack: x | y
     ISZERO
     // stack: (x,y) == (0,0)

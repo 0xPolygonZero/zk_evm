@@ -214,7 +214,7 @@ global exc_stop:
 
     // Check the program counter.
     // stack: addr_registers, trap_info
-    DUP2 %as_u32_no_and
+    PUSH 0x100000000 DUP3 MOD
     // stack: program_counter, addr_registers, trap_info
     DUP2
     MLOAD_GENERAL
@@ -223,8 +223,9 @@ global exc_stop:
 
     // Check is_kernel_mode.
     // stack: addr_registers, trap_info
-    DUP2 %shr_const(32)
-    %as_u32_no_and
+    PUSH 0x100000000
+    DUP3 %shr_const(32)
+    MOD
     // stack: is_kernel_mode, addr_registers, trap_info
     DUP2 %increment
     MLOAD_GENERAL
