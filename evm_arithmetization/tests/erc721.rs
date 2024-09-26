@@ -14,14 +14,13 @@ use evm_arithmetization::testing_utils::{
     update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::{AllStark, Node, StarkConfig};
+use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
-use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 
@@ -191,7 +190,7 @@ fn test_erc721() -> anyhow::Result<()> {
         trie_roots_after,
         contract_code,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
-        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

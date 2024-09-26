@@ -6,8 +6,7 @@ use std::{
 };
 
 pub use evm_arithmetization::NUM_TABLES;
-use evm_arithmetization::{AllStark, StarkConfig};
-use proof_gen::types::AllRecursiveCircuits;
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, StarkConfig};
 
 use crate::parsing::{parse_range_exclusive, RangeParseError};
 

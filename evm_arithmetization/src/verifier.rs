@@ -156,88 +156,31 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 
     let stark_proofs = &all_proof.multi_proof.stark_proofs;
 
-    verify_stark_proof_with_challenges(
-        arithmetic_stark,
-        &stark_proofs[*Table::Arithmetic].proof,
-        &stark_challenges[*Table::Arithmetic],
-        Some(&ctl_vars_per_table[*Table::Arithmetic]),
-        &[],
-        config,
-    )?;
+    macro_rules! verify_table {
+        ($stark:ident, $table:expr) => {
+            verify_stark_proof_with_challenges(
+                $stark,
+                &stark_proofs[*$table].proof,
+                &stark_challenges[*$table],
+                Some(&ctl_vars_per_table[*$table]),
+                &[],
+                config,
+            )?;
+        };
+    }
 
-    verify_stark_proof_with_challenges(
-        byte_packing_stark,
-        &stark_proofs[*Table::BytePacking].proof,
-        &stark_challenges[*Table::BytePacking],
-        Some(&ctl_vars_per_table[*Table::BytePacking]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        cpu_stark,
-        &stark_proofs[*Table::Cpu].proof,
-        &stark_challenges[*Table::Cpu],
-        Some(&ctl_vars_per_table[*Table::Cpu]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        keccak_stark,
-        &stark_proofs[*Table::Keccak].proof,
-        &stark_challenges[*Table::Keccak],
-        Some(&ctl_vars_per_table[*Table::Keccak]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        keccak_sponge_stark,
-        &stark_proofs[*Table::KeccakSponge].proof,
-        &stark_challenges[*Table::KeccakSponge],
-        Some(&ctl_vars_per_table[*Table::KeccakSponge]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        logic_stark,
-        &stark_proofs[*Table::Logic].proof,
-        &stark_challenges[*Table::Logic],
-        Some(&ctl_vars_per_table[*Table::Logic]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        memory_stark,
-        &stark_proofs[*Table::Memory].proof,
-        &stark_challenges[*Table::Memory],
-        Some(&ctl_vars_per_table[*Table::Memory]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        mem_before_stark,
-        &stark_proofs[*Table::MemBefore].proof,
-        &stark_challenges[*Table::MemBefore],
-        Some(&ctl_vars_per_table[*Table::MemBefore]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        mem_after_stark,
-        &stark_proofs[*Table::MemAfter].proof,
-        &stark_challenges[*Table::MemAfter],
-        Some(&ctl_vars_per_table[*Table::MemAfter]),
-        &[],
-        config,
-    )?;
+    verify_table!(arithmetic_stark, Table::Arithmetic);
+    verify_table!(byte_packing_stark, Table::BytePacking);
+    verify_table!(cpu_stark, Table::Cpu);
+    verify_table!(keccak_stark, Table::Keccak);
+    verify_table!(keccak_sponge_stark, Table::KeccakSponge);
+    verify_table!(logic_stark, Table::Logic);
+    verify_table!(memory_stark, Table::Memory);
+    verify_table!(mem_before_stark, Table::MemBefore);
+    verify_table!(mem_after_stark, Table::MemAfter);
+
     #[cfg(feature = "cdk_erigon")]
-    verify_stark_proof_with_challenges(
-        poseidon_stark,
-        &stark_proofs[*Table::Poseidon].proof,
-        &stark_challenges[*Table::Poseidon],
-        Some(&ctl_vars_per_table[*Table::Poseidon]),
-        &[],
-        config,
-    )?;
+    verify_table!(poseidon_stark, Table::Poseidon);
 
     let public_values = all_proof.public_values;
 

@@ -1,10 +1,12 @@
 use core::default::Default;
 use core::option::Option::None;
+use core::str::FromStr as _;
 use core::time::Duration;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Not as _;
 
+use __compat_primitive_types::H160;
 use __compat_primitive_types::H256;
 use alloy::primitives::Address;
 use alloy::primitives::U160;
@@ -24,8 +26,8 @@ use evm_arithmetization::CodeDb;
 use keccak_hash::keccak;
 use structlogprime::normalize_structlog;
 use tokio::time::timeout;
+use trace_decoder::is_precompile;
 use trace_decoder::TxnTrace;
-use trace_decoder::PRECOMPILE_ADDRESSES;
 use tracing::trace;
 
 /// The maximum time we are willing to wait for a structlog before failing over
@@ -137,7 +139,7 @@ pub(crate) fn generate_jumpdest_table(
     );
 
     let entrypoint_code_hash: H256 = match tx.to {
-        Some(to_address) if PRECOMPILE_ADDRESSES.contains(&to_address) => {
+        Some(to_address) if is_precompile(H160::from_str(&to_address.to_string())?) => {
             return Ok((jumpdest_table, code_db))
         }
         Some(to_address) if callee_addr_to_code_hash.contains_key(&to_address).not() => {
@@ -225,12 +227,12 @@ pub(crate) fn generate_jumpdest_table(
                     call_stack.push((next_code_hash, next_ctx_available));
                 };
 
-                if PRECOMPILE_ADDRESSES.contains(&callee_address) {
+                if is_precompile(H160::from_str(&callee_address.to_string())?) {
                     trace!("Called precompile at address {}.", &callee_address);
                 };
 
                 if callee_addr_to_code_hash.contains_key(&callee_address).not()
-                    && PRECOMPILE_ADDRESSES.contains(&callee_address).not()
+                    && is_precompile(H160::from_str(&callee_address.to_string())?).not()
                 {
                     // This case happens if calling an EOA. This is described
                     // under opcode `STOP`: https://www.evm.codes/#00?fork=cancun

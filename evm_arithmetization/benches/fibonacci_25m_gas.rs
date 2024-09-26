@@ -20,14 +20,13 @@ use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
-use evm_arithmetization::Node;
+use evm_arithmetization::{Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
-use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
 type F = GoldilocksField;
 
@@ -183,7 +182,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         checkpoint_state_trie_root: H256(hex!(
             "fe07ff6d1ab215df17884b89112ccf2373597285a56c5902150313ad1a53ee57"
         )),
-        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         ger_data: None,
         block_metadata,
         txn_number_before: 0.into(),

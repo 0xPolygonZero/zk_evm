@@ -136,13 +136,15 @@ impl Display for DiffPoint {
 /// Meta information for a node in a trie.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct NodeInfo {
-    key: Nibbles,
-
+    /// Mpt trie node key.
+    pub key: Nibbles,
     /// The direct value associated with the node (only applicable to `Leaf` &
     /// `Branch` nodes).
-    value: Option<Vec<u8>>,
-    node_type: TrieNodeType,
-    hash: H256,
+    pub value: Option<Vec<u8>>,
+    /// Type of this node.
+    pub node_type: TrieNodeType,
+    /// Node hash.
+    pub hash: H256,
 }
 
 impl Display for NodeInfo {

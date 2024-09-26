@@ -55,7 +55,6 @@ const _DEVELOPER_DOCS: () = ();
 mod interface;
 
 pub use interface::*;
-use plonky2::field::goldilocks_field::GoldilocksField;
 
 mod type1;
 // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -67,14 +66,12 @@ mod typed_mpt;
 mod wire;
 
 pub use core::entrypoint;
-pub use core::PRECOMPILE_ADDRESSES;
+pub use core::is_precompile;
 
 mod core;
 
-/// The base field on which statements are being proven.
-// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
-pub type Field = GoldilocksField;
-
+/// Implementation of the observer for the trace decoder.
+pub mod observer;
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {
     use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};

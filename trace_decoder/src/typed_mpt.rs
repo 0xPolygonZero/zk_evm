@@ -4,7 +4,7 @@ use core::fmt;
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use copyvec::CopyVec;
-use ethereum_types::{Address, H256};
+use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
@@ -125,6 +125,11 @@ impl TrieKey {
     }
     pub fn from_address(address: Address) -> Self {
         Self::from_hash(keccak_hash::keccak(address))
+    }
+    pub fn from_slot_position(pos: U256) -> Self {
+        let mut bytes = [0; 32];
+        pos.to_big_endian(&mut bytes);
+        Self::from_hash(keccak_hash::keccak(H256::from_slice(&bytes)))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
@@ -266,6 +271,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
+/// TODO(0xaatif): document this after refactoring is done https://github.com/0xPolygonZero/zk_evm/issues/275
 pub trait StateTrie {
     fn insert_by_address(
         &mut self,
@@ -274,6 +280,7 @@ pub trait StateTrie {
     ) -> anyhow::Result<Option<AccountRlp>>;
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
+    #[allow(dead_code)]
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
     /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
     fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
@@ -422,8 +429,11 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
+    pub fn get(&mut self, key: &TrieKey) -> Option<&[u8]> {
+        self.untyped.get(key.into_nibbles())
+    }
     pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
-        let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
+        let prev = self.get(&key).map(Vec::from);
         self.untyped.insert(key.into_nibbles(), value)?;
         Ok(prev)
     }
