@@ -25,9 +25,12 @@ use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
 use crate::{
-    typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+    typed_mpt::{
+        ReceiptTrie, StateMpt, StateTrie, StorageTrie, TraceDecoderStateTrie, TransactionTrie,
+        TrieKey,
+    },
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    Field, OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage,
+    EvmType, Field, OtherBlockData, SeparateStateTriePreImage, SeparateStorageTriesPreImage,
     SeparateTriePreImages, TxnInfo, TxnMeta, TxnTrace,
 };
 
@@ -130,67 +133,111 @@ pub fn entrypoint(
 /// representations.
 fn start(
     pre_images: BlockTraceTriePreImages,
-) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
+) -> anyhow::Result<(
+    TraceDecoderStateTrie,
+    Option<BTreeMap<H256, StorageTrie>>,
+    Hash2Code,
+)> {
     Ok(match pre_images {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
         //                refactor our convoluted input types
         BlockTraceTriePreImages::Separate(SeparateTriePreImages {
-            state: SeparateTriePreImage::Direct(state),
-            storage: SeparateStorageTriesPreImage::MultipleTries(storage),
+            state: SeparateStateTriePreImage::Direct(state),
+            storage,
         }) => {
-            let state = state.items().try_fold(
-                StateMpt::default(),
-                |mut acc, (nibbles, hash_or_val)| {
-                    let path = TrieKey::from_nibbles(nibbles);
-                    match hash_or_val {
-                        mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                            #[expect(deprecated)] // this is MPT specific
-                            acc.insert_by_hashed_address(
-                                path.into_hash()
-                                    .context("invalid path length in direct state trie")?,
-                                AccountRlp::Type1(
-                                    rlp::decode(&bytes)
-                                        .context("invalid AccountRlp in direct state trie")?,
-                                ),
-                            )?;
-                        }
-                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                            acc.insert_hash_by_key(path, h)?;
-                        }
-                    };
-                    anyhow::Ok(acc)
-                },
-            )?;
-            let storage = storage
-                .into_iter()
-                .map(|(k, SeparateTriePreImage::Direct(v))| {
-                    v.items()
-                        .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
+            match state {
+                InputStateTrie::Type1(state_mpt) => {
+                    let state_mpt = state_mpt.items().try_fold(
+                        StateMpt::default(),
+                        |mut acc, (nibbles, hash_or_val)| {
                             let path = TrieKey::from_nibbles(nibbles);
                             match hash_or_val {
-                                mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                    acc.insert(path, value)?;
+                                mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                    #[expect(deprecated)] // this is MPT specific
+                                    acc.insert_by_hashed_address(
+                                        path.into_hash()
+                                            .context("invalid path length in direct state trie")?,
+                                        AccountRlp::Type1(
+                                            rlp::decode(&bytes).context(
+                                                "invalid AccountRlp in direct state trie",
+                                            )?,
+                                        ),
+                                    )?;
                                 }
                                 mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                    acc.insert_hash(path, h)?;
+                                    acc.insert_hash_by_key(path, h)?;
                                 }
                             };
                             anyhow::Ok(acc)
+                        },
+                    )?;
+                    let storage = storage.expect("Type 1 must have storage tries.");
+                    let SeparateStorageTriesPreImage::MultipleTries(storage) = storage;
+                    let storage = storage
+                        .into_iter()
+                        .map(|(k, v)| {
+                            v.items()
+                                .try_fold(
+                                    StorageTrie::default(),
+                                    |mut acc, (nibbles, hash_or_val)| {
+                                        let path = TrieKey::from_nibbles(nibbles);
+                                        match hash_or_val {
+                                            mpt_trie::trie_ops::ValOrHash::Val(value) => {
+                                                acc.insert(path, value)?;
+                                            }
+                                            mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                                acc.insert_hash(path, h)?;
+                                            }
+                                        };
+                                        anyhow::Ok(acc)
+                                    },
+                                )
+                                .map(|v| (k, v))
                         })
-                        .map(|v| (k, v))
-                })
-                .collect::<Result<_, _>>()?;
-            (state, storage, Hash2Code::new())
+                        .collect::<Result<_, _>>()?;
+                    (
+                        TraceDecoderStateTrie::Type1(state_mpt),
+                        Some(storage),
+                        Hash2Code::new(),
+                    )
+                }
+                InputStateTrie::Type2(_) => {
+                    unimplemented!()
+                }
+            }
         }
-        BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
-            let instructions = crate::wire::parse(&compact)
-                .context("couldn't parse instructions from binary format")?;
-            let crate::type1::Frontend {
-                state,
-                storage,
-                code,
-            } = crate::type1::frontend(instructions)?;
-            (state, storage, code.into_iter().map(Into::into).collect())
+        BlockTraceTriePreImages::Combined(CombinedPreImages { evm_type, compact }) => {
+            match evm_type {
+                EvmType::Type1 => {
+                    let instructions = crate::wire::parse(&compact)
+                        .context("couldn't parse instructions from binary format")?;
+                    let crate::type1::Frontend {
+                        state,
+                        storage,
+                        code,
+                    } = crate::type1::frontend(instructions)?;
+                    (
+                        TraceDecoderStateTrie::Type1(state),
+                        Some(storage),
+                        code.into_iter().map(Into::into).collect(),
+                    )
+                }
+                EvmType::Type2 => {
+                    let instructions = crate::wire::parse(&compact)
+                        .context("couldn't parse instructions from binary format")?;
+                    let crate::type2::Frontend {
+                        trie,
+                        // Do we need it?
+                        collation,
+                        code,
+                    } = crate::type2::frontend(instructions)?;
+                    (
+                        TraceDecoderStateTrie::Type2(trie),
+                        None,
+                        code.into_iter().map(Into::into).collect(),
+                    )
+                }
+            }
         }
     })
 }
@@ -249,7 +296,7 @@ fn test_batch() {
 }
 
 #[derive(Debug)]
-struct Batch<StateTrieT> {
+struct Batch {
     pub first_txn_ix: usize,
     pub gas_used: u64,
     /// See [`GenerationInputs::contract_code`].
@@ -257,7 +304,7 @@ struct Batch<StateTrieT> {
     /// For each transaction in batch, in order.
     pub byte_code: Vec<NonEmpty<Vec<u8>>>,
 
-    pub before: IntraBlockTries<StateTrieT>,
+    pub before: IntraBlockTries,
     pub after: TrieRoots,
 
     /// Empty for all but the final batch
@@ -267,8 +314,8 @@ struct Batch<StateTrieT> {
 /// [`evm_arithmetization::generation::TrieInputs`],
 /// generic over state trie representation.
 #[derive(Debug)]
-struct IntraBlockTries<StateTrieT> {
-    pub state: StateTrieT,
+struct IntraBlockTries {
+    pub state: TraceDecoderStateTrie,
     pub storage: BTreeMap<H256, StorageTrie>,
     pub transaction: TransactionTrie,
     pub receipt: ReceiptTrie,
@@ -277,7 +324,7 @@ struct IntraBlockTries<StateTrieT> {
 /// Does the main work mentioned in the [module documentation](super).
 fn middle<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
-    mut state_trie: StateTrieT,
+    mut state_trie: TraceDecoderStateTrie,
     // storage at the beginning of the block
     mut storage_tries: BTreeMap<H256, StorageTrie>,
     // None represents a dummy transaction that should not increment the transaction index
@@ -288,22 +335,24 @@ fn middle<StateTrieT: StateTrie + Clone>(
     parent_beacon_block_root: H256,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
-) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
-    // Initialise the storage tries.
-    for (haddr, acct) in state_trie.iter() {
-        let storage = storage_tries.entry(haddr).or_insert({
-            let mut it = StorageTrie::default();
-            it.insert_hash(
-                TrieKey::default(),
-                acct.storage_root().expect("Should be a Type1 account."),
+) -> anyhow::Result<Vec<Batch>> {
+    // Initialise the storage tries (only for type 1).
+    if matches!(state_trie, TraceDecoderStateTrie::Type1(_)) {
+        for (haddr, acct) in state_trie.iter() {
+            let storage = storage_tries.entry(haddr).or_insert({
+                let mut it = StorageTrie::default();
+                it.insert_hash(
+                    TrieKey::default(),
+                    acct.storage_root().expect("Should be a Type1 account."),
+                )
+                .expect("empty trie insert cannot fail");
+                it
+            });
+            ensure!(
+                storage.root() == acct.storage_root().expect("Should be a Type1 account."),
+                "inconsistent initial storage for hashed address {haddr:x}"
             )
-            .expect("empty trie insert cannot fail");
-            it
-        });
-        ensure!(
-            storage.root() == acct.storage_root().expect("Should be a Type1 account."),
-            "inconsistent initial storage for hashed address {haddr:x}"
-        )
+        }
     }
 
     // These are the per-block tries.
@@ -549,13 +598,13 @@ fn middle<StateTrieT: StateTrie + Clone>(
 ///
 /// This is cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
-fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
+fn do_beacon_hook(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
     parent_beacon_block_root: H256,
     trim_state: &mut BTreeSet<TrieKey>,
-    state_trie: &mut StateTrieT,
+    state_trie: &mut TraceDecoderStateTrie,
 ) -> anyhow::Result<()> {
     let history_timestamp = block_timestamp % HISTORY_BUFFER_LENGTH.value;
     let history_timestamp_next = history_timestamp + HISTORY_BUFFER_LENGTH.value;

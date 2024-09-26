@@ -266,6 +266,45 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum TraceDecoderStateTrie {
+    Type1(StateMpt),
+    Type2(StateSmt),
+}
+
+impl TraceDecoderStateTrie {
+    pub fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>> {
+        unimplemented!()
+    }
+
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+
+    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        unimplemented!()
+    }
+
+    pub fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+        unimplemented!()
+    }
+    /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
+    pub fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        vec![(H256::zero(), AccountRlp::Type1(Type1AccountRlp::default()))].into_iter()
+    }
+
+    pub fn root(&self) -> H256 {
+        unimplemented!()
+    }
+}
+
 pub trait StateTrie {
     fn insert_by_address(
         &mut self,
@@ -375,6 +414,7 @@ impl From<StateMpt> for HashedPartialTrie {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
     hashed_out: BTreeMap<TrieKey, H256>,

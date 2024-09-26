@@ -16,6 +16,7 @@ use super::linked_list::{
 };
 #[cfg(not(feature = "cdk_erigon"))]
 use super::TrimmedTrieInputs;
+use super::{InputStateTrie, TrimmedTrieInputs};
 use crate::cpu::kernel::constants::mpt_type::PartialMptType;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
@@ -329,7 +330,6 @@ where
     }
 }
 
-#[cfg(not(feature = "cdk_erigon"))]
 fn load_state_trie(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -393,8 +393,9 @@ fn load_state_trie(
             Ok(node_ptr)
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
+            let account: Type1AccountRlp =
+                rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let Type1AccountRlp {
                 nonce,
                 balance,
                 storage_root,
@@ -438,7 +439,6 @@ fn load_state_trie(
     }
 }
 
-#[cfg(not(feature = "cdk_erigon"))]
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -493,8 +493,9 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
+            let account: Type1AccountRlp =
+                rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let Type1AccountRlp {
                 nonce,
                 balance,
                 storage_root,
@@ -647,7 +648,6 @@ type TriePtrsLinkedLists = (
     Vec<Option<U256>>,
 );
 
-#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
@@ -661,13 +661,15 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
+        .as_ref()
+        .expect("Type 1 must have storage tries.")
         .iter()
         .map(|(hashed_address, storage_trie)| {
             let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
                 .expect("An H256 is 32 bytes long");
             (key, storage_trie)
         })
-        .collect();
+        .collect::<HashMap<_, _>>();
 
     let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];
@@ -677,16 +679,20 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 
     let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
-    get_state_and_storage_leaves(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        &mut state_leaves,
-        &mut storage_leaves,
-        &mut trie_data,
-        accounts_pointers,
-        storage_pointers,
-        &storage_tries_by_state_key,
-    )?;
+    match &trie_inputs.state_trie {
+        InputStateTrie::Type1(trie) => get_state_and_storage_leaves(
+            trie,
+            empty_nibbles(),
+            &mut state_leaves,
+            &mut storage_leaves,
+            &mut trie_data,
+            accounts_pointers,
+            storage_pointers,
+            &storage_tries_by_state_key,
+        )?,
+
+        InputStateTrie::Type2(_) => panic!("State trie must be type 1."),
+    };
 
     Ok((
         TrieRootPtrs {
@@ -700,20 +706,20 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     ))
 }
 
-#[cfg(feature = "cdk_erigon")]
-pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
+pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts_type2(
     trie_inputs: &TrieInputs,
 ) -> Result<TriePtrsLinkedLists, ProgramError> {
     unimplemented!()
 }
 
-#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,
 ) -> Result<usize, ProgramError> {
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
+        .as_ref()
+        .expect("Must have storage tries in type 1.")
         .iter()
         .map(|(hashed_address, storage_trie)| {
             let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
@@ -722,12 +728,15 @@ pub(crate) fn load_state_mpt(
         })
         .collect();
 
-    load_state_trie(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        trie_data,
-        &storage_tries_by_state_key,
-    )
+    match &trie_inputs.state_trie {
+        InputStateTrie::Type1(trie) => load_state_trie(
+            trie,
+            empty_nibbles(),
+            trie_data,
+            &storage_tries_by_state_key,
+        ),
+        InputStateTrie::Type2(_) => panic!("Trie inputs must be type 1."),
+    }
 }
 
 pub mod transaction_testing {

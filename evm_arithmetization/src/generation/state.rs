@@ -392,8 +392,9 @@ impl<F: RichField> GenerationState<F> {
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        #[cfg(not(feature = "cdk_erigon"))]
-        {
+        if cfg!(feature = "cdk_erigon") {
+            unimplemented!()
+        } else {
             let generation_state = self.get_mut_generation_state();
             let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
                 load_linked_lists_and_txn_and_receipt_mpts(
@@ -422,8 +423,6 @@ impl<F: RichField> GenerationState<F> {
 
             trie_roots_ptrs
         }
-        #[cfg(feature = "cdk_erigon")]
-        unimplemented!();
     }
 
     pub(crate) fn new(

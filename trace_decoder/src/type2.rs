@@ -162,7 +162,7 @@ fn node2trie(
         let address = ethereum_types::Address::from_slice(&address);
         let collated = collated.entry(address).or_default();
         let value = ethereum_types::U256::from_big_endian(&value);
-        let key = match node_type {
+        let key: smt_trie::smt::Key = match node_type {
             SmtLeafType::Balance => {
                 ensure!(collated.balance.is_none(), "double write of field");
                 collated.balance = Some(value);

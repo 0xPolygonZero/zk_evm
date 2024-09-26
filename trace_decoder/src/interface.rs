@@ -5,13 +5,22 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ethereum_types::{Address, U256};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+use evm_arithmetization::{
+    generation::InputStateTrie,
+    proof::{BlockHashes, BlockMetadata},
+};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use serde::{Deserialize, Serialize};
 
 use crate::Field;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum EvmType {
+    Type1,
+    Type2,
+}
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -50,24 +59,25 @@ pub enum BlockTraceTriePreImages {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SeparateTriePreImages {
     /// State trie.
-    pub state: SeparateTriePreImage,
+    pub state: SeparateStateTriePreImage,
     /// Storage trie.
-    pub storage: SeparateStorageTriesPreImage,
+    pub storage: Option<SeparateStorageTriesPreImage>,
 }
 
 /// A trie pre-image where state & storage are separate.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SeparateTriePreImage {
+pub enum SeparateStateTriePreImage {
     /// Storage or state trie format that can be processed as is, as it
     /// corresponds to the internal format.
-    Direct(HashedPartialTrie),
+    Direct(InputStateTrie),
 }
 
 /// A trie pre-image where both state & storage are combined into one payload.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CombinedPreImages {
+    pub evm_type: EvmType,
     /// Compact combined state and storage tries.
     #[serde(with = "crate::hex")]
     pub compact: Vec<u8>,
@@ -79,7 +89,7 @@ pub struct CombinedPreImages {
 pub enum SeparateStorageTriesPreImage {
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
-    MultipleTries(HashMap<H256, SeparateTriePreImage>),
+    MultipleTries(HashMap<H256, HashedPartialTrie>),
 }
 
 /// Info specific to txns in the block.

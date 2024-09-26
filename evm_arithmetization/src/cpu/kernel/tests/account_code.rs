@@ -29,111 +29,116 @@ pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: &TrieInputs,
 ) {
-    // Load all MPTs.
-    let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-        load_linked_lists_and_txn_and_receipt_mpts(
-            &mut interpreter.generation_state.accounts_pointers,
-            &mut interpreter.generation_state.storage_pointers,
-            trie_inputs,
-        )
-        .expect("Invalid MPT data for preinitialization");
-
-    interpreter.generation_state.memory.contexts[0].segments
-        [Segment::AccountsLinkedList.unscale()]
-    .content = state_leaves;
-    interpreter.generation_state.memory.contexts[0].segments
-        [Segment::StorageLinkedList.unscale()]
-    .content = storage_leaves;
-    interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-        trie_data.clone();
-    interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
-
-    interpreter.generation_state.insert_all_slots_in_memory();
-    interpreter.generation_state.insert_all_accounts_in_memory();
-
-    if trie_root_ptrs.state_root_ptr.is_none() {
-        trie_root_ptrs.state_root_ptr = Some(
-            load_state_mpt(
-                &trie_inputs.trim(),
-                &mut interpreter.generation_state.memory.contexts[0].segments
-                    [Segment::TrieData.unscale()]
-                .content,
+    if cfg!(feature = "cdk_erigon") {
+        unimplemented!()
+    } else {
+        // Load all MPTs.
+        let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(
+                &mut interpreter.generation_state.accounts_pointers,
+                &mut interpreter.generation_state.storage_pointers,
+                trie_inputs,
             )
-            .expect("Invalid MPT data for preinitialization"),
-        );
-    }
+            .expect("Invalid MPT data for preinitialization");
 
-    let accounts_len = Segment::AccountsLinkedList as usize
-        + interpreter.generation_state.memory.contexts[0].segments
+        interpreter.generation_state.memory.contexts[0].segments
             [Segment::AccountsLinkedList.unscale()]
-        .content
-        .len();
-    let storage_len = Segment::StorageLinkedList as usize
-        + interpreter.generation_state.memory.contexts[0].segments
+        .content = state_leaves;
+        interpreter.generation_state.memory.contexts[0].segments
             [Segment::StorageLinkedList.unscale()]
+        .content = storage_leaves;
+        interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()]
+            .content = trie_data.clone();
+        interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
+
+        interpreter.generation_state.insert_all_slots_in_memory();
+        interpreter.generation_state.insert_all_accounts_in_memory();
+
+        if trie_root_ptrs.state_root_ptr.is_none() {
+            trie_root_ptrs.state_root_ptr = Some(
+                load_state_mpt(
+                    &trie_inputs.trim(),
+                    &mut interpreter.generation_state.memory.contexts[0].segments
+                        [Segment::TrieData.unscale()]
+                    .content,
+                )
+                .expect("Invalid MPT data for preinitialization"),
+            );
+        }
+
+        let accounts_len = Segment::AccountsLinkedList as usize
+            + interpreter.generation_state.memory.contexts[0].segments
+                [Segment::AccountsLinkedList.unscale()]
+            .content
+            .len();
+        let storage_len = Segment::StorageLinkedList as usize
+            + interpreter.generation_state.memory.contexts[0].segments
+                [Segment::StorageLinkedList.unscale()]
+            .content
+            .len();
+        let accounts_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::AccountsLinkedListNextAvailable.unscale(),
+        };
+        let storage_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::StorageLinkedListNextAvailable.unscale(),
+        };
+        let initial_accounts_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::InitialAccountsLinkedListLen.unscale(),
+        };
+        let initial_storage_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::InitialStorageLinkedListLen.unscale(),
+        };
+        let trie_data_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::TrieDataSize.unscale(),
+        };
+        let trie_data_len = interpreter.generation_state.memory.contexts[0].segments
+            [Segment::TrieData.unscale()]
         .content
         .len();
-    let accounts_len_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::AccountsLinkedListNextAvailable.unscale(),
-    };
-    let storage_len_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::StorageLinkedListNextAvailable.unscale(),
-    };
-    let initial_accounts_len_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::InitialAccountsLinkedListLen.unscale(),
-    };
-    let initial_storage_len_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::InitialStorageLinkedListLen.unscale(),
-    };
-    let trie_data_len_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::TrieDataSize.unscale(),
-    };
-    let trie_data_len = interpreter.generation_state.memory.contexts[0].segments
-        [Segment::TrieData.unscale()]
-    .content
-    .len();
-    interpreter.set_memory_multi_addresses(&[
-        (accounts_len_addr, accounts_len.into()),
-        (storage_len_addr, storage_len.into()),
-        (trie_data_len_addr, trie_data_len.into()),
-        (initial_accounts_len_addr, accounts_len.into()),
-        (initial_storage_len_addr, storage_len.into()),
-    ]);
+        interpreter.set_memory_multi_addresses(&[
+            (accounts_len_addr, accounts_len.into()),
+            (storage_len_addr, storage_len.into()),
+            (trie_data_len_addr, trie_data_len.into()),
+            (initial_accounts_len_addr, accounts_len.into()),
+            (initial_storage_len_addr, storage_len.into()),
+        ]);
 
-    let state_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
-    let txn_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into()).unwrap();
-    let receipts_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
+        let state_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
+        let txn_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into())
+                .unwrap();
+        let receipts_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
 
-    let mut to_set = vec![];
-    if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
-        to_set.push((state_addr, state_root_ptr.into()));
-    }
-    to_set.extend([
-        (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
-        (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
-    ]);
+        let mut to_set = vec![];
+        if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
+            to_set.push((state_addr, state_root_ptr.into()));
+        }
+        to_set.extend([
+            (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
+            (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
+        ]);
 
-    interpreter.set_memory_multi_addresses(&to_set);
+        interpreter.set_memory_multi_addresses(&to_set);
 
-    for (i, data) in trie_data.iter().enumerate() {
-        let trie_addr = MemoryAddress::new(0, Segment::TrieData, i);
-        interpreter
-            .generation_state
-            .memory
-            .set(trie_addr, data.unwrap_or_default());
+        for (i, data) in trie_data.iter().enumerate() {
+            let trie_addr = MemoryAddress::new(0, Segment::TrieData, i);
+            interpreter
+                .generation_state
+                .memory
+                .set(trie_addr, data.unwrap_or_default());
+        }
     }
 }
 
