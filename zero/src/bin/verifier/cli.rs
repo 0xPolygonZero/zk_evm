@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueHint};
+use clap::{Parser, Subcommand, ValueHint};
 use zero::prover_state::cli::CliProverStateConfig;
 
 #[derive(Parser)]
 #[command(version = zero::version(), propagate_version = true)]
 pub(crate) struct Cli {
+    #[command(subcommand)]
+    pub(crate) command: Command,
+
     /// The file containing the proof to verify
     #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) file_path: PathBuf,
@@ -13,4 +16,14 @@ pub(crate) struct Cli {
     /// and the verifier state.
     #[clap(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum Command {
+    /// Verifies a provided block proof.
+    Block,
+    /// Verifies a provided wrapped block proof.
+    WrappedBlock,
+    /// Verifies a provided aggregated block proof.
+    AggBlock,
 }

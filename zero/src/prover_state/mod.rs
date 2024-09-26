@@ -21,7 +21,6 @@ use evm_arithmetization::{
     TrimmedGenerationInputs,
 };
 use evm_arithmetization::{ProofWithPublicInputs, VerifierData};
-use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::util::timing::TimingTree;
 use tracing::info;
 
@@ -63,12 +62,25 @@ impl<T: Borrow<ProverState>> From<T> for VerifierState {
 
 impl VerifierState {
     /// Verifies a `block_proof`.
-    pub fn verify(&self, block_proof: &ProofWithPublicInputs) -> anyhow::Result<()> {
-        // Proof verification
-        self.state.verify(block_proof.clone())?;
+    pub fn verify_block(&self, block_proof: &ProofWithPublicInputs) -> anyhow::Result<()> {
+        self.state.verify_block(block_proof.clone())
+    }
 
-        // Verifier data verification
-        check_cyclic_proof_verifier_data(block_proof, &self.state.verifier_only, &self.state.common)
+    /// Verifies a `wrapped_block_proof`.
+    pub fn verify_block_wrapper(
+        &self,
+        wrapped_block_proof: &ProofWithPublicInputs,
+    ) -> anyhow::Result<()> {
+        self.state.verify_block_wrapper(wrapped_block_proof.clone())
+    }
+
+    /// Verifies an aggregation of independent `wrapped_block_proof` combined
+    /// into a single `agg_block_proof`.
+    pub fn verify_block_aggreg(
+        &self,
+        agg_block_proof: &ProofWithPublicInputs,
+    ) -> anyhow::Result<()> {
+        self.state.verify_block_aggreg(agg_block_proof.clone())
     }
 }
 

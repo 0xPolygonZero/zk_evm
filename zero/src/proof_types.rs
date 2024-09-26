@@ -2,11 +2,9 @@
 //! generation process.
 
 use evm_arithmetization::{
-    fixed_recursive_verifier::{extract_block_final_public_values, extract_two_to_one_block_hash},
-    BlockHeight, Hash, Hasher, ProofWithPublicInputs, PublicValues,
+    BlockHeight, ChainID, FinalPublicValues, HashOrPV, ProofWithPublicInputs, PublicValues,
 };
-use plonky2::plonk::config::Hasher as _;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
@@ -37,7 +35,7 @@ pub struct GeneratedSegmentAggProof {
 /// Transaction agregation proofs can represent any contiguous range of two or
 /// more transactions, up to an entire block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneratedTxnAggProof {
+pub struct GeneratedBatchAggProof {
     /// Public values of this transaction aggregation proof.
     pub p_vals: PublicValues,
     /// Underlying plonky2 proof.
@@ -54,13 +52,27 @@ pub struct GeneratedBlockProof {
     pub intern: ProofWithPublicInputs,
 }
 
-/// An aggregation block proof along with its hashed public values, for proper
-/// connection with other proofs.
+/// A wrapped block proof along with the block height against which this proof
+/// ensures the validity since the last proof checkpoint.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneratedWrappedBlockProof {
+    /// Associated block height.
+    pub b_height: BlockHeight,
+    /// Associated chain ID.
+    pub chain_id: ChainID,
+    /// Underlying plonky2 proof.
+    pub intern: ProofWithPublicInputs,
+}
+
+/// An aggregation block proof along with its public values, for proper
+/// verification by a third-party.
 ///
 /// Aggregation block proofs can represent any aggregation of independent
 /// blocks.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedAggBlockProof {
+    /// Public values of this aggregation proof.
+    pub p_vals: HashOrPV,
     /// Underlying plonky2 proof.
     pub intern: ProofWithPublicInputs,
 }
@@ -87,7 +99,7 @@ pub enum BatchAggregatableProof {
     /// The underlying proof is a transaction proof.
     Txn(GeneratedSegmentAggProof),
     /// The underlying proof is an aggregation proof.
-    Agg(GeneratedTxnAggProof),
+    Agg(GeneratedBatchAggProof),
 }
 
 impl SegmentAggregatableProof {
@@ -157,8 +169,8 @@ impl From<GeneratedSegmentAggProof> for BatchAggregatableProof {
     }
 }
 
-impl From<GeneratedTxnAggProof> for BatchAggregatableProof {
-    fn from(v: GeneratedTxnAggProof) -> Self {
+impl From<GeneratedBatchAggProof> for BatchAggregatableProof {
+    fn from(v: GeneratedBatchAggProof) -> Self {
         Self::Agg(v)
     }
 }
@@ -174,28 +186,22 @@ impl From<SegmentAggregatableProof> for BatchAggregatableProof {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum AggregatableBlockProof {
-    /// The underlying proof is a single block proof.
-    Block(GeneratedBlockProof),
+    /// The underlying proof is a single wrapped block proof.
+    Block(GeneratedWrappedBlockProof),
     /// The underlying proof is an aggregated proof.
     Agg(GeneratedAggBlockProof),
 }
 
 impl AggregatableBlockProof {
-    pub fn pv_hash(&self) -> Hash {
+    pub(crate) fn public_values(&self) -> HashOrPV {
         match self {
-            AggregatableBlockProof::Block(info) => {
-                let pv = extract_block_final_public_values(&info.intern.public_inputs);
-                Hasher::hash_no_pad(pv)
-            }
-            AggregatableBlockProof::Agg(info) => {
-                let hash = extract_two_to_one_block_hash(&info.intern.public_inputs);
-                Hash::from_partial(hash)
-            }
+            AggregatableBlockProof::Block(info) => HashOrPV::Val(
+                FinalPublicValues::from_public_inputs(&info.intern.public_inputs),
+            ),
+            AggregatableBlockProof::Agg(info) => info.p_vals.clone(),
         }
     }
 
-    // TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/387
-    #[allow(unused)]
     pub(crate) const fn is_agg(&self) -> bool {
         match self {
             AggregatableBlockProof::Block(_) => false,
@@ -203,9 +209,7 @@ impl AggregatableBlockProof {
         }
     }
 
-    // TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/387
-    #[allow(unused)]
-    pub(crate) const fn intern(&self) -> &ProofWithPublicInputs {
+    pub const fn intern(&self) -> &ProofWithPublicInputs {
         match self {
             AggregatableBlockProof::Block(info) => &info.intern,
             AggregatableBlockProof::Agg(info) => &info.intern,
@@ -213,14 +217,59 @@ impl AggregatableBlockProof {
     }
 }
 
-impl From<GeneratedBlockProof> for AggregatableBlockProof {
-    fn from(v: GeneratedBlockProof) -> Self {
+impl From<GeneratedWrappedBlockProof> for AggregatableBlockProof {
+    fn from(v: GeneratedWrappedBlockProof) -> Self {
         Self::Block(v)
+    }
+}
+
+impl From<AggregatableBlockProof> for GeneratedAggBlockProof {
+    fn from(v: AggregatableBlockProof) -> Self {
+        match v {
+            AggregatableBlockProof::Block(info) => GeneratedAggBlockProof {
+                p_vals: HashOrPV::Val(FinalPublicValues::from_public_inputs(
+                    &info.intern.public_inputs,
+                )),
+                intern: info.intern,
+            },
+            AggregatableBlockProof::Agg(info) => info,
+        }
     }
 }
 
 impl From<GeneratedAggBlockProof> for AggregatableBlockProof {
     fn from(v: GeneratedAggBlockProof) -> Self {
         Self::Agg(v)
+    }
+}
+
+pub trait WritableProof: Serialize + DeserializeOwned {
+    fn block_height(&self) -> Option<u64>;
+}
+
+impl WritableProof for GeneratedBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        Some(self.b_height)
+    }
+}
+
+impl WritableProof for GeneratedWrappedBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        Some(self.b_height)
+    }
+}
+
+impl WritableProof for GeneratedAggBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        None
+    }
+}
+
+impl WritableProof for AggregatableBlockProof {
+    fn block_height(&self) -> Option<u64> {
+        match self {
+            AggregatableBlockProof::Block(block) => Some(block.b_height),
+            AggregatableBlockProof::Agg(_) => None,
+        }
     }
 }

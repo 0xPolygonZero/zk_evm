@@ -14,7 +14,7 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofChallenges};
 
 use crate::all_stark::NUM_TABLES;
-use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
+use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u, u256_to_u32};
 use crate::witness::state::RegistersState;
 
 /// The default cap height used for our zkEVM STARK proofs.
@@ -152,6 +152,18 @@ pub struct FinalPublicValues<F: RichField, H: Hasher<F>> {
 }
 
 impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
+    fn to_field_elements(&self) -> Vec<F> {
+        let mut out = Vec::with_capacity(FinalPublicValuesTarget::SIZE);
+
+        out.push(u256_to_u32(self.chain_id).expect("Chain ID should fit in a u32"));
+        out.extend(&h256_limbs(self.checkpoint_state_trie_root));
+        out.extend(&h256_limbs(self.new_state_trie_root));
+        out.extend(&self.checkpoint_consolidated_hash);
+        out.extend(&self.new_consolidated_hash);
+
+        out
+    }
+
     /// Extracts final public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
@@ -293,6 +305,65 @@ impl FinalPublicValuesTarget {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(bound = "")]
+pub enum HashOrPV<F: RichField, H: Hasher<F>> {
+    /// Some `PublicValues` associated to a proof.
+    Val(FinalPublicValues<F, H>),
+
+    /// The hash of some `PublicValues`.
+    Hash(H::Hash),
+
+    /// An arbitrary sequence of `HashorPV` values, useful for nested sequences.
+    Sequence(Vec<HashOrPV<F, H>>),
+}
+
+impl<F: RichField, H: Hasher<F>> From<FinalPublicValues<F, H>> for HashOrPV<F, H> {
+    fn from(values: FinalPublicValues<F, H>) -> Self {
+        Self::Val(values)
+    }
+}
+
+impl<F: RichField, H: Hasher<F>> HashOrPV<F, H> {
+    pub fn hash(&self) -> H::Hash {
+        match self {
+            // Do nothing and just extract the underlying value
+            Self::Hash(h) => *h,
+
+            // Flatten these public values into field elements and hash them
+            Self::Val(pvs) => H::hash_no_pad(&pvs.to_field_elements()),
+
+            // Flatten this sequence first, and then hash and compress its
+            // public values using a foldleft approach.
+            Self::Sequence(seq) => {
+                if seq.is_empty() {
+                    panic!("Sequence should not be empty");
+                }
+
+                if seq.len() == 1 {
+                    return seq[0].hash();
+                }
+
+                let mut seq_hash = seq[0].hash();
+
+                for item in seq.iter().skip(1) {
+                    let next_hash = match item {
+                        HashOrPV::Val(pvs) => H::hash_no_pad(&pvs.to_field_elements()),
+                        HashOrPV::Hash(h) => *h,
+                        HashOrPV::Sequence(sub_seq) => {
+                            Self::hash(&HashOrPV::Sequence(sub_seq.to_vec()))
+                        }
+                    };
+
+                    seq_hash = H::two_to_one(seq_hash, next_hash);
+                }
+
+                seq_hash
+            }
+        }
+    }
+}
+
 /// Trie hashes.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrieRoots {
@@ -320,17 +391,6 @@ impl TrieRoots {
     }
 }
 
-// There should be 256 previous hashes stored, so the default should also
-// contain 256 values.
-impl Default for BlockHashes {
-    fn default() -> Self {
-        Self {
-            prev_hashes: vec![H256::default(); 256],
-            cur_hash: H256::default(),
-        }
-    }
-}
-
 /// User-provided helper values to compute the `BLOCKHASH` opcode.
 /// The proofs across consecutive blocks ensure that these values
 /// are consistent (i.e. shifted by one to the left).
@@ -345,6 +405,17 @@ pub struct BlockHashes {
     pub prev_hashes: Vec<H256>,
     // The hash of the current block.
     pub cur_hash: H256,
+}
+
+/// There should be 256 previous hashes stored, so the default should also
+/// contain 256 values.
+impl Default for BlockHashes {
+    fn default() -> Self {
+        Self {
+            prev_hashes: vec![H256::default(); 256],
+            cur_hash: H256::default(),
+        }
+    }
 }
 
 impl BlockHashes {
