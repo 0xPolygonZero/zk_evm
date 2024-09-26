@@ -12,7 +12,7 @@ use crate::cpu::kernel::parser::parse;
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     158
 } else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
-    154
+    155
 } else {
     // unreachable
     0
@@ -125,7 +125,7 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     #[cfg(feature = "eth_mainnet")]
     include_str!("asm/linked_list/storage_linked_list.asm"),
     #[cfg(feature = "cdk_erigon")]
-    include_str!("asm/mpt/linked_list/state_linked_list.asm"),
+    include_str!("asm/linked_list/state_linked_list.asm"),
     include_str!("asm/linked_list/final_tries.asm"),
     include_str!("asm/linked_list/initial_tries.asm"),
     include_str!("asm/memory/core.asm"),
