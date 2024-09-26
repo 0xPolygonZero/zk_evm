@@ -56,8 +56,12 @@ jobs:
           cache-on-failure: true
 
       - name: Test in evm_arithmetization subdirectory
-        # we hit timeouts if we `cargo test --debug ...`
-        run: cargo test --release --manifest-path evm_arithmetization/Cargo.toml
+        run: cargo test --manifest-path evm_arithmetization/Cargo.toml
+        env:
+          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
+          RUST_LOG: 1
+          CARGO_INCREMENTAL: 1
+          RUST_BACKTRACE: 1
 
   test_zero_bin:
     name: Test zero_bin
