@@ -2,12 +2,12 @@ zk_evm_common::check_chain_features!();
 
 use std::fs::File;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use dotenvy::dotenv;
 use evm_arithmetization::fixed_recursive_verifier::extract_two_to_one_block_hash;
 use serde_json::Deserializer;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use zero::proof_types::{AggregatableBlockProof, GeneratedAggBlockProof, GeneratedBlockProof};
 use zero::prover_state::persistence::set_circuit_cache_dir_env_if_not_set;
 
@@ -39,9 +39,8 @@ fn main() -> Result<()> {
             if input_proofs.into_iter().all(|block_proof| {
                 verifier
                     .verify_block(&block_proof.intern)
-                    .map_err(|e| {
-                        info!("Block proof verification failed with error: {:?}", e);
-                    })
+                    .context("Failed to verify block proof")
+                    .inspect_err(|e| error!("{e:?}"))
                     .is_ok()
             }) {
                 info!("All proofs verified successfully!");
@@ -53,12 +52,8 @@ fn main() -> Result<()> {
             if input_proofs.into_iter().all(|block_proof| {
                 verifier
                     .verify_block_wrapper(block_proof.intern())
-                    .map_err(|e| {
-                        info!(
-                            "Wrapped block proof verification failed with error: {:?}",
-                            e
-                        );
-                    })
+                    .context("Failed to verify wrapped block proof")
+                    .inspect_err(|e| error!("{e:?}"))
                     .is_ok()
             }) {
                 info!("All proofs verified successfully!");
@@ -82,12 +77,8 @@ fn main() -> Result<()> {
 
                 verifier
                     .verify_block_aggreg(&wrapped_proof.intern)
-                    .map_err(|e| {
-                        info!(
-                            "Aggregated block proof verification failed with error: {:?}",
-                            e
-                        );
-                    })
+                    .context("Failed to verify aggregated block proof")
+                    .inspect_err(|e| error!("{e:?}"))
                     .is_ok() && pis_match
             }) {
                 info!("All proofs verified successfully!");

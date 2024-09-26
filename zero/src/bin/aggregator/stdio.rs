@@ -20,7 +20,7 @@ pub(crate) async fn stdio_wrap(
     std::io::stdin().read_to_string(&mut buffer)?;
 
     let des = &mut serde_json::Deserializer::from_str(&buffer);
-    let block_proof = serde_path_to_error::deserialize::<_, Vec<GeneratedBlockProof>>(des)?
+    let mut block_proof = serde_path_to_error::deserialize::<_, Vec<GeneratedBlockProof>>(des)?
         .into_iter()
         .collect::<Vec<_>>();
 
@@ -28,7 +28,7 @@ pub(crate) async fn stdio_wrap(
         block_proof.len() == 1,
         "Expected only one block proof to be wrapped",
     );
-    let block_proof = block_proof[0].clone();
+    let block_proof = block_proof.pop().expect("valid block proof");
     let block_number = block_proof.b_height;
 
     let proving_task = tokio::spawn(crate::wrap(

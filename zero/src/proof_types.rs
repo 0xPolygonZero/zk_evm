@@ -225,9 +225,14 @@ impl From<GeneratedWrappedBlockProof> for AggregatableBlockProof {
 
 impl From<AggregatableBlockProof> for GeneratedAggBlockProof {
     fn from(v: AggregatableBlockProof) -> Self {
-        GeneratedAggBlockProof {
-            p_vals: v.public_values(),
-            intern: v.intern().clone(),
+        match v {
+            AggregatableBlockProof::Block(info) => GeneratedAggBlockProof {
+                p_vals: HashOrPV::Val(FinalPublicValues::from_public_inputs(
+                    &info.intern.public_inputs,
+                )),
+                intern: info.intern,
+            },
+            AggregatableBlockProof::Agg(info) => info,
         }
     }
 }
