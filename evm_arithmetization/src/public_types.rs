@@ -67,7 +67,7 @@ pub type RecursiveCircuitsForTableSize =
 /// A type alias for the verifier data necessary to verify succinct block
 /// proofs.
 /// While the prover state [`AllRecursiveCircuits`] can also verify proofs, this
-/// [`VerifierData`] is much lighter, allowing anyone to verify block proofs,
+/// [`VerifierData`] is much lighter, allowing anyone to verify final proofs,
 /// regardless of the underlying hardware.
 pub type VerifierData =
     crate::fixed_recursive_verifier::AllVerifierData<Field, RecursionConfig, EXTENSION_DEGREE>;
