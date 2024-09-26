@@ -134,7 +134,7 @@ do
 
     if $WRAP_PROOF ; then
       "${REPO_ROOT}/target/release/aggregator" --runtime in-memory --load-strategy on-demand --wrap stdio < $proof_file &> $OUTPUT_LOG
-      cat $OUTPUT_LOG | grep "Successfully wrote to disk wrapped proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+      cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
       if [ ! -s "$PROOFS_FILE_LIST" ]; then
         echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
         exit 1
