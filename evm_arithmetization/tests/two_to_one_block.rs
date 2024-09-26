@@ -174,17 +174,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
-        &[
-            16..17,
-            8..9,
-            12..13,
-            9..10,
-            8..9,
-            6..7,
-            17..18,
-            17..18,
-            7..8,
-        ],
+        &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 17..18, 7..8],
         &config,
     );
 
