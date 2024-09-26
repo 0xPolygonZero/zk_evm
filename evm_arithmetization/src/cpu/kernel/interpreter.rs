@@ -5,7 +5,7 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
@@ -19,6 +19,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::linked_list::LinkedListsPtrs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -115,8 +116,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    pub(crate) accounts: BTreeMap<U256, usize>,
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) access_lists_ptrs: LinkedListsPtrs,
+    pub(crate) state_ptrs: LinkedListsPtrs,
     pub(crate) next_txn_index: usize,
 }
 
@@ -235,8 +236,8 @@ impl<F: RichField> Interpreter<F> {
         // Initialize the MPT's pointers.
         let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.accounts_pointers,
-                &mut self.generation_state.storage_pointers,
+                &mut self.generation_state.state_ptrs.accounts,
+                &mut self.generation_state.state_ptrs.storage,
                 &inputs.tries,
             )
             .expect("Invalid MPT data for preinitialization");
