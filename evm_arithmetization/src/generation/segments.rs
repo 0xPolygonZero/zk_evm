@@ -1,6 +1,8 @@
 //! Module defining the logic around proof segmentation into chunks,
 //! which allows what is commonly known as zk-continuations.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -11,6 +13,7 @@ use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, I
 use crate::generation::state::State;
 use crate::generation::{collect_debug_tries, debug_inputs, ErrorWithTries, GenerationInputs};
 use crate::witness::memory::MemoryState;
+use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
 
 /// Structure holding the data needed to initialize a segment.
@@ -29,6 +32,8 @@ pub struct GenerationSegmentData {
     pub(crate) extra_data: ExtraSegmentData,
     /// Log of the maximal cpu length.
     pub(crate) max_cpu_len_log: Option<usize>,
+    /// Counts the number of appearances of each opcode. For debugging purposes.
+    pub(crate) opcode_counts: HashMap<Operation, usize>,
 }
 
 impl GenerationSegmentData {
@@ -77,6 +82,7 @@ fn build_segment_data<F: RichField>(
             accounts: interpreter.generation_state.accounts_pointers.clone(),
             storage: interpreter.generation_state.storage_pointers.clone(),
         },
+        opcode_counts: interpreter.opcode_count.clone(),
     }
 }
 
@@ -133,6 +139,9 @@ impl<F: RichField> SegmentDataIterator<F> {
 
         let segment_index = segment_data.segment_index;
 
+        // Reset opcode counts before executing the segment
+        self.interpreter.reset_opcode_counts();
+
         // Run the interpreter to get `registers_after` and the partial data for the
         // next segment.
         let execution_result =
@@ -147,6 +156,8 @@ impl<F: RichField> SegmentDataIterator<F> {
             ));
 
             segment_data.registers_after = updated_registers;
+            segment_data.opcode_counts = self.interpreter.opcode_count.clone();
+
             Ok(Some(Box::new((segment_data, partial_segment_data))))
         } else {
             let inputs = &self.interpreter.get_generation_state().inputs;

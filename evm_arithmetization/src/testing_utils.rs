@@ -165,70 +165,46 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
     }
 }
 
-/// Get `GenerationInputs` for a dummy payload, where the block has the given
-/// timestamp.
-pub fn dummy_payload(timestamp: u64, is_first_payload: bool) -> Result<GenerationInputs> {
-    let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
-
+pub fn empty_payload() -> Result<GenerationInputs> {
+    // Set up default block metadata
     let block_metadata = BlockMetadata {
-        block_beneficiary: Address::from(beneficiary),
-        block_timestamp: timestamp.into(),
-        block_number: 1.into(),
-        block_difficulty: 0x020000.into(),
-        block_random: H256::from_uint(&0x020000.into()),
-        block_gaslimit: 0xff112233u32.into(),
-        block_chain_id: 1.into(),
-        block_base_fee: 0xa.into(),
+        block_beneficiary: Address::zero(),
+        block_timestamp: U256::zero(),
+        block_number: U256::one(),
+        block_difficulty: U256::zero(),
+        block_random: H256::zero(),
+        block_gaslimit: U256::zero(),
+        block_chain_id: U256::one(),
+        block_base_fee: U256::zero(),
         ..Default::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    // Initialize an empty state trie and storage tries
+    let state_trie_before = HashedPartialTrie::from(crate::Node::Empty);
+    let storage_tries = Vec::new();
     let checkpoint_state_trie_root = state_trie_before.hash();
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
 
-    update_beacon_roots_account_storage(
-        &mut beacon_roots_account_storage,
-        block_metadata.block_timestamp,
-        block_metadata.parent_beacon_block_root,
-    )?;
-    let updated_beacon_roots_account =
-        beacon_roots_contract_from_storage(&beacon_roots_account_storage);
-
-    if !is_first_payload {
-        // This isn't the first dummy payload being processed. We need to update the
-        // initial state trie to account for the update on the beacon roots contract.
-        state_trie_before.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&updated_beacon_roots_account).to_vec(),
-        )?;
-        storage_tries[0].1 = beacon_roots_account_storage;
-    }
-
+    // Prepare the tries without any transactions or receipts
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        storage_tries,
-        ..Default::default()
+        state_trie: state_trie_before.clone(),
+        storage_tries: storage_tries.clone(),
+        transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
+        receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
     };
 
-    let expected_state_trie_after: HashedPartialTrie = {
-        let mut state_trie_after = HashedPartialTrie::from(crate::Node::Empty);
-        state_trie_after.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&updated_beacon_roots_account).to_vec(),
-        )?;
+    // The expected state trie after execution remains the same as before
+    let expected_state_trie_after = state_trie_before;
 
-        state_trie_after
-    };
-
+    // Compute the trie roots after execution
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
         transactions_root: tries_before.transactions_trie.hash(),
         receipts_root: tries_before.receipts_trie.hash(),
     };
 
+    // Construct the GenerationInputs without any transactions or state changes
     let inputs = GenerationInputs {
-        tries: tries_before.clone(),
-        burn_addr: None,
+        tries: tries_before,
         trie_roots_after,
         checkpoint_state_trie_root,
         block_metadata,

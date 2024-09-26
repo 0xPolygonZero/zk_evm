@@ -1,5 +1,6 @@
 use ethereum_types::U256;
 use plonky2::field::types::PrimeField64;
+use serde::{Deserialize, Serialize};
 
 use self::columns::{
     INPUT_REGISTER_0, INPUT_REGISTER_1, INPUT_REGISTER_2, OPCODE_COL, OUTPUT_REGISTER,
@@ -24,7 +25,7 @@ pub(crate) mod columns;
 ///
 /// `Shl` and `Shr` are handled differently, by leveraging `Mul` and `Div`
 /// respectively.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub(crate) enum BinaryOperator {
     Add,
     Mul,
@@ -114,7 +115,7 @@ impl BinaryOperator {
 
 /// An enum representing different ternary operations.
 #[allow(clippy::enum_variant_names)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub(crate) enum TernaryOperator {
     AddMod,
     MulMod,
