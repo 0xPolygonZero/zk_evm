@@ -3,11 +3,13 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use alloy::primitives::U256;
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
-use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
-use zero::prover::{BlockProverInput, ProofRuntime, ProverConfig};
+use zero::proof_types::GeneratedBlockProof;
+use zero::prover::{BlockProverInput, ProverConfig};
+
+use crate::ProofRuntime;
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(

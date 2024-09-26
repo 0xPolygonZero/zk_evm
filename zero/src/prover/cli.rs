@@ -43,6 +43,10 @@ pub struct CliProverConfig {
     /// generate one proof file.
     #[arg(long, default_value_t = 8)]
     block_batch_size: usize,
+    /// The maximum number of block proving tasks that can run in parallel. Must
+    /// be greater than zero.
+    #[arg(long, default_value_t = 16)]
+    block_pool_size: usize,
 }
 
 impl From<CliProverConfig> for super::ProverConfig {
@@ -55,6 +59,8 @@ impl From<CliProverConfig> for super::ProverConfig {
             proof_output_dir: cli.proof_output_dir,
             keep_intermediate_proofs: cli.keep_intermediate_proofs,
             block_batch_size: cli.block_batch_size,
+            block_pool_size: cli.block_pool_size,
+            save_tries_on_error: false,
         }
     }
 }

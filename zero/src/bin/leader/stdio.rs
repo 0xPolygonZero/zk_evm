@@ -2,10 +2,12 @@ use std::io::Read;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use proof_gen::proof_types::GeneratedBlockProof;
 use tokio::sync::mpsc;
 use tracing::info;
-use zero::prover::{self, BlockProverInput, ProofRuntime, ProverConfig};
+use zero::proof_types::GeneratedBlockProof;
+use zero::prover::{self, BlockProverInput, ProverConfig};
+
+use crate::ProofRuntime;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(

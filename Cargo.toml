@@ -5,7 +5,6 @@ members = [
   "evm_arithmetization",
   "mpt_trie",
   "proc_macro",
-  "proof_gen",
   "smt_trie",
   "trace_decoder",
   "zero",
@@ -104,7 +103,6 @@ winnow = "0.6.13"
 # local dependencies
 evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0", default-features = false }
 mpt_trie = { path = "mpt_trie", version = "0.4.1" }
-proof_gen = { path = "proof_gen", version = "0.4.0", default-features = false }
 smt_trie = { path = "smt_trie", version = "0.1.1" }
 trace_decoder = { path = "trace_decoder", version = "0.6.0", default-features = false }
 zk_evm_common = { path = "common", version = "0.1.0" }

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
-use log::log_enabled;
+use log::error;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -50,6 +51,29 @@ pub const NUM_EXTRA_CYCLES_AFTER: usize = 81;
 pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
 /// Memory values used to initialize `MemBefore`.
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ErrorWithTries<E = anyhow::Error> {
+    pub inner: E,
+    pub tries: Option<DebugOutputTries>,
+}
+impl<E: Display> Display for ErrorWithTries<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<E: std::error::Error> std::error::Error for ErrorWithTries<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source()
+    }
+}
+
+impl<E> ErrorWithTries<E> {
+    pub fn new(inner: E, tries: Option<DebugOutputTries>) -> Self {
+        Self { inner, tries }
+    }
+}
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -232,6 +256,15 @@ impl<F: RichField> GenerationInputs<F> {
             block_hashes: self.block_hashes.clone(),
         }
     }
+}
+
+/// Post transaction execution tries retrieved from the prover's memory.
+/// Used primarily for error debugging in case of a failed execution.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct DebugOutputTries {
+    pub state_trie: HashedPartialTrie,
+    pub transaction_trie: HashedPartialTrie,
+    pub receipt_trie: HashedPartialTrie,
 }
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
@@ -492,10 +525,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         "simulate CPU",
         simulate_cpu(&mut state, *max_cpu_len_log)
     );
-    if cpu_res.is_err() {
-        output_debug_tries(&state)?;
-        cpu_res?;
-    };
+
+    cpu_res?;
 
     let trace_lengths = state.traces.get_lengths();
 
@@ -595,59 +626,50 @@ fn simulate_cpu<F: RichField>(
     Ok((final_registers, mem_after))
 }
 
-/// Outputs the tries that have been obtained post transaction execution, as
+/// Collects the tries that have been obtained post transaction execution, as
 /// they are represented in the prover's memory.
-/// This will do nothing if the CPU execution failed outside of the final trie
-/// root checks.
-pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> anyhow::Result<()> {
-    if !log_enabled!(log::Level::Debug) {
-        return Ok(());
-    }
+pub(crate) fn collect_debug_tries<F: RichField>(
+    state: &GenerationState<F>,
+) -> Option<DebugOutputTries> {
+    let state_trie_ptr = u256_to_usize(
+        state
+            .memory
+            .read_global_metadata(GlobalMetadata::StateTrieRoot),
+    )
+    .inspect_err(|e| error!("failed to retrieve state trie pointer: {e:?}"))
+    .ok()?;
 
-    // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
-    // `perform_final_checks`. We will output debugging information on the final
-    // tries only if we got a root mismatch.
-    let previous_pc = state.get_registers().program_counter;
+    let state_trie = get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
+        .inspect_err(|e| error!("unable to retrieve state trie for debugging purposes: {e:?}"))
+        .ok()?;
 
-    let label = KERNEL.offset_name(previous_pc);
+    let txn_trie_ptr = u256_to_usize(
+        state
+            .memory
+            .read_global_metadata(GlobalMetadata::TransactionTrieRoot),
+    )
+    .inspect_err(|e| error!("failed to retrieve transactions trie pointer: {e:?}"))
+    .ok()?;
+    let transaction_trie = get_txn_trie::<HashedPartialTrie>(&state.memory, txn_trie_ptr)
+        .inspect_err(|e| {
+            error!("unable to retrieve transaction trie for debugging purposes: {e:?}",)
+        })
+        .ok()?;
 
-    if label.contains("check_state_trie")
-        || label.contains("check_txn_trie")
-        || label.contains("check_receipt_trie")
-    {
-        let state_trie_ptr = u256_to_usize(
-            state
-                .memory
-                .read_global_metadata(GlobalMetadata::StateTrieRoot),
-        )
-        .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
-        log::debug!(
-            "Computed state trie: {:?}",
-            get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
-        );
+    let receipt_trie_ptr = u256_to_usize(
+        state
+            .memory
+            .read_global_metadata(GlobalMetadata::ReceiptTrieRoot),
+    )
+    .inspect_err(|e| error!("failed to retrieve receipts trie pointer: {e:?}"))
+    .ok()?;
+    let receipt_trie = get_receipt_trie::<HashedPartialTrie>(&state.memory, receipt_trie_ptr)
+        .inspect_err(|e| error!("unable to retrieve receipt trie for debugging purposes: {e:?}"))
+        .ok()?;
 
-        let txn_trie_ptr = u256_to_usize(
-            state
-                .memory
-                .read_global_metadata(GlobalMetadata::TransactionTrieRoot),
-        )
-        .map_err(|_| anyhow!("Transactions trie pointer is too large to fit in a usize."))?;
-        log::debug!(
-            "Computed transactions trie: {:?}",
-            get_txn_trie::<HashedPartialTrie>(&state.memory, txn_trie_ptr)
-        );
-
-        let receipt_trie_ptr = u256_to_usize(
-            state
-                .memory
-                .read_global_metadata(GlobalMetadata::ReceiptTrieRoot),
-        )
-        .map_err(|_| anyhow!("Receipts trie pointer is too large to fit in a usize."))?;
-        log::debug!(
-            "Computed receipts trie: {:?}",
-            get_receipt_trie::<HashedPartialTrie>(&state.memory, receipt_trie_ptr)
-        );
-    }
-
-    Ok(())
+    Some(DebugOutputTries {
+        state_trie,
+        transaction_trie,
+        receipt_trie,
+    })
 }

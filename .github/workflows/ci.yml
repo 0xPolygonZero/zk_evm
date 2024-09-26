@@ -71,31 +71,6 @@ jobs:
       - name: test
         run: cargo test --release --manifest-path trace_decoder/Cargo.toml -- --nocapture
 
-  test_proof_gen:
-    name: Test proof_gen
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Test in proof_gen subdirectory
-        run: cargo test --manifest-path proof_gen/Cargo.toml
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
-
   test_evm_arithmetization:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
