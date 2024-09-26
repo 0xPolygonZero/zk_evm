@@ -14,7 +14,7 @@ use itertools::{EitherOrBoth, Itertools as _};
 use nunny::NonEmpty;
 use plonky2::field::types::Field;
 
-use crate::wire::{Instruction, SmtLeaf, SmtLeafType};
+use super::{Instruction, SmtLeaf, SmtLeafType};
 
 type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
 
@@ -233,7 +233,7 @@ fn test_tries() {
             .enumerate()
     {
         println!("case {}", ix);
-        let instructions = crate::wire::parse(&case.bytes).unwrap();
+        let instructions = super::parse(&case.bytes).unwrap();
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, {
             let mut it = [0; 32];

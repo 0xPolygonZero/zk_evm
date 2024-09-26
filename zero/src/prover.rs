@@ -20,13 +20,13 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{oneshot, Semaphore};
-use trace_decoder::observer::DummyObserver;
-use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 
 use crate::fs::generate_block_proof_file_name;
+use crate::intra_block_tries::DummyObserver;
 use crate::ops;
 use crate::proof_types::GeneratedBlockProof;
+use crate::trace_decoder::{BlockTrace, OtherBlockData};
 
 // All proving tasks are executed concurrently, which can cause issues for large
 // block intervals, where distant future blocks may be proven first.
@@ -83,7 +83,7 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let block_generation_inputs = trace_decoder::entrypoint(
+        let block_generation_inputs = crate::intra_block_tries::entrypoint(
             self.block_trace,
             self.other_data,
             batch_size,
@@ -176,7 +176,7 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let block_generation_inputs = trace_decoder::entrypoint(
+        let block_generation_inputs = crate::intra_block_tries::entrypoint(
             self.block_trace,
             self.other_data,
             batch_size,

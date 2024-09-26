@@ -6,8 +6,8 @@
 //! for a total of 24,479,837 gas.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use trace_decoder::observer::DummyObserver;
-use trace_decoder::{BlockTrace, OtherBlockData};
+use zero::intra_block_tries::DummyObserver;
+use zero::trace_decoder::{BlockTrace, OtherBlockData};
 
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct ProverInput {
@@ -16,9 +16,7 @@ pub struct ProverInput {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let prover_input =
-        serde_json::from_slice::<ProverInput>(include_bytes!("block_input.json").as_slice())
-            .unwrap();
+    let prover_input = serde_json::from_str::<ProverInput>(include_str!("case.json")).unwrap();
 
     let batch_sizes = vec![1, 2, 4, 8];
 
@@ -34,7 +32,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                      block_trace,
                      other_data,
                  }| {
-                    trace_decoder::entrypoint(
+                    zero::intra_block_tries::entrypoint(
                         block_trace,
                         other_data,
                         batch_size,

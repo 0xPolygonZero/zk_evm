@@ -757,7 +757,7 @@ dependencies = [
  "assert2-macros",
  "diff",
  "is-terminal",
- "yansi 1.0.1",
+ "yansi",
 ]
 
 [[package]]
@@ -3771,16 +3771,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretty_assertions"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af7cee1a6c8a5b9208b3cb1061f10c0cb689087b3d8ce85fb9d2dd7a29b6ba66"
-dependencies = [
- "diff",
- "yansi 0.5.1",
-]
-
-[[package]]
 name = "pretty_env_logger"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5069,54 +5059,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
-name = "trace_decoder"
-version = "0.6.0"
-dependencies = [
- "alloy",
- "alloy-compat",
- "anyhow",
- "assert2",
- "bitflags 2.6.0",
- "bitvec",
- "bytes",
- "camino",
- "ciborium",
- "ciborium-io",
- "clap",
- "copyvec",
- "criterion",
- "either",
- "enum-as-inner",
- "ethereum-types",
- "evm_arithmetization",
- "glob",
- "hex",
- "hex-literal",
- "itertools 0.13.0",
- "keccak-hash 0.10.0",
- "libtest-mimic",
- "log",
- "mpt_trie",
- "nunny",
- "plonky2",
- "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_assertions",
- "pretty_env_logger",
- "rlp",
- "serde",
- "serde_json",
- "serde_path_to_error",
- "smt_trie",
- "stackstack",
- "strum",
- "thiserror",
- "u4",
- "winnow",
- "zero",
- "zk_evm_common",
-]
-
-[[package]]
 name = "tracing"
 version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5751,12 +5693,6 @@ dependencies = [
 
 [[package]]
 name = "yansi"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
-
-[[package]]
-name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
@@ -5768,23 +5704,35 @@ dependencies = [
  "alloy",
  "alloy-compat",
  "anyhow",
+ "assert2",
  "async-stream",
  "axum",
+ "bitflags 2.6.0",
+ "bitvec",
+ "camino",
  "cargo_metadata",
+ "ciborium",
  "clap",
  "compat",
+ "copyvec",
+ "criterion",
  "directories",
  "dotenvy",
+ "either",
+ "ethereum-types",
  "evm_arithmetization",
  "futures",
+ "glob",
  "hashbrown",
  "hex",
  "itertools 0.13.0",
  "jemallocator",
  "keccak-hash 0.10.0",
+ "libtest-mimic",
  "lru",
  "mpt_trie",
  "num-traits",
+ "nunny",
  "once_cell",
  "paladin-core",
  "plonky2",
@@ -5796,15 +5744,18 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_path_to_error",
+ "smt_trie",
+ "stackstack",
  "thiserror",
  "tokio",
  "toml",
  "tower 0.4.13",
- "trace_decoder",
  "tracing",
  "tracing-subscriber",
+ "u4",
  "url",
  "vergen-git2",
+ "winnow",
  "zk_evm_common",
 ]
 

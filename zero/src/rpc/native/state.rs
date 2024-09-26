@@ -12,12 +12,12 @@ use alloy_compat::Compat;
 use anyhow::Context as _;
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
-use trace_decoder::{
+
+use crate::provider::CachedProvider;
+use crate::trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
     SeparateTriePreImages, TxnInfo,
 };
-
-use crate::provider::CachedProvider;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(

@@ -2,11 +2,11 @@ use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport
 use anyhow::Context as _;
 use serde::Deserialize;
 use serde_json::json;
-use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
 
 use super::fetch_other_block_data;
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
+use crate::trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]

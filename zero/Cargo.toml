@@ -15,10 +15,16 @@ alloy-compat = "0.1.0"
 anyhow = { workspace = true }
 async-stream = { workspace = true }
 axum = { workspace = true }
+bitflags = { workspace = true }
+bitvec = { workspace = true }
 cargo_metadata = { workspace = true }
+ciborium = { workspace = true }
 clap = { workspace = true, features = ["derive", "string"] }
+copyvec = "0.2.1"
 directories = "5.0.1"
 dotenvy = { workspace = true }
+either = { workspace = true }
+ethereum-types = { workspace = true }
 futures = { workspace = true }
 hashbrown = { workspace = true }
 hex = { workspace = true }
@@ -26,30 +32,35 @@ itertools = { workspace = true }
 keccak-hash = { workspace = true }
 lru = { workspace = true }
 num-traits = { workspace = true }
+nunny = { workspace = true }
 once_cell = { workspace = true }
 paladin-core = { workspace = true }
 plonky2 = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
 regex = "1.5.4"
-rlp = {workspace = true}
+rlp = { workspace = true }
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+stackstack = "0.3.0"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+u4 = { workspace = true }
 url = { workspace = true }
+winnow = { workspace = true }
 
 # Local dependencies
 compat = { workspace = true }
 evm_arithmetization = { workspace = true }
 mpt_trie = { workspace = true }
-trace_decoder = { workspace = true }
+smt_trie = { workspace = true }
 zk_evm_common = { workspace = true }
+
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
@@ -63,9 +74,31 @@ vergen-git2 = { version = "1.0.0", features = ["build"] }
 
 [features]
 default = ["eth_mainnet"]
-eth_mainnet = ["evm_arithmetization/eth_mainnet", "trace_decoder/eth_mainnet"]
-cdk_erigon = ["evm_arithmetization/cdk_erigon", "trace_decoder/cdk_erigon"]
-polygon_pos = ["evm_arithmetization/polygon_pos", "trace_decoder/polygon_pos"]
+eth_mainnet = ["evm_arithmetization/eth_mainnet"]
+cdk_erigon = ["evm_arithmetization/cdk_erigon"]
+polygon_pos = ["evm_arithmetization/polygon_pos"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "intra-block-tries"
+harness = false
+required-features = ["eth_mainnet"]
+
+[[test]]
+name = "consistent-with-header"
+harness = false
+required-features = ["eth_mainnet"]
+
+[[test]]
+name = "simulate-execution"
+harness = false
+required-features = ["eth_mainnet"]
+
+[dev-dependencies]
+assert2 = "0.3.15"
+camino = "1.1.9"
+criterion.workspace = true
+glob = "0.3.1"
+libtest-mimic = "0.7.3"

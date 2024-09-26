@@ -22,9 +22,9 @@ use alloy::{
 use anyhow::Context as _;
 use compat::Compat;
 use futures::stream::{FuturesOrdered, TryStreamExt};
-use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
 use super::CodeDb;
+use crate::trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
 /// Processes the transactions in the given block and updates the code db.
 pub(super) async fn process_transactions<ProviderT, TransportT>(

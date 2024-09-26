@@ -12,8 +12,8 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
+use super::{Instruction, SmtLeaf};
 use crate::typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
-use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone)]
 pub struct Frontend {
@@ -387,7 +387,7 @@ fn test_tries() {
             .enumerate()
     {
         println!("case {}", ix);
-        let instructions = crate::wire::parse(&case.bytes).unwrap();
+        let instructions = super::parse(&case.bytes).unwrap();
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, frontend.state.root());
 

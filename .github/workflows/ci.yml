@@ -37,39 +37,6 @@ jobs:
 
       - name: Test in mpt_trie subdirectory
         run: cargo test --manifest-path mpt_trie/Cargo.toml
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
-
-  test_trace_decoder:
-    name: Test trace_decoder
-    runs-on: zero-ci
-    timeout-minutes: 30
-    env:
-      RUST_LOG: info
-      CARGO_INCREMENTAL: 1
-      RUST_BACKTRACE: 1
-
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: build # build separately so test logs are actually nice
-        run: cargo build --tests --manifest-path trace_decoder/Cargo.toml
-
-      - name: test
-        run: cargo test --release --manifest-path trace_decoder/Cargo.toml -- --nocapture
 
   test_evm_arithmetization:
     name: Test evm_arithmetization
@@ -117,12 +84,6 @@ jobs:
         run: |
           cargo test --manifest-path zero/Cargo.toml
 
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
-
   test_zk_evm_proc_macro:
     name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
@@ -142,11 +103,6 @@ jobs:
 
       - name: Test in proc_macro subdirectory
         run: cargo test --manifest-path proc_macro/Cargo.toml
-        env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
 
   simple_proof_regular:
     name: Execute bash script to generate and verify a proof for a small block.

@@ -12,9 +12,6 @@ This repository contains the following Rust crates:
 
 * [smt_trie](./smt_trie/README.md): A collection of types and functions to work with Polygon Hermez Sparse Merkle Trees (SMT).
 
-* [trace_decoder](./trace_decoder/Cargo.toml): Flexible protocol designed to process Ethereum clients trace payloads into an IR format that can be
-understood by the zkEVM prover.
-
 * [evm_arithmetization](./evm_arithmetization/README.md): Defines all the STARK constraints and recursive circuits to generate succinct proofs of EVM execution.
 It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/plonky2.
 
@@ -32,24 +29,20 @@ TODO: Update mermaid chart with `smt_trie` once type-2 is plugged in.
 %%{init: {'theme':'dark'}}%%
 flowchart LR
     subgraph ps [proving systems]
-    A1{{plonky2}}
-    A2{{starky}}
+        A1{{plonky2}}
+        A2{{starky}}
     end
 
     ps --> zk_evm
 
-    subgraph zk_evm [zk_evm]
-    B[mpt_trie]
-    C[evm_arithmetization]
-    D[trace_decoder]
+    subgraph zk_evm
+        B[mpt_trie]
+        C[evm_arithmetization]
 
-    B --> C
-    B ---> D
-    C ---> D
+        B --> C
 
-    F{zero-bin}
-    C --> F
-    D --> F
+        F{zero-bin}
+        C --> F
     end
 ```
 

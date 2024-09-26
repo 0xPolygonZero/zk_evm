@@ -1,3 +1,8 @@
+//! Over RPC, ethereum nodes expose their tries as a series of binary
+//! [`Instruction`]s in a node-dependant format.
+//!
+//! These are parsed into the relevant trie depending on the node
+//!
 //! We support two wire formats:
 //! - Type 1, based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
 //! - Type 2, loosely based on [this specification](https://github.com/0xPolygonHermez/cdk-erigon/blob/d1d6b3c7a4c81c46fd995c1baa5c1f8069ff0348/turbo/trie/WITNESS.md)
@@ -23,6 +28,9 @@ use winnow::{
     token::{any, one_of, take},
     Parser as _,
 };
+
+pub mod type1;
+pub mod type2;
 
 pub fn parse(input: &[u8]) -> anyhow::Result<NonEmpty<Vec<Instruction>>> {
     match preceded(
@@ -294,6 +302,20 @@ fn array<const N: usize>(input: &mut &[u8]) -> PResult<[u8; N]> {
     take(N)
         .map(|it: &[u8]| it.try_into().expect("take has already selected N bytes"))
         .parse_next(input)
+}
+
+#[cfg(test)]
+#[derive(serde::Deserialize)]
+struct Case {
+    #[serde(with = "crate::hex")]
+    pub bytes: Vec<u8>,
+    #[serde(deserialize_with = "h256")]
+    pub expected_state_root: ethereum_types::H256,
+}
+
+#[cfg(test)]
+fn h256<'de, D: serde::Deserializer<'de>>(it: D) -> Result<ethereum_types::H256, D::Error> {
+    Ok(ethereum_types::H256(crate::hex::deserialize(it)?))
 }
 
 #[cfg(test)]

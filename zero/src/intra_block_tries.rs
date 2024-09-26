@@ -1,3 +1,42 @@
+//! An _Ethereum Node_ executes _transactions_ in _blocks_.
+//!
+//! Execution mutates two key data structures:
+//! - [The state trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie).
+//! - [The storage tries](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie).
+//!
+//! Ethereum nodes expose information about the transactions over RPC, e.g:
+//! - [The specific changes to the storage tries](TxnTrace::storage_written).
+//! - [Changes to account balance in the state trie](TxnTrace::balance).
+//!
+//! The state execution correctness is then asserted by the zkEVM prover in
+//! [`evm_arithmetization`], relying on `starky` and [`plonky2`].
+//!
+//! **Prover perfomance is a high priority.**
+//!
+//! The aformentioned trie structures may have subtries _hashed out_.
+//! That is, any node (and its children!) may be replaced by its hash,
+//! while maintaining provability of its contents:
+//!
+//! ```text
+//!     A               A
+//!    / \             / \
+//!   B   C     ->    H   C
+//!  / \   \               \
+//! D   E   F               F
+//! ```
+//! (where `H` is the hash of the `D/B\E` subtrie).
+//!
+//! The principle concern of this module is to step through the transactions,
+//! and reproduce the _intermediate tries_,
+//! while hashing out all possible subtries to minimise prover load
+//! (since prover performance is sensitive to the size of the trie).
+//! The prover can therefore prove each batch of transactions independently.
+//!
+//! # Non-goals
+//! - Performance - this will never be the bottleneck in any proving stack.
+//! - Robustness - this library depends on other libraries that are not robust,
+//!   so may panic at any time.
+
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -19,12 +58,13 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
-use crate::observer::Observer;
 use crate::{
+    trace_decoder::{
+        BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
+        OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
+        TxnInfo, TxnMeta, TxnTrace,
+    },
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
-    BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
-    TxnInfo, TxnMeta, TxnTrace,
 };
 
 /// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -180,13 +220,13 @@ fn start(
             (state, storage, Hash2Code::new())
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
-            let instructions = crate::wire::parse(&compact)
+            let instructions = crate::wire_tries::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
-            let crate::type1::Frontend {
+            let crate::wire_tries::type1::Frontend {
                 state,
                 storage,
                 code,
-            } = crate::type1::frontend(instructions)?;
+            } = crate::wire_tries::type1::frontend(instructions)?;
             (state, storage, code.into_iter().map(Into::into).collect())
         }
     })
@@ -805,5 +845,109 @@ impl FromIterator<Vec<u8>> for Hash2Code {
         let mut this = Self::new();
         this.extend(iter);
         this
+    }
+}
+
+/// Collects various debugging and metadata info through [`middle`].
+pub trait Observer<StateTrieT> {
+    /// Collect tries after the transaction/batch execution.
+    ///
+    /// Passing the arguments one by one through reference, because
+    /// we don't want to clone argument tries in case they are not used in
+    /// observer.
+    fn collect_tries(
+        &mut self,
+        block: U256,
+        batch: usize,
+        state_trie: &StateTrieT,
+        storage: &BTreeMap<H256, StorageTrie>,
+        transaction_trie: &TransactionTrie,
+        receipt_trie: &ReceiptTrie,
+    );
+}
+
+#[derive(Debug)]
+/// Tries observer collected data element - contains
+/// the data collected during the trace decoder processing of the batches in a
+/// block, one element is retrieved after every batch.
+pub struct TriesObserverElement<StateTrieT> {
+    /// Block where the tries are collected.
+    pub block: U256,
+    /// Tries were collected after trace decoder processes batch number `batch`.
+    pub batch: usize,
+    /// State, transaction, and receipt tries after the batch
+    /// execution (how the trace decoder sees them).
+    pub tries: IntraBlockTries<StateTrieT>,
+}
+
+/// Observer for collection of post-execution tries from the
+/// trace decoder run.
+#[derive(Debug)]
+pub struct TriesObserver<StateTrieT> {
+    /// Collected data in the observer pass
+    pub data: Vec<TriesObserverElement<StateTrieT>>,
+}
+
+impl<StateTrieT> TriesObserver<StateTrieT> {
+    /// Create new tries collecting observer.
+    pub fn new() -> Self {
+        TriesObserver::<StateTrieT> { data: Vec::new() }
+    }
+}
+
+impl<StateTrieT: Clone> Observer<StateTrieT> for TriesObserver<StateTrieT> {
+    fn collect_tries(
+        &mut self,
+        block: U256,
+        batch: usize,
+        state_trie: &StateTrieT,
+        storage: &BTreeMap<H256, StorageTrie>,
+        transaction_trie: &TransactionTrie,
+        receipt_trie: &ReceiptTrie,
+    ) {
+        self.data.push(TriesObserverElement {
+            block,
+            batch,
+            tries: IntraBlockTries {
+                state: state_trie.clone(),
+                storage: storage.clone(),
+                transaction: transaction_trie.clone(),
+                receipt: receipt_trie.clone(),
+            },
+        });
+    }
+}
+
+impl<StateTrieT> Default for TriesObserver<StateTrieT> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Dummy observer which does not collect any data.
+#[derive(Default, Debug)]
+pub struct DummyObserver<StateTrieT> {
+    phantom: std::marker::PhantomData<StateTrieT>,
+}
+
+impl<StateTrieT> DummyObserver<StateTrieT> {
+    /// Create a new dummy observer.
+    pub fn new() -> Self {
+        DummyObserver::<StateTrieT> {
+            phantom: Default::default(),
+        }
+    }
+}
+
+impl<StateTrieT> Observer<StateTrieT> for DummyObserver<StateTrieT> {
+    fn collect_tries(
+        &mut self,
+        _block: U256,
+        _batch: usize,
+        _state_trie: &StateTrieT,
+        _storage: &BTreeMap<H256, StorageTrie>,
+        _transaction_trie: &TransactionTrie,
+        _receipt_trie: &ReceiptTrie,
+    ) {
     }
 }
