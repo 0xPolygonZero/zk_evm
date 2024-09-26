@@ -45,6 +45,11 @@ global init_access_lists:
     // Store the segment scaled length
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
+    
+    // Reset the access lists pointers in the `GenerationState`
+    PROVER_INPUT(access_lists::reset)
+    POP // reset pushed a 0
+
     JUMP
 
 %macro init_access_lists
