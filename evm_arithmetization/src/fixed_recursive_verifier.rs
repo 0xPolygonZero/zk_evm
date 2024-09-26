@@ -3025,7 +3025,8 @@ mod tests {
     use plonky2::timed;
 
     use super::*;
-    use crate::testing_utils::{dummy_payload, init_logger};
+    use crate::testing_utils::{empty_payload, init_logger};
+    use crate::witness::operation::Operation;
 
     type F = GoldilocksField;
     const D: usize = 2;
@@ -3040,56 +3041,47 @@ mod tests {
         let all_stark = AllStark::<F, D>::default();
         let config = StarkConfig::standard_fast_config();
 
+        // Generate a dummy payload for testing
+        let payload = empty_payload()?;
+        let max_cpu_len_log = Some(7);
+        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log);
+        let (_, mut segment_data) = segment_iterator.next().unwrap()?;
+
+        let opcode_counts = &segment_data.opcode_counts;
+        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+
+        // Process and prove segment
         let all_circuits = timed!(
             timing,
             log::Level::Info,
             "Create all recursive circuits",
             AllRecursiveCircuits::<F, C, D>::new(
                 &all_stark,
-                &[16..17, 8..9, 9..10, 4..9, 8..9, 4..7, 17..18, 17..18, 7..18],
+                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 17..18, 17..18, 17..18],
                 &config,
             )
         );
 
-        // Generate a dummy payload for testing
-        let dummy_payload = timed!(
+        let segment_proof = timed!(
             timing,
             log::Level::Info,
-            "Generate dummy payload",
-            dummy_payload(100, true)?
-        );
-
-        let max_cpu_len_log = 9;
-        let segment_iterator = SegmentDataIterator::<F>::new(&dummy_payload, Some(max_cpu_len_log));
-
-        let mut proofs_without_keccak = vec![];
-
-        for segment_run in segment_iterator {
-            // Process and prove segment
-            let (_, mut segment_data) = segment_run?;
-            let segment_proof = timed!(
+            "Prove segment",
+            all_circuits.prove_segment(
+                &all_stark,
+                &config,
+                payload.trim(),
+                &mut segment_data,
                 timing,
-                log::Level::Info,
-                "Prove segment",
-                all_circuits.prove_segment(
-                    &all_stark,
-                    &config,
-                    dummy_payload.trim(),
-                    &mut segment_data,
-                    timing,
-                    None,
-                )?
-            );
-
-            proofs_without_keccak.push(segment_proof);
-        }
+                None,
+            )?
+        );
 
         // Verify the generated segment proof
         timed!(
             timing,
             log::Level::Info,
             "Verify segment proof",
-            all_circuits.verify_root(proofs_without_keccak[0].proof_with_pis.clone())?
+            all_circuits.verify_root(segment_proof.proof_with_pis.clone())?
         );
 
         // Print timing details

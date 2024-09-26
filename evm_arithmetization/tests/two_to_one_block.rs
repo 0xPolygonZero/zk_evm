@@ -1,12 +1,22 @@
 #![cfg(feature = "eth_mainnet")]
 
+use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
 };
-use evm_arithmetization::proof::{FinalPublicValues, PublicValues};
-use evm_arithmetization::testing_utils::{dummy_payload, init_logger};
-use evm_arithmetization::{AllRecursiveCircuits, AllStark, StarkConfig};
+use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use evm_arithmetization::proof::{
+    BlockMetadata, FinalPublicValues, PublicValues, TrieRoots, EMPTY_CONSOLIDATED_BLOCKHASH,
+};
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+};
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
+use hex_literal::hex;
+use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
@@ -15,6 +25,80 @@ use plonky2::util::timing::TimingTree;
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
+
+/// Get `GenerationInputs` for a dummy payload, where the block has the given
+/// timestamp.
+fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs<F>> {
+    let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+    let block_metadata = BlockMetadata {
+        block_beneficiary: Address::from(beneficiary),
+        block_timestamp: timestamp.into(),
+        block_number: 1.into(),
+        block_difficulty: 0x020000.into(),
+        block_random: H256::from_uint(&0x020000.into()),
+        block_gaslimit: 0xff112233u32.into(),
+        block_chain_id: 1.into(),
+        block_base_fee: 0xa.into(),
+        ..Default::default()
+    };
+
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let checkpoint_state_trie_root = state_trie_before.hash();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_metadata.block_timestamp,
+        block_metadata.parent_beacon_block_root,
+    )?;
+    let updated_beacon_roots_account =
+        beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+    if !is_first_payload {
+        // This isn't the first dummy payload being processed. We need to update the
+        // initial state trie to account for the update on the beacon roots contract.
+        state_trie_before.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&updated_beacon_roots_account).to_vec(),
+        )?;
+        storage_tries[0].1 = beacon_roots_account_storage;
+    }
+
+    let tries_before = TrieInputs {
+        state_trie: state_trie_before,
+        storage_tries,
+        ..Default::default()
+    };
+
+    let expected_state_trie_after: HashedPartialTrie = {
+        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
+        state_trie_after.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&updated_beacon_roots_account).to_vec(),
+        )?;
+
+        state_trie_after
+    };
+
+    let trie_roots_after = TrieRoots {
+        state_root: expected_state_trie_after.hash(),
+        transactions_root: tries_before.transactions_trie.hash(),
+        receipts_root: tries_before.receipts_trie.hash(),
+    };
+
+    let inputs = GenerationInputs {
+        tries: tries_before.clone(),
+        burn_addr: None,
+        trie_roots_after,
+        checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
+        block_metadata,
+        ..Default::default()
+    };
+
+    Ok(inputs)
+}
 
 fn get_test_block_proof(
     timestamp: u64,
@@ -90,17 +174,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
-        &[
-            16..17,
-            8..9,
-            12..13,
-            9..10,
-            8..9,
-            6..7,
-            17..18,
-            17..18,
-            7..8,
-        ],
+        &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 17..18, 7..8],
         &config,
     );
 
