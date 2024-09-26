@@ -2961,7 +2961,6 @@ mod tests {
     #[test]
     #[ignore]
     fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
-        let timing = &mut TimingTree::new("Segment Proof Generation", log::Level::Info);
         init_logger();
 
         let all_stark = AllStark::<F, D>::default();
@@ -2976,6 +2975,10 @@ mod tests {
         let opcode_counts = &segment_data.opcode_counts;
         assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
 
+        let timing = &mut TimingTree::new(
+            "Segment Proof Generation Without Keccak Test",
+            log::Level::Info,
+        );
         // Process and prove segment
         let all_circuits = timed!(
             timing,
