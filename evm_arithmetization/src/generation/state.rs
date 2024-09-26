@@ -376,12 +376,12 @@ pub struct GenerationState<F: RichField> {
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
-    // Provides quick access to pointers that reference the memory location
-    // of an accounts or storage access list node containing a specific key.
+    /// Provides quick access to pointers that reference the location
+    /// of either and account or a slot in the respective access list.
     pub(crate) access_lists_ptrs: LinkedListsPtrs,
 
-    // Provides quick access to pointers that reference the memory location
-    // of a accounts or storage linked list node containing a specific key.
+    /// Provides quick access to pointers that reference the memory location of
+    /// either and account or a slot in the respective access list.
     pub(crate) state_ptrs: LinkedListsPtrs,
 }
 

@@ -1,29 +1,45 @@
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::fmt;
+#[cfg(test)]
 use std::marker::PhantomData;
 
+#[cfg(test)]
 use anyhow::Result;
 use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 
 use crate::memory::segments::Segment;
+#[cfg(test)]
 use crate::util::u256_to_usize;
+#[cfg(test)]
 use crate::witness::errors::ProgramError;
+#[cfg(test)]
 use crate::witness::errors::ProverInputError::InvalidInput;
 
 pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 
+#[cfg(test)]
+pub const ADDRESSES_ACCESS_LIST_LEN: usize = 2;
+
+pub const DUMMYHEAD: (U256, U256) = (U256::MAX, U256::zero());
+
+#[cfg(test)]
 pub(crate) trait LinkedListType {}
 #[derive(Clone)]
 /// A linked list that starts from the first node after the special node and
 /// iterates forever.
+#[cfg(test)]
 pub(crate) struct Cyclic;
 #[derive(Clone)]
 /// A linked list that starts from the special node and iterates until the last
 /// node.
+#[cfg(test)]
 pub(crate) struct Bounded;
+#[cfg(test)]
 impl LinkedListType for Cyclic {}
+#[cfg(test)]
 impl LinkedListType for Bounded {}
 
 // A linked list implemented using a vector `access_list_mem`.
@@ -31,6 +47,7 @@ impl LinkedListType for Bounded {}
 // `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
 // 1]` holds the address of the next node, where i = node_size * j.
 #[derive(Clone)]
+#[cfg(test)]
 pub(crate) struct LinkedList<'a, const N: usize, T = Cyclic>
 where
     T: LinkedListType,
@@ -67,6 +84,7 @@ pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>;
     })
 }
 
+#[cfg(test)]
 impl<'a, const N: usize, T: LinkedListType> LinkedList<'a, N, T> {
     pub fn from_mem_and_segment(
         mem: &'a [Option<U256>],
@@ -79,7 +97,7 @@ impl<'a, const N: usize, T: LinkedListType> LinkedList<'a, N, T> {
         mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
-        if mem.is_empty() || mem.len() % N != 0 {
+        if mem.len() % N != 0 {
             return Err(ProgramError::ProverInputError(InvalidInput));
         }
         Ok(Self {
@@ -91,6 +109,7 @@ impl<'a, const N: usize, T: LinkedListType> LinkedList<'a, N, T> {
     }
 }
 
+#[cfg(test)]
 impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Linked List {{")?;
@@ -105,6 +124,7 @@ impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
     }
 }
 
+#[cfg(test)]
 impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N, Bounded> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Linked List {{")?;
@@ -116,6 +136,7 @@ impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N, Bounded> {
     }
 }
 
+#[cfg(test)]
 impl<'a, const N: usize> Iterator for LinkedList<'a, N> {
     type Item = [U256; N];
 
@@ -132,6 +153,7 @@ impl<'a, const N: usize> Iterator for LinkedList<'a, N> {
     }
 }
 
+#[cfg(test)]
 impl<'a, const N: usize> Iterator for LinkedList<'a, N, Bounded> {
     type Item = [U256; N];
 

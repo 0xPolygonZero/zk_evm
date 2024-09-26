@@ -10,8 +10,10 @@ use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+use super::linked_list::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
 use super::linked_list::{
-    LinkedList, LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
+    LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD, STORAGE_LINKED_LIST_NODE_SIZE,
 };
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -43,11 +45,6 @@ use crate::witness::util::{current_context_peek, stack_peek};
 /// `ProverInputFn([ff, bn254_base, inverse])`.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct ProverInputFn(Vec<String>);
-
-#[allow(dead_code)]
-pub const ADDRESSES_ACCESS_LIST_LEN: usize = 2;
-#[allow(dead_code)]
-pub const STORAGE_KEYS_ACCESS_LIST_LEN: usize = 4;
 
 impl From<Vec<String>> for ProverInputFn {
     fn from(v: Vec<String>) -> Self {
@@ -466,10 +463,7 @@ impl<F: RichField> GenerationState<F> {
             .storage
             .range(..=(addr, key))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::AccessedStorageKeys as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::AccessedStorageKeys as usize)));
         if pred_addr != addr || pred_slot_key != key {
             self.access_lists_ptrs.storage.insert(
                 (addr, key),
@@ -493,10 +487,7 @@ impl<F: RichField> GenerationState<F> {
             .storage
             .range(..(addr, key))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::AccessedStorageKeys as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::AccessedStorageKeys as usize)));
         self.access_lists_ptrs
             .storage
             .remove(&(addr, key))
@@ -548,10 +539,7 @@ impl<F: RichField> GenerationState<F> {
             .storage
             .range(..=(addr, key))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
             self.state_ptrs.storage.insert(
                 (addr, key),
@@ -599,10 +587,7 @@ impl<F: RichField> GenerationState<F> {
             .storage
             .range(..(addr, key))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
         self.state_ptrs
             .storage
             .remove(&(addr, key))
@@ -625,14 +610,24 @@ impl<F: RichField> GenerationState<F> {
             .storage
             .range(..(addr, U256::zero()))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
 
         Ok(U256::from(
             (pred_ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE,
         ))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn get_addresses_access_list(
+        &self,
+    ) -> Result<LinkedList<ADDRESSES_ACCESS_LIST_LEN>, ProgramError> {
+        // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
+        // virtual address in the segment. In order to get the length we need
+        // to substract `Segment::AccessedAddresses` as usize.
+        LinkedList::from_mem_and_segment(
+            &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
+            Segment::AccessedAddresses,
+        )
     }
 
     /// Returns the first part of the KZG precompile output.
@@ -852,32 +847,6 @@ impl<F: RichField> GenerationState<F> {
                 );
             }
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn get_addresses_access_list(
-        &self,
-    ) -> Result<LinkedList<ADDRESSES_ACCESS_LIST_LEN>, ProgramError> {
-        // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
-        // virtual address in the segment. In order to get the length we need
-        // to substract `Segment::AccessedAddresses` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
-            Segment::AccessedAddresses,
-        )
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn get_storage_keys_access_list(
-        &self,
-    ) -> Result<LinkedList<STORAGE_KEYS_ACCESS_LIST_LEN>, ProgramError> {
-        // GlobalMetadata::AccessedStorageKeysLen stores the value of the next available
-        // virtual address in the segment. In order to get the length we need
-        // to substract `Segment::AccessedStorageKeys` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content,
-            Segment::AccessedStorageKeys,
-        )
     }
 }
 
