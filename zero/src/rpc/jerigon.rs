@@ -68,8 +68,8 @@ where
         .await?;
 
     let jdts: Vec<Option<(JumpDestTableWitness, CodeDb)>> = match jumpdest_src {
-        JumpdestSrc::Simulation => vec![None; tx_results.len()],
-        JumpdestSrc::Zero => {
+        JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],
+        JumpdestSrc::ClientFetchedStructlogs => {
             process_transactions(
                 &block,
                 cached_provider.get_provider().await?.deref(),
@@ -77,7 +77,8 @@ where
             )
             .await?
         }
-        JumpdestSrc::Jerigon => todo!("hybrid server bulk struct log retrieval/local jumpdest table generation not yet implemented"),
+        JumpdestSrc::ServerFetchedStructlogs => todo!("hybrid server bulk struct log retrieval/local jumpdest table generation not yet implemented"),
+        JumpdestSrc::Serverside => todo!(),
     };
 
     let mut code_db = CodeDb::default();

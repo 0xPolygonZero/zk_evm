@@ -155,7 +155,7 @@ where
     let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
 
     let (tx_receipt, pre_trace, diff_trace, structlog_trace) = match jumpdest_src {
-        JumpdestSrc::Zero => {
+        JumpdestSrc::ClientFetchedStructlogs => {
             let structlog_trace_fut = get_normalized_structlog(provider, tx_hash);
             futures::try_join!(
                 tx_receipt_fut,
@@ -164,12 +164,12 @@ where
                 structlog_trace_fut,
             )?
         }
-        JumpdestSrc::Simulation => {
+        JumpdestSrc::ProverSimulation => {
             let (tx_receipt, pre_trace, diff_trace) =
                 futures::try_join!(tx_receipt_fut, pre_trace_fut, diff_trace_fut,)?;
             (tx_receipt, pre_trace, diff_trace, None)
         }
-        JumpdestSrc::Jerigon => todo!(),
+        _ => todo!(),
     };
 
     Ok((

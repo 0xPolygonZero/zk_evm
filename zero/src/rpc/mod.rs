@@ -44,9 +44,10 @@ pub enum RpcType {
 /// The Jumpdest source type.
 #[derive(ValueEnum, Clone, Debug, Copy)]
 pub enum JumpdestSrc {
-    Simulation,
-    Zero,
-    Jerigon,
+    ProverSimulation,
+    ClientFetchedStructlogs,
+    ServerFetchedStructlogs, // later
+    Serverside,              // later
 }
 
 /// Obtain the prover input for one block
