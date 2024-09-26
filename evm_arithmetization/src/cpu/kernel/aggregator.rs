@@ -10,7 +10,7 @@ use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
-    157
+    158
 } else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
     154
 } else {
@@ -120,6 +120,14 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/hash/sha2/temp_words.asm"),
     include_str!("asm/hash/sha2/write_length.asm"),
     include_str!("asm/main.asm"),
+    #[cfg(feature = "eth_mainnet")]
+    include_str!("asm/linked_list/accounts_linked_list.asm"),
+    #[cfg(feature = "eth_mainnet")]
+    include_str!("asm/linked_list/storage_linked_list.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/mpt/linked_list/state_linked_list.asm"),
+    include_str!("asm/linked_list/final_tries.asm"),
+    include_str!("asm/linked_list/initial_tries.asm"),
     include_str!("asm/memory/core.asm"),
     include_str!("asm/memory/memcpy.asm"),
     include_str!("asm/memory/memset.asm"),
@@ -139,9 +147,6 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/mpt/insert/insert_extension.asm"),
     include_str!("asm/mpt/insert/insert_leaf.asm"),
     include_str!("asm/mpt/insert/insert_trie_specific.asm"),
-    include_str!("asm/mpt/linked_list/linked_list.asm"),
-    include_str!("asm/mpt/linked_list/final_tries.asm"),
-    include_str!("asm/mpt/linked_list/initial_tries.asm"),
     include_str!("asm/mpt/read.asm"),
     include_str!("asm/mpt/storage/storage_read.asm"),
     include_str!("asm/mpt/storage/storage_write.asm"),
@@ -155,6 +160,8 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/rlp/read_to_memory.asm"),
     include_str!("asm/shift.asm"),
     include_str!("asm/signed.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/utils.asm"),
     include_str!("asm/journal/journal.asm"),
     include_str!("asm/journal/account_loaded.asm"),
     include_str!("asm/journal/account_destroyed.asm"),

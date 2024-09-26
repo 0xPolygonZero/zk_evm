@@ -391,12 +391,14 @@ const MAX_RLP_PREFIX_SIZE: (&str, u8) = ("MAX_RLP_PREFIX_SIZE", 9);
 pub(crate) const INITIAL_RLP_ADDR: (&str, usize) =
     ("INITIAL_RLP_ADDR", Segment::RlpRaw as usize + 1);
 
-const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
+const LINKED_LISTS_CONSTANTS: [(&str, u16); 7] = [
     ("ACCOUNTS_LINKED_LISTS_NODE_SIZE", 4),
     ("STORAGE_LINKED_LISTS_NODE_SIZE", 5),
+    ("STATE_LINKED_LISTS_NODE_SIZE", 4),
     ("ACCOUNTS_NEXT_NODE_PTR", 3),
     ("STORAGE_NEXT_NODE_PTR", 4),
     ("STORAGE_COPY_PAYLOAD_PTR", 3),
+    ("STATE_COPY_PAYLOAD_PTR", 4),
 ];
 
 /// Cancun-related constants
