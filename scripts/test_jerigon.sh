@@ -9,9 +9,11 @@ if [ -z $RPC ]; then
 fi
 mkdir -p witnesses
 
-export RAYON_NUM_THREADS=4
+# Must match the values in prove_stdio.sh or build is dirty.
+export RAYON_NUM_THREADS=1
 export TOKIO_WORKER_THREADS=1
 export RUST_BACKTRACE=full
+#export RUST_LOG=info
 #export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 #export RUST_MIN_STACK=67108864
 
@@ -251,8 +253,8 @@ BLOCKS="$ROUND3"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 echo "Testing:  $BLOCKS"
-printf "githash       block verdict\n" | tee -a witnesses/jerigon_results.txt
-echo "---------------------------" | tee -a witnesses/jerigon_results.txt
+printf "githash       block verdict duration\n" | tee -a witnesses/jerigon_results.txt
+echo   "------------------------------------"   | tee -a witnesses/jerigon_results.txt
 
 for BLOCK in $BLOCKS; do
   GITHASH=`git rev-parse --short HEAD`
@@ -263,13 +265,16 @@ for BLOCK in $BLOCKS; do
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
-  ./prove_stdio.sh $WITNESS test_only
+  SECONDS=0
+  timeout 10m ./prove_stdio.sh $WITNESS test_only
   EXITCODE=$?
+  DURATION=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
+  echo $DURATION
   if [ $EXITCODE -eq 0 ]
   then
-    RESULT="success"
+    VERDICT="success"
   else
-    RESULT="failure"
+    VERDICT="failure"
   fi
-  printf "%s %10i %s\n" $GITHASH $BLOCK $RESULT | tee -a witnesses/jerigon_results.txt
+  printf "%s %10i %s %s\n" $GITHASH $BLOCK $VERDICT $DURATION | tee -a witnesses/jerigon_results.txt
 done

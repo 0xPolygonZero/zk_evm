@@ -53,7 +53,7 @@ pub fn entrypoint(
         txn_info,
     } = trace;
     let (state, storage, mut code) = start(trie_pre_images)?;
-    code.extend(code_db);
+    code.extend(code_db.clone());
 
     let OtherBlockData {
         b_data:
@@ -132,24 +132,30 @@ pub fn entrypoint(
                                 }
                             });
 
+                    // TODO convert to Hash2Code
                     let initmap: HashMap<_, _> = initcodes
                         .into_iter()
                         .map(|it| (keccak_hash::keccak(&it), it))
                         .collect();
+                    log::trace!("Initmap {:?}", initmap);
 
                     let contractmap: HashMap<_, _> = contract_code
                         .into_iter()
                         .map(|it| (keccak_hash::keccak(&it), it))
                         .collect();
-
-                    log::trace!("Initmap {:?}", initmap);
                     log::trace!("Contractmap {:?}", contractmap);
-                    //log::trace!("DECODER: {:#?}", res);
 
-                    let mut c = code.inner.clone();
-                    c.extend(contractmap);
-                    c.extend(initmap);
-                    c
+                    let codemap: HashMap<_, _> = code_db
+                        .clone()
+                        .into_iter()
+                        .map(|it| (keccak_hash::keccak(&it), it))
+                        .collect();
+                    log::trace!("Codemap {:?}", codemap);
+
+                    let mut res = codemap;
+                    res.extend(contractmap);
+                    res.extend(initmap);
+                    res
                 },
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
@@ -656,10 +662,9 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// trace.
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
-#[derive(Clone)]
 struct Hash2Code {
     /// Key must always be [`hash`] of value.
-    pub inner: HashMap<H256, Vec<u8>>,
+    inner: HashMap<H256, Vec<u8>>,
 }
 
 impl Hash2Code {
