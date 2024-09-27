@@ -3,7 +3,7 @@
 %macro scratch_space_addr_from_num_blocks
     // stack: num_blocks
     %mul_const(320)
-    %add_const(2)
+    %increment_twice
     %build_current_general_address
 %endmacro
 
@@ -92,7 +92,7 @@ compression_loop:
     // stack: a[i+1], b[i+1], c[i+1], d[i+1], e[i+1], f[i+1], g[i+1], h[i+1], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
     DUP12
     // stack: i, a[i+1], b[i+1], c[i+1], d[i+1], e[i+1], f[i+1], g[i+1], h[i+1], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
-    %increment
+    INCR1
     // stack: i+1, a[i+1], b[i+1], c[i+1], d[i+1], e[i+1], f[i+1], g[i+1], h[i+1], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
     DUP1
     // stack: i+1, i+1, a[i+1], b[i+1], c[i+1], d[i+1], e[i+1], f[i+1], g[i+1], h[i+1], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest

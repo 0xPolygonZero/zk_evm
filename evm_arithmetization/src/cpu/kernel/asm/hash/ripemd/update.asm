@@ -119,9 +119,9 @@ buffer_update:
     // stack: get, set, get  , set  , times  , retdest
     %mupdate_current_general
     // stack:           get  , set  , times  , retdest
-    %increment
+    INCR1
+    INCR2
     SWAP1 
-    %increment
     SWAP1
     SWAP2
     %decrement

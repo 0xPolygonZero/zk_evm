@@ -14,7 +14,7 @@ global process_type_1_txn:
 
     // stack: rlp_addr, retdest
     // Initial rlp address offset of 1 (skipping over the 0x01 byte)
-    %add_const(1)
+    INCR1
     // stack: rlp_addr, retdest
     %decode_rlp_list_len
     // We don't actually need the length.
@@ -62,7 +62,7 @@ type_1_compute_signed_data:
     // stack: rlp_addr, rlp_len, retdest
 
     // Hash the RLP + the leading `1`
-    SWAP1 %increment SWAP1
+    INCR2
     // stack: ADDR, len, retdest
     KECCAK_GENERAL
     // stack: hash, retdest

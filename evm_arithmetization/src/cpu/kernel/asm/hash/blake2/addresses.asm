@@ -7,7 +7,7 @@
     MLOAD_GENERAL
     // stack: num_blocks, addr
     %block_size
-    %add_const(2)
+    %increment_twice
     // stack: num_bytes+2, addr
     ADD
     // stack: addr

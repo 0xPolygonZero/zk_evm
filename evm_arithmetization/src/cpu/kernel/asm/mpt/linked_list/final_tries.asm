@@ -14,10 +14,10 @@ global insert_all_accounts:
     %jumpi(no_more_accounts)
     // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP4
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: account_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    %add_const(2)
+    %increment_twice
     DUP1
     %mload_trie_data
     // stack: storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -32,7 +32,7 @@ after_insert_all_slots:
     %mstore_trie_data
     // stack: storage_ptr_ptr', key, root_ptr, account_ptr_ptr, retdest
     DUP4
-    %increment
+    INCR1
     MLOAD_GENERAL
     %stack
         (payload_ptr, storage_ptr_ptr_p, key, root_ptr, account_ptr_ptr) -> 
@@ -67,11 +67,11 @@ global insert_all_slots:
 insert_next_slot:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     DUP2
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: key, addr, storage_ptr_ptr, root_ptr, retdest
     DUP3
-    %add_const(2)
+    %increment_twice
     MLOAD_GENERAL
     // stack: value, key, addr, storage_ptr_ptr, root_ptr, retdest
     // If the value is 0, then payload_ptr = 0, and we don't need to insert a value in the `TrieData` segment.
@@ -116,15 +116,15 @@ global delete_removed_accounts:
     MLOAD_GENERAL
     // stack: key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP2
-    %add_const(2)
+    %increment_twice
     MLOAD_GENERAL // get initial payload_ptr
-    %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
+    %increment_twice // storage_root_ptr_ptr = payload_ptr + 2
     %mload_trie_data
     // stack: storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP3
-    %increment
+    INCR1
     MLOAD_GENERAL // get dynamic payload_ptr
-    %add_const(2) // storage_root_ptr_ptr = dyn_payload_ptr + 2
+    %increment_twice // storage_root_ptr_ptr = dyn_payload_ptr + 2
     %stack
         (storage_root_ptr_ptr, storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr) ->
         (key, storage_root_ptr, storage_ptr_ptr, after_delete_removed_slots, storage_root_ptr_ptr, account_ptr_ptr, root_ptr)
@@ -196,7 +196,7 @@ maybe_delete_this_slot:
 delete_this_slot:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
-    %increment
+    INCR1
     MLOAD_GENERAL
     %stack (key, addr, root_ptr, storage_ptr_ptr) -> (root_ptr, 64, key, after_mpt_delete_slot, addr, storage_ptr_ptr)
     %jump(mpt_delete)

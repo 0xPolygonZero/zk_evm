@@ -33,6 +33,7 @@ const KEEPS_CONTEXT: OpsColumnsView<bool> = OpsColumnsView {
     m_op_32bytes: true,
     exit_kernel: true,
     m_op_general: true,
+    incr: true,
     syscall: true,
     exception: true,
 };

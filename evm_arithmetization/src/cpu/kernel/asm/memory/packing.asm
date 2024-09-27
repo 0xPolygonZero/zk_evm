@@ -4,8 +4,8 @@
 global mload_packing_u64_LE:
     // stack: addr, retdest
     DUP1                MLOAD_GENERAL
-    DUP2 %add_const(1)  MLOAD_GENERAL %shl_const( 8) ADD
-    DUP2 %add_const(2)  MLOAD_GENERAL %shl_const(16) ADD
+    DUP2 INCR1  MLOAD_GENERAL %shl_const( 8) ADD
+    DUP2 %increment_twice  MLOAD_GENERAL %shl_const(16) ADD
     DUP2 %add_const(3)  MLOAD_GENERAL %shl_const(24) ADD
     DUP2 %add_const(4)  MLOAD_GENERAL %shl_const(32) ADD
     DUP2 %add_const(5)  MLOAD_GENERAL %shl_const(40) ADD
@@ -284,11 +284,11 @@ global mstore_unpacking_u64_LE:
     %stack (addr, value) -> (0xff, value, addr, addr, value)
     AND
     MSTORE_GENERAL // First byte
-    DUP1 %add_const(1)
+    DUP1 INCR1
     %stack (new_addr, addr, value) -> (0xff00, value, new_addr, addr, value)
     AND %shr_const(8)
     MSTORE_GENERAL // Second byte
-    DUP1 %add_const(2)
+    DUP1 %increment_twice
     %stack (new_addr, addr, value) -> (0xff0000, value, new_addr, addr, value)
     AND %shr_const(16)
     MSTORE_GENERAL // Third byte

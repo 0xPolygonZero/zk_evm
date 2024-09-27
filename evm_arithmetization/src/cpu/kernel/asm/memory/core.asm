@@ -12,13 +12,13 @@
     MLOAD_GENERAL
     // stack: c0, addr
     DUP2
-    %increment
+    INCR1
     MLOAD_GENERAL
     %shl_const(8)
     ADD
     // stack: c0 | (c1 << 8), addr
     DUP2
-    %add_const(2)
+    %increment_twice
     MLOAD_GENERAL
     %shl_const(16)
     ADD

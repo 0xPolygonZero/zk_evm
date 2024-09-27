@@ -11,14 +11,14 @@ global mpt_delete_extension:
     // stack: node_payload_ptr, num_nibbles, key, retdest
     DUP1 %mload_trie_data
     // stack: node_len, node_payload_ptr, num_nibbles, key, retdest
-    DUP2 %increment %mload_trie_data
+    DUP2 INCR1 %mload_trie_data
     %stack (node_key, node_len, node_payload_ptr, num_nibbles, key, retdest) ->
         (node_len, num_nibbles, key, node_payload_ptr, node_len, node_key, retdest)
     %truncate_nibbles
     // stack: num_nibbles, key, node_payload_ptr, node_len, node_key, retdest
     SWAP2
     // stack: node_payload_ptr, key, num_nibbles, node_len, node_key, retdest
-    DUP1 %add_const(2) %mload_trie_data
+    DUP1 %increment_twice %mload_trie_data
     %stack (node_child_ptr, node_payload_ptr, key, num_nibbles, node_len, node_key, retdest) ->
         (node_child_ptr, num_nibbles, key, after_mpt_delete_extension, node_payload_ptr, node_len, node_key, retdest)
     %jump(mpt_delete)
@@ -37,7 +37,7 @@ after_mpt_delete_extension_branch:
     // stack: child_type, updated_child_node_ptr, node_payload_ptr, node_len, node_key, retdest
     POP
     // stack: updated_child_node_ptr, node_payload_ptr, node_len, node_key, retdest
-    DUP2 %add_const(2) %mstore_trie_data
+    DUP2 %increment_twice %mstore_trie_data
     // stack: node_payload_ptr, node_len, node_key, retdest
     %decrement
     %stack (extension_ptr, node_len, node_key, retdest) -> (retdest, extension_ptr)
@@ -47,16 +47,16 @@ after_mpt_delete_extension_extension:
     // stack: child_type, updated_child_node_ptr, node_payload_ptr, node_len, node_key, retdest
     POP SWAP1 POP
     // stack: updated_child_node_ptr, node_len, node_key, retdest
-    DUP1 %increment %mload_trie_data
+    DUP1 INCR1 %mload_trie_data
     // stack: child_len, updated_child_node_ptr, node_len, node_key, retdest
-    DUP2 %add_const(2) %mload_trie_data
+    DUP2 %increment_twice %mload_trie_data
     // stack: child_key, child_len, updated_child_node_ptr, node_len, node_key, retdest
     %stack (child_key, child_len, updated_child_node_ptr, node_len, node_key) -> (node_len, node_key, child_len, child_key, updated_child_node_ptr)
     %merge_nibbles
     // stack: len, key, updated_child_node_ptr, retdest
-    DUP3 %increment %mstore_trie_data // Change len
+    DUP3 INCR1 %mstore_trie_data // Change len
     // stack: key, updated_child_node_ptr, retdest
-    DUP2 %add_const(2) %mstore_trie_data // Change key
+    DUP2 %increment_twice %mstore_trie_data // Change key
     // stack: extension_ptr, retdest
     SWAP1 JUMP
 
@@ -65,15 +65,15 @@ after_mpt_delete_extension_leaf:
     // stack: child_type, updated_child_node_ptr, node_payload_ptr, node_len, node_key, retdest
     POP SWAP1 POP
     // stack: updated_child_node_ptr, node_len, node_key, retdest
-    DUP1 %increment %mload_trie_data
+    DUP1 INCR1 %mload_trie_data
     // stack: child_len, updated_child_node_ptr, node_len, node_key, retdest
-    DUP2 %add_const(2) %mload_trie_data
+    DUP2 %increment_twice %mload_trie_data
     // stack: child_key, child_len, updated_child_node_ptr, node_len, node_key, retdest
     %stack (child_key, child_len, updated_child_node_ptr, node_len, node_key) -> (node_len, node_key, child_len, child_key, updated_child_node_ptr)
     %merge_nibbles
     // stack: len, key, updated_child_node_ptr, retdest
-    DUP3 %increment %mstore_trie_data // Change len
+    DUP3 INCR1 %mstore_trie_data // Change len
     // stack: key, updated_child_node_ptr, retdest
-    DUP2 %add_const(2) %mstore_trie_data // Change key
+    DUP2 %increment_twice %mstore_trie_data // Change key
     // stack: updated_child_node_ptr, retdest
     SWAP1 JUMP

@@ -69,29 +69,29 @@ loop_store_initial_accounts:
     %get_trie_data_size
     // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: nonce_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     DUP1
     %mload_trie_data // nonce
     %append_to_trie_data
-    %increment
+    INCR1
     // stack: balance_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     DUP1
     %mload_trie_data // balance
     %append_to_trie_data
-    %increment // The storage_root_ptr is not really necessary
+    INCR1 // The storage_root_ptr is not really necessary
     // stack: storage_root_ptr_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     DUP1
     %mload_trie_data // storage_root_ptr
     %append_to_trie_data
-    %increment
+    INCR1
     // stack: code_hash_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     %mload_trie_data // code_hash
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
-    %add_const(2)
+    %increment_twice
     SWAP1
     MSTORE_GENERAL // Store cpy_ptr
     // stack: current_node_ptr, cur_len, retdest
@@ -148,7 +148,7 @@ store_initial_accounts_end:
     DUP2
     %mul_const(4)
     // stack: ptr, @SEGMENT_ACCOUNTS_LINKED_LIST, ptr/4
-    %increment %assert_gt
+    INCR1 %assert_gt
     // stack: ptr/4
     DUP1
     PUSH 4
@@ -196,7 +196,7 @@ account_found_with_overwrite:
     // The address was already in the list
     // stack: pred_ptr, addr_key, payload_ptr, retdest
     // Load the payload pointer
-    %increment
+    INCR1
     // stack: payload_ptr_ptr, addr_key, payload_ptr, retdest
     DUP3 MSTORE_GENERAL
     %pop2
@@ -233,23 +233,23 @@ insert_new_account:
     DUP4
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr_key, payload_ptr, retdest
-    %increment
+    INCR1
     DUP1
     DUP5
     MSTORE_GENERAL
     // stack: new_ptr + 1, next_ptr, addr_key, payload_ptr, retdest
-    %increment
+    INCR1
     DUP1
     DUP5
     %clone_account
     MSTORE_GENERAL
-    %increment
+    INCR1
     DUP1
     // stack: new_next_ptr, new_next_ptr, next_ptr, addr_key, payload_ptr, retdest
     SWAP2
     MSTORE_GENERAL
     // stack: new_next_ptr, addr_key, payload_ptr, retdest
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     // stack: addr_key, payload_ptr, retdest
     %pop2
@@ -293,7 +293,7 @@ account_found:
     // The address was already in the list
     // stack: pred_ptr, addr_key, retdest
     // Load the payload pointer
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: orig_payload_ptr, addr_key, retdest
     %stack (orig_payload_ptr, addr_key, retdest) -> (retdest, orig_payload_ptr)
@@ -390,7 +390,7 @@ global store_initial_slots:
 loop_store_initial_slots:
     // stack: current_node_ptr, cur_len, retdest
     DUP1
-    %add_const(2)
+    %increment_twice
     MLOAD_GENERAL
     // stack: value, current_node_ptr, cur_len, retdest
     DUP2
@@ -408,7 +408,7 @@ loop_store_initial_slots:
     // stack: current_addr_key, current_node_ptr, cur_len', retdest
     SWAP1
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: current_slot_key, current_node_ptr, current_addr_key, cur_len', retdest
     SWAP1
@@ -422,7 +422,7 @@ loop_store_initial_slots:
     // stack: next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
     DUP1
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: next_node_slot_key, next_node_ptr, next_node_ptr, current_slot_key, current_addr_key, cur_len', retdest
     SWAP1
@@ -513,7 +513,7 @@ global insert_slot_with_value:
     %assert_eq
     // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP1 DUP5
@@ -562,7 +562,7 @@ insert_new_slot_with_value:
     %assert_eq
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: next_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1 // This is added just to have the correct stack in next_node_ok
@@ -585,14 +585,14 @@ next_node_ok_with_value:
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr_key, key, value, retdest
     // Write the key in the new node
-    %increment
+    INCR1
     DUP1
     DUP5
     MSTORE_GENERAL
     // stack: new_ptr + 1, next_ptr, addr_key, key, value, retdest
     // Write the value in the linked list.
-    %increment
-    DUP1 %increment
+    INCR1
+    DUP1 INCR1
     // stack: new_ptr+3, new_value_ptr, next_ptr, addr_key, key, value, retdest
     %stack (new_cloned_value_ptr, new_value_ptr, next_ptr, addr_key, key, value, retdest)
         -> (value, new_cloned_value_ptr, value, new_value_ptr, new_cloned_value_ptr, next_ptr, retdest)
@@ -600,20 +600,20 @@ next_node_ok_with_value:
     MSTORE_GENERAL // Store value.
 
     // stack: new_ptr + 3, next_ptr, retdest
-    %increment
+    INCR1
     DUP1
     // stack: new_next_ptr_ptr, new_next_ptr_ptr, next_ptr, retdest
     SWAP2
     MSTORE_GENERAL
     // stack: new_next_ptr_ptr, retdest
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     // stack: retdest
     JUMP
 
 slot_found_write_value:
     // stack: pred_ptr, addr_key, key, value, retdest
-    %add_const(2)
+    %increment_twice
     %stack (payload_ptr, addr_key, key, value) -> (value, payload_ptr)
     MSTORE_GENERAL
     // stack: retdest
@@ -666,7 +666,7 @@ global insert_slot:
     %assert_eq
     // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP1 DUP5
@@ -691,7 +691,7 @@ slot_found_write:
     // The slot was already in the list
     // stack: pred_ptr, addr_key, key, value, retdest
     // Load the old value
-    %add_const(2)
+    %increment_twice
     DUP1
     MLOAD_GENERAL
     // stack: old_value, pred_ptr + 2, addr_key, key, value, retdest
@@ -729,7 +729,7 @@ insert_new_slot:
     %assert_eq
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: next_key, next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
     DUP1 // This is added just to have the correct stack in next_node_ok
@@ -751,32 +751,32 @@ next_node_ok:
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr_key, key, value, retdest
     // Write the key in the new node
-    %increment
+    INCR1
     DUP1
     DUP5
     MSTORE_GENERAL
     // stack: new_ptr + 1, next_ptr, addr_key, key, value, retdest
     // Store value
-    %increment
+    INCR1
     DUP1
     DUP6
     MSTORE_GENERAL
 
     // stack: new_ptr + 2, next_ptr, addr_key, key, value, retdest
     // Store the copy of value
-    %increment
+    INCR1
     DUP1
     DUP6
     %clone_slot
     MSTORE_GENERAL
     // stack: new_ptr + 3, next_ptr, addr_key, key, value, retdest
-    %increment
+    INCR1
     DUP1
     // stack: new_next_ptr, new_next_ptr, next_ptr, addr_key, key, value, retdest
     SWAP2
     MSTORE_GENERAL
     // stack: new_next_ptr, addr_key, key, value, retdest
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     // stack: addr_key, key, value, retdest
     %stack (addr_key, key, value, retdest) -> (retdest, value)
@@ -809,7 +809,7 @@ global search_slot:
     %assert_eq
     // stack: pred_ptr, addr_key, key, value, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: pred_key, pred_ptr, addr_key, key, value, retdest
     DUP1 DUP5
@@ -839,7 +839,7 @@ slot_found_no_write:
     // The slot was already in the list
     // stack: pred_ptr, addr_key, key, value, retdest
     // Load the old value
-    %add_const(2)
+    %increment_twice
     MLOAD_GENERAL
     // stack: old_value, addr_key, key, value, retdest
     %stack (old_value, addr_key, key, value, retdest) -> (retdest, old_value)
@@ -879,7 +879,7 @@ global remove_slot:
     %assert_eq
     // stack: next_ptr, next_ptr_ptr, addr_key, key, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: next_key, next_ptr, next_ptr_ptr, addr_key, key, retdest
     DUP5

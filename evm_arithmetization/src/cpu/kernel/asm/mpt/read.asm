@@ -32,7 +32,7 @@ global mpt_read:
     %mload_trie_data
     // stack: node_type, node_ptr, num_nibbles, key, retdest
     // Increment node_ptr, so it points to the node payload instead of its type.
-    SWAP1 %increment SWAP1
+    INCR2
     // stack: node_type, node_payload_ptr, num_nibbles, key, retdest
 
     DUP1 %eq_const(@MPT_NODE_EMPTY)     %jumpi(mpt_read_empty)
@@ -98,7 +98,7 @@ global mpt_read_extension:
     %mul_const(4) SHR // key_part = key >> (future_nibbles * 4)
     DUP1
     // stack: key_part, key_part, future_nibbles, key, node_payload_ptr, retdest
-    DUP5 %increment %mload_trie_data
+    DUP5 INCR1 %mload_trie_data
     // stack: node_key, key_part, key_part, future_nibbles, key, node_payload_ptr, retdest
     EQ // does the first part of our key match the node's key?
     %jumpi(mpt_read_extension_found)
@@ -116,7 +116,7 @@ global mpt_read_extension_found:
     // stack: key, future_nibbles, node_payload_ptr, retdest
     SWAP2
     // stack: node_payload_ptr, future_nibbles, key, retdest
-    %add_const(2) // child pointer is third field of extension node
+    %increment_twice // child pointer is third field of extension node
     %mload_trie_data
     // stack: child_ptr, future_nibbles, key, retdest
     %jump(mpt_read) // recurse
@@ -127,7 +127,7 @@ global mpt_read_leaf:
     // stack: node_payload_ptr, num_nibbles, key, retdest
     DUP1 %mload_trie_data
     // stack: node_num_nibbles, node_payload_ptr, num_nibbles, key, retdest
-    DUP2 %increment %mload_trie_data
+    DUP2 INCR1 %mload_trie_data
     // stack: node_key, node_num_nibbles, node_payload_ptr, num_nibbles, key, retdest
     SWAP3
     // stack: num_nibbles, node_num_nibbles, node_payload_ptr, node_key, key, retdest
@@ -144,7 +144,7 @@ global mpt_read_leaf_not_found:
     JUMP
 global mpt_read_leaf_found:
     // stack: node_payload_ptr, retdest
-    %add_const(2) // The value pointer is located after num_nibbles and the key.
+    %increment_twice // The value pointer is located after num_nibbles and the key.
     // stack: value_ptr_ptr, retdest
     SWAP1
     // For leaves, we return the pointer

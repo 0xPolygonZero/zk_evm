@@ -19,7 +19,7 @@ use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::memory::segments::Segment;
-use crate::util::u256_to_usize;
+use crate::util::{u256_limbs, u256_to_usize};
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
@@ -58,6 +58,7 @@ pub(crate) enum Operation {
     SetContext,
     Mload32Bytes,
     Mstore32Bytes(u8),
+    Incr(u8),
     ExitKernel,
     MloadGeneral,
     MstoreGeneral,
@@ -594,6 +595,88 @@ pub(crate) fn generate_swap<F: RichField, T: Transition<F>>(
     state.push_memory(log_in1);
     state.push_memory(log_out0);
     state.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_incr<F: RichField, T: Transition<F>>(
+    n: u8,
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    let generation_state = state.get_mut_generation_state();
+    let offset = generation_state
+        .registers
+        .stack_len
+        .checked_sub(1 + (n as usize))
+        .ok_or(ProgramError::StackUnderflow)?;
+    let addr = MemoryAddress::new(generation_state.registers.context, Segment::Stack, offset);
+
+    let (in0, log_in0) = if n == 0 {
+        let val = generation_state.registers.stack_top;
+        let op = MemoryOp::new(
+            MemoryChannel::GeneralPurpose(1),
+            generation_state.traces.clock(),
+            addr,
+            MemoryOpKind::Read,
+            val,
+        );
+
+        let channel = &mut row.mem_channels[1];
+        assert_eq!(channel.used, F::ZERO);
+        channel.used = F::ONE;
+        channel.is_read = F::ONE;
+        channel.addr_context = F::from_canonical_usize(addr.context);
+        channel.addr_segment = F::from_canonical_usize(addr.segment);
+        channel.addr_virtual = F::from_canonical_usize(addr.virt);
+        for (i, limb) in val.0.into_iter().enumerate() {
+            channel.value[2 * i] = F::from_canonical_u32(limb as u32);
+            channel.value[2 * i + 1] = F::from_canonical_u32((limb >> 32) as u32);
+        }
+
+        (val, op)
+    } else {
+        mem_read_gp_with_log_and_fill(1, addr, &generation_state, &mut row)
+    };
+
+    // Write the read value, incremented by 1.
+    let log_out0 = mem_write_gp_log_and_fill(2, addr, generation_state, &mut row, in0 + 1);
+
+    // Manually increment the top of the stack if calling INCR1.
+    if n == 0 {
+        generation_state.registers.stack_top += 1.into();
+    }
+    state.push_memory(log_out0);
+    state.push_memory(log_in0);
+
+    let in0_limbs = u256_limbs::<F>(in0);
+    let out0_limbs = u256_limbs::<F>(in0 + 1);
+    // This is necessary to properly constrain the increment over limbs without
+    // relying on the Arithmetic table.
+    for (i, limb) in row.general.incr_mut().limbs.iter_mut().enumerate() {
+        *limb = if in0_limbs[i] != out0_limbs[i] {
+            F::ONE
+        } else {
+            F::ZERO
+        }
+    }
+    // if n == 0 {
+    //     println!(
+    //         "TOP OF THE STACK: {:?}\n\t{:?}\n\t{:?}\n",
+    //         row.general.incr().limbs,
+    //         row.mem_channels[1],
+    //         row.mem_channels[2],
+    //     );
+    // } else {
+    //     println!(
+    //         "REGULAR CHANNEL: {:?}\n\t{:?}\n\t{:?}\n",
+    //         row.general.incr().limbs,
+    //         row.mem_channels[1],
+    //         row.mem_channels[2]
+    //     );
+    // }
+
+    state.push_cpu(row);
+
     Ok(())
 }
 

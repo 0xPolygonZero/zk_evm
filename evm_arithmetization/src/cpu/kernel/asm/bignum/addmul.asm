@@ -87,11 +87,11 @@ addmul_loop:
     // stack: i-1, base_addr, carry_limb, a_cur_loc, b_cur_loc, val, retdest
     SWAP3
     // stack: a_cur_loc, base_addr, carry_limb, i-1, b_cur_loc, val, retdest
-    %increment
+    INCR1
     // stack: a_cur_loc+1, base_addr, carry_limb, i-1, b_cur_loc, val, retdest
     SWAP4
     // stack: b_cur_loc, base_addr, carry_limb, i-1, a_cur_loc+1, val, retdest
-    %increment
+    INCR1
     // stack: b_cur_loc+1, base_addr, carry_limb, i-1, a_cur_loc+1, val, retdest
     %stack (b, addr, c, i, a) -> (c, addr, i, a, b)
     // stack: carry_limb, base_addr, i-1, a_cur_loc+1, b_cur_loc+1, val, retdest

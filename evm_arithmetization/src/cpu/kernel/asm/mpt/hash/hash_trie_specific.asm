@@ -80,7 +80,7 @@ global encode_account:
     DUP2 %mload_trie_data // nonce = value[0]
     %rlp_scalar_len
     // stack: nonce_rlp_len, rlp_addr, value_ptr, cur_len, retdest
-    DUP3 %increment %mload_trie_data // balance = value[1]
+    DUP3 INCR1 %mload_trie_data // balance = value[1]
     %rlp_scalar_len
     // stack: balance_rlp_len, nonce_rlp_len, rlp_addr, value_ptr, cur_len, retdest
     PUSH 66 // storage_root and code_hash fields each take 1 + 32 bytes
@@ -100,12 +100,12 @@ global encode_account:
     // stack: nonce, rlp_pos_3, value_ptr, cur_len, retdest
     SWAP1 %encode_rlp_scalar
     // stack: rlp_pos_4, value_ptr, cur_len, retdest
-    DUP2 %increment %mload_trie_data // balance = value[1]
+    DUP2 INCR1 %mload_trie_data // balance = value[1]
     // stack: balance, rlp_pos_4, value_ptr, cur_len, retdest
     SWAP1 %encode_rlp_scalar
     // stack: rlp_pos_5, value_ptr, cur_len, retdest
     DUP3
-    DUP3 %add_const(2) %mload_trie_data // storage_root_ptr = value[2]
+    DUP3 %increment_twice %mload_trie_data // storage_root_ptr = value[2]
     // stack: storage_root_ptr, cur_len, rlp_pos_5, value_ptr, cur_len, retdest
     DUP3
     // stack: rlp_pos_5, storage_root_ptr, cur_len, rlp_pos_5, value_ptr, cur_len, retdest
@@ -130,10 +130,10 @@ global encode_txn:
     DUP2 %mload_trie_data
     // stack: txn_rlp_len, rlp_addr, value_ptr, cur_len, retdest
     // We need to add 1+txn_rlp_len to the length of the trie data.
-    SWAP3 DUP4 %increment ADD
+    INCR4 SWAP3 DUP4 ADD
     // stack: new_len, rlp_addr, value_ptr, txn_rlp_len, retdest
     SWAP3
-    SWAP2 %increment
+    INCR3 SWAP2
     // stack: txn_rlp_ptr=value_ptr+1, rlp_addr, txn_rlp_len, new_len, retdest
 
     %stack (txn_rlp_ptr, rlp_addr, txn_rlp_len) -> (rlp_addr, txn_rlp_len, txn_rlp_len, txn_rlp_ptr)
@@ -190,12 +190,12 @@ encode_receipt_after_type:
     SWAP1 %encode_rlp_list_prefix 
     // stack: rlp_addr, payload_len_ptr, cur_len, retdest
     // Encode status.
-    DUP2 %increment %mload_trie_data
+    DUP2 INCR1 %mload_trie_data
     // stack: status, rlp_addr, payload_len_ptr, cur_len, retdest
     SWAP1 %encode_rlp_scalar
     // stack: rlp_addr, payload_len_ptr, cur_len, retdest
     // Encode cum_gas_used.
-    DUP2 %add_const(2) %mload_trie_data
+    DUP2 %increment_twice %mload_trie_data
     // stack: cum_gas_used, rlp_addr, payload_len_ptr, cur_len, retdest
     SWAP1 %encode_rlp_scalar
     // stack: rlp_addr, payload_len_ptr, cur_len, retdest
@@ -235,11 +235,11 @@ encode_receipt_logs_loop:
     SWAP1 %encode_rlp_list_prefix
     // stack: rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
     // Encode address.
-    DUP2 %increment %mload_trie_data
+    DUP2 INCR1 %mload_trie_data
     // stack: address, rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
     SWAP1 %encode_rlp_160
     // stack: rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
-    DUP2 %add_const(2) %mload_trie_data
+    DUP2 %increment_twice %mload_trie_data
     // stack: num_topics, rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
     // Encode topics prefix.
     DUP1 %mul_const(33)
@@ -272,9 +272,10 @@ encode_receipt_topics_loop:
     // stack: rlp_addr, current_topic, j, topics_ptr, rlp_addr, num_topics, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len', retdest
     %encode_rlp_256
     // stack: new_rlp_pos, j, topics_ptr, rlp_addr, num_topics, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len', retdest
+    INCR2
+    // stack: new_rlp_pos, j', topics_ptr, rlp_addr, num_topics, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len', retdest
     SWAP3 POP
-    // stack: j, topics_ptr, new_rlp_pos, num_topics, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len', retdest
-    %increment
+    // stack: j', topics_ptr, new_rlp_pos, num_topics, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len', retdest
     %jump(encode_receipt_topics_loop)
 
 encode_receipt_topics_end:
@@ -295,9 +296,9 @@ encode_receipt_topics_end:
     DUP1 SWAP7 ADD SWAP6
 
     // stack: data_len, i, num_logs, data_len_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
-    DUP4 %increment DUP2 ADD
+    DUP4 INCR1 DUP2 ADD
     // stack: next_log_ptr, data_len, i, num_logs, data_len_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
-    SWAP4 %increment
+    SWAP4 INCR1
     // stack: data_ptr, data_len, i, num_logs, next_log_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
     PUSH @SEGMENT_TRIE_DATA %build_kernel_address
     // stack: SRC, data_len, i, num_logs, next_log_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
@@ -305,9 +306,10 @@ encode_receipt_topics_end:
     // stack: rlp_addr, SRC, data_len, i, num_logs, next_log_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
     %encode_rlp_string
     // stack: new_rlp_pos, i, num_logs, next_log_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
+    INCR2
+    // stack: new_rlp_pos, i', num_logs, next_log_ptr, rlp_addr, payload_len_ptr, cur_len'', retdest
     SWAP4 POP
-    // stack: i, num_logs, next_log_ptr, new_rlp_pos, payload_len_ptr, cur_len'', retdest
-    %increment
+    // stack: i', num_logs, next_log_ptr, new_rlp_pos, payload_len_ptr, cur_len'', retdest
     %jump(encode_receipt_logs_loop)
 
 encode_receipt_end:
@@ -322,22 +324,22 @@ encode_receipt_end:
 encode_nonzero_receipt_type:
     // stack: txn_type, rlp_addr, value_ptr, cur_len, retdest
     // We have a nonlegacy receipt, so the type is also stored in the trie data segment.
-    SWAP3 %increment SWAP3
+    INCR4
     // stack: txn_type, rlp_addr, value_ptr, cur_len, retdest
-    DUP3 %increment %mload_trie_data
+    DUP3 INCR1 %mload_trie_data
     // stack: payload_len, txn_type, rlp_addr, value_ptr, retdest
     // The transaction type is encoded in 1 byte
-    %increment %rlp_list_len
+    INCR1 %rlp_list_len
     // stack: rlp_receipt_len, txn_type, rlp_addr, value_ptr, retdest
     DUP3 %encode_rlp_multi_byte_string_prefix
     // stack: rlp_addr, txn_type, old_rlp_addr, value_ptr, retdest
     DUP1 DUP3
     MSTORE_GENERAL
-    %increment
+    INCR1
     // stack: rlp_addr, txn_type, old_rlp_addr, value_ptr, retdest
     %stack (rlp_addr, txn_type, old_rlp_addr, value_ptr, retdest) -> (rlp_addr, value_ptr, retdest)
     // We replace `value_ptr` with `paylaod_len_ptr` so we can encode the rest of the data more easily
-    SWAP1 %increment SWAP1
+    INCR2
     // stack: rlp_addr, payload_len_ptr, retdest
     %jump(encode_receipt_after_type)
 
@@ -346,7 +348,7 @@ global encode_storage_value:
     SWAP1 %mload_trie_data SWAP1
 
     // A storage value is a scalar, so we only need to add 1 to the trie data length.
-    SWAP2 %increment SWAP2
+    INCR3
 
     // stack: rlp_addr, value, cur_len, retdest
     // The YP says storage trie is a map "... to the RLP-encoded 256-bit integer values"

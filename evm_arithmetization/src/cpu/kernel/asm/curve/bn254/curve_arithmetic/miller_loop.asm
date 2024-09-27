@@ -198,7 +198,7 @@ after_add:
     // stack:      py^2 - 9, addr12, addr12, px, py, qx, qx_,  qy, qy_
     MSTORE_GENERAL
     // stack:               addr12, px, py, qx, qx_,  qy, qy_
-    %add_const(2) DUP1
+    %increment_twice DUP1
     SWAP2
     DUP1
     MULFP254
@@ -228,7 +228,7 @@ after_add:
     // stack:           (2py)qy, addr20, addr14, -3px^2, qx_, 2py, qy_ 
     MSTORE_GENERAL
     // stack:                   addr14, -3px^2, qx_, 2py, qy_
-    %add_const(1) SWAP2
+    SWAP2 INCR3
     // stack:                   qx_, -3px^2, addr15, 2py, qy_
     MULFP254
     // stack:                   (-3px^2)*qx_, addr15, 2py, qy_ 
@@ -295,13 +295,13 @@ after_add:
     PUSH 12
     %create_bn254_pairing_address
     // stack: addr12
-    DUP1 %add_const(2)
+    DUP1 %increment_twice
     // stack: addr14, addr12
-    DUP1 %add_const(1)
+    DUP1 INCR1
     // stack: addr15, addr14, addr12
     DUP1 %add_const(5)
     // stack: addr20, addr15, addr14, addr12
-    DUP1 %add_const(1)
+    DUP1 INCR1
     // stack: addr21, addr20, addr15, addr14, addr12
     %rep 5
         PUSH 0 MSTORE_GENERAL

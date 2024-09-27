@@ -34,7 +34,7 @@
     %get_trie_data_size
     // stack: trie_data_size, value
     DUP1
-    %increment
+    INCR1
     // stack: trie_data_size', trie_data_size, value
     %set_trie_data_size
     // stack: trie_data_size, value
@@ -151,7 +151,7 @@
     DUP2 DUP2 SUB %jumpi(%%return_with_first_nibs)
 
     // len_common += 1
-    SWAP2 %increment SWAP2
+    INCR3
 
     // key_common = key_common * 16 + first_nib_1
     SWAP3

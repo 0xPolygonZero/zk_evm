@@ -15,14 +15,13 @@ use starky::lookup::{Column, Filter};
 use starky::stark::Stark;
 
 use super::columns::CpuColumnsView;
-use super::halt;
 use super::kernel::constants::context_metadata::ContextMetadata;
 use super::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::cpu::columns::{COL_MAP, NUM_CPU_COLUMNS};
 use crate::cpu::{
-    byte_unpacking, clock, contextops, control_flow, decode, dup_swap, gas, jumps, membus, memio,
-    modfp254, pc, push0, shift, simple_logic, stack, syscalls_exceptions,
+    byte_unpacking, clock, contextops, control_flow, decode, dup_swap, gas, halt, incr, jumps,
+    membus, memio, modfp254, pc, push0, shift, simple_logic, stack, syscalls_exceptions,
 };
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
@@ -612,6 +611,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for CpuStark<F, D
         dup_swap::eval_packed(local_values, next_values, yield_constr);
         gas::eval_packed(local_values, next_values, yield_constr);
         halt::eval_packed(local_values, next_values, yield_constr);
+        incr::eval_packed(local_values, yield_constr);
         jumps::eval_packed(local_values, next_values, yield_constr);
         membus::eval_packed(local_values, yield_constr);
         memio::eval_packed(local_values, next_values, yield_constr);
@@ -647,6 +647,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for CpuStark<F, D
         dup_swap::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         gas::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         halt::eval_ext_circuit(builder, local_values, next_values, yield_constr);
+        incr::eval_ext_circuit(builder, local_values, yield_constr);
         jumps::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         membus::eval_ext_circuit(builder, local_values, yield_constr);
         memio::eval_ext_circuit(builder, local_values, next_values, yield_constr);

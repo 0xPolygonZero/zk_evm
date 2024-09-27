@@ -1,4 +1,3 @@
-
 global set_initial_state_trie:
     // stack: retdest
     PUSH set_initial_state_trie_after
@@ -44,20 +43,20 @@ after_mpt_read:
     //stack: trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP1
     %mload_trie_data
-    %add_const(2)
+    %increment_twice
     %mload_trie_data
     // stack: trie_storage_root, trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     SWAP1
     // stack: trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP6
-    %add_const(2) // intial account_ptr = account_ptr_ptr + 2
+    %increment_twice // intial account_ptr = account_ptr_ptr + 2
     MLOAD_GENERAL
     // stack: account_ptr, trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP1 SWAP2
     // stack: trie_account_ptr_ptr, account_ptr, account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %mstore_trie_data // The trie's account points to the linked list initial account
     // stack: account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    %add_const(2)
+    %increment_twice
     // stack: storage_root_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
 
     %stack
@@ -101,7 +100,7 @@ global insert_all_initial_slots:
 insert_next_slot:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     DUP2
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: key, addr, storage_ptr_ptr, root_ptr, retdest
     DUP3

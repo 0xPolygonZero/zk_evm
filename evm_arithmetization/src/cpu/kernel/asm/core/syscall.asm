@@ -141,9 +141,14 @@ global syscall_jumptable:
         JUMPTABLE panic // mstore_32bytes_1-32 are implemented natively
     %endrep
 
-    // 0xe0-0xef
-    %rep 16
-        JUMPTABLE panic // 0xe0-0xef are invalid opcodes
+    // 0xe0-0xe3
+    %rep 4
+        JUMPTABLE panic // incr1-incr4 are implemented natively
+    %endrep
+
+    // 0xe4-0xef
+    %rep 12
+        JUMPTABLE panic // 0xe4-0xef are invalid opcodes
     %endrep
 
     // 0xf0-0xff

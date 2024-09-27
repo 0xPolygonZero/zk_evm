@@ -28,7 +28,7 @@ insert_touched_addresses_loop:
     // stack: addr, loaded_addr, i, len, addr, retdest
     EQ %jumpi(insert_touched_addresses_found)
     // stack: i, len, addr, retdest
-    %increment
+    INCR1
     %jump(insert_touched_addresses_loop)
 
 insert_address:
@@ -37,7 +37,7 @@ insert_address:
     %swap_mstore // Store new address at the end of the array.
     // stack: len, segment, retdest
     SUB // unscale
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_TOUCHED_ADDRESSES_LEN) // Store new length.
     JUMP
 
@@ -64,7 +64,7 @@ remove_touched_addresses_loop:
     // stack: addr, loaded_addr, i, len, addr, retdest
     EQ %jumpi(remove_touched_addresses_found)
     // stack: i, len, addr, retdest
-    %increment
+    INCR1
     %jump(remove_touched_addresses_loop)
 remove_touched_addresses_found:
     %stack (i, len, addr, retdest) -> (len, 1, i, retdest)
@@ -94,11 +94,11 @@ delete_all_touched_addresses_loop:
     // stack: loaded_addr, i, len, retdest
     DUP1 %is_empty %jumpi(bingo)
     // stack: loaded_addr, i, len, retdest
-    POP %increment %jump(delete_all_touched_addresses_loop)
+    POP INCR1 %jump(delete_all_touched_addresses_loop)
 bingo:
     // stack: loaded_addr, i, len, retdest
     %delete_account
-    %increment %jump(delete_all_touched_addresses_loop)
+    INCR1 %jump(delete_all_touched_addresses_loop)
 delete_all_touched_addresses_done:
     // stack: i, len, retdest
     %pop2 JUMP

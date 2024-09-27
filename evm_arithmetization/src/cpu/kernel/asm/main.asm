@@ -7,7 +7,7 @@ global init:
     // stack: prev_stack_len, addr_registers
     // First, check the stack length.
     DUP1
-    DUP3 %add_const(2) 
+    DUP3 %increment_twice 
     // stack: stack_len_addr, prev_stack_len, prev_stack_len, addr_registers
     MLOAD_GENERAL
     %assert_eq
@@ -48,7 +48,7 @@ global init:
     // Construct `kexit_info`.
     DUP1 MLOAD_GENERAL
     // stack: program_counter, addr_registers
-    DUP2 %increment
+    DUP2 INCR1
     MLOAD_GENERAL
     // stack: is_kernel, program_counter, addr_registers
     %shl_const(32) ADD
@@ -102,7 +102,7 @@ global hash_initial_tries:
     // stack: actual_nb_accounts
     // The initial payloads are written twice, and each payload requires 4 elements.
     PUSH 8 MUL
-    %increment
+    INCR1
     // stack: init_trie_data_len
     PUSH @INITIAL_RLP_ADDR
     // stack: rlp_start, init_trie_data_len
@@ -170,7 +170,7 @@ global txn_loop_after:
     %process_receipt
 
     // stack: new_cum_gas, txn_counter, num_nibbles, txn_nb
-    SWAP3 %increment SWAP3
+    INCR4
 
     // Re-initialize memory values before processing the next txn.
     %reinitialize_memory_pre_txn

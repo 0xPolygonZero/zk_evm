@@ -47,7 +47,7 @@ search_transient_storage_loop:
 
     // Addresses match, but we need to check for keys as well
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: loaded_key, i, len, addr, key, retdest
     DUP5
@@ -56,7 +56,7 @@ search_transient_storage_loop:
     %jumpi(search_transient_storage_found)
 increment_and_loop:
     // stack: i, len, addr, key, retdest
-    %increment
+    INCR1
     %jump(search_transient_storage_loop)
 
 search_transient_storage_not_found:
@@ -65,7 +65,7 @@ search_transient_storage_not_found:
 
 search_transient_storage_found:
     // stack: i, len, addr, key, retdest
-    DUP1 %add_const(2)
+    DUP1 %increment_twice
     MLOAD_GENERAL
     %stack (val, i, len, addr, key, retdest) -> (retdest, 1, i, addr, val, key) // Return 1 to indicate that the address was already present.
     JUMP
@@ -123,11 +123,11 @@ global sys_tstore:
     DUP1 DUP3
     // stack: addr, pos, pos, addr, original_value, slot, value, kexit_info
     MSTORE_GENERAL
-    %increment DUP1
+    INCR1 DUP1
     DUP5
     // stack: slot, pos', pos', addr, original_value, slot, value, kexit_info
     MSTORE_GENERAL
-    %increment DUP1
+    INCR1 DUP1
     DUP6
     // stack: value, pos'', pos'', addr, original_value, slot, value, kexit_info
     MSTORE_GENERAL
@@ -156,7 +156,7 @@ add_to_journal:
 new_transient_storage_len:
     // Store the new (unscaled) length.
     // stack: pos, addr, original_value, slot, value, kexit_info
-    %increment
+    INCR1
     // stack: pos + 1, addr, original_value, slot, value, kexit_info
     %mstore_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
     // stack: addr, original_value, slot, value, kexit_info

@@ -15,7 +15,7 @@ global revert_transient_storage_change:
     // The value must have been stored
     %assert_nonzero
     // stack: pos, addr, value, slot, prev_value, retdest
-    %add_const(2)
+    %increment_twice
     DUP5
     // stack: prev_value, pos+2, addr, value, slot, prev_value, retdest
     MSTORE_GENERAL

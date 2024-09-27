@@ -2,7 +2,7 @@
 %macro message_schedule_addr_from_num_blocks
     // stack: num_blocks
     %mul_const(64)
-    %add_const(2)
+    %increment_twice
     %build_current_general_address
 %endmacro
 
@@ -174,8 +174,8 @@ global sha2_gen_all_message_schedules:
     // stack: base_addr, base_addr, output_addr, output_addr, retdest
     MLOAD_GENERAL
     // stack: num_blocks, base_addr, output_addr, output_addr, retdest
+    INCR2
     SWAP1
-    %increment
     // stack: cur_addr (offset = 1), counter = num_blocks, output_addr, output_addr, retdest
 gen_all_message_schedules_loop:
     // stack: cur_addr, counter, cur_output_addr, output_addr, retdest
