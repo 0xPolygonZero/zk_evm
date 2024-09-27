@@ -15,7 +15,6 @@ pub(crate) union CpuGeneralColumnsView<T: Copy> {
     shift: CpuShiftView<T>,
     stack: CpuStackView<T>,
     push: CpuPushView<T>,
-    incr: CpuIncrView<T>,
     context_pruning: CpuContextPruningView<T>,
 }
 
@@ -92,18 +91,6 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
     /// SAFETY: Each view is a valid interpretation of the underlying array.
     pub(crate) fn push_mut(&mut self) -> &mut CpuPushView<T> {
         unsafe { &mut self.push }
-    }
-
-    /// View of the columns required for the incr operation.
-    /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) const fn incr(&self) -> &CpuIncrView<T> {
-        unsafe { &self.incr }
-    }
-
-    /// Mutable view of the columns required for the incr operation.
-    /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn incr_mut(&mut self) -> &mut CpuIncrView<T> {
-        unsafe { &mut self.incr }
     }
 
     /// View of the column for context pruning.
@@ -230,17 +217,6 @@ pub(crate) struct CpuPushView<T: Copy> {
     _padding_columns: [T; NUM_SHARED_COLUMNS - 1],
 }
 
-/// View of all `CpuGeneralColumn`s, helping to detect any limb overflow
-/// when incrementing by 1.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub(crate) struct CpuIncrView<T: Copy> {
-    /// If limb `i` is 1, then we overflowed the first `i-1` limbs when adding
-    /// 1 (i.e. they are now 0). This means limb `1` is incremented by 1, and
-    /// higher limbs remain unchanged.
-    pub(crate) limbs: [T; NUM_SHARED_COLUMNS],
-}
-
 /// View of the first `CpuGeneralColumn` storing a flag for context pruning.
 #[derive(Copy, Clone)]
 pub(crate) struct CpuContextPruningView<T: Copy> {
@@ -267,5 +243,4 @@ const_assert!(size_of::<CpuJumpsView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuShiftView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuStackView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuPushView<u8>>() == NUM_SHARED_COLUMNS);
-const_assert!(size_of::<CpuIncrView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuContextPruningView<u8>>() == NUM_SHARED_COLUMNS);

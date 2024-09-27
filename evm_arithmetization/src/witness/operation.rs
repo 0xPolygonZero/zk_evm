@@ -19,7 +19,7 @@ use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::memory::segments::Segment;
-use crate::util::{u256_limbs, u256_to_usize};
+use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
@@ -648,33 +648,8 @@ pub(crate) fn generate_incr<F: RichField, T: Transition<F>>(
     state.push_memory(log_out0);
     state.push_memory(log_in0);
 
-    let in0_limbs = u256_limbs::<F>(in0);
-    let out0_limbs = u256_limbs::<F>(in0 + 1);
-    // This is necessary to properly constrain the increment over limbs without
-    // relying on the Arithmetic table.
-    for (i, limb) in row.general.incr_mut().limbs.iter_mut().enumerate() {
-        *limb = if in0_limbs[i] != out0_limbs[i] {
-            F::ONE
-        } else {
-            F::ZERO
-        }
-    }
-    // if n == 0 {
-    //     println!(
-    //         "TOP OF THE STACK: {:?}\n\t{:?}\n\t{:?}\n",
-    //         row.general.incr().limbs,
-    //         row.mem_channels[1],
-    //         row.mem_channels[2],
-    //     );
-    // } else {
-    //     println!(
-    //         "REGULAR CHANNEL: {:?}\n\t{:?}\n\t{:?}\n",
-    //         row.general.incr().limbs,
-    //         row.mem_channels[1],
-    //         row.mem_channels[2]
-    //     );
-    // }
-
+    let operation = arithmetic::Operation::binary(BinaryOperator::Add, in0, U256::one());
+    state.push_arithmetic(operation);
     state.push_cpu(row);
 
     Ok(())
