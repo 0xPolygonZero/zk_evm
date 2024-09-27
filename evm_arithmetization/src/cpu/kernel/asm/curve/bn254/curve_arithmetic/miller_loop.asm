@@ -247,58 +247,48 @@ after_add:
 ///     )
 
 %macro cord
-    GET_CONTEXT PUSH @SEGMENT_BN_PAIRING %build_address_no_offset
-    // stack:                    addr, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
-    DUP2
-    DUP6
+    // stack:                    p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
+    DUP1
+    DUP5
     MULFP254
-    // stack:           p2y*p1x, addr, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
-    DUP4
-    DUP6  
-    MULFP254
-    // stack: p1y*p2x , p2y*p1x, addr, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
-    SUBFP254
-    // stack: p1y*p2x - p2y*p1x, addr, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
-    DUP2 %add_const(12)
-    %swap_mstore
-    // stack:                    addr, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
-    SWAP4
-    // stack:                     p2y, p1x, p1y, p2x , addr, qx, qx_, qy, qy_
-    SUBFP254
-    // stack:                    p2y - p1y, p2x , p1x, addr, qx, qx_, qy, qy_
-    SWAP2
-    // stack:                    p1x , p2x, p2y - p1y, addr, qx, qx_, qy, qy_
-    SUBFP254
-    // stack:                    p1x - p2x, p2y - p1y, addr, qx, qx_, qy, qy_
-    SWAP5
-    // stack:                    qy, p2y - p1y, addr, qx, qx_, p1x - p2x, qy_
-    DUP6
-    MULFP254
-    // stack:         (p1x - p2x)qy, p2y - p1y, addr, qx, qx_, p1x - p2x, qy_
-    DUP2 %add_const(20)
-    %swap_mstore
-    // stack:                        p2y - p1y, addr, qx, qx_, p1x - p2x, qy_
-    SWAP2
-    // stack:                        qx, addr, p2y - p1y, qx_, p1x - p2x, qy_
+    // stack:           p2y*p1x, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
     DUP3
+    DUP5  
     MULFP254
-    // stack:             (p2y - p1y)qx, addr, p2y - p1y, qx_, p1x - p2x, qy_
-    DUP2 %add_const(14)
-    %swap_mstore
-    // stack:                            addr, p2y - p1y, qx_, p1x - p2x, qy_
+    // stack: p1y*p2x , p2y*p1x, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
+    SUBFP254
+    // stack: p1y*p2x - p2y*p1x, p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
+    %mstore_bn254_pairing(12)
+    // stack:                    p1x , p1y, p2x , p2y, qx, qx_, qy, qy_
+    SWAP3
+    // stack:                    p2y , p1y, p2x , p1x, qx, qx_, qy, qy_
+    SUBFP254
+    // stack:                    p2y - p1y, p2x , p1x, qx, qx_, qy, qy_
     SWAP2
-    // stack:                            qx_, p2y - p1y, addr, p1x - p2x, qy_
+    // stack:                    p1x , p2x, p2y - p1y, qx, qx_, qy, qy_
+    SUBFP254
+    // stack:                    p1x - p2x, p2y - p1y, qx, qx_, qy, qy_
+    SWAP4
+    // stack:                    qy, p2y - p1y, qx, qx_, p1x - p2x, qy_
+    DUP5
     MULFP254
-    // stack:                            (p2y - p1y)qx_, addr, p1x - p2x, qy_
-    DUP2 %add_const(15)
-    %swap_mstore
-    // stack:                                            addr, p1x - p2x, qy_
-    %add_const(21)
-    SWAP2
-    // stack:                                            p1x - p2x, qy_, addr
+    // stack:         (p1x - p2x)qy, p2y - p1y, qx, qx_, p1x - p2x, qy_
+    %mstore_bn254_pairing(20)
+    // stack:                        p2y - p1y, qx, qx_, p1x - p2x, qy_
+    SWAP1
+    // stack:                        qx, p2y - p1y, qx_, p1x - p2x, qy_
+    DUP2
     MULFP254
-    // stack:                                           (p1x - p2x)*qy_, addr
-    MSTORE_GENERAL
+    // stack:             (p2y - p1y)qx, p2y - p1y, qx_, p1x - p2x, qy_
+    %mstore_bn254_pairing(14)
+    // stack:                            p2y - p1y, qx_, p1x - p2x, qy_
+    MULFP254
+    // stack:                            (p2y - p1y)qx_, p1x - p2x, qy_
+    %mstore_bn254_pairing(15)
+    // stack:                                            p1x - p2x, qy_
+    MULFP254
+    // stack:                                           (p1x - p2x)*qy_
+    %mstore_bn254_pairing(21)
 %endmacro
 
 %macro clear_line

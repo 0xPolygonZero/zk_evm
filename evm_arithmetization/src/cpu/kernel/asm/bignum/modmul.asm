@@ -27,13 +27,14 @@ global modmul_bignum:
     // stack: i=0, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
 modmul_remainder_loop:
     // stack: i, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
-    DUP7
-    DUP2
-    ADD
-    // stack: out_loc[i], i, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
-    DUP3 ADD // out_addr_i
     PROVER_INPUT(bignum_modmul)
-    MSTORE_GENERAL
+    // stack: PI, i, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
+    DUP8
+    DUP3
+    ADD
+    // stack: out_loc[i], PI, i, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
+    DUP4 ADD // out_addr_i
+    %swap_mstore
     // stack: i, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
     %increment
     DUP3
@@ -79,13 +80,14 @@ modmul_return_1:
     // stack: i=0, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
 modmul_quotient_loop:
     // stack: i, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
-    DUP9
-    DUP2
-    ADD
-    // stack: s1[i], i, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
-    DUP3 ADD // s1_addr_i
     PROVER_INPUT(bignum_modmul)
-    MSTORE_GENERAL
+    // stack: PI, i, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
+    DUP10
+    DUP3
+    ADD
+    // stack: s1[i], PI, i, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
+    DUP4 ADD // s1_addr_i
+    %swap_mstore
     // stack: i, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
     %increment
     DUP3

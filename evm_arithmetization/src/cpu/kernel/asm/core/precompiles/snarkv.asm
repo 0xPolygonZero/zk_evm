@@ -23,49 +23,56 @@ global precompile_snarkv:
     SWAP1
     // stack: k, kexit_info
     PUSH 0
-    PUSH @SEGMENT_CALLDATA GET_CONTEXT %build_address_no_offset
 loading_loop:
-    // stack: base_addr, i, k, kexit_info
-    DUP3 DUP3 EQ %jumpi(loading_done)
-    // stack: base_addr, i, k, kexit_info
-    DUP2 %mul_const(192)
-    // stack: px, base_addr, i, k, kexit_info
-    %stack (px, base_addr) -> (base_addr, px, 32, px, base_addr)
-    ADD // base_addr + offset
+    // stack: i, k, kexit_info
+    DUP2 DUP2 EQ %jumpi(loading_done)
+    // stack: i, k, kexit_info
+    DUP1 %mul_const(192)
+    // stack: px, i, k, kexit_info
+    GET_CONTEXT
+    %stack (ctx, px) -> (ctx, @SEGMENT_CALLDATA, px, 32, px)
+    %build_address
     MLOAD_32BYTES
 loading_loop_contd:
-    // stack: base_addr, x, px, i, k, kexit_info
-    SWAP2 %add_const(32)
-    %stack (py, base_addr) -> (base_addr, py, 32, py, base_addr)
-    ADD // base_addr + offset
+    // stack: x, px, i, k, kexit_info
+    SWAP1 %add_const(32)
+    GET_CONTEXT
+    %stack (ctx, py) -> (ctx, @SEGMENT_CALLDATA, py, 32, py)
+    %build_address
     MLOAD_32BYTES
 loading_loop_contd2:
-    // stack: base_addr, y, py, x, i, k, kexit_info
-    SWAP2 %add_const(32)
-    %stack (px_im, base_addr) -> (base_addr, px_im, 32, px_im, base_addr)
-    ADD // base_addr + offset
+    // stack: y, py, x, i, k, kexit_info
+    SWAP1 %add_const(32)
+    GET_CONTEXT
+    %stack (ctx, px_im) -> (ctx, @SEGMENT_CALLDATA, px_im, 32, px_im)
+    %build_address
     MLOAD_32BYTES
 loading_loop_contd3:
-    // stack: base_addr, x_im, px_im, y, x, i, k, kexit_info
-    SWAP2 %add_const(32)
-    %stack (px_re, base_addr) -> (base_addr, px_re, 32, px_re, base_addr)
-    ADD // base_addr + offset
+    // stack: x_im, px_im, y, x, i, k, kexit_info
+    SWAP1 %add_const(32)
+    // stack: px_re, x_im, y, x, i, k, kexit_info
+    GET_CONTEXT
+    %stack (ctx, px_re) -> (ctx, @SEGMENT_CALLDATA, px_re, 32, px_re)
+    %build_address
     MLOAD_32BYTES
 loading_loop_contd4:
-    // stack: base_addr, x_re, px_re, x_im, y, x, i, k, kexit_info
-    SWAP2 %add_const(32)
-    %stack (py_im, base_addr) -> (base_addr, py_im, 32, py_im, base_addr)
-    ADD // base_addr + offset
+    // stack: x_re, px_re, x_im, y, x, i, k, kexit_info
+    SWAP1 %add_const(32)
+    // stack: py_im, x_re, x_im, y, x, i, k, kexit_info
+    GET_CONTEXT
+    %stack (ctx, py_im) -> (ctx, @SEGMENT_CALLDATA, py_im, 32, py_im)
+    %build_address
     MLOAD_32BYTES
 loading_loop_contd5:
-    // stack: base_addr, y_im, py_im, x_re, x_im, y, x, i, k, kexit_info
-    SWAP2 %add_const(32)
-    %stack (py_re, base_addr) -> (base_addr, py_re, 32, py_re, base_addr)
-    ADD // base_addr + offset
+    // stack: y_im, py_im, x_re, x_im, y, x, i, k, kexit_info
+    SWAP1 %add_const(32)
+    // stack: py_re, y_im, x_re, x_im, y, x, i, k, kexit_info
+    GET_CONTEXT
+    %stack (ctx, py_re) -> (ctx, @SEGMENT_CALLDATA, py_re, 32)
+    %build_address
     MLOAD_32BYTES
 loading_loop_contd6:
-    // stack: base_addr, y_re, y_im, x_re, x_im, y, x, i, k, kexit_info
-    POP
+    // stack: y_re, y_im, x_re, x_im, y, x, i, k, kexit_info
     SWAP1  // the EVM serializes the imaginary part first
     // stack: y_im, y_re, x_re, x_im, y, x, i, k, kexit_info
     DUP7
