@@ -14,41 +14,37 @@ global precompile_bn_add:
 
     %charge_gas_const(@BN_ADD_GAS)
 
+    GET_CONTEXT
+    PUSH @SEGMENT_CALLDATA
+    %build_address_no_offset
+    // stack: base_addr, kexit_info
+
     // Load x0, y0, x1, y1 from the call data using `MLOAD_32BYTES`.
     PUSH bn_add_return
-    // stack: bn_add_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 96, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 96, 32, bn_add_return, kexit_info
-    %build_address
+    // stack: bn_add_return, base_addr, kexit_info
+    %stack (bn_add_return, base_addr) -> (base_addr, 96, 32, bn_add_return, base_addr)
+    ADD // base_addr + offset
     MLOAD_32BYTES
-    // stack: y1, bn_add_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 64, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 64, 32, y1, bn_add_return, kexit_info
-    %build_address
+    // stack: y1, bn_add_return, base_addr, kexit_info
+    %stack (y1, bn_add_return, base_addr) -> (base_addr, 64, 32, y1, bn_add_return, base_addr)
+    ADD // base_addr + offset
     MLOAD_32BYTES
-    // stack: x1, y1, bn_add_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 32, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 32, 32, x1, y1, bn_add_return, kexit_info
-    %build_address
+    // stack: x1, y1, bn_add_return, base_addr, kexit_info
+    %stack (x1, y1, bn_add_return, base_addr) -> (base_addr, 32, 32, x1, y1, bn_add_return, base_addr)
+    ADD // base_addr + offset
     MLOAD_32BYTES
-    // stack: y0, x1, y1, bn_add_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 32, y0, x1, y1, bn_add_return, kexit_info
-    %build_address_no_offset
+    // stack: y0, x1, y1, bn_add_return, base_addr, kexit_info
+    %stack (y0, x1, y1, bn_add_return, base_addr) -> (base_addr, 32, y0, x1, y1, bn_add_return, base_addr)
     MLOAD_32BYTES
-    // stack: x0, y0, x1, y1, bn_add_return, kexit_info
+    // stack: x0, y0, x1, y1, bn_add_return, base_addr, kexit_info
     %jump(bn_add)
 bn_add_return:
-    // stack: x, y, kexit_info
+    // stack: x, y, base_addr, kexit_info
     DUP2 %eq_const(@U256_MAX) // bn_add returns (U256_MAX, U256_MAX) on bad input.
     DUP2 %eq_const(@U256_MAX) // bn_add returns (U256_MAX, U256_MAX) on bad input.
     MUL // Cheaper than AND
     %jumpi(fault_exception)
-    // stack: x, y, kexit_info
+    // stack: x, y, base_addr, kexit_info
 
     // Store the result (x, y) to the parent's return data using `mstore_unpacking`.
     %mstore_parent_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 64)
@@ -60,4 +56,6 @@ bn_add_return:
     %stack (parent_ctx, y) -> (parent_ctx, @SEGMENT_RETURNDATA, 32, y)
     %build_address
     MSTORE_32BYTES_32
+    // stack: addr, base_addr, kexit_info
+    POP
     %jump(pop_and_return_success)
