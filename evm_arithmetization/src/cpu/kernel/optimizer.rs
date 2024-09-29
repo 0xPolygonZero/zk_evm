@@ -159,7 +159,7 @@ fn remove_ignored_values(code: &mut Vec<Item>) {
     });
 }
 
-/// 1. (not A) and (not B) = not (A or B)
+/// First law: (not A) and (not B) = not (A or B)
 /// [PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]
 fn de_morgan1(code: &mut Vec<Item>) {
     replace_windows(code, |window| {
@@ -180,7 +180,7 @@ fn de_morgan1(code: &mut Vec<Item>) {
     });
 }
 
-/// 2. (not A) or (not B) = not (A and B)
+/// Second law: (not A) or (not B) = not (A and B)
 /// [PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]
 fn de_morgan2(code: &mut Vec<Item>) {
     replace_windows(code, |window| {
