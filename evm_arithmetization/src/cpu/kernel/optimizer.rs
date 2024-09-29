@@ -27,6 +27,8 @@ fn optimize_asm_once(code: &mut Vec<Item>) {
     remove_swapped_pushes(code);
     remove_swaps_commutative(code);
     remove_ignored_values(code);
+    de_morgan1(code);
+    de_morgan2(code);
 }
 
 /// Constant propagation.
@@ -151,6 +153,48 @@ fn remove_ignored_values(code: &mut Vec<Item>) {
                 StandardOp(dup) if dup.starts_with("DUP") => Some(vec![]),
                 _ => None,
             }
+        } else {
+            None
+        }
+    });
+}
+
+/// 1. (not A) and (not B) = not (A or B)
+/// [PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]
+fn de_morgan1(code: &mut Vec<Item>) {
+    replace_windows(code, |window| {
+        if let [Push(a), StandardOp(op1), Push(b), StandardOp(op2), StandardOp(op3)] = window
+            && op1 == "NOT"
+            && op2 == "NOT"
+            && op3 == "AND"
+        {
+            Some(vec![
+                Push(a),
+                Push(b),
+                StandardOp("OR".to_string()),
+                StandardOp("NOT".to_string()),
+            ])
+        } else {
+            None
+        }
+    });
+}
+
+/// 2. (not A) or (not B) = not (A and B)
+/// [PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]
+fn de_morgan2(code: &mut Vec<Item>) {
+    replace_windows(code, |window| {
+        if let [Push(a), StandardOp(op1), Push(b), StandardOp(op2), StandardOp(op3)] = window
+            && op1 == "NOT"
+            && op2 == "NOT"
+            && op3 == "OR"
+        {
+            Some(vec![
+                Push(a),
+                Push(b),
+                StandardOp("AND".to_string()),
+                StandardOp("NOT".to_string()),
+            ])
         } else {
             None
         }
@@ -284,5 +328,45 @@ mod tests {
         let mut code = vec![StandardOp("DUP5".into()), StandardOp("POP".into())];
         remove_ignored_values(&mut code);
         assert_eq!(code, vec![]);
+    }
+
+    #[test]
+    fn test_demorgan1() {
+        let mut before = vec![
+            Push(Literal(3.into())),
+            StandardOp("NOT".into()),
+            Push(Literal(8.into())),
+            StandardOp("NOT".into()),
+            StandardOp("AND".into()),
+        ];
+        let after = vec![
+            Push(Literal(3.into())),
+            Push(Literal(8.into())),
+            StandardOp("OR".into()),
+            StandardOp("NOT".into()),
+        ];
+        assert!(is_code_improved(&before, &after));
+        de_morgan1(&mut before);
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn test_demorgan2() {
+        let mut before = vec![
+            Push(Literal(3.into())),
+            StandardOp("NOT".into()),
+            Push(Literal(8.into())),
+            StandardOp("NOT".into()),
+            StandardOp("OR".into()),
+        ];
+        let after = vec![
+            Push(Literal(3.into())),
+            Push(Literal(8.into())),
+            StandardOp("AND".into()),
+            StandardOp("NOT".into()),
+        ];
+        assert!(is_code_improved(&before, &after));
+        de_morgan2(&mut before);
+        assert_eq!(before, after);
     }
 }
