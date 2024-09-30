@@ -1,0 +1,52 @@
+name: lint
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  BINSTALL_NO_CONFIRM: true
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/rust
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --all-targets --no-default-features --features cdk_erigon -- -D warnings
+  udeps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/rust
+      - run: cargo binstall cargo-udeps
+      - run: cargo udeps --quiet
+      - run: cargo udeps --quiet --tests --benches --examples
+  rustdoc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/rust
+      - run: cargo doc --all
+  cargo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/rust
+      - run: cargo fmt --check
+  taplo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/rust
+      - run: cargo binstall taplo-cli
+      - run: taplo fmt --check
