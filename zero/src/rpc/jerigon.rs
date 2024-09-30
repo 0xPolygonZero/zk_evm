@@ -1,30 +1,24 @@
 use core::iter::Iterator;
-use std::collections::BTreeMap;
 use std::ops::Deref as _;
 
-use __compat_primitive_types::H160;
+use alloy::eips::BlockNumberOrTag;
 use alloy::{
     providers::Provider,
-    rpc::types::{eth::BlockId, trace::geth::StructLog, Block, BlockTransactionsKind, Transaction},
+    rpc::types::{eth::BlockId, Block, BlockTransactionsKind},
     transports::Transport,
 };
-use alloy_primitives::Address;
-use anyhow::Context as _;
+use anyhow::{bail, Context as _};
+use compat::Compat;
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
-use futures::stream::FuturesOrdered;
-use futures::StreamExt as _;
 use serde::Deserialize;
 use serde_json::json;
-use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo, TxnTrace};
-use tracing::info;
+use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
 
-use super::{
-    fetch_other_block_data,
-    jumpdest::{self, get_normalized_structlog},
-    JumpdestSrc,
-};
+use super::{fetch_other_block_data, JumpdestSrc};
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
+use crate::rpc::jumpdest::{generate_jumpdest_table, get_block_normalized_structlogs};
+
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
 pub struct ZeroTxResult {
@@ -67,25 +61,28 @@ where
         .get_block(target_block_id, BlockTransactionsKind::Full)
         .await?;
 
-    let jdts: Vec<Option<(JumpDestTableWitness, CodeDb)>> = match jumpdest_src {
-        JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],
-        JumpdestSrc::ClientFetchedStructlogs => {
-            process_transactions(
-                &block,
-                cached_provider.get_provider().await?.deref(),
-                tx_results.iter().map(|TxnInfo { traces, meta: _ }| traces), // &tx_traces,
-            )
-            .await?
-        }
-        JumpdestSrc::ServerFetchedStructlogs => todo!("hybrid server bulk struct log retrieval/local jumpdest table generation not yet implemented"),
-        JumpdestSrc::Serverside => todo!(),
-    };
+    let block_jumpdest_table_witnesses: Vec<Option<(JumpDestTableWitness, CodeDb)>> =
+        match jumpdest_src {
+            JumpdestSrc::ProverSimulation => Vec::new(),
+            JumpdestSrc::ServerFetchedStructlogs => {
+                process_transactions(
+                    &block,
+                    cached_provider.get_provider().await?.deref(),
+                    &tx_results,
+                )
+                .await?
+            }
+            JumpdestSrc::Serverside => todo!(),
+            JumpdestSrc::ClientFetchedStructlogs => {
+                bail!("client per transaction structlogs fetching is not supported for jerigon RPC type");
+            }
+        };
 
     let mut code_db = CodeDb::default();
     // weave in the JDTs
     let txn_info = tx_results
         .into_iter()
-        .zip(jdts)
+        .zip(block_jumpdest_table_witnesses)
         .map(|(mut tx_info, jdt)| {
             tx_info.meta.jumpdest_table = jdt.map(|(j, c)| {
                 code_db.extend(c);
@@ -112,75 +109,34 @@ where
     })
 }
 
-/// Processes the transactions in the given block and updates the code db.
-pub async fn process_transactions<'i, I, ProviderT, TransportT>(
+/// Processes the transactions in the given block, generating jumpdest tables
+/// and updates the code database
+pub async fn process_transactions<'i, ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
-    tx_traces: I,
+    tx_results: &[TxnInfo],
 ) -> anyhow::Result<Vec<Option<(JumpDestTableWitness, CodeDb)>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
-    I: Iterator<Item = &'i BTreeMap<H160, TxnTrace>>,
 {
-    let futures = block
+    let block_structlogs =
+        get_block_normalized_structlogs(provider, &BlockNumberOrTag::from(block.header.number))
+            .await?;
+
+    let tx_traces = tx_results
+        .iter()
+        .map(|tx| tx.traces.iter().map(|(h, t)| (h.compat(), t)));
+
+    let block_jumpdest_tables = block
         .transactions
         .as_transactions()
-        .context("No transactions in block")?
+        .context("no transactions in block")?
         .iter()
+        .zip(block_structlogs)
         .zip(tx_traces)
-        .map(|(tx, tx_trace)| process_transaction(provider, tx, tx_trace))
-        .collect::<FuturesOrdered<_>>();
+        .map(|((tx, structlog), tx_trace)| generate_jumpdest_table(tx, &structlog.1, tx_trace).ok())
+        .collect::<Vec<_>>();
 
-    futures
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-}
-
-/// Processes the transaction with the given transaction hash and updates the
-/// accounts state.
-pub async fn process_transaction<ProviderT, TransportT>(
-    provider: &ProviderT,
-    tx: &Transaction,
-    tx_trace: &BTreeMap<H160, TxnTrace>,
-) -> anyhow::Result<Option<(JumpDestTableWitness, CodeDb)>>
-where
-    ProviderT: Provider<TransportT>,
-    TransportT: Transport + Clone,
-{
-    let tx_traces = tx_trace
-        .iter()
-        .map(|(h, t)| (Address::from(h.to_fixed_bytes()), t.clone()))
-        .collect();
-
-    let structlog_opt: Option<Vec<StructLog>> = get_normalized_structlog(provider, &tx.hash)
-        .await
-        .ok()
-        .flatten();
-
-    let jc: Option<(JumpDestTableWitness, CodeDb)> = structlog_opt.and_then(|struct_log| {
-        jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces).map_or_else(
-            |error| {
-                info!(
-                    "{:#?}: JumpDestTable generation failed with reason: {}",
-                    tx.hash, error
-                );
-                None
-            },
-            |(jdt, code_db)| {
-                info!(
-                    "{:#?}: JumpDestTable generation succeeded with result: {}",
-                    tx.hash, jdt
-                );
-                Some((jdt, code_db))
-            },
-        )
-    });
-
-    // TODO
-    // let jumpdest_table = jc.map(|(j, c)| j);
-
-    Ok(jc)
+    Ok(block_jumpdest_tables)
 }

@@ -1,43 +1,36 @@
 use core::default::Default;
 use core::option::Option::None;
 use core::str::FromStr as _;
-use core::time::Duration;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Not as _;
 
 use __compat_primitive_types::H160;
 use __compat_primitive_types::H256;
-use alloy::primitives::Address;
-use alloy::primitives::U160;
+use alloy::eips::BlockNumberOrTag;
+use alloy::primitives::{Address, U160};
 use alloy::providers::ext::DebugApi;
 use alloy::providers::Provider;
 use alloy::rpc::types::eth::Transaction;
-use alloy::rpc::types::trace::geth::GethTrace;
-use alloy::rpc::types::trace::geth::StructLog;
-use alloy::rpc::types::trace::geth::{GethDebugTracingOptions, GethDefaultTracingOptions};
-use alloy::transports::RpcError;
+use alloy::rpc::types::trace::geth::{
+    GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace, StructLog, TraceResult,
+};
 use alloy::transports::Transport;
-use alloy::transports::TransportErrorKind;
-use alloy_primitives::B256;
-use alloy_primitives::U256;
+use alloy_primitives::{TxHash, U256};
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use evm_arithmetization::CodeDb;
 use keccak_hash::keccak;
-use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
 use tracing::trace;
 
-/// The maximum time we are willing to wait for a structlog before failing over
-/// to simulating the JumpDest analysis.
-const TIMEOUT_LIMIT: Duration = Duration::from_secs(10 * 60);
-
 /// Structure of Etheruem memory
 type Word = [u8; 32];
 const WORDSIZE: usize = std::mem::size_of::<Word>();
+
+#[derive(Debug)]
+pub struct TxStructLogs(pub Option<TxHash>, pub Vec<StructLog>);
 
 /// Pass `true` for the components needed.
 fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDebugTracingOptions {
@@ -62,65 +55,39 @@ fn get_code_hash(usage: &ContractCodeUsage) -> H256 {
     }
 }
 
-/// Predicate that determines whether a `StructLog` that includes memory is
-/// required.
-fn trace_contains_create(structlog: &[StructLog]) -> bool {
-    structlog
-        .iter()
-        .any(|entry| entry.op == "CREATE" || entry.op == "CREATE2")
-}
-
-/// Gets the lightest possible structlog for transcation `tx_hash`.
-pub(crate) async fn get_normalized_structlog<ProviderT, TransportT>(
+pub(crate) async fn get_block_normalized_structlogs<ProviderT, TransportT>(
     provider: &ProviderT,
-    tx_hash: &B256,
-) -> Result<Option<Vec<StructLog>>, RpcError<TransportErrorKind>>
+    block: &BlockNumberOrTag,
+) -> anyhow::Result<Vec<TxStructLogs>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let inner = async {
-        // Optimization: It may be a better default to pull the stack immediately.
-        let stackonly_structlog_trace = provider
-            .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
-            .await?;
+    let block_stackonly_structlog_traces = provider
+        .debug_trace_block_by_number(*block, structlog_tracing_options(true, false, false))
+        .await?;
 
-        let stackonly_structlog_opt: Option<Vec<StructLog>> =
-            trace2structlog(stackonly_structlog_trace).unwrap_or_default();
+    let block_normalized_stackonly_structlog_traces = block_stackonly_structlog_traces
+        .into_iter()
+        .map(|tx_trace_result| match tx_trace_result {
+            TraceResult::Success {
+                result, tx_hash, ..
+            } => trace_to_tx_structlog(&tx_hash, result),
+            TraceResult::Error { error, tx_hash } => Err(anyhow::anyhow!(
+                "error fetching structlog for tx: {tx_hash:?}. Error: {error:?}"
+            )),
+        })
+        .collect::<Result<Vec<TxStructLogs>, anyhow::Error>>()?;
 
-        let need_memory = stackonly_structlog_opt
-            .as_deref()
-            .is_some_and(trace_contains_create);
-        trace!("Need structlog with memory: {need_memory}");
-
-        if need_memory.not() {
-            return Ok(stackonly_structlog_opt);
-        };
-
-        let memory_structlog_fut = provider.debug_trace_transaction(
-            *tx_hash,
-            structlog_tracing_options(true, need_memory, false),
-        );
-
-        let memory_structlog = trace2structlog(memory_structlog_fut.await?).unwrap_or_default();
-
-        Ok::<Option<Vec<_>>, RpcError<TransportErrorKind>>(memory_structlog)
-    };
-
-    match timeout(TIMEOUT_LIMIT, inner).await {
-        Err(ellapsed_error) => Err(RpcError::Transport(TransportErrorKind::Custom(Box::new(
-            ellapsed_error,
-        )))),
-        Ok(structlog_res) => Ok(structlog_res?),
-    }
+    Ok(block_normalized_stackonly_structlog_traces)
 }
 
 /// Generate at JUMPDEST table by simulating the call stack in EVM,
 /// using a Geth structlog as input.
-pub(crate) fn generate_jumpdest_table(
+pub(crate) fn generate_jumpdest_table<'a>(
     tx: &Transaction,
     struct_log: &[StructLog],
-    tx_traces: &BTreeMap<Address, TxnTrace>,
+    tx_traces: impl Iterator<Item = (Address, &'a TxnTrace)>,
 ) -> anyhow::Result<(JumpDestTableWitness, CodeDb)> {
     trace!("Generating JUMPDEST table for tx: {}", tx.hash);
 
@@ -130,12 +97,11 @@ pub(crate) fn generate_jumpdest_table(
     // This map does neither contain the `init` field of Contract Deployment
     // transactions nor CREATE, CREATE2 payloads.
     let callee_addr_to_code_hash: HashMap<Address, H256> = tx_traces
-        .iter()
         .filter_map(|(callee_addr, trace)| {
             trace
                 .code_usage
                 .as_ref()
-                .map(|code| (*callee_addr, get_code_hash(code)))
+                .map(|code| (callee_addr, get_code_hash(code)))
         })
         .collect();
 
@@ -169,6 +135,9 @@ pub(crate) fn generate_jumpdest_table(
     // true condition and target `jump_target`.
     let mut prev_jump: Option<U256> = None;
 
+    // Call depth of the previous `entry`. We initialize to 0 as this compares
+    // smaller to 1.
+    //let mut prev_depth = 0;
     // The next available context. Starts at 1. Never decrements.
     let mut next_ctx_available = 1;
     // Immediately use context 1;
@@ -398,13 +367,27 @@ pub(crate) fn generate_jumpdest_table(
     Ok((jumpdest_table, code_db))
 }
 
-fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>, serde_json::Error> {
+fn trace_to_tx_structlog(
+    tx_hash: &Option<TxHash>,
+    trace: GethTrace,
+) -> anyhow::Result<TxStructLogs> {
     match trace {
-        GethTrace::Default(it) => Ok(Some(it.struct_logs)),
-        GethTrace::JS(it) => Ok(Some(compat::deserialize(it)?.struct_logs)),
-        _ => Ok(None),
+        GethTrace::Default(structlog_frame) => {
+            Ok(TxStructLogs(*tx_hash, structlog_frame.struct_logs))
+        }
+        GethTrace::JS(it) => Ok(TxStructLogs(*tx_hash, compat::deserialize(it)?.struct_logs)),
+        _ => anyhow::bail!("unsupported structlog type for tx {:?}", tx_hash),
     }
 }
+
+// fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>,
+// serde_json::Error> {     match trace {
+//         GethTrace::Default(it) => Ok(Some(it.struct_logs)),
+//         GethTrace::JS(it) => Ok(Some(compat::deserialize(it)?.struct_logs)),
+//         _ => Ok(None),
+//     }
+// }
+
 /// This module exists as a workaround for parsing `StructLog`.  The `error`
 /// field is a string in Geth and Alloy but an object in Erigon. A PR[^1] has
 /// been merged to fix this upstream and should eventually render this
