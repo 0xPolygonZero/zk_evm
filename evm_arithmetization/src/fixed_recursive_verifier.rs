@@ -2555,7 +2555,8 @@ where
             .verify(wrapped_block_proof.clone())
     }
 
-    /// Aggregates two proofs in manner similar to [`prove_aggregation`].
+    /// Aggregates two proofs in a manner similar to
+    /// [`AllRecursiveCircuits::prove_batch_aggregation`].
     ///
     /// # Arguments
     ///

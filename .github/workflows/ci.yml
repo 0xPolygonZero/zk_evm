@@ -16,6 +16,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  RUSTDOCFLAGS: "-D warnings"
 
 jobs:
   test_mpt_trie:
@@ -204,4 +206,4 @@ jobs:
         run: cargo clippy --package zero --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
 
       - name: Rustdoc
-        run: cargo doc --all
+        run: cargo doc --all --no-deps

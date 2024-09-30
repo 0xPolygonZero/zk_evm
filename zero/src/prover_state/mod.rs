@@ -1,16 +1,16 @@
 //! Global prover state management and utilities.
 //!
 //! This module provides the following:
-//! - [`Circuit`] and [`CircuitConfig`] which can be used to dynamically
-//!   construct [`evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits`]
-//!   from the specified circuit sizes.
+//! - [`ProverState`] and [`CircuitConfig`] which can be used to dynamically
+//!   construct [`evm_arithmetization::AllRecursiveCircuits`] from the specified
+//!   circuit sizes.
 //! - Command line arguments for constructing a [`CircuitConfig`].
 //!     - Provides default values for the circuit sizes.
 //!     - Allows the circuit sizes to be specified via environment variables.
 //! - Persistence utilities for saving and loading
-//!   [`evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits`].
-//! - Global prover state management via the [`P_STATE`] static and the
-//!   [`set_prover_state_from_config`] function.
+//!   [`evm_arithmetization::AllRecursiveCircuits`].
+//! - Global prover state management via the `P_STATE` static and the
+//!   [`p_state`] function.
 use std::borrow::Borrow;
 use std::{fmt::Display, sync::OnceLock};
 

@@ -27,7 +27,7 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-/// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
+/// TODO(0xaatif): document this after <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
