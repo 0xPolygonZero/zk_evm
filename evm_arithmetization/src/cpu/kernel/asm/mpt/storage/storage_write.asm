@@ -114,7 +114,7 @@ sstore_after_refund:
 
     // stack: slot, value, kexit_info
     %address
-    %insert_slot_with_value
+    %insert_slot
 
     EXIT_KERNEL
 
@@ -129,8 +129,7 @@ sstore_delete:
     %address
     %addr_to_state_key
     // stack: addr_key, slot, value, kexit_info
-    SWAP2 POP
-    // stack: slot, addr_key, kexit_info
-    %slot_to_storage_key
-    %remove_slot
+    %remove_slot_from_addr_key
+    // stack: value, kexit_info
+    POP
     EXIT_KERNEL

@@ -27,47 +27,30 @@ global set_beacon_root:
     // stack: state_key, root_slot_idx, calldata, state_key, timestamp_idx, timestamp, retdest
     DUP3 ISZERO %jumpi(delete_root_idx_slot)
     // stack: state_key, root_slot_idx, calldata, state_key, timestamp_idx, timestamp, retdest
-    %insert_beacon_slot
+    %insert_slot_from_addr_key
     // stack: state_key, timestamp_idx, timestamp, retdest
-    %insert_beacon_slot
+    %insert_slot_from_addr_key
     // stack: retdest
     JUMP
-
-%macro insert_beacon_slot
-    #[cfg(feature = "eth_mainnet")]
-    {
-        // stack: state_key, slot, calldata 
-        SWAP1
-        %slot_to_storage_key
-        SWAP1
-        %insert_slot_with_value_from_keys
-    }
-    {
-        %key_storage
-        %beacon_slot_to_key
-        
-    }
-%endmacro
 
 delete_root_idx_slot:
     // stack: state_key, root_slot_idx, 0, state_key, timestamp_idx, timestamp, retdest
     DUP2 DUP2
-    %search_slot
+    %search_slot_from_addr_key
     // stack: slot_exists, state_key, root_slot_idx, 0, state_key, timestamp_idx, timestamp, retdest
-// -----> Aca voy
     %jumpi(remove_root_idx_slot)
     // stack: state_key, root_slot_key, 0, state_key, timestamp_idx, timestamp, retdest
     %pop3
-    // stack: state_key, timestamp_slot_key, timestamp, retdest
-    %insert_slot_with_value_from_keys
+    // stack: state_key, timestamp_idx, timestamp, retdest
+    %insert_slot_from_addr_key
     // stack: retdest
     JUMP
 
 remove_root_idx_slot:
-    // stack: state_key, root_slot_key, 0, state_key, timestamp_slot_key, timestamp, retdest
-    %stack(state_key, storage_key, zero) -> (storage_key, state_key)
-    %remove_slot
-    // stack: state_key, timestamp_slot_key, timestamp, retdest
-    %insert_slot_with_value_from_keys
+    // stack: state_key, root_slot_idx, 0, state_key, timestamp_slot_idx, timestamp, retdest
+    %remove_slot_from_addr_key
+    POP
+    // stack: state_key, timestamp_slot_idx, timestamp, retdest
+    %insert_slot_from_addr_key
     // stack: retdest
     JUMP

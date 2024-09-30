@@ -21,9 +21,9 @@ global update_scalable_block_number:
     // stack: retdest
 
     // Check timestamp
-    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     PUSH @TIMESTAMP_STORAGE_POS
-    %read_storage_linked_list_w_state_key
+    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
+    %read_slot_from_addr_key
     // stack: old_timestamp, retdest
     %timestamp
     GT %jumpi(update_scalable_timestamp)
@@ -74,11 +74,9 @@ global update_scalable_l1blockhash:
     // stack: addr, len, l1blockhash, retdest
     KECCAK_GENERAL
     // stack: slot, l1blockhash, retdest
-    %slot_to_storage_key
-    // stack: storage_key, l1blockhash, retdest
     PUSH @GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY
-    // stack: state_key, storage_key, l1blockhash, retdest
-    %insert_slot_with_value_from_keys
+    // stack: state_key, slot, l1blockhash, retdest
+    %insert_slot_from_addr_key
     // stack: retdest
     JUMP
 
@@ -112,10 +110,8 @@ global create_scalable_l2_account:
 
 %macro write_scalable_storage
     // stack: slot, value
-    %slot_to_storage_key
-    // stack: storage_key, value
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
-    // stack: state_key, storage_key, value
-    %insert_slot_with_value_from_keys
+    // stack: state_key, slot, value
+    %insert_slot_from_addr_key
     // stack: (empty)
 %endmacro

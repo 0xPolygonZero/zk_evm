@@ -11,7 +11,7 @@ global revert_storage_change:
     // stack: address, slot, prev_value, retdest
     DUP3 ISZERO %jumpi(delete)
     // stack: address, slot, prev_value, retdest
-    %insert_slot_with_value
+    %insert_slot
     JUMP
 
 delete:
@@ -21,4 +21,5 @@ delete:
     %slot_to_storage_key
     SWAP1 %addr_to_state_key
     // stack: addr_key, slot_key, retdest
-    %jump(remove_slot)
+    %remove_slot_from_addr_key
+    JUMP
