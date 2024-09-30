@@ -12,7 +12,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::generation::linked_list::LinkedList;
+use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::linked_list::ACCOUNTS_LINKED_LIST_NODE_SIZE;
 use crate::generation::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use crate::memory::segments::Segment;
