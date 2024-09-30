@@ -8,7 +8,7 @@ use ethereum_types::{Address, U256};
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::ConsolidatedHash;
-use keccak_hash::{keccak, H256};
+use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 

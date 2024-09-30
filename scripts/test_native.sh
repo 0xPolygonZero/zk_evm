@@ -10,8 +10,8 @@ fi
 mkdir -p witnesses
 
 # Must match the values in prove_stdio.sh or build is dirty.
-export RAYON_NUM_THREADS=1
-export TOKIO_WORKER_THREADS=1
+#export RAYON_NUM_THREADS=1
+#export TOKIO_WORKER_THREADS=1
 export RUST_BACKTRACE=full
 #export RUST_LOG=info
 #export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'

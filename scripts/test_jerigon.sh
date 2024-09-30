@@ -237,6 +237,51 @@ ROUND3="
 548
 "
 
+ROUND4="
+136
+186
+268
+282
+301
+304
+321
+333
+460
+461
+462
+463
+464
+465
+466
+467
+468
+473
+474
+528
+529
+530
+531
+532
+533
+534
+570
+664
+"
+
+ROUND5="
+460
+461
+462
+463
+464
+465
+466
+467
+468
+473
+474
+664
+"
 
 # 470..663 from Robin
 for i in {470..663}
@@ -249,11 +294,11 @@ NUMRANDOMBLOCKS=10
 RANDOMBLOCKS=`shuf --input-range=0-$TIP -n $NUMRANDOMBLOCKS | sort`
 
 #$CREATE2 $DECODING $CONTAINSKEY $USEDTOFAIL $STILLFAIL $CIBLOCKS $JUMPI $ROUND2 $RANDOMBLOCKS $ROUND3" 
-BLOCKS="$ROUND3" 
+BLOCKS="$ROUND5"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 echo "Testing:  $BLOCKS"
-printf "githash       block verdict duration\n" | tee -a witnesses/jerigon_results.txt
+printf "\ngithash       block verdict duration\n" | tee -a witnesses/jerigon_results.txt
 echo   "------------------------------------"   | tee -a witnesses/jerigon_results.txt
 
 for BLOCK in $BLOCKS; do
@@ -261,12 +306,12 @@ for BLOCK in $BLOCKS; do
   WITNESS="witnesses/$BLOCK.jerigon.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
+  SECONDS=0
   cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs fetch  --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
-  SECONDS=0
-  timeout 10m ./prove_stdio.sh $WITNESS test_only
+  timeout 10m ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   DURATION=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   echo $DURATION

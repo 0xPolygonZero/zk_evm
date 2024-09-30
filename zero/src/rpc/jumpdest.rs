@@ -33,7 +33,7 @@ use tracing::trace;
 
 /// The maximum time we are willing to wait for a structlog before failing over
 /// to simulating the JumpDest analysis.
-const TIMEOUT_LIMIT: Duration = Duration::from_secs(2 * 60);
+const TIMEOUT_LIMIT: Duration = Duration::from_secs(10 * 60);
 
 /// Structure of Etheruem memory
 type Word = [u8; 32];

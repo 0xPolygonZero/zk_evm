@@ -21,15 +21,15 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel)
 PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
 
-BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
+BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-1}"
 echo "Block batch size: $BLOCK_BATCH_SIZE"
 
-BATCH_SIZE=${BATCH_SIZE:=1}
+BATCH_SIZE=${BATCH_SIZE:-1}
 echo "Batch size: $BATCH_SIZE"
 
 OUTPUT_LOG="${REPO_ROOT}/output.log"
 PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
-TEST_OUT_PATH="${REPO_ROOT}/test.out"
+TEST_OUT_PATH="${REPO_ROOT}/$3.test.out"
 
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
@@ -98,14 +98,17 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE |& tee $TEST_OUT_PATH
+    cargo run --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR --batch-size $BATCH_SIZE --save-inputs-on-error stdio < $INPUT_FILE |& tee &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
-        rm $TEST_OUT_PATH
+        #rm $TEST_OUT_PATH
         exit
-    else
-         echo "Failed to create proof witnesses. See \"zk_evm/test.out\" for more details."
+      elif grep -q 'Proving task finished with error' $TEST_OUT_PATH; then
+        echo -e "\n\nFailed to create proof witnesses. See \"zk_evm/test.out\" for more details."
         exit 1
+      else
+        echo -e "\n\nUndecided.  Proving process has stopped but verdict is undecided. See \"zk_evm/test.out\" for more details."
+        exit 2
     fi
 fi
 
