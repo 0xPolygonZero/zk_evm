@@ -6,7 +6,8 @@
 // - the key, as a U256
 // - return destination
 //
-// This function returns a pointer to the value, or 0 if the key is not found.
+// This function returns a pointer to the value, or 0 if the key is not found. If the key
+// is a leaf, it returns a pointer to a pointer.
 global mpt_read:
     // stack: node_ptr, num_nibbles, key, retdest
     DUP1
@@ -116,7 +117,7 @@ global mpt_read_leaf:
     %stack (num_nibbles_match, node_payload_ptr, node_key, key)
         -> (key, node_key, num_nibbles_match, node_payload_ptr)
     EQ
-    AND
+    MUL // AND
     // stack: keys_match && num_nibbles_match, node_payload_ptr, retdest
     %jumpi(mpt_read_leaf_found)
 global mpt_read_leaf_not_found:
@@ -127,7 +128,6 @@ global mpt_read_leaf_found:
     // stack: node_payload_ptr, retdest
     %add_const(2) // The value pointer is located after num_nibbles and the key.
     // stack: value_ptr_ptr, retdest
-    %mload_trie_data
-    // stack: value_ptr, retdest
     SWAP1
+    // For leaves, we return the pointer
     JUMP

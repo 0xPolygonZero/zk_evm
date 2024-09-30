@@ -1,6 +1,5 @@
 zk_evm_common::check_chain_features!();
 
-use std::env;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -15,7 +14,6 @@ use zero::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
 use zero::{fs::get_previous_proof, ops::register};
-use zero::{prover_state::persistence::CIRCUIT_VERSION, version};
 
 use self::leader::*;
 use crate::client::{client_main, LeaderConfig};
@@ -32,17 +30,6 @@ async fn main() -> Result<()> {
     set_circuit_cache_dir_env_if_not_set()?;
     zero::tracing::init();
 
-    let args: Vec<String> = env::args().collect();
-
-    if args.contains(&"--version".to_string()) {
-        version::print_version(
-            CIRCUIT_VERSION.as_str(),
-            env!("VERGEN_RUSTC_COMMIT_HASH"),
-            env!("VERGEN_BUILD_TIMESTAMP"),
-        );
-        return Ok(());
-    }
-
     let args = cli::Cli::parse();
 
     if let Command::Clean = args.command {
@@ -51,6 +38,9 @@ async fn main() -> Result<()> {
 
     let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
     let prover_config: ProverConfig = args.prover_config.into();
+    if prover_config.block_pool_size == 0 {
+        panic!("block-pool-size must be greater than 0");
+    }
 
     // If not in test_only mode and running in emulation mode, we'll need to
     // initialize the prover state here.

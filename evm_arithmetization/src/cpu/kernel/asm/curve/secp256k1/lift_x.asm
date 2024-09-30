@@ -22,12 +22,12 @@
     // stack: sqrtOk, y, parity
     SWAP2
     // stack: parity, y, sqrtOk
-    DUP2
-    // stack: y, parity, y, sqrtOk
-    PUSH 1
-    // stack: 1, y, parity, y, sqrtOk
-    AND
-    // stack: 1 & y, parity, y, sqrtOk
+    PUSH 2
+    // stack: 2, parity, y, sqrtOk
+    DUP3
+    // stack: y, 2, parity, y, sqrtOk
+    MOD
+    // stack: y % 2, parity, y, sqrtOk
     EQ
     // stack: correctParity, y, sqrtOk
     DUP2

@@ -190,36 +190,29 @@ fn test_state_trie(
     interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
     interpreter.run()?;
 
-    // Set initial tries.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(0.into()) // Initial nibbles
-        .expect("The stack should not overflow");
-    interpreter
-        .push(0.into()) // Initial number of nibbles
-        .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::StorageLinkedList as usize + 8).into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::AccountsLinkedList as usize + 6).into())
+        .push((Segment::StorageLinkedList as usize + 5).into())
         .expect("The stack should not overflow");
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
         .unwrap();
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 4).into())
+        .expect("The stack should not overflow");
 
     // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["mpt_set_payload"];
+        KERNEL.global_labels["insert_all_initial_accounts"];
 
     interpreter.run()?;
 
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+    assert_eq!(interpreter.stack_len(), 1);
+
+    let state_root = interpreter.pop().expect("The stack should not be empty");
+    interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
     // Next, execute mpt_insert_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
@@ -267,10 +260,6 @@ fn test_state_trie(
     );
 
     interpreter.generation_state.registers.program_counter = check_state_trie;
-    interpreter
-        .halt_offsets
-        .push(KERNEL.global_labels["check_txn_trie"]);
-
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");

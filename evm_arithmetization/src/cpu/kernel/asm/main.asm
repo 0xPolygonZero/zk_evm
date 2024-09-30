@@ -215,14 +215,16 @@ global check_state_trie:
     // `GLOBAL_METADATA_TRIE_DATA_SIZE` is correct.
     %get_trie_data_size
     // stack: trie_data_len
-    PROVER_INPUT(trie_ptr::state)
+    PROVER_INPUT(trie_ptr::initial_state)
 
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
 
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
-    %set_initial_tries
+    // stack: trie_data_len
+    %set_initial_state_trie
+    // stack: trie_data_len
 
     // stack: trie_data_len
     %hash_state_trie
@@ -232,7 +234,7 @@ global check_state_trie:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
     %assert_eq
     // Check that the stored trie data length is correct.
-    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
     %assert_eq
 
     // We set a dummy value as an initial trie data length,

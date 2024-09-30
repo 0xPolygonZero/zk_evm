@@ -8,18 +8,17 @@ use std::{
 use alloy::hex;
 use anyhow::anyhow;
 use directories::ProjectDirs;
-use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
+use evm_arithmetization::{
+    cpu::kernel::aggregator::KERNEL, AllRecursiveCircuits, RecursionConfig,
+    RecursiveCircuitsForTableSize, VerifierData, EXTENSION_DEGREE,
+};
 use once_cell::sync::Lazy;
 use plonky2::util::serialization::{
     Buffer, DefaultGateSerializer, DefaultGeneratorSerializer, IoError,
 };
-use proof_gen::types::{AllRecursiveCircuits, VerifierData};
 use thiserror::Error;
 
-use super::{
-    circuit::{Circuit, CircuitConfig},
-    Config, RecursiveCircuitsForTableSize, SIZE,
-};
+use super::circuit::{Circuit, CircuitConfig};
 
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
@@ -35,15 +34,21 @@ const KERNEL_HASH_PREFIX: usize = 8;
 /// kernel to determine if the circuit is compatible with our current binary. If
 /// the kernel hash of the circuit that we are loading in from disk differs,
 /// then using these circuits would cause failures during proof generation
-pub static CIRCUIT_VERSION: Lazy<String> =
-    Lazy::new(|| hex::encode(KERNEL.hash())[..KERNEL_HASH_PREFIX].to_string());
+pub static KERNEL_HASH: Lazy<&'static str> = Lazy::new(|| {
+    String::leak(
+        hex::encode(KERNEL.hash())
+            .chars()
+            .take(KERNEL_HASH_PREFIX)
+            .collect(),
+    )
+});
 
 fn get_serializers() -> (
     DefaultGateSerializer,
-    DefaultGeneratorSerializer<Config, SIZE>,
+    DefaultGeneratorSerializer<RecursionConfig, EXTENSION_DEGREE>,
 ) {
     let gate_serializer = DefaultGateSerializer;
-    let witness_serializer: DefaultGeneratorSerializer<Config, SIZE> =
+    let witness_serializer: DefaultGeneratorSerializer<RecursionConfig, EXTENSION_DEGREE> =
         DefaultGeneratorSerializer::default();
 
     (gate_serializer, witness_serializer)
@@ -126,7 +131,7 @@ impl DiskResource for BaseProverResource {
             "{}/{}_base_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             p.get_configuration_digest()
         )
     }
@@ -162,7 +167,7 @@ impl DiskResource for MonolithicProverResource {
             "{}/{}_monolithic_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             p.get_configuration_digest()
         )
     }
@@ -197,7 +202,7 @@ impl DiskResource for RecursiveCircuitResource {
             "{}/{}_{}_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             circuit_type.as_short_str(),
             size
         )
@@ -241,7 +246,7 @@ impl DiskResource for VerifierResource {
             "{}/{}_{}_{}",
             circuit_dir(),
             VERIFIER_STATE_FILE_PREFIX,
-            *CIRCUIT_VERSION,
+            *KERNEL_HASH,
             p.get_configuration_digest()
         )
     }

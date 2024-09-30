@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ethereum_types::{H256, U256};
+use ethereum_types::{Address, H160, H256, U256};
 use hex_literal::hex;
 use smt_type::PartialSmtType;
 
@@ -96,8 +96,8 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
         U256::from(global_exit_root::GLOBAL_EXIT_ROOT_STORAGE_POS.1),
     );
     c.insert(
-        global_exit_root::ADDRESS_SCALABLE_L2.0.into(),
-        U256::from_big_endian(&global_exit_root::ADDRESS_SCALABLE_L2.1),
+        "ADDRESS_SCALABLE_L2".into(),
+        U256::from_big_endian(&global_exit_root::ADDRESS_SCALABLE_L2.to_fixed_bytes()),
     );
     c.insert(
         global_exit_root::ADDRESS_SCALABLE_L2_STATE_KEY.0.into(),
@@ -423,7 +423,6 @@ const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
 /// See <https://eips.ethereum.org/EIPS/eip-4788> and
 /// <https://eips.ethereum.org/EIPS/eip-4844>.
 pub mod cancun_constants {
-    use ethereum_types::{Address, H160};
 
     use super::*;
     use crate::generation::mpt::Type1AccountRlp;
@@ -464,9 +463,9 @@ pub mod cancun_constants {
         "37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42"
     ));
 
-    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 20]) = (
+    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 32]) = (
         "BEACON_ROOTS_CONTRACT_STATE_KEY",
-        *BEACON_ROOTS_CONTRACT_ADDRESS.as_fixed_bytes(),
+        *BEACON_ROOTS_CONTRACT_ADDRESS_HASHED.as_fixed_bytes(),
     );
     pub const BEACON_ROOTS_CONTRACT_CODE: [u8; 97] = hex!("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500");
     pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
@@ -498,8 +497,10 @@ pub mod global_exit_root {
     /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L16.
     pub const GLOBAL_EXIT_ROOT_MANAGER_L2: (&str, [u8; 20]) = (
         "GLOBAL_EXIT_ROOT_MANAGER_L2",
-        hex!("a40D5f56745a118D0906a34E69aeC8C0Db1cB8fA"),
+        GLOBAL_EXIT_ROOT_ADDRESS.to_fixed_bytes(),
     );
+    pub const GLOBAL_EXIT_ROOT_ADDRESS: Address =
+        H160(hex!("a40D5f56745a118D0906a34E69aeC8C0Db1cB8fA"));
     pub const GLOBAL_EXIT_ROOT_ADDRESS_HASHED: H256 = H256(hex!(
         "1d5e9c22b4b1a781d0ef63e9c1293c2a45fee966809019aa9804b5e7148b0ca9"
     ));
@@ -508,13 +509,12 @@ pub mod global_exit_root {
         GLOBAL_EXIT_ROOT_ADDRESS_HASHED.to_fixed_bytes(),
     );
     /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/dc3cbcc59a95769626056c7bc70aade501e7741d/core/state/intra_block_state_zkevm.go#L20.
-    pub const ADDRESS_SCALABLE_L2: (&str, [u8; 20]) = (
-        "ADDRESS_SCALABLE_L2",
-        hex!("000000000000000000000000000000005ca1ab1e"),
-    );
+    pub const ADDRESS_SCALABLE_L2: Address = H160(hex!("000000000000000000000000000000005ca1ab1e"));
+
     pub const ADDRESS_SCALABLE_L2_ADDRESS_HASHED: H256 = H256(hex!(
         "4bff39c4f33dafcd90c45c9a0a1f2e72949b200788587b306eda5dd84aa87577"
     ));
+
     pub const ADDRESS_SCALABLE_L2_STATE_KEY: (&str, [u8; 32]) = (
         "ADDRESS_SCALABLE_L2_STATE_KEY",
         ADDRESS_SCALABLE_L2_ADDRESS_HASHED.to_fixed_bytes(),
@@ -545,11 +545,11 @@ pub mod global_exit_root {
     #[test]
     fn hashed() {
         assert_eq!(
-            keccak_hash::keccak(GLOBAL_EXIT_ROOT_MANAGER_L2.1),
+            keccak_hash::keccak(GLOBAL_EXIT_ROOT_ADDRESS),
             GLOBAL_EXIT_ROOT_ADDRESS_HASHED
         );
         assert_eq!(
-            keccak_hash::keccak(ADDRESS_SCALABLE_L2.1),
+            keccak_hash::keccak(ADDRESS_SCALABLE_L2),
             ADDRESS_SCALABLE_L2_ADDRESS_HASHED
         );
     }

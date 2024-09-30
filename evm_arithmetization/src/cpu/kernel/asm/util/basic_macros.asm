@@ -303,6 +303,16 @@
     // stack: ceil(x / c), ...
 %endmacro
 
+/// Same as `%as_u32`, but does not rely on
+/// the AND operation.
+/// *Note*: This is heavier, `%as_u32` should be preferred.
+%macro as_u32_no_and
+    // stack: word
+    PUSH 0x100000000
+    SWAP1
+    MOD
+%endmacro
+
 %macro as_u32
     %and_const(0xffffffff)
 %endmacro

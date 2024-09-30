@@ -1,4 +1,4 @@
-//! Principled MPT types used in this library.
+S//! Principled MPT types used in this library.
 
 use core::fmt;
 use std::{collections::BTreeMap, marker::PhantomData};
@@ -125,6 +125,11 @@ impl TrieKey {
     }
     pub fn from_address(address: Address) -> Self {
         Self::from_hash(keccak_hash::keccak(address))
+    }
+    pub fn from_slot_position(pos: U256) -> Self {
+        let mut bytes = [0; 32];
+        pos.to_big_endian(&mut bytes);
+        Self::from_hash(keccak_hash::keccak(H256::from_slice(&bytes)))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
@@ -466,8 +471,11 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
+    pub fn get(&mut self, key: &TrieKey) -> Option<&[u8]> {
+        self.untyped.get(key.into_nibbles())
+    }
     pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
-        let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
+        let prev = self.get(&key).map(Vec::from);
         self.untyped.insert(key.into_nibbles(), value)?;
         Ok(prev)
     }

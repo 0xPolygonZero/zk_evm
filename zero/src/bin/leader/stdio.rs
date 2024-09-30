@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use paladin::runtime::Runtime;
-use proof_gen::proof_types::GeneratedBlockProof;
 use tokio::sync::mpsc;
 use tracing::info;
+use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
 
 /// The main function for the stdio mode.

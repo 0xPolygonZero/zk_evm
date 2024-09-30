@@ -209,21 +209,17 @@ after_mpt_delete_slot:
 
 global set_final_tries:
     PUSH set_final_tries_after
-    PUSH @SEGMENT_STORAGE_LINKED_LIST
-    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE) // Skip the first node.
+    %first_initial_slot // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE) // Skip the first node.
+    %first_initial_account // Skip the first node.
     %jump(delete_removed_accounts)
 set_final_tries_after:
     // stack: new_state_root
     PUSH set_final_tries_after_after SWAP1
     // stack: new_state_root, set_final_tries_after_after
-    PUSH @SEGMENT_STORAGE_LINKED_LIST
-    %next_slot
+    %first_slot
     SWAP1
-    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    %next_account
+    %first_account
     %jump(insert_all_accounts)
 set_final_tries_after_after:
     //stack: new_state_root

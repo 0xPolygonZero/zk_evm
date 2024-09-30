@@ -5,13 +5,14 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ethereum_types::{Address, U256};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+use evm_arithmetization::ConsolidatedHash;
 use evm_arithmetization::{
     generation::InputStateTrie,
     proof::{BlockHashes, BlockMetadata},
 };
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
-use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use serde::{Deserialize, Serialize};
 
 use crate::Field;
@@ -183,11 +184,16 @@ pub struct OtherBlockData {
     /// State trie root hash at the checkpoint.
     pub checkpoint_state_trie_root: H256,
     /// Consolidated block hashes at the checkpoint.
-    pub checkpoint_consolidated_hash: [Field; NUM_HASH_OUT_ELTS],
+    pub checkpoint_consolidated_hash: ConsolidatedHash,
     /// Address where the burnt fees are stored.
     ///
     /// Only used if the `cfg_erigon` feature is activated.
     pub burn_addr: Option<Address>,
+    /// The global exit root along with the l1blockhash to write to the GER
+    /// manager.
+    ///
+    /// Only used if the `cfg_erigon` feature is activated.
+    pub ger_data: Option<(H256, H256)>,
 }
 
 /// Data that is specific to a block and is constant for all txns in a given
