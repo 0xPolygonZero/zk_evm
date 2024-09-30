@@ -1,5 +1,6 @@
-out
-node_modules
-client/server
 .vscode-test
 *.ignoreme
+*.vsix
+/lsp-server
+node_modules
+out

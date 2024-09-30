@@ -5,3 +5,5 @@
 /mpt_trie/ @0xaatif @Nashtare @muursh
 /trace_decoder/ @0xaatif @muursh @Nashtare
 .github/ @0xaatif @atanmarko @muursh @Nashtare
+/vscode-extension @0xaatif
+/evm_arithmetization/src/bin/lsp-server.rs @0xaatif
