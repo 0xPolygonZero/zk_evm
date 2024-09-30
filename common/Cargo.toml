@@ -9,9 +9,9 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-ethereum-types = { workspace = true }
+ethereum-types.workspace = true
 
 [dev-dependencies]
-bytes = { workspace = true }
-keccak-hash = { workspace = true }
-rlp = { workspace = true }
+bytes.workspace = true
+keccak-hash.workspace = true
+rlp.workspace = true
