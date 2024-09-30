@@ -6,7 +6,6 @@ description: |
 runs:
   using: composite  
   steps:
-    - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: cargo-bins/cargo-binstall@v1.10.6
     - uses: Swatinem/rust-cache@v2
