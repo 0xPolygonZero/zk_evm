@@ -236,7 +236,7 @@ global secp_double:
     // stack: y, N, x < N, x, y
     LT
     // stack: y < N, x < N, x, y
-    AND
+    MUL // AND
     // stack: (y < N) & (x < N), x, y
     SWAP2
     // stack: y, x, (y < N) & (x < N), x
@@ -280,8 +280,8 @@ global secp_double:
     // stack: (x,y)==(0,0), y^2 % N == (x^3 + 7) % N, b
     SWAP2
     // stack: b, y^2 % N == (x^3 + 7) % N, (x,y)==(0,0)
-    AND
+    MUL // AND
     // stack: y^2 % N == (x^3 + 7) % N & (x < N) & (y < N), (x,y)==(0,0)
-    OR
+    ADD // OR
     // stack: y^2 % N == (x^3 + 7) % N & (x < N) & (y < N) || (x,y)==(0,0)
 %endmacro

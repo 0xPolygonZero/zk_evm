@@ -17,7 +17,7 @@
     // stack: y_, x, x_, y, curve & range
     %bn_check_twisted_ident
     // stack:     ident ,   curve & range
-    OR
+    ADD // OR
     // stack:     ident || (curve & range)
 %endmacro
 
