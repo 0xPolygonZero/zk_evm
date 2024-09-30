@@ -10,43 +10,41 @@ categories.workspace = true
 
 [dependencies]
 __compat_primitive_types.workspace = true
-alloy.workspace = true
 alloy-compat = "0.1.0"
+alloy.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true
 clap = { workspace = true, features = ["derive", "string"] }
+compat.workspace = true
 directories = "5.0.1"
 dotenvy.workspace = true
+evm_arithmetization.workspace = true
 futures.workspace = true
 hashbrown.workspace = true
 hex.workspace = true
 itertools.workspace = true
 keccak-hash.workspace = true
 lru.workspace = true
+mpt_trie.workspace = true
 num-traits.workspace = true
 once_cell.workspace = true
 paladin-core.workspace = true
-plonky2.workspace = true
 plonky2_maybe_rayon.workspace = true
+plonky2.workspace = true
 regex = "1.5.4"
 rlp.workspace = true
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
-serde.workspace = true
 serde_json.workspace = true
 serde_path_to_error.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tower = { workspace = true, features = ["retry"] }
-tracing.workspace = true
-tracing-subscriber.workspace = true
-url.workspace = true
-
-# Local dependencies
-compat.workspace = true
-evm_arithmetization.workspace = true
-mpt_trie.workspace = true
 trace_decoder.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+url.workspace = true
 zk_evm_common.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
