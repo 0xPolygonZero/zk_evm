@@ -15,7 +15,6 @@ alloy-compat = "0.1.0"
 anyhow = { workspace = true }
 async-stream = { workspace = true }
 axum = { workspace = true }
-cargo_metadata = { workspace = true }
 clap = { workspace = true, features = ["derive", "string"] }
 directories = "5.0.1"
 dotenvy = { workspace = true }
@@ -31,14 +30,13 @@ paladin-core = { workspace = true }
 plonky2 = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
 regex = "1.5.4"
-rlp = {workspace = true}
+rlp = { workspace = true }
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-toml = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -57,7 +55,6 @@ jemallocator = "0.5.4"
 
 [build-dependencies]
 anyhow = { workspace = true }
-cargo_metadata = { workspace = true }
 vergen-git2 = { version = "1.0.0", features = ["build"] }
 
 

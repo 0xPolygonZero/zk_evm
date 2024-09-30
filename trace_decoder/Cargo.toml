@@ -40,7 +40,6 @@ winnow = { workspace = true }
 # Local dependencies
 evm_arithmetization = { workspace = true }
 mpt_trie = { workspace = true }
-smt_trie = { workspace = true }
 zk_evm_common = { workspace = true }
 
 [dev-dependencies]
@@ -58,6 +57,7 @@ zero = { workspace = true }
 pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+smt_trie = { workspace = true }
 
 [features]
 default = ["eth_mainnet"]

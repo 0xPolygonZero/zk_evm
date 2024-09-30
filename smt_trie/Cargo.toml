@@ -15,10 +15,12 @@ keywords.workspace = true
 
 [dependencies]
 ethereum-types = { workspace = true }
-hex-literal = { workspace = true }
 plonky2 = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
+
+[dev-dependencies]
+hex-literal = { workspace = true }
 
 [lints]
 workspace = true

@@ -10,8 +10,8 @@ categories.workspace = true
 
 [dependencies]
 ethereum-types = { workspace = true }
-keccak-hash = { workspace = true }
 
 [dev-dependencies]
 bytes = { workspace = true }
+keccak-hash = { workspace = true }
 rlp = { workspace = true }
