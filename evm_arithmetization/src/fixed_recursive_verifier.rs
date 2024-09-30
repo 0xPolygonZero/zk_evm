@@ -872,7 +872,11 @@ where
                 if KECCAK_TABLES_INDICES.contains(&i) {
                     // Ensure the challenger state:
                     // 1) prev == current_before when using Keccak
-                    builder. conditional_assert_eq(use_keccak_tables.target, prev_state[j], current_state_before[j]);
+                    builder.conditional_assert_eq(
+                        use_keccak_tables.target,
+                        prev_state[j],
+                        current_state_before[j],
+                    );
                     // 2) Update prev <- current_after when using Keccak
                     // 3) Keep prev <- prev when skipping Keccak
                     prev_state[j] =
