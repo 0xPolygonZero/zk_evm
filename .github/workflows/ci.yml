@@ -176,41 +176,32 @@ jobs:
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
 
-  lints:
-    name: Rustdoc, Formatting and Clippy
+  clippy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: rustfmt, clippy
-
-      - name: Set up rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Run cargo fmt
-        run: cargo fmt --all --check
-
-      - name: Run cargo clippy
-        run: cargo clippy --all-targets -- -D warnings -A incomplete-features
-
-      - name: Run cargo clippy (with `cdk_erigon` flag)
-        run: cargo clippy --package zero --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
-
-      - name: Rustdoc
-        run: cargo doc --all
+      - uses: ./.github/actions/rust
+      - run: cargo clippy --all-targets -- -D warnings -A incomplete-features
+      - run: cargo clippy --package zero --all-targets --no-default-features --features cdk_erigon -- -D warnings -A incomplete-features
   udeps:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - uses: cargo-bins/cargo-binstall@v1.10.6
+      - uses: ./.github/actions/rust
       - run: cargo binstall cargo-udeps
       - run: cargo udeps --quiet
       - run: cargo udeps --quiet --tests --benches --examples
+  rustdoc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo doc --all
+  cargo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/rust
+      - run: cargo fmt --check
+  taplo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/rust
+      - run: cargo binstall taplo-cli
+      - run: taplo fmt --check
