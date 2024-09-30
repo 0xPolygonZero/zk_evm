@@ -205,3 +205,12 @@ jobs:
 
       - name: Rustdoc
         run: cargo doc --all
+  udeps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: cargo-bins/cargo-binstall@v1.10.6
+      - run: cargo binstall cargo-udeps
+      - run: cargo udeps --quiet
+      - run: cargo udeps --quiet --tests --benches --examples
