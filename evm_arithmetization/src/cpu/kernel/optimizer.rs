@@ -159,20 +159,35 @@ fn remove_ignored_values(code: &mut Vec<Item>) {
     });
 }
 
+/// Helper predicate for the De Morgan rules.
+fn is_push_or_dup(op: &Item) -> bool {
+    if matches!(&op, &Push(_)) {
+        return true;
+    };
+    if let StandardOp(inner) = op
+        && inner.starts_with("DUP")
+    {
+        return true;
+    }
+    false
+}
+
 /// First law: (not A) and (not B) = not (A or B)
 /// [PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]
 fn de_morgan1(code: &mut Vec<Item>) {
     replace_windows(code, |window| {
-        if let [Push(a), StandardOp(op1), Push(b), StandardOp(op2), StandardOp(op3)] = window
+        if let [op0, StandardOp(op1), op2, StandardOp(op3), StandardOp(op4)] = window
+            && is_push_or_dup(&op0)
             && op1 == "NOT"
-            && op2 == "NOT"
-            && op3 == "AND"
+            && is_push_or_dup(&op2)
+            && op3 == "NOT"
+            && op4 == "AND"
         {
             Some(vec![
-                Push(a),
-                Push(b),
-                StandardOp("OR".to_string()),
-                StandardOp("NOT".to_string()),
+                op0,
+                op2,
+                StandardOp("OR".into()),
+                StandardOp("NOT".into()),
             ])
         } else {
             None
@@ -184,16 +199,18 @@ fn de_morgan1(code: &mut Vec<Item>) {
 /// [PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]
 fn de_morgan2(code: &mut Vec<Item>) {
     replace_windows(code, |window| {
-        if let [Push(a), StandardOp(op1), Push(b), StandardOp(op2), StandardOp(op3)] = window
+        if let [op0, StandardOp(op1), op2, StandardOp(op3), StandardOp(op4)] = window
+            && is_push_or_dup(&op0)
             && op1 == "NOT"
-            && op2 == "NOT"
-            && op3 == "OR"
+            && is_push_or_dup(&op2)
+            && op3 == "NOT"
+            && op4 == "OR"
         {
             Some(vec![
-                Push(a),
-                Push(b),
-                StandardOp("AND".to_string()),
-                StandardOp("NOT".to_string()),
+                op0,
+                op2,
+                StandardOp("AND".into()),
+                StandardOp("NOT".into()),
             ])
         } else {
             None
@@ -335,13 +352,13 @@ mod tests {
         let mut before = vec![
             Push(Literal(3.into())),
             StandardOp("NOT".into()),
-            Push(Literal(8.into())),
+            StandardOp("DUP1".into()),
             StandardOp("NOT".into()),
             StandardOp("AND".into()),
         ];
         let after = vec![
             Push(Literal(3.into())),
-            Push(Literal(8.into())),
+            StandardOp("DUP1".into()),
             StandardOp("OR".into()),
             StandardOp("NOT".into()),
         ];
