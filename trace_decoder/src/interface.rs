@@ -166,16 +166,6 @@ pub enum ContractCodeUsage {
     /// contract code will not appear in the [`BlockTrace`] map.
     Write(#[serde(with = "crate::hex")] Vec<u8>),
 }
-// Review: Re-adding this. It has been removed upstream.
-impl ContractCodeUsage {
-    /// Get code hash from a read or write operation of contract code.
-    pub fn get_code_hash(&self) -> H256 {
-        match self {
-            ContractCodeUsage::Read(hash) => *hash,
-            ContractCodeUsage::Write(bytes) => keccak(bytes),
-        }
-    }
-}
 
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -27,6 +27,7 @@ use keccak_hash::keccak;
 use structlogprime::normalize_structlog;
 use tokio::time::timeout;
 use trace_decoder::is_precompile;
+use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
 use tracing::trace;
 
@@ -50,6 +51,14 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
         },
         tracer: None,
         ..GethDebugTracingOptions::default()
+    }
+}
+
+/// Get code hash from a read or write operation of contract code.
+fn get_code_hash(usage: &ContractCodeUsage) -> H256 {
+    match usage {
+        ContractCodeUsage::Read(hash) => *hash,
+        ContractCodeUsage::Write(bytes) => keccak(bytes),
     }
 }
 
@@ -124,7 +133,7 @@ pub(crate) fn generate_jumpdest_table(
         .map(|(callee_addr, trace)| (callee_addr, &trace.code_usage))
         .filter(|(_callee_addr, code_usage)| code_usage.is_some())
         .map(|(callee_addr, code_usage)| {
-            (*callee_addr, code_usage.as_ref().unwrap().get_code_hash())
+            (*callee_addr, get_code_hash(code_usage.as_ref().unwrap()))
         })
         .collect();
 
@@ -204,6 +213,10 @@ pub(crate) fn generate_jumpdest_table(
 
                 if evm_stack.len() < operands_used {
                     trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len());
+                    // Note for future debugging:  There may exist edge cases, where the call
+                    // context has been incremented before the call op fails. This should be
+                    // accounted for before this and the following `continue`.  The details are
+                    // defined in `sys_calls.asm`.
                     continue;
                 }
                 // This is the same stack index (i.e. 2nd) for all four opcodes. See https://ethervm.io/#F1
@@ -217,6 +230,7 @@ pub(crate) fn generate_jumpdest_table(
                         *address,
                         U256::from(U160::MAX)
                     );
+                    // Se note above.
                     continue;
                 };
                 let lower_20_bytes = U160::from(*address);
@@ -368,6 +382,7 @@ pub(crate) fn generate_jumpdest_table(
                     );
                     continue;
                 }
+                assert!(jumpdest_offset.unwrap() < 24576);
                 jumpdest_table.insert(*code_hash, *ctx, jumpdest_offset.unwrap());
             }
             "EXTCODECOPY" | "EXTCODESIZE" => {
