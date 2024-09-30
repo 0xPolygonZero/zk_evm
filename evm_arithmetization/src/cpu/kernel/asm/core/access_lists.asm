@@ -45,6 +45,11 @@ global init_access_lists:
     // Store the segment scaled length
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
+    
+    // Reset the access lists pointers in the `GenerationState`
+    PROVER_INPUT(access_lists::reset)
+    POP // reset pushed a 0
+
     JUMP
 
 %macro init_access_lists
@@ -101,7 +106,7 @@ global insert_accessed_addresses:
     // pred_ptr == start, pred_addr, pred_ptr, addr, retdest
     DUP2 DUP5 GT
     // addr > pred_addr, pred_ptr == start, pred_addr, pred_ptr, addr, retdest
-    OR
+    ADD // OR
     // (addr > pred_addr) || (pred_ptr == start), pred_addr, pred_ptr, addr, retdest
     %jumpi(insert_new_address)
     // Here, addr <= pred_addr. Assert that `addr == pred_addr`.
@@ -308,8 +313,8 @@ insert_storage_key:
     DUP8
     LT
     // stack: next_key > key, next_val == addr, addr < next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
-    AND
-    OR
+    MUL // AND
+    ADD // OR
     %assert_nonzero
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     SWAP2
