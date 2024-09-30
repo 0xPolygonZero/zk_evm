@@ -835,18 +835,16 @@ where
                 if KECCAK_TABLES_INDICES.contains(&i) {
                     // Ensures that the correct CTL challenges are used in Keccak tables when
                     // `enable_keccak_tables` is true.
-                    let beta_diff = builder.sub(
+                    builder.conditional_assert_eq(
+                        use_keccak_tables.target,
                         ctl_challenges.challenges[j].beta,
                         pi.ctl_challenges.challenges[j].beta,
                     );
-                    let gamma_diff = builder.sub(
+                    builder.conditional_assert_eq(
+                        use_keccak_tables.target,
                         ctl_challenges.challenges[j].gamma,
                         pi.ctl_challenges.challenges[j].gamma,
                     );
-                    let beta_check = builder.mul(use_keccak_tables.target, beta_diff);
-                    let gamma_check = builder.mul(use_keccak_tables.target, gamma_diff);
-                    builder.assert_zero(beta_check);
-                    builder.assert_zero(gamma_check);
                 } else {
                     builder.connect(
                         ctl_challenges.challenges[j].beta,
