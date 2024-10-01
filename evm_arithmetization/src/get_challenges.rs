@@ -1,6 +1,7 @@
 use ethereum_types::{BigEndianHash, H256, U256};
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
+use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use starky::config::StarkConfig;
@@ -258,7 +259,12 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
         let stark_proofs = &self.multi_proof.stark_proofs;
 
         for proof in stark_proofs {
-            challenger.observe_cap(&proof.proof.trace_cap);
+            if let Some(proof) = proof {
+                challenger.observe_cap(&proof.proof.trace_cap);
+            } else {
+                let zero_cap = vec![F::ZERO; config.fri_config.num_cap_elements()];
+                challenger.observe_elements(&zero_cap);
+            }
         }
 
         observe_public_values::<F, C, D>(&mut challenger, &self.public_values)?;

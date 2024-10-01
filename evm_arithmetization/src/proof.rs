@@ -11,7 +11,7 @@ use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{MultiProof, StarkProofChallenges};
+use starky::proof::{StarkProofChallenges, StarkProofWithMetadata};
 
 use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
@@ -21,6 +21,22 @@ use crate::witness::state::RegistersState;
 pub(crate) const DEFAULT_CAP_HEIGHT: usize = 4;
 /// Number of elements contained in a Merkle cap with default height.
 pub(crate) const DEFAULT_CAP_LEN: usize = 1 << DEFAULT_CAP_HEIGHT;
+
+/// A combination of STARK proofs for independent statements operating on
+/// possibly shared variables, along with Cross-Table Lookup (CTL) challenges to
+/// assert consistency of common variables across tables.
+#[derive(Debug, Clone)]
+pub struct MultiProof<
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    const D: usize,
+    const N: usize,
+> {
+    /// Proofs for all the different STARK modules.
+    pub stark_proofs: [Option<StarkProofWithMetadata<F, C, D>>; N],
+    /// Cross-table lookup challenges.
+    pub ctl_challenges: GrandProductChallengeSet<F>,
+}
 
 /// A STARK proof for each table, plus some metadata used to create recursive
 /// wrapper proofs.

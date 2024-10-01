@@ -16,7 +16,7 @@ use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{MultiProof, StarkProofWithMetadata};
+use starky::proof::StarkProofWithMetadata;
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
@@ -25,7 +25,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
-use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
+use crate::proof::{AllProof, MemCap, MultiProof, PublicValues, DEFAULT_CAP_LEN};
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
@@ -220,7 +220,7 @@ where
 }
 
 type ProofWithMemCaps<F, C, H, const D: usize> = (
-    [StarkProofWithMetadata<F, C, D>; NUM_TABLES],
+    [Option<StarkProofWithMetadata<F, C, D>>; NUM_TABLES],
     MerkleCap<F, H>,
     MerkleCap<F, H>,
 );

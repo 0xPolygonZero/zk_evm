@@ -1919,7 +1919,9 @@ where
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
             } else {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table]
+                    .as_ref()
+                    .expect("Unable to get stark proof");
                 let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
                 let shrunk_proof = table_circuits
                     .by_stark_size
@@ -2094,7 +2096,9 @@ where
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
             } else {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table]
+                    .as_ref()
+                    .expect("Unable to get stark proof");
 
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
