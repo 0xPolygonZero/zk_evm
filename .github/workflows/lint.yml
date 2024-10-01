@@ -28,10 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo binstall cargo-udeps
-      - run: echo $CARGO_HOME
-      - run: which -a cargo-udeps || true
-      - run: PATH=$PATH:$HOME/.cargo/bin which -a cargo-udeps || true
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-udeps
       - run: cargo udeps --quiet
       - run: cargo udeps --quiet --tests --benches --examples
   rustdoc:
@@ -51,5 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo binstall taplo-cli
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: taplo-cli
       - run: taplo fmt --check
