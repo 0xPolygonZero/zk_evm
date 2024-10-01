@@ -27,7 +27,7 @@ global sys_balance:
 
 global balance:
     // stack: address, retdest
-    %mpt_read_state_trie
+    %read_state_trie
     // stack: account_ptr, retdest
     DUP1 ISZERO %jumpi(retzero) // If the account pointer is null, return 0.
     %add_const(1)

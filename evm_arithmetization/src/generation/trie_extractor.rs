@@ -6,7 +6,7 @@ use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
-use crate::cpu::kernel::constants::trie_type::PartialTrieType;
+use crate::cpu::kernel::constants::mpt_type::PartialMptType;
 use crate::memory::segments::Segment;
 use crate::util::{u256_to_bool, u256_to_h160, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProgramError;
@@ -93,17 +93,22 @@ pub(crate) fn read_state_rlp_value(
     memory: &MemoryState,
     slice: &MemoryValues,
 ) -> Result<Vec<u8>, ProgramError> {
-    let storage_trie: HashedPartialTrie =
-        get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
-            Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
-        })?;
-    let account = AccountRlp {
-        nonce: slice[0].unwrap_or_default(),
-        balance: slice[1].unwrap_or_default(),
-        storage_root: storage_trie.hash(),
-        code_hash: H256::from_uint(&slice[3].unwrap_or_default()),
-    };
-    Ok(rlp::encode(&account).to_vec())
+    #[cfg(not(feature = "cdk_erigon"))]
+    {
+        let storage_trie: HashedPartialTrie =
+            get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
+                Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
+            })?;
+        let account = AccountRlp {
+            nonce: slice[0].unwrap_or_default(),
+            balance: slice[1].unwrap_or_default(),
+            storage_root: storage_trie.hash(),
+            code_hash: H256::from_uint(&slice[3].unwrap_or_default()),
+        };
+        Ok(rlp::encode(&account).to_vec())
+    }
+    #[cfg(feature = "cdk_erigon")]
+    unimplemented!()
 }
 
 pub(crate) fn read_txn_rlp_value(
@@ -186,15 +191,15 @@ pub(crate) fn get_trie_helper<N: PartialTrie>(
         &memory.contexts[0].segments[Segment::TrieData.unscale()].content[init_offset..]
     };
 
-    let trie_type = PartialTrieType::all()[u256_to_usize(load(ptr).unwrap_or_default())?];
+    let trie_type = PartialMptType::all()[u256_to_usize(load(ptr).unwrap_or_default())?];
     match trie_type {
-        PartialTrieType::Empty => Ok(Node::Empty),
-        PartialTrieType::Hash => {
+        PartialMptType::Empty => Ok(Node::Empty),
+        PartialMptType::Hash => {
             let ptr_payload = ptr + 1;
             let hash = H256::from_uint(&load(ptr_payload).unwrap_or_default());
             Ok(Node::Hash(hash))
         }
-        PartialTrieType::Branch => {
+        PartialMptType::Branch => {
             let ptr_payload = ptr + 1;
             let children = (0..16)
                 .map(|i| {
@@ -211,7 +216,7 @@ pub(crate) fn get_trie_helper<N: PartialTrie>(
             };
             Ok(Node::Branch { children, value })
         }
-        PartialTrieType::Extension => {
+        PartialMptType::Extension => {
             let count = u256_to_usize(load(ptr + 1).unwrap_or_default())?;
             let packed = load(ptr + 2).unwrap_or_default();
             let nibbles = Nibbles {
@@ -227,7 +232,7 @@ pub(crate) fn get_trie_helper<N: PartialTrie>(
             )?);
             Ok(Node::Extension { nibbles, child })
         }
-        PartialTrieType::Leaf => {
+        PartialMptType::Leaf => {
             let count = u256_to_usize(load(ptr + 1).unwrap_or_default())?;
             let packed = load(ptr + 2).unwrap_or_default();
             let nibbles = Nibbles {

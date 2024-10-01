@@ -4,12 +4,12 @@ use std::marker::PhantomData;
 use ethereum_types::{H256, U256};
 
 use crate::core::IntraBlockTries;
-use crate::typed_mpt::{ReceiptTrie, StorageTrie, TransactionTrie};
+use crate::typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie};
 
 /// Observer API for the trace decoder.
 /// Observer is used to collect various debugging and metadata info
 /// from the trace decoder run.
-pub trait Observer<StateTrieT> {
+pub trait Observer<StateTrieT: StateTrie + Clone> {
     /// Collect tries after the transaction/batch execution.
     ///
     /// Passing the arguments one by one through reference, because
@@ -55,7 +55,7 @@ impl<StateTrieT> TriesObserver<StateTrieT> {
     }
 }
 
-impl<StateTrieT: Clone> Observer<StateTrieT> for TriesObserver<StateTrieT> {
+impl<StateTrieT: StateTrie + Clone> Observer<StateTrieT> for TriesObserver<StateTrieT> {
     fn collect_tries(
         &mut self,
         block: U256,
@@ -99,7 +99,7 @@ impl<StateTrieT> DummyObserver<StateTrieT> {
     }
 }
 
-impl<StateTrieT> Observer<StateTrieT> for DummyObserver<StateTrieT> {
+impl<StateTrieT: StateTrie + Clone> Observer<StateTrieT> for DummyObserver<StateTrieT> {
     fn collect_tries(
         &mut self,
         _block: U256,

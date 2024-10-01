@@ -21,6 +21,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{oneshot, Semaphore};
 use trace_decoder::observer::DummyObserver;
+use trace_decoder::typed_mpt::{StateMpt, StateSmt};
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::{error, info};
 
@@ -83,12 +84,21 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let block_generation_inputs = trace_decoder::entrypoint(
-            self.block_trace,
-            self.other_data,
-            batch_size,
-            &mut DummyObserver::new(),
-        )?;
+        let block_generation_inputs = if cfg!(feature = "cdk_erigon") {
+            trace_decoder::entrypoint::<StateSmt>(
+                self.block_trace,
+                self.other_data,
+                batch_size,
+                //&mut DummyObserver::new(),
+            )?
+        } else {
+            trace_decoder::entrypoint::<StateMpt>(
+                self.block_trace,
+                self.other_data,
+                batch_size,
+                //&mut DummyObserver::new(),
+            )?
+        };
 
         // Create segment proof.
         let seg_prove_ops = ops::SegmentProof {
@@ -176,12 +186,21 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let block_generation_inputs = trace_decoder::entrypoint(
-            self.block_trace,
-            self.other_data,
-            batch_size,
-            &mut DummyObserver::new(),
-        )?;
+        let block_generation_inputs = if cfg!(feature = "cdk_erigon") {
+            trace_decoder::entrypoint::<StateSmt>(
+                self.block_trace,
+                self.other_data,
+                batch_size,
+                //&mut DummyObserver::new(),
+            )?
+        } else {
+            trace_decoder::entrypoint::<StateMpt>(
+                self.block_trace,
+                self.other_data,
+                batch_size,
+                //&mut DummyObserver::new(),
+            )?
+        };
 
         let seg_ops = ops::SegmentProofTestOnly {
             save_inputs_on_error,

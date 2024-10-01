@@ -62,7 +62,7 @@ mod type1;
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;
-mod typed_mpt;
+pub mod typed_mpt;
 mod wire;
 
 pub use core::entrypoint;

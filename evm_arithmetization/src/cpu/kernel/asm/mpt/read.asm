@@ -1,21 +1,3 @@
-// Given an address, return a pointer to the associated account data, which
-// consists of four words (nonce, balance, storage_root, code_hash), in the
-// trie_data segment. Return null if the address is not found.
-global mpt_read_state_trie:
-    // stack: addr, retdest
-    %read_accounts_linked_list
-    // stack: account_ptr, retdest
-    SWAP1
-    // stack: retdest, account_ptr
-    JUMP
-
-// Convenience macro to call mpt_read_state_trie and return where we left off.
-%macro mpt_read_state_trie
-    %stack (addr) -> (addr, %%after)
-    %jump(mpt_read_state_trie)
-%%after:
-%endmacro
-
 // Read a value from a MPT.
 //
 // Arguments:

@@ -9,34 +9,116 @@ use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
+use smt_trie::code::hash_bytecode_u256;
 
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
+#[cfg(not(feature = "cdk_erigon"))]
 use super::TrimmedTrieInputs;
-use crate::cpu::kernel::constants::trie_type::PartialTrieType;
+use super::{InputStateTrie, TrimmedTrieInputs};
+use crate::cpu::kernel::constants::mpt_type::PartialMptType;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AccountRlp {
+    Type1(Type1AccountRlp),
+    Type2(Type2AccountRlp),
+}
+
+impl Encodable for AccountRlp {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match self {
+            Self::Type1(acc) => acc.rlp_append(s),
+            Self::Type2(acc) => acc.rlp_append(s),
+        }
+    }
+}
+
+impl From<Type1AccountRlp> for AccountRlp {
+    fn from(value: Type1AccountRlp) -> Self {
+        Self::Type1(value)
+    }
+}
+
+impl AccountRlp {
+    pub fn nonce(&self) -> U256 {
+        match self {
+            Self::Type1(acc) => acc.nonce,
+            Self::Type2(acc) => acc.nonce,
+        }
+    }
+
+    pub fn set_nonce(&mut self, val: U256) {
+        match self {
+            Self::Type1(acc) => acc.nonce = val,
+            Self::Type2(acc) => acc.nonce = val,
+        }
+    }
+
+    pub fn balance(&self) -> U256 {
+        match self {
+            Self::Type1(acc) => acc.balance,
+            Self::Type2(acc) => acc.balance,
+        }
+    }
+
+    pub fn set_balance(&mut self, val: U256) {
+        match self {
+            Self::Type1(acc) => acc.balance = val,
+            Self::Type2(acc) => acc.balance = val,
+        }
+    }
+
+    pub fn code_hash(&self) -> H256 {
+        match self {
+            Self::Type1(acc) => acc.code_hash,
+            Self::Type2(acc) => acc.code_hash,
+        }
+    }
+
+    pub fn set_code_hash(&mut self, hash: H256) {
+        match self {
+            Self::Type1(acc) => acc.code_hash = hash,
+            Self::Type2(acc) => acc.code_hash = hash,
+        }
+    }
+
+    pub fn storage_root(&self) -> Option<H256> {
+        match self {
+            Self::Type1(acc) => Some(acc.storage_root),
+            Self::Type2(_) => None,
+        }
+    }
+
+    pub fn set_storage_root(&mut self, hash: H256) {
+        match self {
+            Self::Type1(acc) => acc.storage_root = hash,
+            Self::Type2(_) => (),
+        }
+    }
+
+    pub fn code_length(&self) -> Option<U256> {
+        match self {
+            Self::Type1(_) => None,
+            Self::Type2(acc) => Some(acc.code_length),
+        }
+    }
+}
+
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AccountRlp {
+pub struct Type1AccountRlp {
     pub nonce: U256,
     pub balance: U256,
     pub storage_root: H256,
     pub code_hash: H256,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct TrieRootPtrs {
-    pub state_root_ptr: Option<usize>,
-    pub txn_root_ptr: usize,
-    pub receipt_root_ptr: usize,
-}
-
-impl Default for AccountRlp {
+impl Default for Type1AccountRlp {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
@@ -45,6 +127,32 @@ impl Default for AccountRlp {
             code_hash: keccak([]),
         }
     }
+}
+
+#[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Type2AccountRlp {
+    pub nonce: U256,
+    pub balance: U256,
+    pub code_length: U256,
+    pub code_hash: H256,
+}
+
+impl Default for Type2AccountRlp {
+    fn default() -> Self {
+        Self {
+            nonce: U256::zero(),
+            balance: U256::zero(),
+            code_hash: keccak(vec![]),
+            code_length: U256::zero(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TrieRootPtrs {
+    pub state_root_ptr: Option<usize>,
+    pub txn_root_ptr: usize,
+    pub receipt_root_ptr: usize,
 }
 
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone)]
@@ -154,7 +262,7 @@ where
     F: Fn(&[u8]) -> Result<Vec<U256>, ProgramError>,
 {
     let node_ptr = trie_data.len();
-    let type_of_trie = PartialTrieType::of(trie) as u32;
+    let type_of_trie = PartialMptType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
     }
@@ -230,7 +338,7 @@ fn load_state_trie(
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<usize, ProgramError> {
     let node_ptr = trie_data.len();
-    let type_of_trie = PartialTrieType::of(trie) as u32;
+    let type_of_trie = PartialMptType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
     }
@@ -285,8 +393,9 @@ fn load_state_trie(
             Ok(node_ptr)
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
+            let account: Type1AccountRlp =
+                rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let Type1AccountRlp {
                 nonce,
                 balance,
                 storage_root,
@@ -384,8 +493,9 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
+            let account: Type1AccountRlp =
+                rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let Type1AccountRlp {
                 nonce,
                 balance,
                 storage_root,
@@ -551,13 +661,15 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
+        .as_ref()
+        .expect("Type 1 must have storage tries.")
         .iter()
         .map(|(hashed_address, storage_trie)| {
             let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
                 .expect("An H256 is 32 bytes long");
             (key, storage_trie)
         })
-        .collect();
+        .collect::<HashMap<_, _>>();
 
     let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];
@@ -567,16 +679,20 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 
     let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
-    get_state_and_storage_leaves(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        &mut state_leaves,
-        &mut storage_leaves,
-        &mut trie_data,
-        accounts_pointers,
-        storage_pointers,
-        &storage_tries_by_state_key,
-    )?;
+    match &trie_inputs.state_trie {
+        InputStateTrie::Type1(trie) => get_state_and_storage_leaves(
+            trie,
+            empty_nibbles(),
+            &mut state_leaves,
+            &mut storage_leaves,
+            &mut trie_data,
+            accounts_pointers,
+            storage_pointers,
+            &storage_tries_by_state_key,
+        )?,
+
+        InputStateTrie::Type2(_) => panic!("State trie must be type 1."),
+    };
 
     Ok((
         TrieRootPtrs {
@@ -590,12 +706,20 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     ))
 }
 
+pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts_type2(
+    trie_inputs: &TrieInputs,
+) -> Result<TriePtrsLinkedLists, ProgramError> {
+    unimplemented!()
+}
+
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,
 ) -> Result<usize, ProgramError> {
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
+        .as_ref()
+        .expect("Must have storage tries in type 1.")
         .iter()
         .map(|(hashed_address, storage_trie)| {
             let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
@@ -604,12 +728,15 @@ pub(crate) fn load_state_mpt(
         })
         .collect();
 
-    load_state_trie(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        trie_data,
-        &storage_tries_by_state_key,
-    )
+    match &trie_inputs.state_trie {
+        InputStateTrie::Type1(trie) => load_state_trie(
+            trie,
+            empty_nibbles(),
+            trie_data,
+            &storage_tries_by_state_key,
+        ),
+        InputStateTrie::Type2(_) => panic!("Trie inputs must be type 1."),
+    }
 }
 
 pub mod transaction_testing {

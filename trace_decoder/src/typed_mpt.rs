@@ -5,7 +5,10 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::generation::{
+    mpt::{AccountRlp, Type1AccountRlp, Type2AccountRlp},
+    InputStateTrie,
+};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
@@ -285,6 +288,8 @@ pub trait StateTrie {
     fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
+    fn default_account() -> AccountRlp;
+    fn into_input_state_trie(self) -> InputStateTrie;
 }
 
 /// Global, [`Address`] `->` [`AccountRlp`].
@@ -292,7 +297,7 @@ pub trait StateTrie {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
 pub struct StateMpt {
-    typed: TypedMpt<AccountRlp>,
+    typed: TypedMpt<Type1AccountRlp>,
 }
 
 impl StateMpt {
@@ -308,11 +313,11 @@ impl StateMpt {
     pub fn insert_by_hashed_address(
         &mut self,
         key: H256,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
+        account: Type1AccountRlp,
+    ) -> anyhow::Result<Option<Type1AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
     }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (H256, Type1AccountRlp)> + '_ {
         self.typed
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
@@ -329,7 +334,12 @@ impl StateTrie for StateMpt {
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>> {
         #[expect(deprecated)]
-        self.insert_by_hashed_address(keccak_hash::keccak(address), account)
+        match account {
+            AccountRlp::Type1(account) => self
+                .insert_by_hashed_address(keccak_hash::keccak(address), account)
+                .map(|option| option.map(|res_account| AccountRlp::Type1(res_account))),
+            AccountRlp::Type2(_) => panic!("Must be type 1."),
+        }
     }
     /// Insert an _hashed out_ part of the trie
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
@@ -338,6 +348,7 @@ impl StateTrie for StateMpt {
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.typed
             .get(TrieKey::from_hash(keccak_hash::keccak(address)))
+            .map(|account| AccountRlp::Type1(account))
     }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
@@ -359,12 +370,23 @@ impl StateTrie for StateMpt {
         Ok(())
     }
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
+        self.typed.iter().map(|(key, rlp)| {
+            (
+                key.into_hash().expect("key is always H256"),
+                AccountRlp::Type1(rlp),
+            )
+        })
     }
     fn root(&self) -> H256 {
         self.typed.root()
+    }
+
+    fn default_account() -> AccountRlp {
+        AccountRlp::Type1(Type1AccountRlp::default())
+    }
+
+    fn into_input_state_trie(self) -> InputStateTrie {
+        InputStateTrie::Type1(self.as_hashed_partial_trie().clone())
     }
 }
 
@@ -377,6 +399,7 @@ impl From<StateMpt> for HashedPartialTrie {
     }
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
     hashed_out: BTreeMap<TrieKey, H256>,
@@ -411,6 +434,13 @@ impl StateTrie for StateSmt {
             .map(|(addr, acct)| (keccak_hash::keccak(addr), *acct))
     }
     fn root(&self) -> H256 {
+        todo!()
+    }
+    fn default_account() -> AccountRlp {
+        AccountRlp::Type2(Type2AccountRlp::default())
+    }
+
+    fn into_input_state_trie(self) -> InputStateTrie {
         todo!()
     }
 }

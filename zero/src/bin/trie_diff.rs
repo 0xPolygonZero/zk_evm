@@ -24,6 +24,7 @@ use paladin::directive::{Directive, IndexedStream};
 use paladin::runtime::Runtime;
 use regex::Regex;
 use trace_decoder::observer::TriesObserver;
+use trace_decoder::typed_mpt::{StateMpt, StateSmt};
 use tracing::{error, info};
 use zero::ops::register;
 use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
@@ -77,24 +78,34 @@ async fn main() -> Result<()> {
         .collect::<Vec<_>>();
 
     for block_prover_input in block_prover_inputs {
-        let mut observer = TriesObserver::new();
+        //let mut observer = TriesObserver::new();
         let block_number = block_prover_input
             .other_data
             .b_data
             .b_meta
             .block_number
             .low_u64();
-        let block_generation_inputs = trace_decoder::entrypoint(
-            block_prover_input.block_trace.clone(),
-            block_prover_input.other_data.clone(),
-            prover_config.batch_size,
-            &mut observer,
-        )?;
-        info!(
-            "Number of collected batch tries for block {}: {}",
-            block_number,
-            observer.data.len()
-        );
+        let block_generation_inputs = if cfg!(feature = "cdk_erigon") {
+            trace_decoder::entrypoint::<StateSmt>(
+                block_prover_input.block_trace.clone(),
+                block_prover_input.other_data.clone(),
+                prover_config.batch_size,
+                //&mut DummyObserver::new(),
+            )?
+        } else {
+            trace_decoder::entrypoint::<StateMpt>(
+                block_prover_input.block_trace.clone(),
+                block_prover_input.other_data.clone(),
+                prover_config.batch_size,
+                //&mut DummyObserver::new(),
+            )?
+        };
+
+        // info!(
+        //     "Number of collected batch tries for block {}: {}",
+        //     block_number,
+        //     observer.data.len()
+        // );
 
         info!("Running trie diff simulation for block {block_number} ...");
         let simulation = Directive::map(
@@ -131,28 +142,28 @@ async fn main() -> Result<()> {
                     zero::debug_utils::load_tries_from_disk(block_number, batch_index)?;
 
                 info!("Performing trie comparison for block {block_number} batch {batch_index}...");
-                zero::trie_diff::compare_tries(
-                    &block_prover_input,
-                    batch_index,
-                    &DebugOutputTries {
-                        state_trie: observer.data[prover_tries.batch_index]
-                            .tries
-                            .state
-                            .as_hashed_partial_trie()
-                            .clone(),
-                        transaction_trie: observer.data[prover_tries.batch_index]
-                            .tries
-                            .transaction
-                            .clone()
-                            .into(),
-                        receipt_trie: observer.data[prover_tries.batch_index]
-                            .tries
-                            .receipt
-                            .clone()
-                            .into(),
-                    },
-                    &prover_tries.tries,
-                )?;
+                // zero::trie_diff::compare_tries(
+                //     &block_prover_input,
+                //     batch_index,
+                //     &DebugOutputTries {
+                //         state_trie: observer.data[prover_tries.batch_index]
+                //             .tries
+                //             .state
+                //             .as_hashed_partial_trie()
+                //             .clone(),
+                //         transaction_trie: observer.data[prover_tries.batch_index]
+                //             .tries
+                //             .transaction
+                //             .clone()
+                //             .into(),
+                //         receipt_trie: observer.data[prover_tries.batch_index]
+                //             .tries
+                //             .receipt
+                //             .clone()
+                //             .into(),
+                //     },
+                //     &prover_tries.tries,
+                // )?;
 
                 info!("Trie comparison finished for block {block_number} batch {batch_index}");
                 return Ok(());

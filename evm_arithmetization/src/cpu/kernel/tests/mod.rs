@@ -1,6 +1,8 @@
+#[cfg(not(feature = "cdk_erigon"))]
 mod account_code;
 #[cfg(feature = "eth_mainnet")]
 mod add11;
+#[cfg(not(feature = "cdk_erigon"))]
 mod balance;
 mod bignum;
 mod blake2_f;
@@ -14,12 +16,15 @@ mod core;
 mod ecc;
 mod exp;
 mod hash;
+#[cfg(not(feature = "cdk_erigon"))]
 mod init_exc_stop;
 mod kernel_consistency;
 mod log;
 mod mcopy;
+#[cfg(not(feature = "cdk_erigon"))]
 mod mpt;
 mod packing;
+#[cfg(not(feature = "cdk_erigon"))]
 mod receipt;
 mod rlp;
 mod signed_syscalls;

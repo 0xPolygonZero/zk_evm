@@ -15,6 +15,7 @@ use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
 use super::linked_list::{
     LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD, STORAGE_LINKED_LIST_NODE_SIZE,
 };
+#[cfg(not(feature = "cdk_erigon"))]
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
@@ -92,6 +93,7 @@ impl<F: RichField> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
+            #[cfg(not(feature = "cdk_erigon"))]
             "initial_state" => self
                 .trie_root_ptrs
                 .state_root_ptr
@@ -112,6 +114,8 @@ impl<F: RichField> GenerationState<F> {
                     Ok,
                 )
                 .map(U256::from),
+            #[cfg(feature = "cdk_erigon")]
+            "initial_state" => unimplemented!(),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(self

@@ -1,4 +1,4 @@
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, Type1AccountRlp};
 use evm_arithmetization::generation::DebugOutputTries;
 use mpt_trie::debug_tools::diff::{create_diff_between_tries, DiffPoint};
 use mpt_trie::utils::TrieNodeType;
@@ -83,7 +83,7 @@ pub fn compare_tries(
     }
 
     let state_trie_diff = create_diff_between_tries(&left.state_trie, &right.state_trie);
-    compare_tries_and_output_results::<usize, AccountRlp>(
+    compare_tries_and_output_results::<usize, Type1AccountRlp>(
         "state trie",
         state_trie_diff.latest_diff_res,
         block_number,

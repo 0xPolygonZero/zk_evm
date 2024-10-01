@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use log::error;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
@@ -13,6 +13,8 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
+use smt_trie::db::MemoryDb;
+use smt_trie::smt::{hash_serialize_u256, Smt};
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
@@ -51,6 +53,33 @@ pub const NUM_EXTRA_CYCLES_AFTER: usize = 82;
 pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
 /// Memory values used to initialize `MemBefore`.
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum InputStateTrie {
+    Type1(HashedPartialTrie),
+    Type2(Vec<U256>),
+}
+
+impl Default for InputStateTrie {
+    fn default() -> Self {
+        if cfg!(feature = "cdk_erigon") {
+            // First 2 zeros are for the default empty node.
+            // The next 2 are for the current empty state trie root.
+            Self::Type2(vec![U256::zero(); 4])
+        } else {
+            Self::Type1(HashedPartialTrie::default())
+        }
+    }
+}
+
+impl InputStateTrie {
+    pub(crate) fn hash(&self) -> H256 {
+        match self {
+            Self::Type1(mpt) => mpt.hash(),
+            Self::Type2(v) => H256::from_uint(&hash_serialize_u256(v)),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorWithTries<E = anyhow::Error> {
@@ -182,12 +211,12 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     pub block_hashes: BlockHashes,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    pub state_trie: HashedPartialTrie,
+    pub state_trie: InputStateTrie,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -202,7 +231,27 @@ pub struct TrieInputs {
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    pub storage_tries: Option<Vec<(H256, HashedPartialTrie)>>,
+}
+
+impl Default for TrieInputs {
+    fn default() -> Self {
+        if cfg!(feature = "cdk_erigon") {
+            Self {
+                state_trie: InputStateTrie::default(),
+                transactions_trie: Default::default(),
+                receipts_trie: Default::default(),
+                storage_tries: None,
+            }
+        } else {
+            Self {
+                state_trie: InputStateTrie::default(),
+                transactions_trie: HashedPartialTrie::from(Node::Empty),
+                receipts_trie: HashedPartialTrie::from(Node::Empty),
+                storage_tries: Some(vec![]),
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -210,11 +259,11 @@ pub struct TrimmedTrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    pub state_trie: HashedPartialTrie,
+    pub state_trie: InputStateTrie,
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    pub storage_tries: Option<Vec<(H256, HashedPartialTrie)>>,
 }
 
 impl TrieInputs {
@@ -238,6 +287,7 @@ impl<F: RichField> GenerationInputs<F> {
 
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),
+
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
@@ -433,12 +483,13 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 
 pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
     log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
-    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    log::debug!("Input state trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
         "Input transactions_trie: {:?}",
         &inputs.tries.transactions_trie
     );
     log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
+    #[cfg(not(feature = "cdk_erigon"))]
     log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }

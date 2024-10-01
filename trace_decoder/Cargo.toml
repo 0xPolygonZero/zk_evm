@@ -60,7 +60,7 @@ serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 
 [features]
-default = ["eth_mainnet"]
+default = ["cdk_erigon"]
 eth_mainnet = ["evm_arithmetization/eth_mainnet", "zero/eth_mainnet"]
 cdk_erigon = ["evm_arithmetization/cdk_erigon", "zero/cdk_erigon"]
 polygon_pos = ["evm_arithmetization/polygon_pos", "zero/polygon_pos"]

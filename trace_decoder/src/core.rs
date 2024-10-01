@@ -9,7 +9,7 @@ use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, H160, U256};
 use evm_arithmetization::{
-    generation::{mpt::AccountRlp, TrieInputs},
+    generation::{mpt::AccountRlp, InputStateTrie, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
     GenerationInputs,
 };
@@ -28,11 +28,12 @@ use crate::{
 };
 
 /// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
-pub fn entrypoint(
+pub fn entrypoint<StateTrieT: StateTrie + Clone>(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-    observer: &mut impl Observer<StateMpt>,
+    // Todo: Handle Smt observer
+    //observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
 
@@ -69,7 +70,7 @@ pub fn entrypoint(
         &b_meta,
         ger_data,
         withdrawals,
-        observer,
+        //observer,
     )?;
 
     let mut running_gas_used = 0;
@@ -101,10 +102,14 @@ pub fn entrypoint(
                 withdrawals,
                 ger_data,
                 tries: TrieInputs {
-                    state_trie: state.into(),
+                    state_trie: state.into_input_state_trie(),
                     transactions_trie: transaction.into(),
                     receipts_trie: receipt.into(),
-                    storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                    storage_tries: if cfg!(feature = "cdk_erigon") {
+                        None
+                    } else {
+                        Some(storage.into_iter().map(|(k, v)| (k, v.into())).collect())
+                    },
                 },
                 trie_roots_after: after,
                 checkpoint_state_trie_root,
@@ -129,67 +134,75 @@ pub fn entrypoint(
 /// representations.
 fn start(
     pre_images: BlockTraceTriePreImages,
-) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
-    Ok(match pre_images {
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
-        //                refactor our convoluted input types
-        BlockTraceTriePreImages::Separate(SeparateTriePreImages {
-            state: SeparateTriePreImage::Direct(state),
-            storage: SeparateStorageTriesPreImage::MultipleTries(storage),
-        }) => {
-            let state = state.items().try_fold(
-                StateMpt::default(),
-                |mut acc, (nibbles, hash_or_val)| {
-                    let path = TrieKey::from_nibbles(nibbles);
-                    match hash_or_val {
-                        mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                            #[expect(deprecated)] // this is MPT specific
-                            acc.insert_by_hashed_address(
-                                path.into_hash()
-                                    .context("invalid path length in direct state trie")?,
-                                rlp::decode(&bytes)
-                                    .context("invalid AccountRlp in direct state trie")?,
-                            )?;
-                        }
-                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                            acc.insert_hash_by_key(path, h)?;
-                        }
-                    };
-                    anyhow::Ok(acc)
-                },
-            )?;
-            let storage = storage
-                .into_iter()
-                .map(|(k, SeparateTriePreImage::Direct(v))| {
-                    v.items()
-                        .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                            let path = TrieKey::from_nibbles(nibbles);
-                            match hash_or_val {
-                                mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                    acc.insert(path, value)?;
-                                }
-                                mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                    acc.insert_hash(path, h)?;
-                                }
-                            };
-                            anyhow::Ok(acc)
-                        })
-                        .map(|v| (k, v))
-                })
-                .collect::<Result<_, _>>()?;
-            (state, storage, Hash2Code::new())
-        }
-        BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
-            let instructions = crate::wire::parse(&compact)
-                .context("couldn't parse instructions from binary format")?;
-            let crate::type1::Frontend {
-                state,
-                storage,
-                code,
-            } = crate::type1::frontend(instructions)?;
-            (state, storage, code.into_iter().map(Into::into).collect())
-        }
-    })
+) -> anyhow::Result<(
+    impl StateTrie + Clone,
+    BTreeMap<H256, StorageTrie>,
+    Hash2Code,
+)> {
+    if cfg!(feature = "cdk_erigon") {
+        unimplemented!()
+    } else {
+        Ok(match pre_images {
+            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
+            //                refactor our convoluted input types
+            BlockTraceTriePreImages::Separate(SeparateTriePreImages {
+                state: SeparateTriePreImage::Direct(state),
+                storage: SeparateStorageTriesPreImage::MultipleTries(storage),
+            }) => {
+                let state = state.items().try_fold(
+                    StateMpt::default(),
+                    |mut acc, (nibbles, hash_or_val)| {
+                        let path = TrieKey::from_nibbles(nibbles);
+                        match hash_or_val {
+                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                #[expect(deprecated)] // this is MPT specific
+                                acc.insert_by_hashed_address(
+                                    path.into_hash()
+                                        .context("invalid path length in direct state trie")?,
+                                    rlp::decode(&bytes)
+                                        .context("invalid AccountRlp in direct state trie")?,
+                                )?;
+                            }
+                            mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                acc.insert_hash_by_key(path, h)?;
+                            }
+                        };
+                        anyhow::Ok(acc)
+                    },
+                )?;
+                let storage = storage
+                    .into_iter()
+                    .map(|(k, SeparateTriePreImage::Direct(v))| {
+                        v.items()
+                            .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
+                                let path = TrieKey::from_nibbles(nibbles);
+                                match hash_or_val {
+                                    mpt_trie::trie_ops::ValOrHash::Val(value) => {
+                                        acc.insert(path, value)?;
+                                    }
+                                    mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                        acc.insert_hash(path, h)?;
+                                    }
+                                };
+                                anyhow::Ok(acc)
+                            })
+                            .map(|v| (k, v))
+                    })
+                    .collect::<Result<_, _>>()?;
+                (state.into(), storage, Hash2Code::new())
+            }
+            BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
+                let instructions = crate::wire::parse(&compact)
+                    .context("couldn't parse instructions from binary format")?;
+                let crate::type1::Frontend {
+                    state,
+                    storage,
+                    code,
+                } = crate::type1::frontend(instructions)?;
+                (state, storage, code.into_iter().map(Into::into).collect())
+            }
+        })
+    }
 }
 
 /// Break `txns` into batches of length `batch_size_hint`, prioritising creating
@@ -287,20 +300,25 @@ fn middle<StateTrieT: StateTrie + Clone>(
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
     // called with the untrimmed tries after each batch
-    observer: &mut impl Observer<StateTrieT>,
+    //observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
-    // Initialise the storage tries.
-    for (haddr, acct) in state_trie.iter() {
-        let storage = storage_tries.entry(haddr).or_insert({
-            let mut it = StorageTrie::default();
-            it.insert_hash(TrieKey::default(), acct.storage_root)
+    // Initialise the storage tries (only for type 1).
+    if cfg!(not(feature = "cdk_erigon")) {
+        for (haddr, acct) in state_trie.iter() {
+            let storage = storage_tries.entry(haddr).or_insert({
+                let mut it = StorageTrie::default();
+                it.insert_hash(
+                    TrieKey::default(),
+                    acct.storage_root().expect("Type 1 requires storage."),
+                )
                 .expect("empty trie insert cannot fail");
-            it
-        });
-        ensure!(
-            storage.root() == acct.storage_root,
-            "inconsistent initial storage for hashed address {haddr:x}"
-        )
+                it
+            });
+            ensure!(
+                storage.root() == acct.storage_root().expect("Type 1 requires storage."),
+                "inconsistent initial storage for hashed address {haddr:x}"
+            )
+        }
     }
 
     // These are the per-block tries.
@@ -389,7 +407,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
                     .map(|acct| (acct, false))
-                    .unwrap_or((AccountRlp::default(), true));
+                    .unwrap_or((StateTrieT::default_account(), true));
 
                 if born || just_access {
                     state_trie
@@ -421,23 +439,25 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 );
 
                 if do_writes {
-                    acct.balance = balance.unwrap_or(acct.balance);
-                    acct.nonce = nonce.unwrap_or(acct.nonce);
-                    acct.code_hash = code_usage
-                        .map(|it| match it {
-                            ContractCodeUsage::Read(hash) => {
-                                batch_contract_code.insert(code.get(hash)?);
-                                anyhow::Ok(hash)
-                            }
-                            ContractCodeUsage::Write(bytes) => {
-                                code.insert(bytes.clone());
-                                let hash = keccak_hash::keccak(&bytes);
-                                batch_contract_code.insert(bytes);
-                                Ok(hash)
-                            }
-                        })
-                        .transpose()?
-                        .unwrap_or(acct.code_hash);
+                    acct.set_balance(balance.unwrap_or(acct.balance()));
+                    acct.set_nonce(nonce.unwrap_or(acct.nonce()));
+                    acct.set_code_hash(
+                        code_usage
+                            .map(|it| match it {
+                                ContractCodeUsage::Read(hash) => {
+                                    batch_contract_code.insert(code.get(hash)?);
+                                    anyhow::Ok(hash)
+                                }
+                                ContractCodeUsage::Write(bytes) => {
+                                    code.insert(bytes.clone());
+                                    let hash = keccak_hash::keccak(&bytes);
+                                    batch_contract_code.insert(bytes);
+                                    Ok(hash)
+                                }
+                            })
+                            .transpose()?
+                            .unwrap_or(acct.code_hash()),
+                    );
 
                     if !storage_written.is_empty() {
                         let storage = match born {
@@ -457,7 +477,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                                 }
                             }
                         }
-                        acct.storage_root = storage.root();
+                        acct.set_storage_root(storage.root());
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
@@ -514,7 +534,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         let mut acct = state_trie
                             .get_by_address(*addr)
                             .context("missing address for withdrawal")?;
-                        acct.balance += *amt;
+                        acct.set_balance(acct.balance() + *amt);
                         state_trie
                             .insert_by_address(*addr, acct)
                             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -550,14 +570,14 @@ fn middle<StateTrieT: StateTrie + Clone>(
             },
         });
 
-        observer.collect_tries(
-            block.block_number,
-            batch_index,
-            &state_trie,
-            &storage_tries,
-            &transaction_trie,
-            &receipt_trie,
-        )
+        // observer.collect_tries(
+        //     block.block_number,
+        //     batch_index,
+        //     &state_trie,
+        //     &storage_tries,
+        //     &transaction_trie,
+        //     &receipt_trie,
+        // )
     } // batch in batches
 
     Ok(out)
@@ -661,7 +681,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     let mut scalable_acct = state_trie
         .get_by_address(ADDRESS_SCALABLE_L2)
         .context("missing scalable contract address")?;
-    scalable_acct.storage_root = scalable_storage.root();
+    scalable_acct.set_storage_root(scalable_storage.root());
     state_trie
         .insert_by_address(ADDRESS_SCALABLE_L2, scalable_acct)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -687,7 +707,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         let mut ger_acct = state_trie
             .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
             .context("missing GER contract address")?;
-        ger_acct.storage_root = ger_storage.root();
+        ger_acct.set_storage_root(ger_storage.root());
         state_trie
             .insert_by_address(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -746,7 +766,7 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     let mut beacon_acct = state_trie
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context("missing beacon contract address")?;
-    beacon_acct.storage_root = beacon_storage.root();
+    beacon_acct.set_storage_root(beacon_storage.root());
     state_trie
         .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275

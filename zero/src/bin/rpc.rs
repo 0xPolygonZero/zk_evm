@@ -9,6 +9,8 @@ use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
 use trace_decoder::observer::DummyObserver;
+use trace_decoder::typed_mpt::StateMpt;
+use trace_decoder::typed_mpt::StateSmt;
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero::block_interval::BlockInterval;
@@ -167,12 +169,21 @@ impl Cli {
                                 block_number
                             ))?;
 
-                        let generation_inputs = trace_decoder::entrypoint(
-                            block_prover_input.block_trace,
-                            block_prover_input.other_data,
-                            batch_size,
-                            &mut DummyObserver::new(),
-                        )?;
+                        let generation_inputs = if cfg!(feature = "cdk_erigon") {
+                            trace_decoder::entrypoint::<StateSmt>(
+                                block_prover_input.block_trace,
+                                block_prover_input.other_data,
+                                batch_size,
+                                //&mut DummyObserver::new(),
+                            )?
+                        } else {
+                            trace_decoder::entrypoint::<StateMpt>(
+                                block_prover_input.block_trace,
+                                block_prover_input.other_data,
+                                batch_size,
+                                //&mut DummyObserver::new(),
+                            )?
+                        };
 
                         if let Some(index) = tx_info.transaction_index {
                             let generation_input_index = if batch_size == 1 {
