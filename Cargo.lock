@@ -2058,7 +2058,6 @@ name = "evm_arithmetization"
 version = "0.4.0"
 dependencies = [
  "anyhow",
- "assert2",
  "bytes",
  "camino",
  "criterion",
@@ -2083,6 +2082,7 @@ dependencies = [
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "plonky2_util",
+ "pretty_assertions",
  "proc-macro2",
  "quote",
  "rand",
@@ -3830,6 +3830,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77957b295656769bb8ad2b6a6b09d897d94f05c41b069aede1fcdaa675eaea04"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
 ]
 
 [[package]]

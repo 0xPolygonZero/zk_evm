@@ -4,6 +4,7 @@ use anyhow::Context as _;
 use camino::Utf8Path;
 use evm_arithmetization::cpu::kernel::ast2;
 use libtest_mimic::{Arguments, Failed, Trial};
+use pretty_assertions::StrComparison;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 
@@ -22,10 +23,16 @@ fn main() -> anyhow::Result<()> {
                 Ok(file) => {
                     let source_tokens = source
                         .parse::<TokenStream>()
-                        .expect("lexing must have succeeded if parsing succeeded");
-                    let parsed_tokens = file.to_token_stream();
-                    assert2::assert!(source_tokens.to_string() == parsed_tokens.to_string());
-                    Ok(())
+                        .expect("lexing must have succeeded if parsing succeeded")
+                        .to_string();
+                    let parsed_tokens = file.to_token_stream().to_string();
+                    match source_tokens == parsed_tokens {
+                        true => Ok(()),
+                        false => Err(Failed::from(StrComparison::new(
+                            &source_tokens,
+                            &parsed_tokens,
+                        ))),
+                    }
                 }
                 Err(e) => Err(Failed::from(syn_miette::Error::new(e, source).render())),
             },

@@ -56,12 +56,12 @@ zk_evm_common.workspace = true
 zk_evm_proc_macro.workspace = true
 
 [dev-dependencies]
-assert2 = "0.3.15"
 camino = "1.1.9"
 criterion.workspace = true
 glob = "0.3.1"
 hex.workspace = true
 libtest-mimic = "0.7.3"
+pretty_assertions = "1.4.1"
 ripemd.workspace = true
 syn-miette = "0.3.0"
 
