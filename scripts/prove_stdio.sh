@@ -55,7 +55,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
         export BYTE_PACKING_CIRCUIT_SIZE="9..15"
         export CPU_CIRCUIT_SIZE="15..20"
-        export KECCAK_CIRCUIT_SIZE="12..18"
+        export KECCAK_CIRCUIT_SIZE="11..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..14"
         export LOGIC_CIRCUIT_SIZE="8..17"
         export MEMORY_CIRCUIT_SIZE="18..22"
@@ -73,7 +73,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..9"
         export LOGIC_CIRCUIT_SIZE="4..14"
         export MEMORY_CIRCUIT_SIZE="17..22"
-        export MEMORY_BEFORE_CIRCUIT_SIZE="17..18"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="16..18"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
         export POSEIDON_CIRCUIT_SIZE="4..8"
     else
