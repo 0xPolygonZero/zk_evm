@@ -29,6 +29,9 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
       - run: cargo binstall cargo-udeps
+      - run: echo $CARGO_HOME
+      - run: which -a cargo-udeps || true
+      - run: PATH=$PATH:$HOME/.cargo/bin which -a cargo-udeps || true
       - run: cargo udeps --quiet
       - run: cargo udeps --quiet --tests --benches --examples
   rustdoc:
