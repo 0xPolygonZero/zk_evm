@@ -8,6 +8,7 @@
 //! - Representing trivia such as comments. This must be done in a separate step
 //!   in the language server, as the implementation complexity is not worth it.
 //! - A Concrete Syntax Tree for formatting.
+//! - Representing invalid parse trees.
 
 use derive_quote_to_tokens::ToTokens;
 use derive_syn_parse::Parse;
