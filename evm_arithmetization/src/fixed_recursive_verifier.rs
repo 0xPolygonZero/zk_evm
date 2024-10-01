@@ -2999,6 +2999,7 @@ where
 }
 
 #[cfg(test)]
+#[cfg(not(feature = "cdk_erigon"))]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::plonk::config::PoseidonGoldilocksConfig;
