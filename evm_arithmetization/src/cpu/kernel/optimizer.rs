@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use ethereum_types::U256;
 use Item::{Push, StandardOp};
 use PushTarget::Literal;
@@ -11,7 +13,6 @@ use crate::cpu::kernel::utils::{replace_windows, u256_from_bool};
 pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
     // Run the optimizer until nothing changes.
     let before = code.len();
-    log::trace!("Assembly optimizer: Before size: {}.", before);
     loop {
         let old_code = code.clone();
         optimize_asm_once(code);
@@ -21,9 +22,10 @@ pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
     }
     let after = code.len();
     log::trace!(
-        "Assembly optimizer:  After size: {} ({}% reduction).",
+        "Assembly optimizer: {}->{} ({}%).",
+        before,
         after,
-        (before - after) / before * 100
+        100 * after / max(1, before)
     );
 }
 
