@@ -1,15 +1,15 @@
 // Transient data storage
 
 
-/// The transient storage is stored in an array. The length of the array is stored in the global metadata.
-/// For storage keys, the address and key are stored as two consecutive elements.
-/// The array is stored in the SEGMENT_TRANSIENT_STORAGE segment in the kernel memory (context=0).
-/// Searching and inserting is done by doing a linear search through the array.
-/// If the key isn't found in the array, it is inserted at the end.
-/// TODO: Look into using a more efficient data structure.
+// The transient storage is stored in an array. The length of the array is stored in the global metadata.
+// For storage keys, the address and key are stored as two consecutive elements.
+// The array is stored in the SEGMENT_TRANSIENT_STORAGE segment in the kernel memory (context=0).
+// Searching and inserting is done by doing a linear search through the array.
+// If the key isn't found in the array, it is inserted at the end.
+// TODO: Look into using a more efficient data structure.
 
-/// The initial length, 0, must be scaled by its segment for
-/// comparison with the accumulator when iterating through the list.
+// The initial length, 0, must be scaled by its segment for
+// comparison with the accumulator when iterating through the list.
 %macro init_transient_storage_len
     PUSH @SEGMENT_TRANSIENT_STORAGE
     %mstore_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
@@ -22,9 +22,9 @@
     // stack:    (is_present, pos, addr, key, val)
 %endmacro
 
-/// Looks for an address, key pair into the transient storage.
-/// Returns 1 and the position in @SEGMENT_TRANSIENT_STORAGE if present,
-/// or 0 and @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN if not.
+// Looks for an address, key pair into the transient storage.
+// Returns 1 and the position in @SEGMENT_TRANSIENT_STORAGE if present,
+// or 0 and @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN if not.
 global search_transient_storage:
     // stack: addr, key, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)

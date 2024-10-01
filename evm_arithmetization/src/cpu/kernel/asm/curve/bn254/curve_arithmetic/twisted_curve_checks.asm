@@ -93,10 +93,10 @@
     MUL // Cheaper than AND
 %endmacro
 
-/// The `ECPAIRING` precompile requires checking that G2
-/// inputs are on the correct prime-order subgroup.
-/// This macro performs this check, based on the algorithm
-/// detailed in <https://eprint.iacr.org/2022/348.pdf>.
+// The `ECPAIRING` precompile requires checking that G2
+// inputs are on the correct prime-order subgroup.
+// This macro performs this check, based on the algorithm
+// detailed in <https://eprint.iacr.org/2022/348.pdf>.
 %macro bn_check_twisted_subgroup
     // stack: Q = (X, Y)
     %dup_bn_g2

@@ -1,4 +1,4 @@
-/// Implementation of Bloom filters for logs.
+// Implementation of Bloom filters for logs.
 
 // Adds a Bloom entry to the transaction Bloom filter and the block Bloom filter.
 //

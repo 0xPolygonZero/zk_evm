@@ -1,17 +1,17 @@
-/// To make the Tate pairing an invariant, the final step is to exponentiate by
-///     (p^12 - 1)/N = (p^6 - 1) * (p^2 + 1) * (p^4 - p^2 + 1)/N
-/// and thus we can exponentiate by each factor sequentially.
-///
-/// def bn254_final_exponent(y: Fp12):
-///     y = first_exp(y)
-///     y = second_exp(y)
-///     return final_exp(y)
+// To make the Tate pairing an invariant, the final step is to exponentiate by
+//     (p^12 - 1)/N = (p^6 - 1) * (p^2 + 1) * (p^4 - p^2 + 1)/N
+// and thus we can exponentiate by each factor sequentially.
+//
+// def bn254_final_exponent(y: Fp12):
+//     y = first_exp(y)
+//     y = second_exp(y)
+//     return final_exp(y)
 
 global bn254_final_exponent:
 
-/// first, exponentiate by (p^6 - 1) via
-///     def first_exp(y):
-///         return y.frob(6) / y
+// first, exponentiate by (p^6 - 1) via
+//     def first_exp(y):
+//         return y.frob(6) / y
     // stack:            k, inp, out, retdest  {out: y}
     %stack (k, inp, out) -> (out, 0, first_exp, out)         
     // stack: out, 0, first_exp, out, retdest  {out: y}
@@ -24,9 +24,9 @@ first_exp:
     // stack:  out, 0, out, second_exp, out, retdest  {out: y_6, 0: y^-1}
     %jump(mul_fp254_12)
 
-/// second, exponentiate by (p^2 + 1) via 
-///     def second_exp(y):
-///         return y.frob(2) * y
+// second, exponentiate by (p^2 + 1) via 
+//     def second_exp(y):
+//         return y.frob(2) * y
 second_exp:
     // stack:                              out, retdest  {out: y}
     %stack (out) -> (out, 0, out, out, final_exp, out)
@@ -35,21 +35,21 @@ second_exp:
     // stack:      0, out, out, final_exp, out, retdest  {out: y, 0: y_2}
     %jump(mul_fp254_12)
 
-/// Finally, we must exponentiate by (p^4 - p^2 + 1)/N
-/// To do so efficiently, we can express this power as
-///     (p^4 - p^2 + 1)/N = p^3 + (a2)p^2 - (a1)p - a0
-/// and simultaneously compute y^a4, y^a2, y^a0 where
-///     a1 = a4 + 2a2 - a0
-/// We first initialize these powers as 1 and then use 
-/// binary algorithms for exponentiation.
-///
-/// def final_exp(y):
-///     y4, y2, y0 = 1, 1, 1
-///     power_loop_4()
-///     power_loop_2()
-///     power_loop_0()
-///     custom_powers()
-///     final_power()
+// Finally, we must exponentiate by (p^4 - p^2 + 1)/N
+// To do so efficiently, we can express this power as
+//     (p^4 - p^2 + 1)/N = p^3 + (a2)p^2 - (a1)p - a0
+// and simultaneously compute y^a4, y^a2, y^a0 where
+//     a1 = a4 + 2a2 - a0
+// We first initialize these powers as 1 and then use 
+// binary algorithms for exponentiation.
+//
+// def final_exp(y):
+//     y4, y2, y0 = 1, 1, 1
+//     power_loop_4()
+//     power_loop_2()
+//     power_loop_0()
+//     custom_powers()
+//     final_power()
 
 final_exp:
     // stack:                 val, retdest
@@ -74,24 +74,24 @@ final_exp:
     // stack: 64, 62, 65, 0, val, retdest  {0: sqr, 12: y0, 24: y2, 36: y4}
     %jump(power_loop_4)
 
-/// After computing the powers 
-///     y^a4, y^a2, y^a0
-/// we would like to transform them to
-///     y^a2, y^-a1, y^-a0
-///
-/// def custom_powers()
-///     y0 = y0^{-1}
-///     y1 = y4 * y2^2 * y0
-///     return y2, y1, y0
-///
-/// And finally, upon doing so, compute the final power
-///     y^(p^3) * (y^a2)^(p^2) * (y^-a1)^p * (y^-a0)
-///
-/// def final_power()
-///     y  = y.frob(3)
-///     y2 = y2.frob(2)
-///     y1 = y1.frob(1)
-///     return y * y2 * y1 * y0
+// After computing the powers 
+//     y^a4, y^a2, y^a0
+// we would like to transform them to
+//     y^a2, y^-a1, y^-a0
+//
+// def custom_powers()
+//     y0 = y0^{-1}
+//     y1 = y4 * y2^2 * y0
+//     return y2, y1, y0
+//
+// And finally, upon doing so, compute the final power
+//     y^(p^3) * (y^a2)^(p^2) * (y^-a1)^p * (y^-a0)
+//
+// def final_power()
+//     y  = y.frob(3)
+//     y2 = y2.frob(2)
+//     y1 = y1.frob(1)
+//     return y * y2 * y1 * y0
 
 custom_powers:
     // stack:                           val, retdest  {12: y0, 24: y2, 36: y4}
@@ -140,35 +140,35 @@ final_mul:
     %jump(mul_fp254_12)
 
 
-/// def power_loop_4():
-///     for i in range(64):
-///         abc = load(i, power_data_4)
-///         if a:
-///             y4 *= acc
-///         if b:
-///             y2 *= acc
-///         if c:
-///             y0 *= acc
-///         acc = square_fp254_12(acc)
-///     y4 *= acc
-///
-/// def power_loop_2():
-///     for i in range(62):
-///        ab = load(i, power_data_2)
-///        if a:
-///            y2 *= acc
-///        if b:
-///            y0 *= acc
-///        acc = square_fp254_12(acc)
-///     y2 *= acc
-///
-/// def power_loop_0():
-///     for i in range(65):
-///         a = load(i, power_data_0)
-///         if a:
-///             y0 *= acc
-///         acc = square_fp254_12(acc)
-///     y0 *= acc
+// def power_loop_4():
+//     for i in range(64):
+//         abc = load(i, power_data_4)
+//         if a:
+//             y4 *= acc
+//         if b:
+//             y2 *= acc
+//         if c:
+//             y0 *= acc
+//         acc = square_fp254_12(acc)
+//     y4 *= acc
+//
+// def power_loop_2():
+//     for i in range(62):
+//        ab = load(i, power_data_2)
+//        if a:
+//            y2 *= acc
+//        if b:
+//            y0 *= acc
+//        acc = square_fp254_12(acc)
+//     y2 *= acc
+//
+// def power_loop_0():
+//     for i in range(65):
+//         a = load(i, power_data_0)
+//         if a:
+//             y0 *= acc
+//         acc = square_fp254_12(acc)
+//     y0 *= acc
 
 power_loop_4:
     // stack:                                   i  , j, k, sqr  {0: sqr, 12: y0, 24: y2, 36: y4}

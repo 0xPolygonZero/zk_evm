@@ -1,19 +1,19 @@
-/// Note that we unpack STATE: 5 to a, b, c, d, e 
-/// All additions are u32
-///
-/// def box(a, b, c, d, e, F, K):
-///
-///     box = get_box(sides, rounds, boxes)
-///     a  += F(b, c, d)
-///     r   = load(r)(box)
-///     x   = load_offset(r)
-///     a  += x + K
-///     s   = load(s)(box)
-///     a   = rol(s, a)
-///     a  += e
-///     c   = rol(10, c)
-///
-///     return e, a, b, c, d, F, K
+// Note that we unpack STATE: 5 to a, b, c, d, e 
+// All additions are u32
+//
+// def box(a, b, c, d, e, F, K):
+//
+//     box = get_box(sides, rounds, boxes)
+//     a  += F(b, c, d)
+//     r   = load(r)(box)
+//     x   = load_offset(r)
+//     a  += x + K
+//     s   = load(s)(box)
+//     a   = rol(s, a)
+//     a  += e
+//     c   = rol(10, c)
+//
+//     return e, a, b, c, d, F, K
 
 global box:
     // stack:                      a, b, c, d, e, F, K, boxes, rounds, sides, virt

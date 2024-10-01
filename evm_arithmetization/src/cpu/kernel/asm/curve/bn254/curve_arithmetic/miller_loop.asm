@@ -1,29 +1,29 @@
-/// def miller(P, Q):
-///     miller_init()
-///     miller_loop()
-///
-/// def miller_init():
-///     out = 1
-///     O = P
-///     times = 61
-///
-/// def miller_loop():
-///     while times:
-///         0xnm = load(miller_data)
-///         while 0xnm > 0x20:
-///             miller_one()
-///         while 0xnm:
-///             miller_zero()
-///         times -= 1
-///
-/// def miller_one():
-///     0xnm -= 0x20
-///     mul_tangent()
-///     mul_cord()
-///
-/// def miller_zero():
-///     0xnm -= 1
-///     mul_tangent()
+// def miller(P, Q):
+//     miller_init()
+//     miller_loop()
+//
+// def miller_init():
+//     out = 1
+//     O = P
+//     times = 61
+//
+// def miller_loop():
+//     while times:
+//         0xnm = load(miller_data)
+//         while 0xnm > 0x20:
+//             miller_one()
+//         while 0xnm:
+//             miller_zero()
+//         times -= 1
+//
+// def miller_one():
+//     0xnm -= 0x20
+//     mul_tangent()
+//     mul_cord()
+//
+// def miller_zero():
+//     0xnm -= 1
+//     mul_tangent()
 
 global bn254_miller:
     // stack:            ptr, out, retdest
@@ -85,11 +85,11 @@ miller_zero:
     %jump(mul_tangent)
 
 
-/// def mul_tangent()
-///     out = square_fp254_12(out)
-///     line = tangent(O, Q)
-///     out = mul_fp254_12_sparse(out, line)
-///     O += O
+// def mul_tangent()
+//     out = square_fp254_12(out)
+//     line = tangent(O, Q)
+//     out = mul_fp254_12_sparse(out, line)
+//     O += O
 
 mul_tangent:
     // stack:                                              retdest, 0xnm, times, O, P, Q, out
@@ -132,10 +132,10 @@ after_double:
     // stack:                  retdest, 0xnm, times, 2*O, P, Q, out  {12: line}
     JUMP
 
-/// def mul_cord()
-///     line = cord(P, O, Q)
-///     out = mul_fp254_12_sparse(out, line)
-///     O += P
+// def mul_cord()
+//     line = cord(P, O, Q)
+//     out = mul_fp254_12_sparse(out, line)
+//     O += P
 
 mul_cord:
     // stack:                           0xnm, times, O, P, Q, out
@@ -179,12 +179,12 @@ after_add:
     %jump(miller_one)
 
 
-/// def tangent(px, py, qx, qy):
-///     return sparse_store(
-///         py**2 - 9, 
-///         (-3px**2) * qx, 
-///         (2py)     * qy,
-///     )
+// def tangent(px, py, qx, qy):
+//     return sparse_store(
+//         py**2 - 9, 
+//         (-3px**2) * qx, 
+//         (2py)     * qy,
+//     )
 
 %macro tangent
     // stack:                px, py, qx, qx_,  qy, qy_
@@ -239,12 +239,12 @@ after_add:
     %mstore_bn254_pairing(21)
 %endmacro
 
-/// def cord(p1x, p1y, p2x, p2y, qx, qy):
-///     return sparse_store(
-///         p1y*p2x - p2y*p1x, 
-///         (p2y - p1y) * qx, 
-///         (p1x - p2x) * qy,
-///     )
+// def cord(p1x, p1y, p2x, p2y, qx, qy):
+//     return sparse_store(
+//         p1y*p2x - p2y*p1x, 
+//         (p2y - p1y) * qx, 
+//         (p1x - p2x) * qy,
+//     )
 
 %macro cord
     // stack:                    p1x , p1y, p2x , p2y, qx, qx_, qy, qy_

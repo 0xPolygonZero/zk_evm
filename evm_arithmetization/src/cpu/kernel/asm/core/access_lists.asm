@@ -1,10 +1,10 @@
-/// Access lists for addresses and storage keys.
-/// The access list is stored in a sorted linked list in SEGMENT_ACCESSED_ADDRESSES for addresses and
-/// SEGMENT_ACCESSED_STORAGE_KEYS segment for storage keys. The length of
-/// the segments is stored in the global metadata.
-/// Both arrays are stored in the kernel memory (context=0).
-/// Searching and inserting is done by guessing the predecessor in the list.
-/// If the address/storage key isn't found in the array, it is inserted at the end.
+// Access lists for addresses and storage keys.
+// The access list is stored in a sorted linked list in SEGMENT_ACCESSED_ADDRESSES for addresses and
+// SEGMENT_ACCESSED_STORAGE_KEYS segment for storage keys. The length of
+// the segments is stored in the global metadata.
+// Both arrays are stored in the kernel memory (context=0).
+// Searching and inserting is done by guessing the predecessor in the list.
+// If the address/storage key isn't found in the array, it is inserted at the end.
 
 // Initialize the set of accessed addresses and storage keys with an empty list of the form (@U256_MAX)⮌
 // which is written as [@U256_MAX, @SEGMENT_ACCESSED_ADDRESSES] in SEGMENT_ACCESSED_ADDRESSES
@@ -89,8 +89,8 @@ global init_access_lists:
 %endmacro
 
 
-/// Inserts the address into the access list if it is not already present.
-/// Return 1 if the address was inserted, 0 if it was already present.
+// Inserts the address into the access list if it is not already present.
+// Return 1 if the address was inserted, 0 if it was already present.
 global insert_accessed_addresses:
     // stack: addr, retdest
     PROVER_INPUT(access_lists::address_insert)
@@ -172,13 +172,13 @@ insert_new_address:
     SWAP1
     JUMP
 
-/// Remove the address from the access list.
-/// Panics if the address is not in the access list.
-/// Otherwise it guesses the node before the address (pred)
-/// such that (pred)->(next)->(next_next), where the (next) node
-/// stores the address. It writes the link (pred)->(next_next)
-/// and (next) is marked as deleted by writing U256_MAX in its 
-/// next node pointer.
+// Remove the address from the access list.
+// Panics if the address is not in the access list.
+// Otherwise it guesses the node before the address (pred)
+// such that (pred)->(next)->(next_next), where the (next) node
+// stores the address. It writes the link (pred)->(next_next)
+// and (next) is marked as deleted by writing U256_MAX in its 
+// next node pointer.
 global remove_accessed_addresses:
     // stack: addr, retdest
     PROVER_INPUT(access_lists::address_remove)
@@ -232,9 +232,9 @@ global remove_accessed_addresses:
     // stack: ptr
 %endmacro
 
-/// Inserts the storage key into the access list if it is not already present.
-/// Return `1, value_ptr` if the storage key was inserted, `0, value_ptr` if it was already present.
-/// Callers to this function must ensure the original storage value is stored at `value_ptr`.
+// Inserts the storage key into the access list if it is not already present.
+// Return `1, value_ptr` if the storage key was inserted, `0, value_ptr` if it was already present.
+// Callers to this function must ensure the original storage value is stored at `value_ptr`.
 global insert_accessed_storage_keys:
     // stack: addr, key, retdest
     PROVER_INPUT(access_lists::storage_insert)
@@ -351,8 +351,8 @@ insert_storage_key:
     %journal_add_storage_loaded
     JUMP
 
-/// Remove the storage key and its value from the access list.
-/// Panics if the key is not in the list.
+// Remove the storage key and its value from the access list.
+// Panics if the key is not in the list.
 global remove_accessed_storage_keys:
     // stack: addr, key, retdest
     PROVER_INPUT(access_lists::storage_remove)

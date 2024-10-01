@@ -1,13 +1,13 @@
-/// Recursive implementation of exp.
-/// Equivalent to:
-///     def exp(x, e):
-///         if e == 0:
-///             # The path where JUMPI does not jump to `step_case`
-///             return 1
-///         else:
-///             # This is under the `step_case` label
-///             return (x if e % 2 else 1) * exp(x * x, e // 2)
-/// Note that this correctly handles exp(0, 0) == 1.
+// Recursive implementation of exp.
+// Equivalent to:
+//     def exp(x, e):
+//         if e == 0:
+//             # The path where JUMPI does not jump to `step_case`
+//             return 1
+//         else:
+//             # This is under the `step_case` label
+//             return (x if e % 2 else 1) * exp(x * x, e // 2)
+// Note that this correctly handles exp(0, 0) == 1.
 
 global exp:
     // stack: x, e, retdest

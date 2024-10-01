@@ -1,10 +1,10 @@
-/// EIP-4788: Beacon block root in the EVM
-/// <https://eips.ethereum.org/EIPS/eip-4788#pseudocode>
-///
-/// *NOTE*: This will panic if one of the provided timestamps is zero.
+// EIP-4788: Beacon block root in the EVM
+// <https://eips.ethereum.org/EIPS/eip-4788#pseudocode>
+//
+// *NOTE*: This will panic if one of the provided timestamps is zero.
 
-/// Pre-stack: (empty)
-/// Post-stack: (empty)
+// Pre-stack: (empty)
+// Post-stack: (empty)
 global set_beacon_root:
     // stack: (empty)
     PUSH txn_loop

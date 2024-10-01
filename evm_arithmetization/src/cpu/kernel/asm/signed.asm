@@ -172,14 +172,14 @@ global _sys_slt:
     JUMP
 
 
-/// These are the global entry-points for the signed system
-/// calls. They just delegate to a subroutine with the same name
-/// preceded by an underscore.
-///
-/// NB: The only reason to structure things this way is so that the
-/// test suite can call the _sys_opcode versions, since the test_suite
-/// uses our interpreter which doesn't handle `EXIT_KERNEL` in a way
-/// that allows for easy testing. The cost is two extra JUMPs per call.
+// These are the global entry-points for the signed system
+// calls. They just delegate to a subroutine with the same name
+// preceded by an underscore.
+//
+// NB: The only reason to structure things this way is so that the
+// test suite can call the _sys_opcode versions, since the test_suite
+// uses our interpreter which doesn't handle `EXIT_KERNEL` in a way
+// that allows for easy testing. The cost is two extra JUMPs per call.
 
 global sys_sdiv:
     %charge_gas_const(@GAS_LOW)

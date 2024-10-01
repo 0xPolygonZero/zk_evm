@@ -244,7 +244,7 @@ sload_with_addr:
     SWAP1
     JUMP
 
-/// Type-3 transactions specific decoding helper macros.
+// Type-3 transactions specific decoding helper macros.
 #[cfg(feature = eth_mainnet)]
 {
     %macro decode_and_store_max_fee_per_blob_gas
