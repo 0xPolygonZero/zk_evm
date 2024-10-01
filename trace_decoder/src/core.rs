@@ -65,7 +65,7 @@ pub fn entrypoint(
         txn_info,
     } = trace;
     let (state, storage, mut code) = start(trie_pre_images)?;
-    // code.extend(code_db.clone());
+    code.extend(code_db.clone());
 
     let OtherBlockData {
         b_data:
