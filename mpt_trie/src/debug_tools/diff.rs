@@ -1,28 +1,10 @@
 //! Diffing tools to compare two tries against each other. Useful when you want
-//! to find where the tries diverge from one each other.
+//! to find where the tries diverge from one other.
 //!
-//! There are a few considerations when implementing the logic to create a trie
-//! diff:
-//! - What should be reported when the trie node structures diverge (eg. two
-//!   different node types proceeding a given common node)?
-//! - If there are multiple structural differences, how do we discover the
-//!   smallest difference to report back?
-//!
-//! If the node types between the tries (structure) are identical but some
-//! values are different, then these types of diffs are easy to detect and
-//! report the lowest difference. Structural differences are more challenging
-//! and a bit hard to report well. There are two approaches (only one currently
-//! is implemented) in how to detect structural differences:
-//! - Top-down search
-//! - Bottom-up search
-//!
-//! These two searches are somewhat self-explanatory:
-//! - Top-down will find the highest point of a structural divergence and report
-//!   it. If there are multiple divergences, then only the one that is the
-//!   highest in the trie will be reported.
-//! - Bottom-up is a lot more complex to implement, but will attempt to find the
-//!   smallest structural trie difference between the trie. If there are
-//!   multiple differences, then this will likely be what you want to use.
+//! Here a top-down approach is used, following the trie structure from the root to
+//! the leaves. The diffing is done by comparing the nodes at each level. Diff functions
+//! will not return on the first difference, but will try to find and collect all diff
+//! points.
 
 use std::fmt::{self, Debug};
 use std::{fmt::Display, ops::Deref};
