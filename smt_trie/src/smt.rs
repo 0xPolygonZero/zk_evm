@@ -161,7 +161,7 @@ impl<D: Db> Smt<D> {
 
     /// Set the value associated with the key in the SMT.
     /// If the value is 0 and the key is in the SMT, the key is removed from the
-    /// SMT. Reference implementation in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt.js.
+    /// SMT. Reference implementation in <https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt.js>.
     pub fn set(&mut self, key: Key, value: U256) {
         if value.is_zero() {
             self.kv_store.remove(&key);

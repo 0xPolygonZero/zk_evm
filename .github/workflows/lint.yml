@@ -14,6 +14,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   BINSTALL_NO_CONFIRM: true
+  RUSTDOCFLAGS: "-D warnings"
 
 jobs:
   clippy:
@@ -38,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo doc --all
+      - run: cargo doc --all --no-deps
   cargo-fmt:
     runs-on: ubuntu-latest
     steps:
