@@ -3128,6 +3128,7 @@ where
 }
 
 #[cfg(test)]
+#[cfg(not(feature = "cdk_erigon"))]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::plonk::config::PoseidonGoldilocksConfig;
@@ -3193,7 +3194,7 @@ mod tests {
             timing,
             log::Level::Info,
             "Verify segment proof",
-            all_circuits.verify_root(segment_proof.proof_with_pis.clone())?
+            all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
         );
 
         // Print timing details
