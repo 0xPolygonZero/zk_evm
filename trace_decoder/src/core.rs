@@ -447,7 +447,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     storage_read,
                     storage_written,
                     code_usage,
-                    self_destructed: _,
+                    self_destructed,
                 },
             ) in traces
                 .into_iter()
@@ -543,6 +543,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         //                BUT if it's omitted, we actually get state root mismatches
                         state_mask.insert(TrieKey::from_address(addr));
                     }
+                }
+
+                if self_destructed {
+                    storage_tries.remove(&keccak_hash::keccak(addr));
+                    state_mask.extend(state_trie.reporting_remove(addr)?)
                 }
             }
 
