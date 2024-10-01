@@ -17,9 +17,9 @@ name = "tests"
 path = "tests/compiletest.rs"
 
 [dependencies]
-proc-macro2 = { workspace = true }
-quote = { workspace = true }
-syn = { workspace = true }
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
 
 [dev-dependencies]
-trybuild = { workspace = true }
+trybuild.workspace = true

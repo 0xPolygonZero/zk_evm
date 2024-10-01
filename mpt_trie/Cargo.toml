@@ -12,30 +12,30 @@ homepage.workspace = true
 exclude = ["test_data/*"]
 
 [dependencies]
-bytes = { workspace = true }
-enum-as-inner = { workspace = true }
-ethereum-types = { workspace = true }
-hex = { workspace = true }
-keccak-hash = { workspace = true }
+bytes.workspace = true
+enum-as-inner.workspace = true
+ethereum-types.workspace = true
+hex.workspace = true
+impl-codec.workspace = true
+impl-num-traits.workspace = true
+impl-rlp.workspace = true
+impl-serde.workspace = true
+keccak-hash.workspace = true
+log.workspace = true
+num-traits.workspace = true
 parking_lot = { workspace = true, features = ["serde"] }
-thiserror = { workspace = true }
-log = { workspace = true }
-num-traits = { workspace = true }
-uint = { workspace = true }
-rlp = { workspace = true }
+rlp.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
-impl-rlp = { workspace = true }
-impl-codec = { workspace = true }
-impl-serde = { workspace = true }
-impl-num-traits = { workspace = true }
-zk_evm_common = {workspace = true}
+thiserror.workspace = true
+uint.workspace = true
+zk_evm_common.workspace = true
 
 [dev-dependencies]
-eth_trie = { workspace = true }
-pretty_env_logger = { workspace = true }
-rand = { workspace = true }
-rlp-derive = { workspace = true }
-serde_json = { workspace = true }
+eth_trie.workspace = true
+pretty_env_logger.workspace = true
+rand.workspace = true
+rlp-derive.workspace = true
+serde_json.workspace = true
 
 [features]
 default = ["trie_debug"]
