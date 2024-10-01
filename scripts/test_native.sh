@@ -2,7 +2,7 @@
 
 set -uo pipefail
 
-export RPC=
+RPC=${RPC_NATIVE}
 if [ -z $RPC ]; then
   # You must set an RPC endpoint
   exit 1
