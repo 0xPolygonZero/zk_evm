@@ -56,6 +56,7 @@ zk_evm_common.workspace = true
 zk_evm_proc_macro.workspace = true
 
 [dev-dependencies]
+assert2 = "0.3.15"
 camino = "1.1.9"
 criterion.workspace = true
 glob = "0.3.1"

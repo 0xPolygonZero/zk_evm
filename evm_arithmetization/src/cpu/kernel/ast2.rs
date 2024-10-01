@@ -19,7 +19,7 @@ use syn::parse::{Parse, ParseStream, Peek};
 use syn::punctuated::Punctuated;
 use syn::{braced, bracketed, parenthesized, token, Token};
 
-/// Keywords
+/// Keywords.
 pub mod kw {
     macro_rules! keywords {
         ($($ident:ident),* $(,)?) => {
@@ -101,6 +101,48 @@ pub mod pc {
     }
 }
 
+pub mod pun {
+    //! Custom punctuation.
+    //!
+    //! We take care to preserve round-tripping the printed tokenstream for our
+    //! tests.
+
+    use derive_quote_to_tokens::ToTokens;
+    use proc_macro2::{Punct, Spacing};
+    use syn::parse::{Parse, ParseStream};
+
+    #[derive(ToTokens)]
+    pub struct Percent2 {
+        punct0: Punct,
+        punct1: Punct,
+    }
+
+    impl Parse for Percent2 {
+        fn parse(input: ParseStream) -> syn::Result<Self> {
+            input.step(|cursor| {
+                match cursor
+                    .punct()
+                    .and_then(|(p0, next)| next.punct().map(|(p1, n)| (p0, p1, n)))
+                {
+                    Some((punct0, punct1, n))
+                        if itertools::all([&punct0, &punct1], |it| it.as_char() == '%')
+                            && punct0.spacing() == Spacing::Joint =>
+                    {
+                        Ok((Percent2 { punct0, punct1 }, n))
+                    }
+                    _ => Err(input.error("expected `%%`")),
+                }
+            })
+        }
+    }
+
+    impl Percent2 {
+        pub fn peek(input: ParseStream) -> bool {
+            input.fork().parse::<Self>().is_ok()
+        }
+    }
+}
+
 pub struct File {
     pub items: Vec<Item>,
 }
@@ -122,10 +164,6 @@ impl ToTokens for File {
             item.to_tokens(tokens);
         }
     }
-}
-
-fn peek2pc(input: ParseStream) -> bool {
-    input.peek(Token![%]) && input.peek2(Token![%])
 }
 
 fn peek2<T: Peek>(token: T) -> impl Fn(ParseStream) -> bool {
@@ -174,7 +212,7 @@ pub enum Item {
     Repeat(Repeat),
     #[peek_with(pc::stack::peek, name = "%stack")]
     Stack(Stack),
-    #[peek_with(peek2pc, name = "a `%%..` macro decl")]
+    #[peek_with(pun::Percent2::peek, name = "a `%%..` macro decl")]
     MacroDecl(MacroDecl),
     #[peek(Token![%], name = "MacroCall")]
     MacroCall(MacroCall),
@@ -196,8 +234,7 @@ pub enum Item {
 
 #[derive(Parse, ToTokens)]
 pub struct MacroLabel {
-    pub percent0: Token![%],
-    pub percent1: Token![%],
+    pub percent: pun::Percent2,
     pub ident: Ident,
 }
 
@@ -303,7 +340,7 @@ pub enum Target {
     Literal(Literal),
     #[peek_with(Ident::peek, name = "Ident")]
     Ident(Ident),
-    #[peek_with(peek2pc, name = "a `%%..` macro label")]
+    #[peek_with(pun::Percent2::peek, name = "a `%%..` macro label")]
     MacroLabel(MacroLabel),
     #[peek(Token![$], name = "a `$..` variable")]
     Variable(Variable),
@@ -352,28 +389,20 @@ impl ToTokens for Repeat {
     }
 }
 
+#[derive(Parse)]
 pub struct Stack {
     pub stack: pc::stack,
+    #[paren]
     pub placeholders_paren: token::Paren,
+    #[inside(placeholders_paren)]
+    #[call(Punctuated::parse_terminated)]
     pub placeholders: Punctuated<Placeholder, Token![,]>,
-    pub arrow: (Token![-], Token![>]),
+    pub arrow: Token![->],
+    #[paren]
     pub replacements_paren: token::Paren,
+    #[inside(replacements_paren)]
+    #[call(Punctuated::parse_terminated)]
     pub replacements: Punctuated<Target, Token![,]>,
-}
-
-impl Parse for Stack {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let placeholders;
-        let replacements;
-        Ok(Self {
-            stack: input.parse()?,
-            placeholders_paren: parenthesized!(placeholders in input),
-            placeholders: { Punctuated::parse_terminated(&placeholders)? },
-            arrow: (input.parse()?, input.parse()?),
-            replacements_paren: parenthesized!(replacements in input),
-            replacements: Punctuated::parse_terminated(&replacements)?,
-        })
-    }
 }
 
 impl ToTokens for Stack {
@@ -382,14 +411,13 @@ impl ToTokens for Stack {
             stack,
             placeholders_paren,
             placeholders,
-            arrow: (arrow0, arrow1),
+            arrow,
             replacements_paren,
             replacements,
         } = self;
         stack.to_tokens(tokens);
         placeholders_paren.surround(tokens, |tokens| placeholders.to_tokens(tokens));
-        arrow0.to_tokens(tokens);
-        arrow1.to_tokens(tokens);
+        arrow.to_tokens(tokens);
         replacements_paren.surround(tokens, |tokens| replacements.to_tokens(tokens));
     }
 }

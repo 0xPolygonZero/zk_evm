@@ -4,6 +4,8 @@ use anyhow::Context as _;
 use camino::Utf8Path;
 use evm_arithmetization::cpu::kernel::ast2;
 use libtest_mimic::{Arguments, Failed, Trial};
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 
 fn main() -> anyhow::Result<()> {
     let mut trials = vec![];
@@ -13,10 +15,18 @@ fn main() -> anyhow::Result<()> {
         let path = Utf8Path::from_path(&path).context("invalid path")?;
         let friendly = path.strip_prefix(asm_folder).unwrap_or(path);
         let source = fs::read_to_string(path)?;
+
         trials.push(Trial::test(
             friendly.to_owned(),
             move || match syn::parse_str::<ast2::File>(&source) {
-                Ok(_) => Ok(()),
+                Ok(file) => {
+                    let source_tokens = source
+                        .parse::<TokenStream>()
+                        .expect("lexing must have succeeded if parsing succeeded");
+                    let parsed_tokens = file.to_token_stream();
+                    assert2::assert!(source_tokens.to_string() == parsed_tokens.to_string());
+                    Ok(())
+                }
                 Err(e) => Err(Failed::from(syn_miette::Error::new(e, source).render())),
             },
         ));
