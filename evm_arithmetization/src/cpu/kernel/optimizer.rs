@@ -10,6 +10,8 @@ use crate::cpu::kernel::utils::{replace_windows, u256_from_bool};
 
 pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
     // Run the optimizer until nothing changes.
+    let before = code.len();
+    log::info!("Assembly optimizer: Before size: {}.", before);
     loop {
         let old_code = code.clone();
         optimize_asm_once(code);
@@ -17,6 +19,9 @@ pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
             break;
         }
     }
+    let after = code.len();
+    log::info!("Assembly optimizer:  After size: {}.", after);
+    panic!();
 }
 
 /// A single optimization pass.
@@ -27,8 +32,7 @@ fn optimize_asm_once(code: &mut Vec<Item>) {
     remove_swapped_pushes(code);
     remove_swaps_commutative(code);
     remove_ignored_values(code);
-    de_morgan1(code);
-    de_morgan2(code);
+    de_morgan(code);
 }
 
 /// Constant propagation.
@@ -144,15 +148,12 @@ fn remove_swaps_commutative(code: &mut Vec<Item>) {
 // Could be extended to other non-side-effecting operations, e.g. [DUP1, ADD,
 // POP] -> [POP].
 fn remove_ignored_values(code: &mut Vec<Item>) {
-    replace_windows(code, |[a, b]| {
-        if let StandardOp(pop) = b
-            && &pop == "POP"
+    replace_windows(code, |window| {
+        if let [a, StandardOp(pop)] = window
+            && is_push_or_dup(&a)
+            && pop == "POP"
         {
-            match a {
-                Push(_) => Some(vec![]),
-                StandardOp(dup) if dup.starts_with("DUP") => Some(vec![]),
-                _ => None,
-            }
+            Some(vec![])
         } else {
             None
         }
@@ -174,42 +175,26 @@ fn is_push_or_dup(op: &Item) -> bool {
 
 /// First law: (not A) and (not B) = not (A or B)
 /// [PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]
-fn de_morgan1(code: &mut Vec<Item>) {
-    replace_windows(code, |window| {
-        if let [op0, StandardOp(op1), op2, StandardOp(op3), StandardOp(op4)] = window
-            && is_push_or_dup(&op0)
-            && op1 == "NOT"
-            && is_push_or_dup(&op2)
-            && op3 == "NOT"
-            && op4 == "AND"
-        {
-            Some(vec![
-                op0,
-                op2,
-                StandardOp("OR".into()),
-                StandardOp("NOT".into()),
-            ])
-        } else {
-            None
-        }
-    });
-}
-
 /// Second law: (not A) or (not B) = not (A and B)
 /// [PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]
-fn de_morgan2(code: &mut Vec<Item>) {
+/// This also handles `DUP` operations.
+fn de_morgan(code: &mut Vec<Item>) {
     replace_windows(code, |window| {
         if let [op0, StandardOp(op1), op2, StandardOp(op3), StandardOp(op4)] = window
             && is_push_or_dup(&op0)
             && op1 == "NOT"
             && is_push_or_dup(&op2)
             && op3 == "NOT"
-            && op4 == "OR"
+            && (op4 == "AND" || op4 == "OR")
         {
             Some(vec![
                 op0,
                 op2,
-                StandardOp("AND".into()),
+                if op4 == "AND" {
+                    StandardOp("OR".into())
+                } else {
+                    StandardOp("AND".into())
+                },
                 StandardOp("NOT".into()),
             ])
         } else {
@@ -363,7 +348,7 @@ mod tests {
             StandardOp("NOT".into()),
         ];
         assert!(is_code_improved(&before, &after));
-        de_morgan1(&mut before);
+        de_morgan(&mut before);
         assert_eq!(before, after);
     }
 
@@ -383,7 +368,7 @@ mod tests {
             StandardOp("NOT".into()),
         ];
         assert!(is_code_improved(&before, &after));
-        de_morgan2(&mut before);
+        de_morgan(&mut before);
         assert_eq!(before, after);
     }
 }
