@@ -45,16 +45,27 @@ thiserror = { workspace = true }
 tiny-keccak = { workspace = true }
 serde_json = { workspace = true }
 serde-big-array = { workspace = true }
+winnow.workspace = true
 
 # Local dependencies
 mpt_trie = { workspace = true }
 smt_trie = { workspace = true, optional = true }
 zk_evm_common = { workspace = true }
 zk_evm_proc_macro = { workspace = true }
+logos = "0.14.2"
+syn.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+derive-syn-parse = "0.2.0"
+derive-quote-to-tokens = "0.1.1"
+syn-miette = "0.3.0"
+glob = "0.3.1"
 
 [dev-dependencies]
+camino = "1.1.9"
 criterion = { workspace = true }
 hex = { workspace = true }
+libtest-mimic = "0.7.3"
 ripemd = { workspace = true }
 
 [features]
@@ -76,6 +87,9 @@ harness = false
 name = "fibonacci_25m_gas"
 harness = false
 
+[[test]]
+name = "parse"
+harness = false
 
 # Display math equations properly in documentation
 [package.metadata.docs.rs]
