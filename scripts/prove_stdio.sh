@@ -101,7 +101,9 @@ if [[ $TEST_ONLY == "test_only" ]]; then
         rm $TEST_OUT_PATH
         exit
     else
-         echo "Failed to create proof witnesses. See \"zk_evm/tools/test.out\" for more details."
+        # Some error occurred, display the logs and exit.
+        cat $OUT_LOG_PATH
+        echo "Failed to create proof witnesses. See $OUT_LOG_PATH for more details."
         exit 1
     fi
 fi
@@ -117,6 +119,8 @@ end_time=$(date +%s%N)
 set +o pipefail
 cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
+  # Some error occurred, display the logs and exit.
+  cat $OUTPUT_LOG
   echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
   exit 1
 fi
@@ -130,7 +134,9 @@ do
       echo "Proof verification for file $proof_file successful";
       rm $verify_file # we keep the generated proof for potential reuse
   else
-      echo "there was an issue with proof verification";
+      # Some error occurred with verification, display the logs and exit.
+      cat $verify_file
+      echo "There was an issue with proof verification. See $verify_file for more details.";
       exit 1
   fi
 done
