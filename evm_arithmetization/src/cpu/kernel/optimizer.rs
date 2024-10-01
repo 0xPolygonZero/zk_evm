@@ -11,7 +11,7 @@ use crate::cpu::kernel::utils::{replace_windows, u256_from_bool};
 pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
     // Run the optimizer until nothing changes.
     let before = code.len();
-    log::info!("Assembly optimizer: Before size: {}.", before);
+    log::trace!("Assembly optimizer: Before size: {}.", before);
     loop {
         let old_code = code.clone();
         optimize_asm_once(code);
@@ -20,8 +20,11 @@ pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
         }
     }
     let after = code.len();
-    log::info!("Assembly optimizer:  After size: {}.", after);
-    panic!();
+    log::trace!(
+        "Assembly optimizer:  After size: {} ({}% reduction).",
+        after,
+        (before - after) / before * 100
+    );
 }
 
 /// A single optimization pass.
@@ -173,10 +176,10 @@ fn is_push_or_dup(op: &Item) -> bool {
     false
 }
 
-/// First law: (not A) and (not B) = not (A or B)
-/// [PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]
-/// Second law: (not A) or (not B) = not (A and B)
-/// [PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]
+/// De Morgan's First Law: `(not A) and (not B) = not (A or B)`.
+/// e.g. `[PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]`.
+/// De Morgan's Second Law: `(not A) or (not B) = not (A and B)`.
+/// e.g. `[PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]`.
 /// This also handles `DUP` operations.
 fn de_morgan(code: &mut Vec<Item>) {
     replace_windows(code, |window| {
