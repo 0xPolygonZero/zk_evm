@@ -13,6 +13,7 @@ use alloy::primitives::U160;
 use alloy::providers::ext::DebugApi;
 use alloy::providers::Provider;
 use alloy::rpc::types::eth::Transaction;
+use alloy::rpc::types::trace::geth::GethTrace;
 use alloy::rpc::types::trace::geth::StructLog;
 use alloy::rpc::types::trace::geth::{GethDebugTracingOptions, GethDefaultTracingOptions};
 use alloy::transports::RpcError;
@@ -24,7 +25,6 @@ use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use evm_arithmetization::CodeDb;
 use keccak_hash::keccak;
-use structlogprime::normalize_structlog;
 use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
@@ -86,7 +86,7 @@ where
             .await?;
 
         let stackonly_structlog_opt: Option<Vec<StructLog>> =
-            normalize_structlog(&stackonly_structlog_trace).await;
+            trace2structlog(stackonly_structlog_trace).unwrap_or_default();
 
         let need_memory = stackonly_structlog_opt
             .as_deref()
@@ -102,7 +102,7 @@ where
             structlog_tracing_options(true, need_memory, false),
         );
 
-        let memory_structlog = normalize_structlog(&memory_structlog_fut.await?).await;
+        let memory_structlog = trace2structlog(memory_structlog_fut.await?).unwrap_or_default();
 
         Ok::<Option<Vec<_>>, RpcError<TransportErrorKind>>(memory_structlog)
     };
@@ -398,131 +398,88 @@ pub(crate) fn generate_jumpdest_table(
     Ok((jumpdest_table, code_db))
 }
 
-/// This module exists as a workaround for parsing `StructLog`.  The `error`
-/// field is a string in Alloy but an object in Erigon.
-pub mod structlogprime {
-    use core::option::Option::None;
-    use std::collections::BTreeMap;
+fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>, serde_json::Error> {
+    match trace {
+        GethTrace::Default(it) => Ok(Some(it.struct_logs)),
+        GethTrace::JS(it) => Ok(Some(compat::deserialize(it)?.struct_logs)),
+        _ => Ok(None),
+    }
+}
 
-    use alloy::rpc::types::trace::geth::{DefaultFrame, GethTrace, StructLog};
+mod compat {
+    use std::{collections::BTreeMap, fmt, iter};
+
+    use alloy::rpc::types::trace::geth::{DefaultFrame, StructLog};
     use alloy_primitives::{Bytes, B256, U256};
-    use serde::{ser::SerializeMap as _, Deserialize, Serialize, Serializer};
-    use serde_json::Value;
+    use serde::{de::SeqAccess, Deserialize, Deserializer};
 
-    /// Geth Default struct log trace frame
-    ///
-    /// <https://github.com/ethereum/go-ethereum/blob/a9ef135e2dd53682d106c6a2aede9187026cc1de/eth/tracers/logger/logger.go#L406-L411>
-    #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    pub(crate) struct DefaultFramePrime {
-        /// Whether the transaction failed
-        pub failed: bool,
-        /// How much gas was used.
-        pub gas: u64,
-        /// Output of the transaction
-        #[serde(serialize_with = "alloy_serde::serialize_hex_string_no_prefix")]
-        pub return_value: Bytes,
-        /// Recorded traces of the transaction
-        pub struct_logs: Vec<StructLogPrime>,
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<DefaultFrame, D::Error> {
+        _DefaultFrame::deserialize(d)
     }
 
-    /// Represents a struct log entry in a trace
-    ///
-    /// <https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L413-L426>
-    #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-    pub(crate) struct StructLogPrime {
-        /// Program counter
-        pub pc: u64,
-        /// Opcode to be executed
-        pub op: String,
-        /// Remaining gas
-        pub gas: u64,
-        /// Cost for executing op
-        #[serde(rename = "gasCost")]
-        pub gas_cost: u64,
-        /// Current call depth
-        pub depth: u64,
-        /// Error message if any
-        #[serde(default, skip)]
-        pub error: Option<String>,
-        /// EVM stack
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub stack: Option<Vec<U256>>,
-        /// Last call's return data. Enabled via enableReturnData
-        #[serde(
-            default,
-            rename = "returnData",
-            skip_serializing_if = "Option::is_none"
-        )]
-        pub return_data: Option<Bytes>,
-        /// ref <https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L450-L452>
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub memory: Option<Vec<String>>,
-        /// Size of memory.
-        #[serde(default, rename = "memSize", skip_serializing_if = "Option::is_none")]
-        pub memory_size: Option<u64>,
-        /// Storage slots of current contract read from and written to. Only
-        /// emitted for SLOAD and SSTORE. Disabled via disableStorage
-        #[serde(
-            default,
-            skip_serializing_if = "Option::is_none",
-            serialize_with = "serialize_string_storage_map_opt"
-        )]
-        pub storage: Option<BTreeMap<B256, B256>>,
-        /// Refund counter
-        #[serde(default, rename = "refund", skip_serializing_if = "Option::is_none")]
-        pub refund_counter: Option<u64>,
+    /// The `error` field is a `string` in `geth` etc. but an `object` in
+    /// `erigon`.
+    fn error<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Error {
+            String(String),
+            #[allow(dead_code)]
+            Object(serde_json::Map<String, serde_json::Value>),
+        }
+        Ok(match Error::deserialize(d)? {
+            Error::String(it) => Some(it),
+            Error::Object(_) => None,
+        })
     }
 
-    /// Serializes a storage map as a list of key-value pairs _without_
-    /// 0x-prefix
-    pub(crate) fn serialize_string_storage_map_opt<S: Serializer>(
-        storage: &Option<BTreeMap<B256, B256>>,
-        s: S,
-    ) -> Result<S::Ok, S::Error> {
-        match storage {
-            None => s.serialize_none(),
-            Some(storage) => {
-                let mut m = s.serialize_map(Some(storage.len()))?;
-                for (key, val) in storage.iter() {
-                    let key = format!("{:?}", key);
-                    let val = format!("{:?}", val);
-                    // skip the 0x prefix
-                    m.serialize_entry(&key.as_str()[2..], &val.as_str()[2..])?;
-                }
-                m.end()
+    #[derive(Deserialize)]
+    #[serde(remote = "DefaultFrame", rename_all = "camelCase")]
+    struct _DefaultFrame {
+        failed: bool,
+        gas: u64,
+        return_value: Bytes,
+        #[serde(deserialize_with = "vec")]
+        struct_logs: Vec<StructLog>,
+    }
+
+    fn vec<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<StructLog>, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Vec<StructLog>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("an array of `StructLog`")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                #[derive(Deserialize)]
+                struct With(#[serde(with = "_StructLog")] StructLog);
+                let v = iter::from_fn(|| seq.next_element().transpose())
+                    .map(|it| it.map(|With(it)| it))
+                    .collect::<Result<_, _>>()?;
+                Ok(v)
             }
         }
+
+        d.deserialize_seq(Visitor)
     }
 
-    impl TryInto<DefaultFrame> for DefaultFramePrime {
-        fn try_into(self) -> Result<DefaultFrame, Self::Error> {
-            let a = serde_json::to_string(&self)?;
-            let b: DefaultFramePrime = serde_json::from_str(&a)?;
-            let c = serde_json::to_string(&b)?;
-            let d: DefaultFrame = serde_json::from_str(&c)?;
-            Ok(d)
-        }
-
-        type Error = anyhow::Error;
-    }
-
-    pub fn try_reserialize(structlog_object: &Value) -> anyhow::Result<DefaultFrame> {
-        let a = serde_json::to_string(structlog_object)?;
-        let b: DefaultFramePrime = serde_json::from_str(&a)?;
-        let d: DefaultFrame = b.try_into()?;
-        Ok(d)
-    }
-
-    pub(crate) async fn normalize_structlog(
-        unnormalized_structlog: &GethTrace,
-    ) -> Option<Vec<StructLog>> {
-        match unnormalized_structlog {
-            GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs.clone()),
-            GethTrace::JS(structlog_js_object) => try_reserialize(structlog_js_object)
-                .ok()
-                .map(|s| s.struct_logs),
-            _ => None,
-        }
+    #[derive(Deserialize)]
+    #[serde(remote = "StructLog", rename_all = "camelCase")]
+    struct _StructLog {
+        pc: u64,
+        op: String,
+        gas: u64,
+        gas_cost: u64,
+        depth: u64,
+        #[serde(deserialize_with = "error")]
+        error: Option<String>,
+        stack: Option<Vec<U256>>,
+        return_data: Option<Bytes>,
+        memory: Option<Vec<String>>,
+        #[serde(rename = "memSize")]
+        memory_size: Option<u64>,
+        storage: Option<BTreeMap<B256, B256>>,
+        #[serde(rename = "refund")]
+        refund_counter: Option<u64>,
     }
 }
