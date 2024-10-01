@@ -3189,7 +3189,7 @@ mod tests {
             timing,
             log::Level::Info,
             "Verify segment proof",
-            all_circuits.verify_root(segment_proof.proof_with_pis.clone())?
+            all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
         );
 
         // Print timing details
