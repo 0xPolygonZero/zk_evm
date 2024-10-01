@@ -19,7 +19,7 @@ global exp:
     // stack: e, retdest
     pop
     // stack: retdest
-    push 1
+    PUSH 1
     // stack: 1, retdest
     swap1
     // stack: retdest, 1
@@ -29,7 +29,7 @@ step_case:
     // stack: x, e, retdest
     push recursion_return
     // stack: recursion_return, x, e, retdest
-    push 2
+    PUSH 2
     // stack: 2, recursion_return, x, e, retdest
     dup4
     // stack: e, 2, recursion_return, x, e, retdest
@@ -42,13 +42,13 @@ step_case:
     %jump(exp)
 recursion_return:
     // stack: exp(x * x, e / 2), x, e, retdest
-    push 2
+    PUSH 2
     // stack: 2, exp(x * x, e / 2), x, e, retdest
     dup4
     // stack: e, 2, exp(x * x, e / 2), x, e, retdest
     mod
     // stack: e % 2, exp(x * x, e / 2), x, e, retdest
-    push 1
+    PUSH 1
     // stack: 1, e % 2, exp(x * x, e / 2), x, e, retdest
     dup4
     // stack: x, 1, e % 2, exp(x * x, e / 2), x, e, retdest
@@ -56,7 +56,7 @@ recursion_return:
     // stack: x - 1, e % 2, exp(x * x, e / 2), x, e, retdest
     mul
     // stack: (x - 1) * (e % 2), exp(x * x, e / 2), x, e, retdest
-    push 1
+    PUSH 1
     // stack: 1, (x - 1) * (e % 2), exp(x * x, e / 2), x, e, retdest
     add
     // stack: 1 + (x - 1) * (e % 2), exp(x * x, e / 2), x, e, retdest
@@ -74,7 +74,7 @@ recursion_return:
 
 global sys_exp:
     %stack (return_info, x, e) -> (x, e, return_info)
-    push 0
+    PUSH 0
     // stack: shift, x, e, return_info
     %jump(sys_exp_gas_loop_enter)
 sys_exp_gas_loop:
