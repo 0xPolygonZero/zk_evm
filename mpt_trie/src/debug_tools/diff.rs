@@ -1,10 +1,10 @@
 //! Diffing tools to compare two tries against each other. Useful when you want
 //! to find where the tries diverge from one other.
 //!
-//! Here a top-down approach is used, following the trie structure from the root to
-//! the leaves. The diffing is done by comparing the nodes at each level. Diff functions
-//! will not return on the first difference, but will try to find and collect all diff
-//! points.
+//! Here a top-down approach is used, following the trie structure from the root
+//! to the leaves. The diffing is done by comparing the nodes at each level.
+//! Diff functions will not return on the first difference, but will try to find
+//! and collect all diff points.
 
 use std::fmt::{self, Debug};
 use std::{fmt::Display, ops::Deref};
