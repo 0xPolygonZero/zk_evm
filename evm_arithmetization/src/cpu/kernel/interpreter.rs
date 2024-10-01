@@ -98,7 +98,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             let clock = interpreter.get_clock();
 
-            let jdtw = interpreter
+            let (a, jdtw) = interpreter
                 .generation_state
                 .set_jumpdest_analysis_inputs(interpreter.jumpdest_table.clone());
 
@@ -106,7 +106,9 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
                 "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
                 clock
             );
-            (interpreter.generation_state.jumpdest_table).map(|x| (x, jdtw))
+            // (interpreter.generation_state.jumpdest_table).map(|x| (x, jdtw))
+            interpreter.generation_state.jumpdest_table = Some(a.clone());
+            Some((a, jdtw))
         }
     }
 }

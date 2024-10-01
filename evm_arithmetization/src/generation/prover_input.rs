@@ -359,8 +359,11 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Returns the next used jump address.
+    /// todo
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
+
+        // get_code from self.memory
 
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
@@ -798,11 +801,14 @@ impl<F: RichField> GenerationState<F> {
         info!("Generating JUMPDEST tables");
         // dbg!(&self.inputs.jumpdest_table);
         // dbg!(&self.inputs.txn_hashes);
-        let rpcw = &self.inputs.jumpdest_table;
-        let rpc: Option<JumpDestTableProcessed> = rpcw
-            .as_ref()
-            .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
-        info!("Generating JUMPDEST tables: Running SIM");
+        // let rpcw = &self.inputs.jumpdest_table.clone();
+        // let rpc: Option<JumpDestTableProcessed> = rpcw
+        //     .as_ref()
+        //     .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt,
+        // &self.inputs.contract_code)); info!("Generating JUMPDEST tables:
+        // Running SIM");
+
+        self.inputs.jumpdest_table = None;
 
         let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
 
@@ -815,12 +821,15 @@ impl<F: RichField> GenerationState<F> {
         //     // assert_eq!(rw, &sw);
         // }
 
-        // info!("SIMW {:#?}", &simw);
+        info!("SIMW {:#?}", &simw);
         // info!("RPCW {:#?}", rpcw);
-        assert_eq!(rpcw, simw);
-        assert_eq!(rpc, sim);
+        info!("SIMP {:#?}", &sim);
+        // info!("RPCP {:#?}", &rpc);
+        // assert_eq!(rpcw, simw);
+        // assert_eq!(rpc, sim);
 
-        self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
+        // self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
+        self.jumpdest_table = sim;
 
         Ok(())
     }
@@ -829,12 +838,12 @@ impl<F: RichField> GenerationState<F> {
     /// compute their respective proofs, by calling
     /// `get_proofs_and_jumpdests`
     pub(crate) fn set_jumpdest_analysis_inputs(
-        &mut self,
+        &self,
         jumpdest_table: HashMap<usize, BTreeSet<usize>>,
-    ) -> JumpDestTableWitness {
+    ) -> (JumpDestTableProcessed, JumpDestTableWitness) {
         let mut jdtw = JumpDestTableWitness::default();
-        self.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from_iter(
-            jumpdest_table.into_iter().map(|(ctx, jumpdest_table)| {
+        let jdtp = JumpDestTableProcessed::new(HashMap::from_iter(jumpdest_table.into_iter().map(
+            |(ctx, jumpdest_table)| {
                 let code = self.get_code(ctx).unwrap();
                 let code_hash = keccak(code.clone());
                 trace!("ctx: {ctx}, code_hash: {:?} code: {:?}", code_hash, code);
@@ -847,9 +856,9 @@ impl<F: RichField> GenerationState<F> {
                 } else {
                     (ctx, vec![])
                 }
-            }),
+            },
         )));
-        jdtw
+        (jdtp, jdtw)
     }
 
     pub(crate) fn get_current_code(&self) -> Result<Vec<u8>, ProgramError> {

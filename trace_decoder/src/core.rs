@@ -65,7 +65,7 @@ pub fn entrypoint(
         txn_info,
     } = trace;
     let (state, storage, mut code) = start(trie_pre_images)?;
-    code.extend(code_db.clone());
+    // code.extend(code_db.clone());
 
     let OtherBlockData {
         b_data:
@@ -837,7 +837,7 @@ impl Hash2Code {
     pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {
             Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {}", hash),
+            None => bail!("no code for hash {:#x}", hash),
         }
     }
     pub fn insert(&mut self, code: Vec<u8>) {
