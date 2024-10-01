@@ -799,9 +799,7 @@ impl<F: RichField> GenerationState<F> {
         // skipping the validate table call
 
         info!("Generating JUMPDEST tables");
-        // dbg!(&self.inputs.jumpdest_table);
-        // dbg!(&self.inputs.txn_hashes);
-        let rpcw = &self.inputs.jumpdest_table.clone();
+        let rpcw = self.inputs.jumpdest_table.clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
             .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
@@ -815,21 +813,12 @@ impl<F: RichField> GenerationState<F> {
 
         info!("Generating JUMPDEST tables: finished");
 
-        // if let (Some(rw), Some(sw)) = (rpcw, simw) {
-        //     info!("SIMW {}", sw);
-        //     info!("RPCW {}", rw);
-        //     // assert_eq!(rw, &sw);
-        // }
-
         info!("SIMW {:#?}", &simw);
-        info!("RPCW {:#?}", rpcw);
+        info!("RPCW {:#?}", &rpcw);
         info!("SIMP {:#?}", &simp);
         info!("RPCP {:#?}", &rpcp);
-        // assert_eq!(simw, rpcw);
-        // assert_eq!(simp, rpcp);
 
         self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
-        // self.jumpdest_table = sim;
 
         Ok(())
     }
