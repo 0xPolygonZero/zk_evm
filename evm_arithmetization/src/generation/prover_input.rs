@@ -801,12 +801,11 @@ impl<F: RichField> GenerationState<F> {
         info!("Generating JUMPDEST tables");
         // dbg!(&self.inputs.jumpdest_table);
         // dbg!(&self.inputs.txn_hashes);
-        // let rpcw = &self.inputs.jumpdest_table.clone();
-        // let rpc: Option<JumpDestTableProcessed> = rpcw
-        //     .as_ref()
-        //     .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt,
-        // &self.inputs.contract_code)); info!("Generating JUMPDEST tables:
-        // Running SIM");
+        let rpcw = &self.inputs.jumpdest_table.clone();
+        let rpc: Option<JumpDestTableProcessed> = rpcw
+            .as_ref()
+            .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+        info!("Generating JUMPDEST tables: Running SIM");
 
         self.inputs.jumpdest_table = None;
 
@@ -822,14 +821,14 @@ impl<F: RichField> GenerationState<F> {
         // }
 
         info!("SIMW {:#?}", &simw);
-        // info!("RPCW {:#?}", rpcw);
+        info!("RPCW {:#?}", rpcw);
         info!("SIMP {:#?}", &sim);
-        // info!("RPCP {:#?}", &rpc);
-        // assert_eq!(rpcw, simw);
-        // assert_eq!(rpc, sim);
+        info!("RPCP {:#?}", &rpc);
+        assert_eq!(rpcw, simw);
+        assert_eq!(rpc, sim);
 
-        // self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
-        self.jumpdest_table = sim;
+        self.jumpdest_table = if rpc.is_some() { rpc } else { sim };
+        // self.jumpdest_table = sim;
 
         Ok(())
     }
