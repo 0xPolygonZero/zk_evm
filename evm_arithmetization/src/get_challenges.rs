@@ -280,6 +280,8 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
         let ctl_challenges =
             get_grand_product_challenge_set(&mut challenger, config.num_challenges);
 
+        let stark_challenges =
+
         Ok(AllProofChallenges {
             stark_challenges: core::array::from_fn(|i| {
                 challenger.compact();
