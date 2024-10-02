@@ -354,6 +354,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     },
             } = txn.unwrap_or_default();
 
+            let tx_hash = keccak_hash::keccak(&byte_code);
+
             if let Ok(nonempty) = nunny::Vec::new(byte_code) {
                 batch_byte_code.push(nonempty.clone());
                 transaction_trie.insert(txn_ix, nonempty.into())?;
@@ -384,7 +386,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                 )
                 .map_err(|e| anyhow!("{e:?}"))
-                .context("couldn't decode receipt")?;
+                .context(format!("couldn't decode receipt in txn {tx_hash:x}"))?;
 
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
@@ -396,7 +398,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         .clone()
                         .insert_by_address(addr, acct)
                         .context(format!(
-                            "couldn't reach state of {} address {addr:x}",
+                            "couldn't reach state of {} address {addr:x} in txn {tx_hash:x}",
                             match born {
                                 true => "created",
                                 false => "accessed",
@@ -442,9 +444,11 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     if !storage_written.is_empty() {
                         let storage = match born {
                             true => storage_tries.entry(keccak_hash::keccak(addr)).or_default(),
-                            false => storage_tries
-                                .get_mut(&keccak_hash::keccak(addr))
-                                .context(format!("missing storage trie for address {addr:x}"))?,
+                            false => storage_tries.get_mut(&keccak_hash::keccak(addr)).context(
+                                format!(
+                                    "missing storage trie for address {addr:x} in txn {tx_hash:x}"
+                                ),
+                            )?,
                         };
 
                         for (k, v) in storage_written {
@@ -513,7 +517,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         state_mask.insert(TrieKey::from_address(*addr));
                         let mut acct = state_trie
                             .get_by_address(*addr)
-                            .context("missing address for withdrawal")?;
+                            .context(format!("missing address {addr:x} for withdrawal"))?;
                         acct.balance += *amt;
                         state_trie
                             .insert_by_address(*addr, acct)
@@ -784,7 +788,7 @@ impl Hash2Code {
     pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {
             Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {}", hash),
+            None => bail!("no code for hash {:x}", hash),
         }
     }
     pub fn insert(&mut self, code: Vec<u8>) {
