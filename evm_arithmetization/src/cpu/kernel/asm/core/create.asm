@@ -249,7 +249,7 @@ create_too_deep:
 // Pre stack: addr, codehash, redest
 // Post stack: (empty)
 global set_codehash:
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: addr, codehash, retdest
         DUP1 %insert_touched_addresses
@@ -265,7 +265,7 @@ global set_codehash:
         // stack: retdest
         JUMP
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: addr, codehash, retdest
         DUP1 %insert_touched_addresses

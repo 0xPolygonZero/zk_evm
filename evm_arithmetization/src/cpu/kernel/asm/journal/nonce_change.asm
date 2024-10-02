@@ -5,7 +5,7 @@
 %endmacro
 
 global revert_nonce_change:
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: entry_type, ptr, retdest
         POP
@@ -19,7 +19,7 @@ global revert_nonce_change:
         // stack: retdest
         JUMP
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: entry_type, ptr, retdest
         POP

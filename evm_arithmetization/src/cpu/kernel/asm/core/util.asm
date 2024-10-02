@@ -57,11 +57,11 @@
 // Returns 1 if the account is non-existent, 0 otherwise.
 %macro is_non_existent
     // stack: addr
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         %mpt_read_state_trie ISZERO
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         %key_code %search_key ISZERO
     }
@@ -70,7 +70,7 @@
 
 // Returns 1 if the account is empty, 0 otherwise.
 %macro is_empty
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: addr
         %mpt_read_state_trie
@@ -89,7 +89,7 @@
         EQ
         %jump(%%after)
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: addr
         DUP1 %read_nonce %mload_trie_data

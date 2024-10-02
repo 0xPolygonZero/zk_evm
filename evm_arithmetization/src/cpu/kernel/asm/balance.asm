@@ -26,7 +26,7 @@ global sys_balance:
 %endmacro
 
 global balance:
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: address, retdest
         %mpt_read_state_trie
@@ -38,7 +38,7 @@ global balance:
         // stack: balance, retdest
         SWAP1 JUMP
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: address, retdest
         %read_balance %mload_trie_data

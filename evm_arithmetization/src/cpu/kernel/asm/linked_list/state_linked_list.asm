@@ -329,7 +329,7 @@ key_not_found:
     %search_key
 %endmacro
 
-%macro read_balance:
+%macro read_balance
     // stack: addr_key
     %key_balance
     %search_key

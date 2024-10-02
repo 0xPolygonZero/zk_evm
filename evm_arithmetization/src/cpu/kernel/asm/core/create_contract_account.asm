@@ -5,7 +5,7 @@
     // stack: address
     DUP1 %insert_touched_addresses
     DUP1 %append_created_contracts
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         %mpt_read_state_trie
 
@@ -62,9 +62,8 @@
 
         %%end:
             // stack: status
-        %endmacro
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         POP
         %read_code ISZERO %jumpi(%%add_account)
@@ -110,8 +109,8 @@
 
         %%end:
             // stack: status
-        %endmacro
     }
+%endmacro
 
 %macro append_created_contracts
     // stack: address

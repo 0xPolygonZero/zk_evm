@@ -12,7 +12,7 @@ global revert_account_destroyed:
     PUSH revert_account_destroyed_contd DUP2
     %jump(remove_selfdestruct_list)
 revert_account_destroyed_contd:
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: address, target, prev_balance, retdest
         SWAP1
@@ -39,7 +39,7 @@ revert_account_destroyed_contd:
         %mstore_trie_data
         JUMP
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: address, target, prev_balance, retdest
         SWAP1

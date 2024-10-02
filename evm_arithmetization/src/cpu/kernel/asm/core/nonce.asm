@@ -2,7 +2,7 @@
 // Pre stack: address, retdest
 // Post stack: (empty)
 global nonce:
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: address, retdest
         %mpt_read_state_trie
@@ -14,7 +14,7 @@ global nonce:
         // stack: nonce, retdest
         SWAP1 JUMP
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: address, retdest
         %read_nonce %mload_trie_data
@@ -31,7 +31,7 @@ global nonce:
 
 // Increment the given account's nonce. Assumes the account already exists; panics otherwise.
 global increment_nonce:
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = eth_mainnet)]
     {
         // stack: address, retdest
         DUP1
@@ -53,7 +53,7 @@ global increment_nonce:
     global increment_nonce_no_such_account:
         PANIC
     }
-    #[cfg(feature = "cdk_erigon")]
+    #[cfg(feature = cdk_erigon)]
     {
         // stack: address, retdest
         DUP1
