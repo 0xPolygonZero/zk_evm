@@ -55,15 +55,19 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
     /// Returns the degree (i.e. the trace length) of each STARK.
-    pub fn degree_bits(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
-        self.multi_proof.recover_degree_bits(config)
+    pub fn degree_bits(&self, config: &StarkConfig) -> [Option<usize>; NUM_TABLES] {
+        core::array::from_fn(|i| {
+            self.multi_proof.stark_proofs[i]
+                .as_ref()
+                .map(|proof| proof.proof.recover_degree_bits(config))
+        })
     }
 }
 
 /// Randomness for all STARKs.
 pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
     /// Randomness used in each STARK proof.
-    pub stark_challenges: [StarkProofChallenges<F, D>; NUM_TABLES],
+    pub stark_challenges: [Option<StarkProofChallenges<F, D>>; NUM_TABLES],
     /// Randomness used for cross-table lookups. It is shared by all STARKs.
     pub ctl_challenges: GrandProductChallengeSet<F>,
 }

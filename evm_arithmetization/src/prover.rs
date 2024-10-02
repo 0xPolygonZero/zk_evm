@@ -274,10 +274,16 @@ where
     let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
     let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
     let challenger_after_cpu = challenger.clone();
-    // TODO(sdeng): Keccak proofs are still required for CTLs, etc. Refactor the
-    // code and remove the unnecessary parts.
-    let (keccak_proof, _) = prove_table!(keccak_stark, Table::Keccak);
-    let (keccak_sponge_proof, _) = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
+    let keccak_proof = if use_keccak_tables {
+        Some(prove_table!(keccak_stark, Table::Keccak).0)
+    } else {
+        None
+    };
+    let keccak_sponge_proof = if use_keccak_tables {
+        Some(prove_table!(keccak_sponge_stark, Table::KeccakSponge).0)
+    } else {
+        None
+    };
     if !use_keccak_tables {
         // We need to connect the challenger state of Logic and CPU tables when the
         // Keccak tables are not in use.
@@ -293,17 +299,17 @@ where
 
     Ok((
         [
-            arithmetic_proof,
-            byte_packing_proof,
-            cpu_proof,
+            Some(arithmetic_proof),
+            Some(byte_packing_proof),
+            Some(cpu_proof),
             keccak_proof,
             keccak_sponge_proof,
-            logic_proof,
-            memory_proof,
-            mem_before_proof,
-            mem_after_proof,
+            Some(logic_proof),
+            Some(memory_proof),
+            Some(mem_before_proof),
+            Some(mem_after_proof),
             #[cfg(feature = "cdk_erigon")]
-            poseidon_proof,
+            Some(poseidon_proof),
         ],
         mem_before_cap,
         mem_after_cap,

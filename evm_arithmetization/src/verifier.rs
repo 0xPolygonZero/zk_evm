@@ -146,8 +146,22 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         cross_table_lookups,
     } = all_stark;
 
+    let auxiliary_polys = core::array::from_fn(|i| {
+        all_proof.multi_proof.stark_proofs[i]
+            .as_ref()
+            .map(|proof| &proof.proof.openings.auxiliary_polys)
+            .unwrap_or(&None)
+    });
+    let auxiliary_polys_next = core::array::from_fn(|i| {
+        all_proof.multi_proof.stark_proofs[i]
+            .as_ref()
+            .map(|proof| &proof.proof.openings.auxiliary_polys_next)
+            .unwrap_or(&None)
+    });
+
     let ctl_vars_per_table = get_ctl_vars_from_proofs(
-        &all_proof.multi_proof,
+        &auxiliary_polys,
+        &auxiliary_polys_next,
         cross_table_lookups,
         &ctl_challenges,
         &num_lookup_columns,
