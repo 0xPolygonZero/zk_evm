@@ -11,7 +11,7 @@
 //! Since an operation like e.g. `PUSH 0x5B` does not encode a valid
 //! [`JUMPDEST`] in its second byte, and `PUSH32
 //! 5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B` does not
-//! encode valid [`JUMPDESTS`] in bytes 1-32, some deligence must be exercised
+//! encode valid [`JUMPDESTS`] in bytes 1-32, some diligence must be exercised
 //! when proving validity of jump operations.
 //!
 //! This module concerns itself with data structures for collecting these
@@ -64,10 +64,6 @@ impl JumpDestTableProcessed {
 }
 
 impl JumpDestTableWitness {
-    pub fn new(ctx_map: HashMap<H256, ContextJumpDests>) -> Self {
-        Self(ctx_map)
-    }
-
     pub fn get(&self, code_hash: &H256) -> Option<&ContextJumpDests> {
         self.0.get(code_hash)
     }
