@@ -2112,7 +2112,7 @@ where
                 let common_date = &table_circuit
                     .shrinking_wrappers
                     .last()
-                    .expect("")
+                    .expect("No shrinking circuits")
                     .circuit
                     .common;
                 let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
