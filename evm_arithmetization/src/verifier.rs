@@ -162,7 +162,9 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
             verify_stark_proof_with_challenges(
                 $stark,
                 &stark_proofs[*$table].proof,
-                &stark_challenges[*$table],
+                &stark_challenges[*$table]
+                    .as_ref()
+                    .expect("Missing challenges"),
                 Some(&ctl_vars_per_table[*$table]),
                 &[],
                 config,
