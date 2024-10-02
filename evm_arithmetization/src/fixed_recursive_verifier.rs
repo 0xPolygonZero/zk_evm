@@ -1928,7 +1928,7 @@ where
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(*index_verifier_data),
                 );
-                let common_date = &table_circuits
+                let common_data = &table_circuits
                     .by_stark_size
                     .get(index_verifier_data)
                     .expect("No valid size in shrinking circuits")
@@ -1937,7 +1937,7 @@ where
                     .expect("No shrinking circuits")
                     .circuit
                     .common;
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");
@@ -2114,7 +2114,7 @@ where
                 let common_date = &table_circuit
                     .shrinking_wrappers
                     .last()
-                    .expect("")
+                    .expect("No shrinking circuits")
                     .circuit
                     .common;
                 let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
@@ -3142,7 +3142,6 @@ mod tests {
     type C = PoseidonGoldilocksConfig;
 
     #[test]
-    #[ignore]
     fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
         init_logger();
 

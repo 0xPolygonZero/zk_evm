@@ -6,6 +6,7 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use starky::config::StarkConfig;
 use starky::lookup::get_grand_product_challenge_set;
 
+use crate::all_stark::KECCAK_TABLES_INDICES;
 use crate::proof::*;
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
