@@ -6,7 +6,7 @@ mod common;
 
 use anyhow::Context as _;
 use common::{cases, Case};
-use evm_arithmetization::prover::simulate_execution_all_segments;
+use evm_arithmetization::prover::testing::simulate_execution_all_segments;
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use trace_decoder::observer::DummyObserver;

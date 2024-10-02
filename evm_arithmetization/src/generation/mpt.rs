@@ -612,7 +612,6 @@ pub(crate) fn load_state_mpt(
     )
 }
 
-#[cfg(any(test, feature = "test_utils"))]
 pub mod transaction_testing {
     use ethereum_types::H160;
     use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};

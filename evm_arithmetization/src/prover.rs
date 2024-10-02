@@ -28,7 +28,6 @@ use crate::generation::ErrorWithTries;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
-use crate::SegmentDataIterator;
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
@@ -383,23 +382,6 @@ pub fn simulate_execution<F: RichField>(inputs: GenerationInputs<F>) -> Result<(
     Ok(())
 }
 
-pub fn simulate_execution_all_segments<F>(
-    inputs: GenerationInputs<F>,
-    max_cpu_len_log: usize,
-) -> Result<(), ErrorWithTries<SegmentError>>
-where
-    F: RichField,
-{
-    features_check(&inputs.clone().trim());
-
-    for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
-        segment?;
-    }
-
-    Ok(())
-}
-
-#[cfg(any(test, feature = "test_utils"))]
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
@@ -435,5 +417,21 @@ pub mod testing {
         }
 
         Ok(proofs)
+    }
+
+    pub fn simulate_execution_all_segments<F>(
+        inputs: GenerationInputs<F>,
+        max_cpu_len_log: usize,
+    ) -> Result<(), ErrorWithTries<SegmentError>>
+    where
+        F: RichField,
+    {
+        features_check(&inputs.clone().trim());
+
+        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
+            segment?;
+        }
+
+        Ok(())
     }
 }

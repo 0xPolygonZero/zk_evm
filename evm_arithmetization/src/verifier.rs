@@ -77,7 +77,6 @@ pub(crate) fn initial_memory_merkle_cap<
     .cap
 }
 
-#[cfg(any(test, feature = "test_utils"))]
 pub mod testing {
     use anyhow::{ensure, Result};
     use ethereum_types::{BigEndianHash, U256};

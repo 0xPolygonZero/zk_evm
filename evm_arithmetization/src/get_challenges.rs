@@ -245,7 +245,6 @@ pub(crate) fn observe_public_values_target<
     observe_burn_addr_target::<F, C, D>(challenger, public_values.burn_addr.clone());
 }
 
-#[cfg(any(test, feature = "test_utils"))]
 pub mod testing {
     use plonky2::field::extension::Extendable;
     use plonky2::hash::hash_types::RichField;

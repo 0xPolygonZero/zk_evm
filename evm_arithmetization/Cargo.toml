@@ -61,7 +61,6 @@ asmtools = ["hex"]
 polygon_pos = []
 cdk_erigon = ["smt_trie"]
 eth_mainnet = []
-test_utils = []
 
 [[bin]]
 name = "assemble"
@@ -81,43 +80,3 @@ rustdoc-args = ["--html-in-header", ".cargo/katex-header.html"]
 
 [lints]
 workspace = true
-
-[[test]]
-name = "add11_yml"
-path = "tests/add11_yml.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "selfdestruct"
-path = "tests/selfdestruct.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "withdrawals"
-path = "tests/withdrawals.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "erc20"
-path = "tests/erc20.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "log_opcode"
-path = "tests/log_opcode.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "simple_transfer"
-path = "tests/simple_transfer.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "erc721"
-path = "tests/erc721.rs"
-required-features = ["test_utils"]
-
-[[test]]
-name = "global_exit_root"
-path = "tests/global_exit_root.rs"
-required-features = ["test_utils"]
