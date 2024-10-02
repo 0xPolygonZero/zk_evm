@@ -3139,7 +3139,6 @@ mod tests {
     type C = PoseidonGoldilocksConfig;
 
     #[test]
-    #[ignore]
     fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
         init_logger();
 
