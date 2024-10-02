@@ -2997,3 +2997,80 @@ where
     circuit.verifier_only.circuit_digest.elements.len()
         + (1 << circuit.common.config.fri_config.cap_height) * NUM_HASH_OUT_ELTS
 }
+
+#[cfg(test)]
+#[cfg(not(feature = "cdk_erigon"))]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::plonk::config::PoseidonGoldilocksConfig;
+    use plonky2::timed;
+
+    use super::*;
+    use crate::testing_utils::{empty_payload, init_logger};
+    use crate::witness::operation::Operation;
+
+    type F = GoldilocksField;
+    const D: usize = 2;
+    type C = PoseidonGoldilocksConfig;
+
+    #[test]
+    #[ignore]
+    fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
+        init_logger();
+
+        let all_stark = AllStark::<F, D>::default();
+        let config = StarkConfig::standard_fast_config();
+
+        // Generate a dummy payload for testing
+        let payload = empty_payload()?;
+        let max_cpu_len_log = Some(7);
+        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log);
+        let (_, mut segment_data) = segment_iterator.next().unwrap()?;
+
+        let opcode_counts = &segment_data.opcode_counts;
+        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+
+        let timing = &mut TimingTree::new(
+            "Segment Proof Generation Without Keccak Test",
+            log::Level::Info,
+        );
+        // Process and prove segment
+        let all_circuits = timed!(
+            timing,
+            log::Level::Info,
+            "Create all recursive circuits",
+            AllRecursiveCircuits::<F, C, D>::new(
+                &all_stark,
+                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 17..18, 17..18, 17..18],
+                &config,
+            )
+        );
+
+        let segment_proof = timed!(
+            timing,
+            log::Level::Info,
+            "Prove segment",
+            all_circuits.prove_segment(
+                &all_stark,
+                &config,
+                payload.trim(),
+                &mut segment_data,
+                timing,
+                None,
+            )?
+        );
+
+        // Verify the generated segment proof
+        timed!(
+            timing,
+            log::Level::Info,
+            "Verify segment proof",
+            all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
+        );
+
+        // Print timing details
+        timing.print();
+
+        Ok(())
+    }
+}
