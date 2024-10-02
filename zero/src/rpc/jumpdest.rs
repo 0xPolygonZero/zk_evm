@@ -191,6 +191,7 @@ pub(crate) fn generate_jumpdest_table(
         );
         let (code_hash, ctx) = call_stack.last().unwrap();
 
+        // REVIEW: will be removed before merge
         trace!("TX:   {:?}", tx.hash);
         trace!("STEP: {:?}", step);
         trace!("STEPS: {:?}", struct_log.len());
