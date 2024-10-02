@@ -147,12 +147,19 @@ jobs:
     name: Execute bash script to generate and verify a proof for a small block.
     runs-on: zero-ci
     timeout-minutes: 15
+    env:
+      REGRESSION_PERCENT_THRESHOLD: 10
+      EXPECTED_PROVING_TIME_SEC: 410
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
+        run: |
+          ./scripts/prove_stdio.sh artifacts/witness_b19807080.json | tee proving_stdout.log
+          MEASURED_PROVING_TIME_SEC=`cat proving_stdout.log | grep 'Proving duration:' | tail -1 | awk '{ print int($3)}'`
+          ./scripts/check_proving_time.sh $EXPECTED_PROVING_TIME_SEC $MEASURED_PROVING_TIME_SEC
+          
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -169,9 +176,16 @@ jobs:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
     runs-on: zero-ci
     timeout-minutes: 10
+    env:
+      REGRESSION_PERCENT_THRESHOLD: 10
+      EXPECTED_PROVING_TIME_SEC: 330
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
+        run: |
+          ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json | tee proving_stdout.log
+          MEASURED_PROVING_TIME_SEC=`cat proving_stdout.log | grep 'Proving duration:' | tail -1 | awk '{ print int($3)}'`
+          ./scripts/check_proving_time.sh $EXPECTED_PROVING_TIME_SEC $MEASURED_PROVING_TIME_SEC
+        
