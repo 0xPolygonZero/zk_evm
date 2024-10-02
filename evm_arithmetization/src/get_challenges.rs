@@ -258,10 +258,11 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
 
         let stark_proofs = &self.multi_proof.stark_proofs;
 
-        for proof in stark_proofs {
+        for (i, proof) in stark_proofs.iter().enumerate() {
             if let Some(proof) = proof {
                 challenger.observe_cap(&proof.proof.trace_cap);
             } else {
+                assert!(KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables);
                 let zero_cap = vec![F::ZERO; config.fri_config.num_cap_elements()];
                 challenger.observe_elements(&zero_cap);
             }
@@ -274,8 +275,8 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
 
         Ok(AllProofChallenges {
             stark_challenges: core::array::from_fn(|i| {
-                challenger.compact();
                 if let Some(stark_proof) = &stark_proofs[i] {
+                    challenger.compact();
                     Some(stark_proof.proof.get_challenges(
                         &mut challenger,
                         Some(&ctl_challenges),
