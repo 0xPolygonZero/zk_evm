@@ -1,3 +1,27 @@
+//! EVM opcode 0x5B or 91 is [`JUMPDEST`] which encodes a a valid offset, that
+//! opcodes `JUMP` and `JUMPI` can jump to. Jumps to non-[`JUMPDEST`]
+//! instructions are invalid. During an execution a [`JUMPDEST`] may be visited
+//! zero or more times. Offsets are measured in bytes with respect to the
+//! beginning of some contract code, which is uniquely identified by its
+//! `CodeHash`. Every time control flow is switches to another contract through
+//! a `CALL`-like instruction a new call context, `Context`, is created. Thus,
+//! the tripple (`CodeHash`,`Context`, `Offset`) uniquely identifies an visited
+//! [`JUMPDEST`] offset of an execution.
+//!
+//! Since an operation like e.g. `PUSH 0x5B` does not encode a valid
+//! [`JUMPDEST`] in its second byte, and `PUSH32
+//! 5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B` does not
+//! encode valid [`JUMPDESTS`] in bytes 1-32, some deligence must be exercised
+//! when proving validity of jump operations.
+//!
+//! This module concerns itself with data structures for collecting these
+//! offsets for [`JUMPDEST`] that was visited during an execution and are not
+//! recording duplicity. The proofs that each of these offsets are not rendered
+//! invalid by any of the previous 32 bytes `PUSH1`-`PUSH32` is computed later
+//! in [`prove_context_jumpdests`] on basis of these collections.
+//!
+//! [`JUMPDEST`]: https://www.evm.codes/?fork=cancun#5b
+
 use std::cmp::max;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -9,12 +33,13 @@ use itertools::{sorted, Itertools};
 use keccak_hash::H256;
 use serde::{Deserialize, Serialize};
 
-/// Each `CodeAddress` can be called one or more times, each time creating a new
-/// `Context`. Each `Context` will contain one or more offsets of `JUMPDEST`.
+/// Each `CodeAddress` can be called one or more times,
+/// each time creating a new `Context`.
+/// Each `Context` will contain one or more offsets of `JUMPDEST`.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ContextJumpDests(pub HashMap<usize, BTreeSet<usize>>);
 
-/// The result after proving a `JumpDestTableWitness`.
+/// The result after proving a [`JumpDestTableWitness`].
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JumpDestTableProcessed(HashMap<usize, Vec<usize>>);
 
