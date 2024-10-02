@@ -120,13 +120,14 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
     all_stark: &AllStark<F, D>,
     all_proof: AllProof<F, C, D>,
     config: &StarkConfig,
+    use_keccak_tables: bool,
     is_initial: bool,
 ) -> Result<()> {
     let AllProofChallenges {
         stark_challenges,
         ctl_challenges,
     } = all_proof
-        .get_challenges(config)
+        .get_challenges(config, use_keccak_tables)
         .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
 
     let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
@@ -172,8 +173,10 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
     verify_table!(arithmetic_stark, Table::Arithmetic);
     verify_table!(byte_packing_stark, Table::BytePacking);
     verify_table!(cpu_stark, Table::Cpu);
-    verify_table!(keccak_stark, Table::Keccak);
-    verify_table!(keccak_sponge_stark, Table::KeccakSponge);
+    if use_keccak_tables {
+        verify_table!(keccak_stark, Table::Keccak);
+        verify_table!(keccak_sponge_stark, Table::KeccakSponge);
+    }
     verify_table!(logic_stark, Table::Logic);
     verify_table!(memory_stark, Table::Memory);
     verify_table!(mem_before_stark, Table::MemBefore);
@@ -423,10 +426,24 @@ pub mod testing {
     ) -> Result<()> {
         assert!(!all_proofs.is_empty());
 
-        verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
+        // TODO(sdeng): determine the value of `use_keccak_tables` from `all_proof`.
+        let use_keccak_tables = true;
+        verify_proof(
+            all_stark,
+            all_proofs[0].clone(),
+            config,
+            use_keccak_tables,
+            true,
+        )?;
 
         for all_proof in &all_proofs[1..] {
-            verify_proof(all_stark, all_proof.clone(), config, false)?;
+            verify_proof(
+                all_stark,
+                all_proof.clone(),
+                config,
+                use_keccak_tables,
+                false,
+            )?;
         }
 
         Ok(())

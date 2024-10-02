@@ -6,6 +6,7 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use starky::config::StarkConfig;
 use starky::lookup::get_grand_product_challenge_set;
 
+use crate::all_stark::KECCAK_TABLES_INDICES;
 use crate::proof::*;
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -252,13 +253,26 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
     pub(crate) fn get_challenges(
         &self,
         config: &StarkConfig,
+        use_keccak_tables: bool,
     ) -> Result<AllProofChallenges<F, D>, ProgramError> {
         let mut challenger = Challenger::<F, C::Hasher>::new();
 
         let stark_proofs = &self.multi_proof.stark_proofs;
 
-        for proof in stark_proofs {
-            challenger.observe_cap(&proof.proof.trace_cap);
+        for (i, proof) in stark_proofs.iter().enumerate() {
+            if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
+                // Observe zero merkle caps when skipping Keccak tables.
+                let zero_merkle_cap = proof
+                    .proof
+                    .trace_cap
+                    .flatten()
+                    .iter()
+                    .map(|_| F::ZERO)
+                    .collect::<Vec<F>>();
+                challenger.observe_elements(&zero_merkle_cap);
+            } else {
+                challenger.observe_cap(&proof.proof.trace_cap);
+            }
         }
 
         observe_public_values::<F, C, D>(&mut challenger, &self.public_values)?;
