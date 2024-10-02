@@ -116,3 +116,8 @@ required-features = ["test_utils"]
 name = "erc721"
 path = "tests/erc721.rs"
 required-features = ["test_utils"]
+
+[[test]]
+name = "global_exit_root"
+path = "tests/global_exit_root.rs"
+required-features = ["test_utils"]
