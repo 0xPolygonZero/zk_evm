@@ -16,10 +16,8 @@ global revert_storage_change:
 
 delete:
     // stack: address, slot, prev_value, retdest
-    SWAP2 POP
-    // stack: slot, address, retdest
-    %slot_to_storage_key
-    SWAP1 %addr_to_state_key
-    // stack: addr_key, slot_key, retdest
+    %addr_to_state_key
+    // stack: addr_key, slot, prev_value, retdest
     %remove_slot_from_addr_key
+    POP
     JUMP

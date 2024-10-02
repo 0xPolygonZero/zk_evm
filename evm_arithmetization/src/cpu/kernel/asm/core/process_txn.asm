@@ -27,7 +27,7 @@ global process_normalized_txn:
     // stack: sender, retdest
 
     // Check that txn nonce matches account nonce.
-    DUP1 %nonce
+    DUP1 %nonce_from_addr
     DUP1 %eq_const(@MAX_NONCE) %assert_zero(invalid_txn_2) // EIP-2681
     // stack: sender_nonce, sender, retdest
     %mload_txn_field(@TXN_FIELD_NONCE)
@@ -117,7 +117,7 @@ global process_contract_creation_txn:
 
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     // stack: origin, retdest
-    DUP1 %nonce
+    DUP1 %nonce_from_addr
     // stack: origin_nonce, origin, retdest
     %decrement // Need the non-incremented nonce
     SWAP1

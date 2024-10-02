@@ -125,12 +125,40 @@ store_state_slots_end:
     %mul_const(4)
 %endmacro
 
+%macro set_nonce
+    // stack: address, nonce
+    %key_nonce
+    %insert_key
+    // stack: (empty)
+%endmacro
+
+%macro set_balance
+    // stack: address, balance
+    %key_balance
+    %insert_key
+    // stack: (empty)
+%endmacro
+
+%macro set_code
+    // stack: address, code
+    %key_code
+    %insert_key
+    // stack: (empty)
+%endmacro
+
+%macro set_code_length
+    // stack: address, code_lenght
+    %key_code_lenght
+    %insert_key
+    // stack: (empty)
+%endmacro
+
+
 %macro insert_slot
     // stack: addr, slot, value
     %addr_to_state_key
     %key_storage
     %insert_key
-%%after:
     // stack: (empty)
 %endmacro
 
@@ -138,7 +166,6 @@ store_state_slots_end:
     // stack: addr_key, slot_key, value
     %key_storage
     %insert_key
-%%after:
     // stack: (empty)
 %endmacro
 
@@ -291,17 +318,42 @@ key_not_found:
     JUMP
 
 %macro search_key
-    // stack: state_key, storage_key, ptr
-    %stack (key, ptr) -> (key, ptr, %%after)
+    %stack (key) -> (key, %%after)
     %jump(search_key)
 %%after:
     // stack: value
 %endmacro
-
 %macro search_slot_from_addr_key
     // stack: addr_key, slot
     %key_storage
     %search_key
+%endmacro
+
+%macro read_balance:
+    // stack: addr_key
+    %key_balance
+    %search_key
+%endmacro
+
+%macro read_code
+    // stack: addr_key
+    %key_code
+    %search_key
+    // stack: code_hash
+%endmacro
+
+%macro read_code_lenght
+    // stack: addr_key
+    %key_code_length
+    %search_key
+    // stack: code_length
+%endmacro
+
+%macro read_nonce
+    // stack: addr_key
+    %key_nonce
+    %search_key
+    // stack: nonce
 %endmacro
 
 %macro remove_key
@@ -309,6 +361,11 @@ key_not_found:
     SWAP1
     %jump(remove_key)
 %%after:
+%endmacro
+
+%macro remove_balance
+    %key_balance
+    %remove_key
 %endmacro
 
 %macro remove_slot_from_addr_key

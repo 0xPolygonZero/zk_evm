@@ -3,7 +3,7 @@
 // trie_data segment. Return null if the address is not found.
 global mpt_read_state_trie:
     // stack: addr, retdest
-    %read_accounts_linked_list
+    %read_account_from_addr
     // stack: account_ptr, retdest
     SWAP1
     // stack: retdest, account_ptr

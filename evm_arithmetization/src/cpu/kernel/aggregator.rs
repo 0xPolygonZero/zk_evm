@@ -47,7 +47,10 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/process_txn.asm"),
     include_str!("asm/core/syscall.asm"),
     include_str!("asm/core/terminate.asm"),
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/core/transfer.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/core/transfer_cdk_erigon.asm"),
     include_str!("asm/core/util.asm"),
     include_str!("asm/core/access_lists.asm"),
     include_str!("asm/core/log.asm"),

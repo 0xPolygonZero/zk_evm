@@ -26,16 +26,25 @@ global sys_balance:
 %endmacro
 
 global balance:
-    // stack: address, retdest
-    %mpt_read_state_trie
-    // stack: account_ptr, retdest
-    DUP1 ISZERO %jumpi(retzero) // If the account pointer is null, return 0.
-    %add_const(1)
-    // stack: balance_ptr, retdest
-    %mload_trie_data
-    // stack: balance, retdest
+    #[cfg(feature = "eth_mainnet")]
+    {
+        // stack: address, retdest
+        %mpt_read_state_trie
+        // stack: account_ptr, retdest
+        DUP1 ISZERO %jumpi(retzero) // If the account pointer is null, return 0.
+        %add_const(1)
+        // stack: balance_ptr, retdest
+        %mload_trie_data
+        // stack: balance, retdest
+        SWAP1 JUMP
+    }
+    #[cfg(feature = "cdk_erigon")]
+    {
+        // stack: address, retdest
+        %read_balance %mload_trie_data
+        // stack: balance, retdest
     SWAP1 JUMP
-
+    }
 retzero:
     %stack (account_ptr, retdest) -> (retdest, 0)
     JUMP

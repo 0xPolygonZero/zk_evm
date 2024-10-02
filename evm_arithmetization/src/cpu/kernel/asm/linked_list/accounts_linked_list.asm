@@ -378,12 +378,21 @@ remove_all_slots_end:
 %%after:
 %endmacro
 
-%macro read_accounts_linked_list
+%macro read_account_from_addr
     %stack (addr) -> (addr, %%after)
     %addr_to_state_key
     %jump(search_account)
 %%after:
     // stack: account_ptr
+%endmacro
+
+%macro nonce_from_ptr:
+    %mload_trie_data
+%endmacro
+
+%macro balance_from_ptr:
+    %increment
+    %mload_trie_data
 %endmacro
 
 %macro first_account

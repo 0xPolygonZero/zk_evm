@@ -57,27 +57,54 @@
 // Returns 1 if the account is non-existent, 0 otherwise.
 %macro is_non_existent
     // stack: addr
-    %mpt_read_state_trie ISZERO
+    #[cfg(feature = "eth_mainnet")]
+    {
+        %mpt_read_state_trie ISZERO
+    }
+    #[cfg(feature = "cdk_erigon")]
+    {
+        %key_code %search_key ISZERO
+    }
 %endmacro
+
 
 // Returns 1 if the account is empty, 0 otherwise.
 %macro is_empty
-    // stack: addr
-    %mpt_read_state_trie
-    // stack: account_ptr
-    DUP1 ISZERO %jumpi(%%false)
-    // stack: account_ptr
-    DUP1 %mload_trie_data
-    // stack: nonce, account_ptr
-    ISZERO %not_bit %jumpi(%%false)
-    %increment DUP1 %mload_trie_data
-    // stack: balance, balance_ptr
-    ISZERO %not_bit %jumpi(%%false)
-    %add_const(2) %mload_trie_data
-    // stack: code_hash
-    PUSH @EMPTY_STRING_HASH
-    EQ
-    %jump(%%after)
+    #[cfg(feature = "eth_mainnet")]
+    {
+        // stack: addr
+        %mpt_read_state_trie
+        // stack: account_ptr
+        DUP1 ISZERO %jumpi(%%false)
+        // stack: account_ptr
+        DUP1 %mload_trie_data
+        // stack: nonce, account_ptr
+        ISZERO %not_bit %jumpi(%%false)
+        %increment DUP1 %mload_trie_data
+        // stack: balance, balance_ptr
+        ISZERO %not_bit %jumpi(%%false)
+        %add_const(2) %mload_trie_data
+        // stack: code_hash
+        PUSH @EMPTY_STRING_HASH
+        EQ
+        %jump(%%after)
+    }
+    #[cfg(feature = "cdk_erigon")]
+    {
+        // stack: addr
+        DUP1 %read_nonce %mload_trie_data
+        // stack: nonce, addr
+        ISZERO %not_bit %jumpi(%%false)
+        // stack: addr
+        DUP1 %read_balance %mload_trie_data
+        // stack: balance, addr
+        ISZERO %not_bit %jumpi(%%false)
+        // stack: addr
+        %read_code %mload_trie_data
+        // stack: codehash
+        %eq_const(@EMPTY_STRING_POSEIDON_HASH)
+        %jump(%%after)
+    }
 %%false:
     // stack: account_ptr
     POP
