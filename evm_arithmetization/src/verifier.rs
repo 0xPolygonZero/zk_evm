@@ -1,4 +1,4 @@
-use ethereum_types::{BigEndianHash, U256};
+use ethereum_types::{ U256};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
@@ -9,11 +9,7 @@ use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
 
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
-use crate::memory::VALUE_LIMBS;
-use crate::proof::PublicValues;
-use crate::util::h2u;
 
 pub(crate) fn initial_memory_merkle_cap<
     F: RichField + Extendable<D>,
@@ -81,6 +77,7 @@ pub(crate) fn initial_memory_merkle_cap<
     .cap
 }
 
+#[cfg(any(test, feature = "test_utils"))]
 pub mod testing {
     use anyhow::{ensure, Result};
     use ethereum_types::{BigEndianHash, U256};

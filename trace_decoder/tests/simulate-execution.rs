@@ -8,6 +8,7 @@ use anyhow::Context as _;
 use common::{cases, Case};
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use evm_arithmetization::prover::simulate_execution_all_segments;
 use trace_decoder::observer::DummyObserver;
 
 fn main() -> anyhow::Result<()> {
@@ -29,7 +30,7 @@ fn main() -> anyhow::Result<()> {
                 trials.push(Trial::test(
                     format!("{name}@{batch_size}/{ix}"),
                     move || {
-                        evm_arithmetization::prover::testing::simulate_execution_all_segments::<
+                        simulate_execution_all_segments::<
                             GoldilocksField,
                         >(gi, 19)
                         .map_err(|e| format!("{e:?}"))?; // get the full error chain

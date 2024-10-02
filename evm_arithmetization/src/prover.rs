@@ -22,10 +22,12 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::segments::GenerationSegmentData;
+use crate::generation::segments::{GenerationSegmentData, SegmentError};
+use crate::generation::ErrorWithTries;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
+use crate::SegmentDataIterator;
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
@@ -367,14 +369,27 @@ pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) 
     }
 }
 
+pub fn simulate_execution_all_segments<F>(
+    inputs: GenerationInputs<F>,
+    max_cpu_len_log: usize,
+) -> Result<(), ErrorWithTries<SegmentError>>
+where
+    F: RichField,
+{
+    features_check(&inputs.clone().trim());
+
+    for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
+        segment?;
+    }
+
+    Ok(())
+}
+
+#[cfg(any(test, feature = "test_utils"))]
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
-    use crate::generation::ErrorWithTries;
-    use crate::{
-        cpu::kernel::interpreter::Interpreter,
-        generation::segments::{SegmentDataIterator, SegmentError},
-    };
+    use crate::{cpu::kernel::interpreter::Interpreter, generation::segments::SegmentDataIterator};
 
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
@@ -419,21 +434,5 @@ pub mod testing {
         }
 
         Ok(proofs)
-    }
-
-    pub fn simulate_execution_all_segments<F>(
-        inputs: GenerationInputs<F>,
-        max_cpu_len_log: usize,
-    ) -> Result<(), ErrorWithTries<SegmentError>>
-    where
-        F: RichField,
-    {
-        features_check(&inputs.clone().trim());
-
-        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
-            segment?;
-        }
-
-        Ok(())
     }
 }

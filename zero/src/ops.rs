@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use anyhow::anyhow;
 use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
-use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
+use evm_arithmetization::{prover::simulate_execution_all_segments, GenerationInputs};
 use evm_arithmetization::{Field, ProofWithPublicValues, PublicValues, TrimmedGenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},

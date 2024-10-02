@@ -6,7 +6,7 @@ use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
-use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
+use rlp::PayloadInfo;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
@@ -612,8 +612,10 @@ pub(crate) fn load_state_mpt(
     )
 }
 
+#[cfg(any(test, feature = "test_utils"))]
 pub mod transaction_testing {
     use ethereum_types::H160;
+    use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
     use super::*;
 
