@@ -22,6 +22,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::segments::{GenerationSegmentData, SegmentError};
 use crate::generation::ErrorWithTries;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
@@ -369,6 +370,19 @@ pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) 
     }
 }
 
+/// Simulates the zkEVM CPU execution.
+/// It does not generate any trace or proof of correct state transition.
+pub fn simulate_execution<F: RichField>(inputs: GenerationInputs<F>) -> Result<()> {
+    features_check(&inputs.clone().trim());
+
+    let initial_stack = vec![];
+    let initial_offset = KERNEL.global_labels["init"];
+    let mut interpreter: Interpreter<F> =
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
+    interpreter.run()?;
+    Ok(())
+}
+
 pub fn simulate_execution_all_segments<F>(
     inputs: GenerationInputs<F>,
     max_cpu_len_log: usize,
@@ -389,20 +403,7 @@ where
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
-    use crate::{cpu::kernel::interpreter::Interpreter, generation::segments::SegmentDataIterator};
-
-    /// Simulates the zkEVM CPU execution.
-    /// It does not generate any trace or proof of correct state transition.
-    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs<F>) -> Result<()> {
-        features_check(&inputs.clone().trim());
-
-        let initial_stack = vec![];
-        let initial_offset = KERNEL.global_labels["init"];
-        let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
-        interpreter.run()?;
-        Ok(())
-    }
+    use crate::generation::segments::SegmentDataIterator;
 
     pub fn prove_all_segments<F, C, const D: usize>(
         all_stark: &AllStark<F, D>,
