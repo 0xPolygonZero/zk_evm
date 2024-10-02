@@ -33,7 +33,7 @@ use itertools::{sorted, Itertools};
 use keccak_hash::H256;
 use serde::{Deserialize, Serialize};
 
-/// Each `CodeAddress` can be called one or more times,
+/// Each `CodeHash` can be called one or more times,
 /// each time creating a new `Context`.
 /// Each `Context` will contain one or more offsets of `JUMPDEST`.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
@@ -43,7 +43,7 @@ pub struct ContextJumpDests(pub HashMap<usize, BTreeSet<usize>>);
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JumpDestTableProcessed(HashMap<usize, Vec<usize>>);
 
-/// Map `CodeAddress -> (Context -> [JumpDests])`
+/// Map `CodeHash -> (Context -> [JumpDests])`
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JumpDestTableWitness(HashMap<H256, ContextJumpDests>);
 

@@ -127,16 +127,19 @@ pub(crate) fn generate_jumpdest_table(
     let mut jumpdest_table = JumpDestTableWitness::default();
     let mut code_db = CodeDb::default();
 
-    // This map does not contain `initcodes`.
+    // This map does neither contain the `init` field of Contract Deployment
+    // transactions nor CREATE, CREATE2 payloads.
     let callee_addr_to_code_hash: HashMap<Address, H256> = tx_traces
         .iter()
-        .map(|(callee_addr, trace)| (callee_addr, &trace.code_usage))
-        .filter(|(_callee_addr, code_usage)| code_usage.is_some())
-        .map(|(callee_addr, code_usage)| {
-            (*callee_addr, get_code_hash(code_usage.as_ref().unwrap()))
+        .filter_map(|(callee_addr, trace)| {
+            trace
+                .code_usage
+                .as_ref()
+                .map(|code| (*callee_addr, get_code_hash(&code)))
         })
         .collect();
 
+    // REVIEW: will be removed before merge
     trace!(
         "Transaction: {} is a {}.",
         tx.hash,
@@ -166,9 +169,6 @@ pub(crate) fn generate_jumpdest_table(
     // true condition and target `jump_target`.
     let mut prev_jump: Option<U256> = None;
 
-    // Call depth of the previous `entry`. We initialize to 0 as this compares
-    // smaller to 1.
-    //let mut prev_depth = 0;
     // The next available context. Starts at 1. Never decrements.
     let mut next_ctx_available = 1;
     // Immediately use context 1;
