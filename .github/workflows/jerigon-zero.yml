@@ -19,7 +19,7 @@ jobs:
   test_jerigon_zero_tracer_proving:
     name: Zero tracer proof generation
     runs-on: zero-ci
-    timeout-minutes: 40
+    timeout-minutes: 30
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
