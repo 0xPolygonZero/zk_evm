@@ -1,4 +1,4 @@
-use ethereum_types::{ U256};
+use ethereum_types::U256;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
@@ -470,7 +470,13 @@ pub mod testing {
 
 #[cfg(debug_assertions)]
 pub(crate) mod debug_utils {
+    use ethereum_types::BigEndianHash;
+
     use super::*;
+    use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+    use crate::memory::VALUE_LIMBS;
+    use crate::proof::*;
+    use crate::util::h2u;
 
     /// Output all the extra memory rows that don't appear in the CPU trace but
     /// are necessary to correctly check the MemoryStark CTL.
