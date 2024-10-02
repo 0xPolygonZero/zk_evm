@@ -5,7 +5,7 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
@@ -19,6 +19,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::linked_list::LinkedListsPtrs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -54,8 +55,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// halt_context
     pub(crate) halt_context: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
-    #[allow(unused)]
-    pub(crate) opcode_count: [usize; 0x100],
+    pub(crate) opcode_count: HashMap<Operation, usize>,
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
@@ -115,8 +115,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    pub(crate) accounts: BTreeMap<U256, usize>,
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) access_lists_ptrs: LinkedListsPtrs,
+    pub(crate) state_ptrs: LinkedListsPtrs,
     pub(crate) next_txn_index: usize,
 }
 
@@ -178,7 +178,7 @@ impl<F: RichField> Interpreter<F> {
             // while the label `halt` is the halting label in the kernel.
             halt_offsets: vec![DEFAULT_HALT_OFFSET, KERNEL.global_labels["halt_final"]],
             halt_context: None,
-            opcode_count: [0; 256],
+            opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
@@ -209,7 +209,7 @@ impl<F: RichField> Interpreter<F> {
             generation_state: state.soft_clone(),
             halt_offsets: vec![halt_offset],
             halt_context: Some(halt_context),
-            opcode_count: [0; 256],
+            opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
             clock: 0,
@@ -235,8 +235,8 @@ impl<F: RichField> Interpreter<F> {
         // Initialize the MPT's pointers.
         let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.accounts_pointers,
-                &mut self.generation_state.storage_pointers,
+                &mut self.generation_state.state_ptrs.accounts,
+                &mut self.generation_state.state_ptrs.storage,
                 &inputs.tries,
             )
             .expect("Invalid MPT data for preinitialization");
@@ -426,6 +426,10 @@ impl<F: RichField> Interpreter<F> {
     /// Returns the max number of CPU cycles.
     pub(crate) const fn get_max_cpu_len_log(&self) -> Option<usize> {
         self.max_cpu_len_log
+    }
+
+    pub(crate) fn reset_opcode_counts(&mut self) {
+        self.opcode_count = HashMap::new();
     }
 
     pub(crate) fn code(&self) -> &MemorySegmentState {
@@ -660,6 +664,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
         let (mut row, opcode) = self.base_row();
 
         let op = decode(registers, opcode)?;
+
+        // Increment the opcode count
+        *self.opcode_count.entry(op).or_insert(0) += 1;
 
         fill_op_flag(op, &mut row);
 

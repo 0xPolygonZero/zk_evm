@@ -308,7 +308,9 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
         ),
     );
 
-    assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
+    let kernel_code =
+        &state.get_generation_state().memory.contexts[0].segments[Segment::Code.unscale()].content;
+    assert!(pc < kernel_code.len(), "Kernel PC is out of range: {}", pc);
 }
 
 pub(crate) trait Transition<F: RichField>: State<F>

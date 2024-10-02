@@ -341,7 +341,7 @@ macro_rules! legend {
 
         impl $ident {
             /// The discriminant of this enum is used as an index
-            /// into itself given by [`Self::legend`].
+            /// into this "legend".
             fn legend() -> ::std::vec::Vec<::tower_lsp::lsp_types::SemanticTokenType> {
                 ::std::vec![
                     $($token_type,)*

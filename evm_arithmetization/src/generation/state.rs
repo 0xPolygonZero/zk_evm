@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
@@ -8,6 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
+use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -375,15 +376,13 @@ pub struct GenerationState<F: RichField> {
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
-    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
-    /// of an account in the accounts linked list, and ptr is the respective
-    /// node address in memory.
-    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
+    /// Provides quick access to pointers that reference the location
+    /// of either and account or a slot in the respective access list.
+    pub(crate) access_lists_ptrs: LinkedListsPtrs,
 
-    /// Each entry contains the pair ((account_key, slot_key), ptr) where
-    /// account_key is the (hashed) key of an account, slot_key is the slot
-    /// key, and ptr is the respective node address in memory.
-    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
+    /// Provides quick access to pointers that reference the memory location of
+    /// either and account or a slot in the respective access list.
+    pub(crate) state_ptrs: LinkedListsPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -394,8 +393,8 @@ impl<F: RichField> GenerationState<F> {
         let generation_state = self.get_mut_generation_state();
         let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
-                &mut generation_state.accounts_pointers,
-                &mut generation_state.storage_pointers,
+                &mut generation_state.state_ptrs.accounts,
+                &mut generation_state.state_ptrs.storage,
                 trie_inputs,
             )
             .expect("Invalid MPT data for preinitialization");
@@ -446,8 +445,8 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            accounts_pointers: BTreeMap::new(),
-            storage_pointers: BTreeMap::new(),
+            access_lists_ptrs: LinkedListsPtrs::default(),
+            state_ptrs: LinkedListsPtrs::default(),
             ger_prover_inputs,
         };
         let trie_root_ptrs =
@@ -463,6 +462,8 @@ impl<F: RichField> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: trimmed_inputs.clone(),
+            state_ptrs: segment_data.extra_data.state_ptrs.clone(),
+            access_lists_ptrs: segment_data.extra_data.access_lists_ptrs.clone(),
             ..Default::default()
         };
 
@@ -560,8 +561,8 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            accounts_pointers: self.accounts_pointers.clone(),
-            storage_pointers: self.storage_pointers.clone(),
+            access_lists_ptrs: self.access_lists_ptrs.clone(),
+            state_ptrs: self.state_ptrs.clone(),
         }
     }
 
@@ -578,10 +579,10 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.accounts_pointers
-            .clone_from(&segment_data.extra_data.accounts);
-        self.storage_pointers
-            .clone_from(&segment_data.extra_data.storage);
+        self.state_ptrs
+            .clone_from(&segment_data.extra_data.state_ptrs);
+        self.access_lists_ptrs
+            .clone_from(&segment_data.extra_data.access_lists_ptrs);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,

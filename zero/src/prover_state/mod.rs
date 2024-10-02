@@ -1,16 +1,16 @@
 //! Global prover state management and utilities.
 //!
 //! This module provides the following:
-//! - [`Circuit`] and [`CircuitConfig`] which can be used to dynamically
-//!   construct [`evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits`]
-//!   from the specified circuit sizes.
+//! - [`ProverState`] and [`CircuitConfig`] which can be used to dynamically
+//!   construct [`evm_arithmetization::AllRecursiveCircuits`] from the specified
+//!   circuit sizes.
 //! - Command line arguments for constructing a [`CircuitConfig`].
 //!     - Provides default values for the circuit sizes.
 //!     - Allows the circuit sizes to be specified via environment variables.
 //! - Persistence utilities for saving and loading
-//!   [`evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits`].
-//! - Global prover state management via the [`P_STATE`] static and the
-//!   [`set_prover_state_from_config`] function.
+//!   [`evm_arithmetization::AllRecursiveCircuits`].
+//! - Global prover state management via the `P_STATE` static and the
+//!   [`p_state`] function.
 use std::borrow::Borrow;
 use std::{fmt::Display, sync::OnceLock};
 
@@ -20,13 +20,12 @@ use evm_arithmetization::{
     AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
     TrimmedGenerationInputs,
 };
-use evm_arithmetization::{ProofWithPublicInputs, VerifierData};
+use evm_arithmetization::{ProofWithPublicInputs, ProofWithPublicValues, VerifierData};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::util::timing::TimingTree;
 use tracing::info;
 
 use self::circuit::{CircuitConfig, NUM_TABLES};
-use crate::proof_types::GeneratedSegmentProof;
 use crate::prover_state::persistence::{
     BaseProverResource, DiskResource, MonolithicProverResource, RecursiveCircuitResource,
     VerifierResource,
@@ -223,7 +222,7 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
-    ) -> anyhow::Result<GeneratedSegmentProof> {
+    ) -> anyhow::Result<ProofWithPublicValues> {
         let config = StarkConfig::standard_fast_config();
         let all_stark = AllStark::default();
 
@@ -238,12 +237,12 @@ impl ProverStateManager {
 
         let table_circuits = self.load_table_circuits(&config, &all_proof)?;
 
-        let (intern, p_vals) =
+        let proof_with_pvs =
             p_state()
                 .state
                 .prove_segment_after_initial_stark(all_proof, &table_circuits, None)?;
 
-        Ok(GeneratedSegmentProof { p_vals, intern })
+        Ok(proof_with_pvs)
     }
 
     /// Generate a segment proof using the specified input on the monolithic
@@ -252,7 +251,7 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
-    ) -> anyhow::Result<GeneratedSegmentProof> {
+    ) -> anyhow::Result<ProofWithPublicValues> {
         let p_out = p_state().state.prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
@@ -263,12 +262,12 @@ impl ProverStateManager {
         )?;
 
         let ProverOutputData {
+            is_agg: _,
             is_dummy: _,
-            proof_with_pis: intern,
-            public_values: p_vals,
+            proof_with_pvs,
         } = p_out;
 
-        Ok(GeneratedSegmentProof { p_vals, intern })
+        Ok(proof_with_pvs)
     }
 
     /// Generate a segment proof using the specified input.
@@ -283,7 +282,7 @@ impl ProverStateManager {
     pub fn generate_segment_proof(
         &self,
         input: (TrimmedGenerationInputs, GenerationSegmentData),
-    ) -> anyhow::Result<GeneratedSegmentProof> {
+    ) -> anyhow::Result<ProofWithPublicValues> {
         let (generation_inputs, mut segment_data) = input;
 
         match self.persistence {
