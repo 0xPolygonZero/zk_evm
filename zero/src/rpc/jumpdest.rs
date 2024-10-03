@@ -29,7 +29,7 @@ use tracing::{trace, warn};
 type Word = [u8; 32];
 const WORDSIZE: usize = std::mem::size_of::<Word>();
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TxStructLogs(pub Option<TxHash>, pub Vec<StructLog>);
 
 /// Pass `true` for the components needed.

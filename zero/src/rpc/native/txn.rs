@@ -25,7 +25,7 @@ use anyhow::{bail, Context as _, Ok};
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::rpc::jumpdest::get_block_normalized_structlogs;
 use crate::rpc::Compat;
@@ -86,8 +86,17 @@ where
     let block_structlogs = match jumpdest_src {
         JumpdestSrc::ProverSimulation => vec![None; block_prestate_trace.len()],
         JumpdestSrc::ClientFetchedStructlogs => {
+            // In case of the error with retrieving structlogs from the server,
+            // continue without interruption. Equivalent to `ProverSimulation` case.
             get_block_normalized_structlogs(provider, &BlockNumberOrTag::from(block.header.number))
-                .await?
+                .await
+                .unwrap_or_else(|e| {
+                    warn!(
+                        "failed to fetch server structlogs for block {}: {e}",
+                        block.header.number
+                    );
+                    vec![None; block_prestate_trace.len()]
+                })
                 .into_iter()
                 .map(|tx_struct_log| tx_struct_log.map(|it| it.1))
                 .collect()
