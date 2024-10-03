@@ -27,6 +27,11 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
+type GenerationAndStructLogs = (
+    Vec<GenerationInputs>,
+    Option<Vec<Vec<Option<Vec<ZeroStructLog>>>>>,
+);
+
 /// TODO(0xaatif): document this after <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub fn entrypoint(
     trace: BlockTrace,
@@ -34,10 +39,7 @@ pub fn entrypoint(
     all_struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
     batch_size_hint: usize,
     observer: &mut impl Observer<StateMpt>,
-) -> anyhow::Result<(
-    Vec<GenerationInputs>,
-    Option<Vec<Vec<Option<Vec<ZeroStructLog>>>>>,
-)> {
+) -> anyhow::Result<GenerationAndStructLogs> {
     ensure!(batch_size_hint != 0);
 
     let BlockTrace {
@@ -76,16 +78,13 @@ pub fn entrypoint(
         observer,
     )?;
 
-    let batched_struct_logs = if let Some(struct_logs) = all_struct_logs {
-        Some(
-            struct_logs
-                .chunks(batch_size_hint)
-                .map(|c| c.to_vec())
-                .collect_vec(),
-        )
-    } else {
-        None
-    };
+    let batched_struct_logs = all_struct_logs.map(|struct_logs| {
+        struct_logs
+            .chunks(batch_size_hint)
+            .map(|c| c.to_vec())
+            .collect_vec()
+    });
+
     let mut running_gas_used = 0;
     Ok((
         batches

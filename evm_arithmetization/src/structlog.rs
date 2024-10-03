@@ -22,7 +22,7 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
     }
 }
 
-// Gets the lightest possible structlog for transcation `tx_hash`.
+// Gets the struct logs with the necessary logs for debugging.
 pub async fn get_structlog_for_debug<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
@@ -31,11 +31,11 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let light_structlog_trace = provider
+    let structlog_trace = provider
         .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
         .await?;
 
-    let structlogs: Option<Vec<ZeroStructLog>> = normalize_structlog(light_structlog_trace);
+    let structlogs: Option<Vec<ZeroStructLog>> = normalize_structlog(structlog_trace);
 
     Ok(structlogs)
 }
@@ -129,8 +129,8 @@ pub mod zerostructlog {
         a = a.replace("\"error\":{},", "");
 
         let b = serde_json::from_str::<DefaultFrame>(&a)?;
-        let d: DefaultFrame = b.try_into()?;
-        Ok(d)
+
+        Ok(b)
     }
 
     pub(crate) fn normalize_structlog(
@@ -141,7 +141,7 @@ pub mod zerostructlog {
                 let all_struct_logs = structlog_frame
                     .struct_logs
                     .into_iter()
-                    .map(|log| ZeroStructLog::from(log))
+                    .map(ZeroStructLog::from)
                     .collect::<Vec<ZeroStructLog>>();
                 Some(all_struct_logs)
             }
@@ -149,7 +149,7 @@ pub mod zerostructlog {
                 try_reserialize(&structlog_js_object).ok().map(|s| {
                     s.struct_logs
                         .into_iter()
-                        .map(|log| ZeroStructLog::from(log))
+                        .map(ZeroStructLog::from)
                         .collect::<Vec<ZeroStructLog>>()
                 })
             }

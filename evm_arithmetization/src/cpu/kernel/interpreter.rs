@@ -72,8 +72,13 @@ pub(crate) struct Interpreter<F: RichField> {
     pub(crate) struct_log_debugger_info: StructLogDebuggerInfo,
 }
 
+/// Structure holding necessary information to check the kernel execution
+/// against struct logs.
 pub(crate) struct StructLogDebuggerInfo {
+    /// Opcode counter within a transaction.
     pub(crate) counter: usize,
+    /// Gas value in the kernel for a transaction (starting at `GasLimit` and
+    /// decreasing with each user opcode).
     pub(crate) gas: usize,
 }
 
@@ -611,10 +616,7 @@ impl<F: RichField> State<F> for Interpreter<F> {
                 // Check stack.
                 if let Some(txn_stack) = cur_txn_struct_logs.stack {
                     let cur_stack = self.get_full_stack();
-                    let txn_stack = txn_stack
-                        .into_iter()
-                        .map(|s| U256::from(s))
-                        .collect::<Vec<_>>();
+                    let txn_stack = txn_stack.into_iter().map(U256::from).collect::<Vec<_>>();
 
                     if txn_stack != cur_stack {
                         log::warn!(
@@ -763,7 +765,6 @@ impl<F: RichField> State<F> for Interpreter<F> {
         stack
     }
 
-    /// Returns the entire stack. Only used for checking against struct logs.
     fn get_full_stack(&self) -> Vec<U256> {
         let mut stack: Vec<U256> = (0..self.get_registers().stack_len)
             .map(|i| crate::witness::util::stack_peek(self.get_generation_state(), i).unwrap())

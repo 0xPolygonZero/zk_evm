@@ -41,7 +41,7 @@ impl NormalizedTxnField {
     pub(crate) const COUNT: usize = 18;
 
     /// Unscales this virtual offset by their respective `Segment` value.
-    // #[cfg(test)]
+    #[cfg(test)]
     pub(crate) const fn unscale(&self) -> usize {
         *self as usize - Segment::TxnFields as usize
     }

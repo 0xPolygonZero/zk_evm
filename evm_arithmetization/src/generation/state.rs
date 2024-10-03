@@ -77,7 +77,8 @@ pub(crate) trait State<F: RichField> {
     /// Returns a `State`'s stack.
     fn get_stack(&self) -> Vec<U256>;
 
-    /// Returns the entire stack. Only used for checking against struct logs.
+    /// Returns the entire stack. Only used in the interpreter, for checking
+    /// against struct logs.
     fn get_full_stack(&self) -> Vec<U256> {
         vec![]
     }
@@ -215,6 +216,7 @@ pub(crate) trait State<F: RichField> {
         Self: Transition<F>,
     {
         let halt_offsets = self.get_halt_offsets();
+
         let cycle_limit =
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
@@ -327,22 +329,19 @@ pub(crate) trait State<F: RichField> {
                 // The current `is_kernel` is the updated value (post operation execution). A
                 // `StructLogDebuggerError` might have arisen on a user
                 // operation before or after it was executed.
-                match e {
-                    ProgramError::StructLogDebuggerError => {
-                        let offset_name = KERNEL.offset_name(self.get_registers().program_counter);
-                        bail!(
-                            "{:?} at struct log debugger at pc={}, stack={:?}, memory={:?}",
-                            e,
-                            offset_name,
-                            self.get_stack(),
-                            self.mem_get_kernel_content()
-                                .iter()
-                                .map(|c| c.unwrap_or_default())
-                                .collect_vec(),
-                        );
-                    }
-                    _ => (),
-                };
+                if let ProgramError::StructLogDebuggerError = e {
+                    let offset_name = KERNEL.offset_name(self.get_registers().program_counter);
+                    bail!(
+                        "{:?} at struct log debugger at pc={}, stack={:?}, memory={:?}",
+                        e,
+                        offset_name,
+                        self.get_stack(),
+                        self.mem_get_kernel_content()
+                            .iter()
+                            .map(|c| c.unwrap_or_default())
+                            .collect_vec(),
+                    );
+                }
 
                 self.rollback(checkpoint);
                 self.handle_error(e)
