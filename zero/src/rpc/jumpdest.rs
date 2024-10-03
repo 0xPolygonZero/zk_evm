@@ -405,7 +405,10 @@ fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>, serde_jso
         _ => Ok(None),
     }
 }
-
+/// This module exists as a workaround for parsing `StructLog`.  The `error`
+/// field is a string in Geth and Alloy but an object in Erigon. A PR[^1] has
+/// been merged to fix this upstream and should eventually render this
+/// unnecessary. [^1]: `https://github.com/erigontech/erigon/pull/12089`
 mod compat {
     use std::{collections::BTreeMap, fmt, iter};
 
@@ -439,11 +442,11 @@ mod compat {
         failed: bool,
         gas: u64,
         return_value: Bytes,
-        #[serde(deserialize_with = "vec")]
+        #[serde(deserialize_with = "vec_structlog")]
         struct_logs: Vec<StructLog>,
     }
 
-    fn vec<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<StructLog>, D::Error> {
+    fn vec_structlog<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<StructLog>, D::Error> {
         struct Visitor;
         impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = Vec<StructLog>;
