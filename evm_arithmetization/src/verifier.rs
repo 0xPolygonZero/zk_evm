@@ -234,26 +234,24 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
                     .as_ref()
                     .expect("Missing ctl_zs")
                     .clone()
+            } else if i == *Table::Keccak {
+                let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                    all_ctls,
+                    *Table::Keccak,
+                    config.num_challenges,
+                    keccak_stark.constraint_degree(),
+                );
+                vec![F::ZERO; n]
+            } else if i == *Table::KeccakSponge {
+                let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                    all_ctls,
+                    *Table::KeccakSponge,
+                    config.num_challenges,
+                    keccak_sponge_stark.constraint_degree(),
+                );
+                vec![F::ZERO; n]
             } else {
-                if i == *Table::Keccak {
-                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
-                        all_ctls,
-                        *Table::Keccak,
-                        config.num_challenges,
-                        keccak_stark.constraint_degree(),
-                    );
-                    vec![F::ZERO; n]
-                } else if i == *Table::KeccakSponge {
-                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
-                        all_ctls,
-                        *Table::KeccakSponge,
-                        config.num_challenges,
-                        keccak_sponge_stark.constraint_degree(),
-                    );
-                    vec![F::ZERO; n]
-                } else {
-                    panic!("Unable to find stark_proof");
-                }
+                panic!("Unable to find stark_proof");
             }
         }),
         Some(&extra_looking_sums),
