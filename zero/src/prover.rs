@@ -21,7 +21,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{oneshot, Semaphore};
 use trace_decoder::observer::DummyObserver;
-use trace_decoder::{BlockTrace, OtherBlockData};
+use trace_decoder::{BlockTrace, OtherBlockData, WireDisposition};
 use tracing::{error, info};
 
 use crate::fs::generate_block_proof_file_name;
@@ -38,6 +38,14 @@ use crate::proof_types::GeneratedBlockProof;
 // While proving a block interval, we will output proofs corresponding to block
 // batches as soon as they are generated.
 static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore = Semaphore::const_new(0);
+
+const WIRE_DISPOSITION: WireDisposition = {
+    cfg_if::cfg_if!(if #[cfg(feature = "eth_mainnet")] {
+        WireDisposition::Type1
+    } else {
+        compile_error!("must select a feature");
+    })
+};
 
 #[derive(Debug, Clone)]
 pub struct ProverConfig {
@@ -88,6 +96,7 @@ impl BlockProverInput {
             self.other_data,
             batch_size,
             &mut DummyObserver::new(),
+            WIRE_DISPOSITION,
         )?;
 
         // Create segment proof.
@@ -181,6 +190,7 @@ impl BlockProverInput {
             self.other_data,
             batch_size,
             &mut DummyObserver::new(),
+            WIRE_DISPOSITION,
         )?;
 
         let seg_ops = ops::SegmentProofTestOnly {

@@ -5723,6 +5723,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "axum",
+ "cfg-if",
  "clap",
  "compat",
  "directories",

@@ -7,6 +7,7 @@ use std::{
 use alloy::primitives::address;
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
+use either::Either;
 use ethereum_types::{Address, H160, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
@@ -19,7 +20,7 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
-use crate::observer::Observer;
+use crate::{observer::Observer, typed_mpt::StateSmt};
 use crate::{
     typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -27,12 +28,22 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
+/// When parsing tries, which type to deserialize as.
+#[derive(Debug)]
+pub enum WireDisposition {
+    /// MPT
+    Type1,
+    /// SMT
+    Type2,
+}
+
 /// TODO(0xaatif): document this after <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-    observer: &mut impl Observer<StateMpt>,
+    observer: &mut impl Observer<Either<StateMpt, StateSmt>>,
+    wire_disposition: WireDisposition,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
 
@@ -41,7 +52,7 @@ pub fn entrypoint(
         code_db,
         txn_info,
     } = trace;
-    let (state, storage, mut code) = start(trie_pre_images)?;
+    let (state, storage, mut code) = start(trie_pre_images, wire_disposition)?;
     code.extend(code_db);
 
     let OtherBlockData {
@@ -101,7 +112,10 @@ pub fn entrypoint(
                 withdrawals,
                 ger_data,
                 tries: TrieInputs {
-                    state_trie: state.into(),
+                    state_trie: match state {
+                        Either::Left(mpt) => mpt.into(),
+                        Either::Right(_) => todo!("evm_arithmetization accepts an SMT"),
+                    },
                     transactions_trie: transaction.into(),
                     receipts_trie: receipt.into(),
                     storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
@@ -127,9 +141,15 @@ pub fn entrypoint(
 ///
 /// Turn either of those into our [`typed_mpt`](crate::typed_mpt)
 /// representations.
+#[allow(clippy::type_complexity)]
 fn start(
     pre_images: BlockTraceTriePreImages,
-) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
+    wire_disposition: WireDisposition,
+) -> anyhow::Result<(
+    Either<StateMpt, StateSmt>,
+    BTreeMap<H256, StorageTrie>,
+    Hash2Code,
+)> {
     Ok(match pre_images {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
         //                refactor our convoluted input types
@@ -177,17 +197,34 @@ fn start(
                         .map(|v| (k, v))
                 })
                 .collect::<Result<_, _>>()?;
-            (state, storage, Hash2Code::new())
+            (Either::Left(state), storage, Hash2Code::new())
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
-            let crate::type1::Frontend {
-                state,
-                storage,
-                code,
-            } = crate::type1::frontend(instructions)?;
-            (state, storage, code.into_iter().map(Into::into).collect())
+            let (state, storage, code) = match wire_disposition {
+                WireDisposition::Type1 => {
+                    let crate::type1::Frontend {
+                        state,
+                        storage,
+                        code,
+                    } = crate::type1::frontend(instructions)?;
+                    (
+                        Either::Left(state),
+                        storage,
+                        Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
+                    )
+                }
+                WireDisposition::Type2 => {
+                    let crate::type2::Frontend {
+                        trie,
+                        code,
+                        collation,
+                    } = crate::type2::frontend(instructions)?;
+                    todo!()
+                }
+            };
+            (state, storage, code)
         }
     })
 }

@@ -4,6 +4,7 @@ use core::fmt;
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use copyvec::CopyVec;
+use either::Either;
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
@@ -377,6 +378,7 @@ impl From<StateMpt> for HashedPartialTrie {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
     hashed_out: BTreeMap<TrieKey, H256>,
@@ -465,6 +467,48 @@ impl StorageTrie {
 impl From<StorageTrie> for HashedPartialTrie {
     fn from(value: StorageTrie) -> Self {
         value.untyped
+    }
+}
+
+macro_rules! either {
+    ($(fn $name:ident $params:tt -> $ret:ty);* $(;)?) => {
+        $(either!{ @ fn $name $params -> $ret })*
+    };
+    (@ fn $name:ident(&self $(, $var:ident : $ty:ty)* $(,)?) -> $ret:ty) => {
+        fn $name(&self $(, $var: $ty)*) -> $ret { match self {
+                Either::Left(it) => it.$name($($var),*),
+                Either::Right(it) => it.$name($($var),*),
+        }}
+    };
+    (@ fn $name:ident(&mut self $(, $var:ident : $ty:ty)* $(,)?) -> $ret:ty) => {
+        fn $name(&mut self $(, $var: $ty)*) -> $ret { match self {
+                Either::Left(it) => it.$name($($var),*),
+                Either::Right(it) => it.$name($($var),*),
+        }}
+    };
+}
+
+impl<L, R> StateTrie for Either<L, R>
+where
+    L: StateTrie,
+    R: StateTrie,
+{
+    either! {
+        fn insert_by_address(
+            &mut self,
+            address: Address,
+            account: AccountRlp,
+        ) -> anyhow::Result<Option<AccountRlp>>;
+        fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
+        fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
+        fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
+        fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+        fn root(&self) -> H256;
+    }
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.as_ref()
+            .map_left(|it| it.iter())
+            .map_right(|it| it.iter())
     }
 }
 
