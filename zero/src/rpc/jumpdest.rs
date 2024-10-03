@@ -135,7 +135,7 @@ pub(crate) fn generate_jumpdest_table(
             trace
                 .code_usage
                 .as_ref()
-                .map(|code| (*callee_addr, get_code_hash(&code)))
+                .map(|code| (*callee_addr, get_code_hash(code)))
         })
         .collect();
 
