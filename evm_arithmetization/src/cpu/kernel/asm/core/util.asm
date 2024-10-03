@@ -75,36 +75,61 @@
         // stack: addr
         %mpt_read_state_trie
         // stack: account_ptr
-        DUP1 ISZERO %jumpi(%%false)
-        // stack: account_ptr
-        DUP1 %mload_trie_data
-        // stack: nonce, account_ptr
-        ISZERO %not_bit %jumpi(%%false)
-        %increment DUP1 %mload_trie_data
-        // stack: balance, balance_ptr
-        ISZERO %not_bit %jumpi(%%false)
-        %add_const(2) %mload_trie_data
-        // stack: code_hash
-        PUSH @EMPTY_STRING_HASH
-        EQ
-        %jump(%%after)
-    }
+        DUP1 ISZERO 
+    } 
     #[cfg(feature = cdk_erigon)]
     {
         // stack: addr
         DUP1 %read_nonce %mload_trie_data
         // stack: nonce, addr
-        ISZERO %not_bit %jumpi(%%false)
+        ISZERO %not_bit
+    }   
+    %jumpi(%%false)
+    #[cfg(feature = eth_mainnet)]
+    {
+        // stack: account_ptr
+        DUP1 %mload_trie_data
+        // stack: nonce, account_ptr
+        ISZERO %not_bit 
+    }
+     #[cfg(feature = cdk_erigon)]
+    {
+        // stack: addr
+        DUP1 %read_nonce %mload_trie_data
+        // stack: nonce, addr
+        ISZERO %not_bit
+    }  
+    %jumpi(%%false)
+    #[cfg(feature = eth_mainnet)]
+    {
+        %increment DUP1 %mload_trie_data
+        // stack: balance, balance_ptr
+        ISZERO %not_bit 
+    }
+     #[cfg(feature = cdk_erigon)]
+    {
         // stack: addr
         DUP1 %read_balance %mload_trie_data
         // stack: balance, addr
-        ISZERO %not_bit %jumpi(%%false)
+        ISZERO %not_bit
+    }  
+    %jumpi(%%false)
+    #[cfg(feature = eth_mainnet)]
+    {
+        %add_const(2) %mload_trie_data
+        // stack: code_hash
+        PUSH @EMPTY_STRING_HASH
+        EQ
+    }
+     #[cfg(feature = cdk_erigon)]
+    {
         // stack: addr
         %read_code %mload_trie_data
         // stack: codehash
         %eq_const(@EMPTY_STRING_POSEIDON_HASH)
         %jump(%%after)
-    }
+    } 
+    %jump(%%after)
 %%false:
     // stack: account_ptr
     POP

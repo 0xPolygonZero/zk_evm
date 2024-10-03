@@ -22,19 +22,30 @@ extcodehash_dead:
     %stack (address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
+#[cfg(feature = eth_mainnet)]
+{
+global extcodehash:
+        // stack: address, retdest
+        %mpt_read_state_trie
+        // stack: account_ptr, retdest
+        DUP1 ISZERO %jumpi(retzero)
+        %add_const(3)
+        // stack: codehash_ptr, retdest
+        %mload_trie_data
+        // stack: codehash, retdest
+        SWAP1 JUMP
+    retzero:
+        %stack (account_ptr, retdest) -> (retdest, 0)
+        JUMP
+}
+#[cfg(feature = cdk_erigon)]
+{
 global extcodehash:
     // stack: address, retdest
-    %mpt_read_state_trie
-    // stack: account_ptr, retdest
-    DUP1 ISZERO %jumpi(retzero)
-    %add_const(3)
-    // stack: codehash_ptr, retdest
-    %mload_trie_data
+    %read_code %mload_trie_data
     // stack: codehash, retdest
     SWAP1 JUMP
-retzero:
-    %stack (account_ptr, retdest) -> (retdest, 0)
-    JUMP
+}
 
 %macro extcodehash
     %stack (address) -> (address, %%after)

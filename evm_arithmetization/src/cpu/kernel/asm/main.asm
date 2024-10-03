@@ -76,8 +76,15 @@ global main:
 
 global store_initial:
     // Store the initial accounts and slots for hashing later
-    %store_initial_accounts
-    %store_initial_slots
+    #[cfg(feature = eth_mainnet)]
+    {
+        %store_initial_accounts
+        %store_initial_slots
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %store_initial_state
+    }
    
 global after_store_initial:
     // Initialize the transaction and receipt trie root pointers.

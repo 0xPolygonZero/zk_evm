@@ -4,16 +4,21 @@
 // Pre stack: key, value_ptr, retdest
 // Post stack: (empty)
 // TODO: Have this take an address and do %mpt_insert_state_trie? To match mpt_read_state_trie.
-global mpt_insert_state_trie:
-    // stack: key, value_ptr, retdest
-    %insert_account_with_overwrite
-    JUMP
+#[cfg(feature = eth_mainnet)]
+{
+    global mpt_insert_state_trie:
+        // stack: key, value_ptr, retdest
+        %insert_account_with_overwrite
+        JUMP
 
-%macro mpt_insert_state_trie
-    %stack (key, value_ptr) -> (key, value_ptr, %%after)
-    %jump(mpt_insert_state_trie)
-%%after:
-%endmacro
+
+    %macro mpt_insert_state_trie
+        %stack (key, value_ptr) -> (key, value_ptr, %%after)
+        %jump(mpt_insert_state_trie)
+    %%after:
+    %endmacro
+
+}
 
 // Insert a node in the transaction trie. The payload
 // must be pointing to the rlp encoded txn

@@ -209,9 +209,9 @@ global delete_account:
     %stack (address, retdest) -> (address, retdest)
     DUP1 %key_nonce
     // stack: key_nonce, address, retdest
-    DUP1 %smt_read_state ISZERO %jumpi(zero_nonce)
+    DUP1 %search_key ISZERO %jumpi(zero_nonce)
     // stack: key_nonce, address, retdest
-    DUP1 %smt_delete_state
+    DUP1 %remove_key
     // stack: key_nonce, address, retdest
 zero_nonce:
     // stack: key_nonce, address, retdest
@@ -219,9 +219,9 @@ zero_nonce:
     // stack: address, retdest
     DUP1 %key_balance
     // stack: key_balance, address, retdest
-    DUP1 %smt_read_state ISZERO %jumpi(zero_balance)
+    DUP1 %search_key ISZERO %jumpi(zero_balance)
     // stack: key_balance, address, retdest
-    DUP1 %smt_delete_state
+    DUP1 %remove_key
     // stack: key_balance, address, retdest
 zero_balance:
     // stack: key_balance, address, retdest
@@ -229,9 +229,9 @@ zero_balance:
     // stack: address, retdest
     DUP1 %key_code
     // stack: key_code, address, retdest
-    DUP1 %smt_read_state ISZERO %jumpi(zero_code)
+    DUP1 %search_key ISZERO %jumpi(zero_code)
     // stack: key_code, address, retdest
-    DUP1 %smt_delete_state
+    DUP1 %remove_key
     // stack: key_code, address, retdest
 zero_code:
     // stack: key_code, address, retdest
@@ -239,9 +239,9 @@ zero_code:
     // stack: address, retdest
     DUP1 %key_code_length
     // stack: key_code_length, address, retdest
-    DUP1 %smt_read_state ISZERO %jumpi(zero_code_length)
+    DUP1 %search_key ISZERO %jumpi(zero_code_length)
     // stack: key_code_length, address, retdest
-    DUP1 %smt_delete_state
+    DUP1 %remove_key
 zero_code_length:
     // N.B.: We don't delete the storage, since there's no way of knowing keys used.
     // stack: key_code_length, address, retdest
@@ -272,9 +272,9 @@ delete_storage_slot:
     // stack: slot, i, slots_len, address, retdest
     DUP4 %key_storage
     // stack: key_storage, i, slots_len, address, retdest
-    DUP1 %smt_read_state ISZERO %jumpi(zero_slot)
+    DUP1 %search_key ISZERO %jumpi(zero_slot)
     // stack: key_storage, i, slots_len, address, retdest
-    DUP1 %smt_delete_state
+    DUP1 %remove_key
 zero_slot:
     // stack: key_storage, i, slots_len, address, retdest
     POP

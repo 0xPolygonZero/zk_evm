@@ -19,7 +19,7 @@ global sys_create:
         -> (sys_create_got_address, value, code_offset, code_len, kexit_info)
     %address
     // stack: sender, sys_create_got_address, value, code_offset, code_len, kexit_info
-    DUP1 %nonce_from_addr
+    DUP1 %nonce
     // stack: nonce, sender, sys_create_got_address, value, code_offset, code_len, kexit_info
     SWAP1
     // stack: sender, nonce, sys_create_got_address, value, code_offset, code_len, kexit_info
@@ -80,7 +80,7 @@ global create_common:
     DUP2 %selfbalance LT %jumpi(create_insufficient_balance)
     // Increment the sender's nonce.
     %address
-    DUP1 %nonce_from_addr %eq_const(@MAX_NONCE) %jumpi(nonce_overflow) // EIP-2681
+    DUP1 %nonce %eq_const(@MAX_NONCE) %jumpi(nonce_overflow) // EIP-2681
     %increment_nonce
     // stack: address, value, code_offset, code_len, kexit_info
 
@@ -271,7 +271,7 @@ global set_codehash:
         DUP1 %insert_touched_addresses
         DUP1 %read_code %mload_trie_data
         // stack: prev_codehash, addr, codehash, retdest
-        DUP2 %read_code_lenght %mload_trie_data
+        DUP2 %read_code_length %mload_trie_data
         %stack (prev_code_length, prev_codehash, addr) -> (addr, prev_codehash, prev_code_length, addr)
         %journal_add_code_change // Add the code change to the journal.
         // stack: addr, codehash, retdest

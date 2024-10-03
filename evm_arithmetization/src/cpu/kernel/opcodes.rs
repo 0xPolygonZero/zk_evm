@@ -39,6 +39,8 @@ pub fn get_opcode(mnemonic: &str) -> u8 {
         "SAR" => 0x1d,
         "KECCAK256" => 0x20,
         "KECCAK_GENERAL" => 0x21,
+        "POSEIDON" => 0x22,
+        "POSEIDON_GENERAL" => 0x23,
         "ADDRESS" => 0x30,
         "BALANCE" => 0x31,
         "ORIGIN" => 0x32,

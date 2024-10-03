@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use ethereum_types::{Address, H160, H256, U256};
 use hex_literal::hex;
+use smt_type::PartialSmtType;
 
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -15,6 +16,7 @@ pub(crate) mod context_metadata;
 mod exc_bitfields;
 pub(crate) mod global_metadata;
 pub(crate) mod journal_entry;
+pub(crate) mod smt_type;
 pub(crate) mod trie_type;
 pub(crate) mod txn_fields;
 
@@ -68,6 +70,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
 
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
+    c.insert(POSEIDON_HASH_ZEROS.0.into(), POSEIDON_HASH_ZEROS.1);
     c.insert(
         MAX_RLP_PREFIX_SIZE.0.into(),
         U256::from(MAX_RLP_PREFIX_SIZE.1),
@@ -135,6 +138,9 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     for trie_type in PartialTrieType::all() {
         c.insert(trie_type.var_name().into(), (trie_type as u32).into());
     }
+    for trie_type in PartialSmtType::all() {
+        c.insert(trie_type.var_name().into(), (trie_type as u32).into());
+    }
     for entry in JournalEntry::all() {
         c.insert(entry.var_name().into(), (entry as u32).into());
     }
@@ -177,7 +183,7 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     ),
 ];
 
-const HASH_CONSTANTS: [(&str, [u8; 32]); 2] = [
+const HASH_CONSTANTS: [(&str, [u8; 32]); 3] = [
     // Hash of an empty string: keccak(b'').hex()
     (
         "EMPTY_STRING_HASH",
@@ -187,6 +193,10 @@ const HASH_CONSTANTS: [(&str, [u8; 32]); 2] = [
     (
         "EMPTY_NODE_HASH",
         hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+    ),
+    (
+        "EMPTY_STRING_POSEIDON_HASH",
+        hex!("3baed9289a384f6c1c05d92b56c801c2d2e2a7050d6c16538b814fa186835c79"),
     ),
 ];
 
@@ -383,6 +393,16 @@ const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
 const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
 
+const POSEIDON_HASH_ZEROS: (&str, U256) = (
+    "POSEIDON_HASH_ZEROS",
+    U256([
+        4330397376401421145,
+        14124799381142128323,
+        8742572140681234676,
+        14345658006221440202,
+    ]),
+);
+
 // 9 bytes, largest possible RLP prefix in our MPTs.
 const MAX_RLP_PREFIX_SIZE: (&str, u8) = ("MAX_RLP_PREFIX_SIZE", 9);
 // Address where RLP encoding generally starts.
@@ -391,12 +411,13 @@ const MAX_RLP_PREFIX_SIZE: (&str, u8) = ("MAX_RLP_PREFIX_SIZE", 9);
 pub(crate) const INITIAL_RLP_ADDR: (&str, usize) =
     ("INITIAL_RLP_ADDR", Segment::RlpRaw as usize + 1);
 
-const LINKED_LISTS_CONSTANTS: [(&str, u16); 7] = [
+const LINKED_LISTS_CONSTANTS: [(&str, u16); 8] = [
     ("ACCOUNTS_LINKED_LISTS_NODE_SIZE", 4),
     ("STORAGE_LINKED_LISTS_NODE_SIZE", 5),
     ("STATE_LINKED_LISTS_NODE_SIZE", 4),
     ("ACCOUNTS_NEXT_NODE_PTR", 3),
     ("STORAGE_NEXT_NODE_PTR", 4),
+    ("STATE_NEXT_NODE_PTR", 3),
     ("STORAGE_COPY_PAYLOAD_PTR", 3),
     ("STATE_COPY_PAYLOAD_PTR", 4),
 ];

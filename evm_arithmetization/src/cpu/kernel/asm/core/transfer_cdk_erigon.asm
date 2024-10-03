@@ -53,7 +53,7 @@ deduct_eth_insufficient_balance:
     JUMP
 deduct_eth_delete_balance:
     %stack (balance, balance_ptr, addr, amount, retdest) -> (addr, retdest, 0)
-    %remove_balanace
+    %remove_balance
     // stack: retdest, 0
     JUMP
 deduct_eth_noop:
@@ -78,7 +78,7 @@ global add_eth:
     // stack: codehash, addr, amount, retdest
     ISZERO %jumpi(add_eth_new_account) // If the account is empty, we need to create the account.
     // stack: addr, amount, retdest
-    %key_balance DUP1 %read_key // TODO: replace with read_balance?
+    %key_balance DUP1 %search_key // TODO: replace with read_balance?
     DUP1 ISZERO %jumpi(add_eth_zero_balance)
     %stack (balance_ptr, key_balance, amount) -> (balance_ptr, amount, balance_ptr)
     // stack: balance_ptr, amount, balance_ptr, retdest

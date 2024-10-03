@@ -12,7 +12,7 @@ use crate::cpu::kernel::parser::parse;
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     158
 } else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
-    156
+    157
 } else {
     // unreachable
     0
@@ -36,7 +36,10 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/call_gas.asm"),
     include_str!("asm/core/create.asm"),
     include_str!("asm/core/create_addresses.asm"),
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/core/create_contract_account.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/core/create_type2_contract_account.asm"),
     include_str!("asm/core/exception.asm"),
     include_str!("asm/core/create_receipt.asm"),
     include_str!("asm/core/gas.asm"),
@@ -127,10 +130,16 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/linked_list/accounts_linked_list.asm"),
     #[cfg(feature = "eth_mainnet")]
     include_str!("asm/linked_list/storage_linked_list.asm"),
-    #[cfg(feature = "cdk_erigon")]
-    include_str!("asm/linked_list/state_linked_list.asm"),
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/linked_list/final_tries.asm"),
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/linked_list/initial_tries.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/linked_list/type2/state_linked_list.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/linked_list/type2/final_tries.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/linked_list/type2/initial_tries.asm"),
     include_str!("asm/memory/core.asm"),
     include_str!("asm/memory/memcpy.asm"),
     include_str!("asm/memory/memset.asm"),
@@ -167,6 +176,8 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/smt/keys.asm"),
     #[cfg(feature = "cdk_erigon")]
     include_str!("asm/smt/utils.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/delete.asm"),
     include_str!("asm/journal/journal.asm"),
     include_str!("asm/journal/account_loaded.asm"),
     include_str!("asm/journal/account_destroyed.asm"),
