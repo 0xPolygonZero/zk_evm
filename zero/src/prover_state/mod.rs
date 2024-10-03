@@ -175,7 +175,10 @@ impl ProverStateManager {
         config: &StarkConfig,
         all_proof: &AllProof,
     ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
-        let degrees = all_proof.degree_bits(config);
+        let default_degree = 5; // default value for None
+        let degrees = all_proof
+            .degree_bits(config)
+            .map(|opt| opt.unwrap_or(default_degree));
 
         /// Given a recursive circuit index (e.g., Arithmetic / 0), return a
         /// tuple containing the loaded table at the specified size and

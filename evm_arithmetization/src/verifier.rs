@@ -10,7 +10,9 @@ use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
 use starky::config::StarkConfig;
-use starky::cross_table_lookup::{get_ctl_vars_from_proofs, verify_cross_table_lookups};
+use starky::cross_table_lookup::{
+    get_ctl_vars_from_proofs, verify_cross_table_lookups, CrossTableLookup,
+};
 use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
@@ -159,7 +161,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
             .unwrap_or(&None)
     });
 
-    let ctl_vars_per_table = get_ctl_vars_from_proofs(
+    let ctl_vars_per_table = get_ctl_vars_from_proofs::<F, C, D, NUM_TABLES>(
         &auxiliary_polys,
         &auxiliary_polys_next,
         cross_table_lookups,
@@ -219,6 +221,8 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
         .collect_vec();
 
+    let all_ctls = &all_stark.cross_table_lookups;
+
     verify_cross_table_lookups::<F, D, NUM_TABLES>(
         cross_table_lookups,
         core::array::from_fn(|i| {
@@ -229,8 +233,27 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
                     .ctl_zs_first
                     .as_ref()
                     .expect("Missing ctl_zs")
+                    .clone()
             } else {
-
+                if i == *Table::Keccak {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::Keccak,
+                        config.num_challenges,
+                        keccak_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else if i == *Table::KeccakSponge {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::KeccakSponge,
+                        config.num_challenges,
+                        keccak_sponge_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else {
+                    panic!("Unable to find stark_proof");
+                }
             }
         }),
         Some(&extra_looking_sums),
