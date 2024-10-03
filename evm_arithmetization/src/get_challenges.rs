@@ -258,9 +258,9 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
 
         let stark_proofs = &self.multi_proof.stark_proofs;
 
-        for (i, proof) in stark_proofs.iter().enumerate() {
-            if let Some(proof) = proof {
-                challenger.observe_cap(&proof.proof.trace_cap);
+        for (i, stark_proof) in stark_proofs.iter().enumerate() {
+            if let Some(stark_proof) = stark_proof {
+                challenger.observe_cap(&stark_proof.proof.trace_cap);
             } else {
                 assert!(KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables);
                 let zero_cap = vec![F::ZERO; config.fri_config.num_cap_elements()];
