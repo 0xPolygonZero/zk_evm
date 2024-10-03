@@ -85,7 +85,7 @@ where
 
     let block_structlogs = match jumpdest_src {
         JumpdestSrc::ProverSimulation => vec![None; block_prestate_trace.len()],
-        JumpdestSrc::ServerFetchedStructlogs => {
+        JumpdestSrc::ClientFetchedStructlogs => {
             get_block_normalized_structlogs(provider, &BlockNumberOrTag::from(block.header.number))
                 .await?
                 .into_iter()
@@ -93,11 +93,6 @@ where
                 .collect()
         }
         JumpdestSrc::Serverside => todo!(),
-        JumpdestSrc::ClientFetchedStructlogs => {
-            bail!(
-                "client per transaction structlogs fetching is not supported for native RPC type"
-            );
-        }
     };
 
     block

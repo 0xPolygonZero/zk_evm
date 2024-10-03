@@ -7,7 +7,7 @@ use alloy::{
     rpc::types::{eth::BlockId, Block, BlockTransactionsKind},
     transports::Transport,
 };
-use anyhow::{bail, Context as _};
+use anyhow::Context as _;
 use compat::Compat;
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use serde::Deserialize;
@@ -64,7 +64,7 @@ where
     let block_jumpdest_table_witnesses: Vec<Option<(JumpDestTableWitness, CodeDb)>> =
         match jumpdest_src {
             JumpdestSrc::ProverSimulation => Vec::new(),
-            JumpdestSrc::ServerFetchedStructlogs => {
+            JumpdestSrc::ClientFetchedStructlogs => {
                 process_transactions(
                     &block,
                     cached_provider.get_provider().await?.deref(),
@@ -73,9 +73,6 @@ where
                 .await?
             }
             JumpdestSrc::Serverside => todo!(),
-            JumpdestSrc::ClientFetchedStructlogs => {
-                bail!("client per transaction structlogs fetching is not supported for jerigon RPC type");
-            }
         };
 
     let mut code_db = CodeDb::default();

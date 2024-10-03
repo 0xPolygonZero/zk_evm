@@ -44,7 +44,7 @@ pub(crate) enum Command {
         #[arg(long, short = 't', default_value = "jerigon")]
         rpc_type: RpcType,
         /// The source of jumpdest tables.
-        #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "server-fetched-structlogs"), ("rpc_type", "native", "server-fetched-structlogs")], required = false)]
+        #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "client-fetched-structlogs"), ("rpc_type", "native", "client-fetched-structlogs")], required = false)]
         jumpdest_src: JumpdestSrc,
         /// The block interval for which to generate a proof.
         #[arg(long, short = 'i')]
