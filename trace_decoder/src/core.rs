@@ -393,6 +393,12 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
+                if born {
+                    // Empty accounts cannot have non-empty storage,
+                    // so we can safely insert a default trie.
+                    storage_tries.insert(keccak_hash::keccak(addr), StorageTrie::default());
+                }
+
                 if born || just_access {
                     state_trie
                         .clone()
