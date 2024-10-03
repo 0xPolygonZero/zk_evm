@@ -126,7 +126,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         stark_challenges,
         ctl_challenges,
     } = all_proof
-        .get_challenges(config, all_proof.use_keccak_tables)
+        .get_challenges(config)
         .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
 
     let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
