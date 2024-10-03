@@ -433,7 +433,10 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     acct.code_hash = code_usage
                         .map(|it| match it {
                             ContractCodeUsage::Read(hash) => {
-                                batch_contract_code.insert(code.get(hash)?);
+                                let _ = code
+                                    .get(hash)
+                                    .map(|bytecode| batch_contract_code.insert(bytecode));
+
                                 anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
