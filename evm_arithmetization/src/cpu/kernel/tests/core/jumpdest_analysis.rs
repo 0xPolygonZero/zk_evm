@@ -17,7 +17,8 @@ use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 
 impl<F: RichField> Interpreter<F> {
     pub(crate) fn set_jumpdest_analysis_inputs(&mut self, jumps: HashMap<usize, BTreeSet<usize>>) {
-        let _ = self.generation_state.set_jumpdest_analysis_inputs(jumps);
+        let (jdtp, _jdtw) = self.generation_state.get_jumpdest_analysis_inputs(jumps);
+        self.generation_state.jumpdest_table = Some(jdtp);
     }
 
     pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {

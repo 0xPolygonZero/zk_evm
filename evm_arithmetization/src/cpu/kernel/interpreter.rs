@@ -100,7 +100,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             let (a, jdtw) = interpreter
                 .generation_state
-                .set_jumpdest_analysis_inputs(interpreter.jumpdest_table.clone());
+                .get_jumpdest_analysis_inputs(interpreter.jumpdest_table.clone());
 
             log::debug!(
                 "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
@@ -163,7 +163,7 @@ pub(crate) fn set_registers_and_run<F: RichField>(
 ///
 /// - `jumpdest_table_rpc`:  The raw table received from RPC.
 /// - `code_db`: The corresponding database of contract code used in the trace.
-pub(crate) fn set_jumpdest_analysis_inputs_rpc(
+pub(crate) fn get_jumpdest_analysis_inputs_rpc(
     jumpdest_table_rpc: &JumpDestTableWitness,
     code_map: &HashMap<H256, Vec<u8>>,
 ) -> JumpDestTableProcessed {

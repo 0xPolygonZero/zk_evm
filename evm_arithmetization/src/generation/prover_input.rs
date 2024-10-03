@@ -26,7 +26,7 @@ use crate::cpu::kernel::constants::cancun_constants::{
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::{
-    set_jumpdest_analysis_inputs_rpc, simulate_cpu_and_get_user_jumps,
+    get_jumpdest_analysis_inputs_rpc, simulate_cpu_and_get_user_jumps,
 };
 use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
 use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
@@ -798,11 +798,13 @@ impl<F: RichField> GenerationState<F> {
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
 
+        // REVIEW: This will be rewritten to only run simulation when
+        // `self.inputs.jumpdest_table` is `None`.
         info!("Generating JUMPDEST tables");
         let rpcw = self.inputs.jumpdest_table.clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
-            .map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+            .map(|jdt| get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
         info!("Generating JUMPDEST tables: Running SIM");
 
         self.inputs.jumpdest_table = None;
@@ -826,7 +828,7 @@ impl<F: RichField> GenerationState<F> {
     /// Given a HashMap containing the contexts and the jumpdest addresses,
     /// compute their respective proofs, by calling
     /// `get_proofs_and_jumpdests`
-    pub(crate) fn set_jumpdest_analysis_inputs(
+    pub(crate) fn get_jumpdest_analysis_inputs(
         &self,
         jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     ) -> (JumpDestTableProcessed, JumpDestTableWitness) {
