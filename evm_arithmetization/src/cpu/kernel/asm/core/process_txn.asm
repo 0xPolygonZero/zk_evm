@@ -326,7 +326,7 @@ process_message_txn_fail:
     %mload_txn_field(@TXN_FIELD_TO)
     %balance
     %mload_txn_field(@TXN_FIELD_VALUE)
-    %min
+    %min // min(to_balance, original_value)
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     %mload_txn_field(@TXN_FIELD_TO)
     %transfer_eth %jumpi(panic)
