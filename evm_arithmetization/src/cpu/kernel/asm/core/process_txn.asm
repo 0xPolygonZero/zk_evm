@@ -323,7 +323,10 @@ process_message_txn_fail:
     // stack: leftover_gas, new_ctx, retdest, success, leftover_gas
     // Transfer value back to the caller.
     %mload_txn_field(@TXN_FIELD_VALUE) ISZERO %jumpi(process_message_txn_after_call_contd)
+    %mload_txn_field(@TXN_FIELD_TO)
+    %balance
     %mload_txn_field(@TXN_FIELD_VALUE)
+    %min
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     %mload_txn_field(@TXN_FIELD_TO)
     %transfer_eth %jumpi(panic)
