@@ -174,7 +174,10 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         ($stark:ident, $table:expr) => {
             verify_stark_proof_with_challenges(
                 $stark,
-                &stark_proofs[*$table].proof,
+                &stark_proofs[*$table]
+                    .as_ref()
+                    .expect("Missing stark_proof")
+                    .proof,
                 &stark_challenges[*$table]
                     .as_ref()
                     .expect("Missing challenges"),
@@ -218,10 +221,18 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 
     verify_cross_table_lookups::<F, D, NUM_TABLES>(
         cross_table_lookups,
-        all_proof
-            .multi_proof
-            .stark_proofs
-            .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
+        core::array::from_fn(|i| {
+            if let Some(stark_proof) = &stark_proofs[i] {
+                stark_proof
+                    .proof
+                    .openings
+                    .ctl_zs_first
+                    .as_ref()
+                    .expect("Missing ctl_zs")
+            } else {
+
+            }
+        }),
         Some(&extra_looking_sums),
         config,
     )
