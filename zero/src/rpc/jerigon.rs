@@ -13,6 +13,7 @@ use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
+use tracing::warn;
 
 use super::{fetch_other_block_data, JumpdestSrc};
 use crate::prover::BlockProverInput;
@@ -64,14 +65,16 @@ where
     let block_jumpdest_table_witnesses: Vec<Option<(JumpDestTableWitness, CodeDb)>> =
         match jumpdest_src {
             JumpdestSrc::ProverSimulation => Vec::new(),
-            JumpdestSrc::ClientFetchedStructlogs => {
-                process_transactions(
-                    &block,
-                    cached_provider.get_provider().await?.deref(),
-                    &tx_results,
-                )
-                .await?
-            }
+            JumpdestSrc::ClientFetchedStructlogs => process_transactions(
+                &block,
+                cached_provider.get_provider().await?.deref(),
+                &tx_results,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                warn!("failed to fetch server structlogs for block {target_block_id}: {e}");
+                Vec::new()
+            }),
             JumpdestSrc::Serverside => todo!(),
         };
 
@@ -132,7 +135,9 @@ where
         .iter()
         .zip(block_structlogs)
         .zip(tx_traces)
-        .map(|((tx, structlog), tx_trace)| generate_jumpdest_table(tx, &structlog.1, tx_trace).ok())
+        .map(|((tx, structlog), tx_trace)| {
+            structlog.and_then(|it| generate_jumpdest_table(tx, &it.1, tx_trace).ok())
+        })
         .collect::<Vec<_>>();
 
     Ok(block_jumpdest_tables)

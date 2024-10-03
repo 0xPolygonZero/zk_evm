@@ -23,7 +23,7 @@ use keccak_hash::keccak;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
-use tracing::trace;
+use tracing::{trace, warn};
 
 /// Structure of Etheruem memory
 type Word = [u8; 32];
@@ -58,7 +58,7 @@ fn get_code_hash(usage: &ContractCodeUsage) -> H256 {
 pub(crate) async fn get_block_normalized_structlogs<ProviderT, TransportT>(
     provider: &ProviderT,
     block: &BlockNumberOrTag,
-) -> anyhow::Result<Vec<TxStructLogs>>
+) -> anyhow::Result<Vec<Option<TxStructLogs>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -72,12 +72,12 @@ where
         .map(|tx_trace_result| match tx_trace_result {
             TraceResult::Success {
                 result, tx_hash, ..
-            } => trace_to_tx_structlog(&tx_hash, result),
+            } => Ok(trace_to_tx_structlog(tx_hash, result)),
             TraceResult::Error { error, tx_hash } => Err(anyhow::anyhow!(
                 "error fetching structlog for tx: {tx_hash:?}. Error: {error:?}"
             )),
         })
-        .collect::<Result<Vec<TxStructLogs>, anyhow::Error>>()?;
+        .collect::<Result<Vec<Option<TxStructLogs>>, anyhow::Error>>()?;
 
     Ok(block_normalized_stackonly_structlog_traces)
 }
@@ -367,26 +367,20 @@ pub(crate) fn generate_jumpdest_table<'a>(
     Ok((jumpdest_table, code_db))
 }
 
-fn trace_to_tx_structlog(
-    tx_hash: &Option<TxHash>,
-    trace: GethTrace,
-) -> anyhow::Result<TxStructLogs> {
+fn trace_to_tx_structlog(tx_hash: Option<TxHash>, trace: GethTrace) -> Option<TxStructLogs> {
     match trace {
         GethTrace::Default(structlog_frame) => {
-            Ok(TxStructLogs(*tx_hash, structlog_frame.struct_logs))
+            Some(TxStructLogs(tx_hash, structlog_frame.struct_logs))
         }
-        GethTrace::JS(it) => Ok(TxStructLogs(*tx_hash, compat::deserialize(it)?.struct_logs)),
-        _ => anyhow::bail!("unsupported structlog type for tx {:?}", tx_hash),
+        GethTrace::JS(it) => {
+            let default_frame = compat::deserialize(it)
+                .inspect_err(|e| warn!("failed to deserialize js default frame {e:?}"))
+                .ok()?;
+            Some(TxStructLogs(tx_hash, default_frame.struct_logs))
+        }
+        _ => None,
     }
 }
-
-// fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>,
-// serde_json::Error> {     match trace {
-//         GethTrace::Default(it) => Ok(Some(it.struct_logs)),
-//         GethTrace::JS(it) => Ok(Some(compat::deserialize(it)?.struct_logs)),
-//         _ => Ok(None),
-//     }
-// }
 
 /// This module exists as a workaround for parsing `StructLog`.  The `error`
 /// field is a string in Geth and Alloy but an object in Erigon. A PR[^1] has

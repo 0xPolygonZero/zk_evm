@@ -89,7 +89,7 @@ where
             get_block_normalized_structlogs(provider, &BlockNumberOrTag::from(block.header.number))
                 .await?
                 .into_iter()
-                .map(|tx_struct_log| Some(tx_struct_log.1))
+                .map(|tx_struct_log| tx_struct_log.map(|it| it.1))
                 .collect()
         }
         JumpdestSrc::Serverside => todo!(),
