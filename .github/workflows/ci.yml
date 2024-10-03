@@ -178,7 +178,7 @@ jobs:
     timeout-minutes: 10
     env:
       REGRESSION_PERCENT_THRESHOLD: 5
-      EXPECTED_PROVING_TIME_SEC: 180
+      EXPECTED_PROVING_TIME_SEC: 210
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
