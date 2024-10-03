@@ -148,8 +148,8 @@ jobs:
     runs-on: zero-ci
     timeout-minutes: 15
     env:
-      REGRESSION_PERCENT_THRESHOLD: 10
-      EXPECTED_PROVING_TIME_SEC: 410
+      REGRESSION_PERCENT_THRESHOLD: 5
+      EXPECTED_PROVING_TIME_SEC: 293
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -177,8 +177,8 @@ jobs:
     runs-on: zero-ci
     timeout-minutes: 10
     env:
-      REGRESSION_PERCENT_THRESHOLD: 10
-      EXPECTED_PROVING_TIME_SEC: 330
+      REGRESSION_PERCENT_THRESHOLD: 5
+      EXPECTED_PROVING_TIME_SEC: 180
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
