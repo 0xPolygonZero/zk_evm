@@ -253,14 +253,13 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
     pub(crate) fn get_challenges(
         &self,
         config: &StarkConfig,
-        use_keccak_tables: bool,
     ) -> Result<AllProofChallenges<F, D>, ProgramError> {
         let mut challenger = Challenger::<F, C::Hasher>::new();
 
         let stark_proofs = &self.multi_proof.stark_proofs;
 
         for (i, proof) in stark_proofs.iter().enumerate() {
-            if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
+            if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
                 // Observe zero merkle caps when skipping Keccak tables.
                 let zero_merkle_cap = proof
                     .proof
@@ -282,7 +281,9 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
 
         Ok(AllProofChallenges {
             stark_challenges: core::array::from_fn(|i| {
-                if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
+                if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
+                    None
+                } else {
                     challenger.compact();
                     Some(stark_proofs[i].proof.get_challenges(
                         &mut challenger,
@@ -290,8 +291,6 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
                         true,
                         config,
                     ))
-                } else {
-                    None
                 }
             }),
             ctl_challenges,
