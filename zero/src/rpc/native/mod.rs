@@ -23,7 +23,6 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
     checkpoint_block_number: u64,
-    get_struct_logs: bool,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
@@ -34,21 +33,10 @@ where
         crate::rpc::fetch_other_block_data(provider.clone(), block_number, checkpoint_block_number)
     )?;
 
-    let struct_logs = if get_struct_logs {
-        Some(
-            block_trace
-                .txn_info
-                .iter()
-                .map(|t_i| t_i.meta.struct_log.clone())
-                .collect::<Vec<_>>(),
-        )
-    } else {
-        None
-    };
     Ok(BlockProverInput {
         block_trace,
         other_data,
-        struct_logs,
+        struct_logs: None,
     })
 }
 
