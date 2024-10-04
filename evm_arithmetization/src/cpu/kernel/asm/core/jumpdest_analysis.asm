@@ -114,13 +114,10 @@ code_bytes_to_skip:
 //     c) code[jumpdest] = 0x5b.
 // To reduce the number of instructions, when i > 32 we load all the bytes code[j], ...,
 // code[j + 31] in a single 32-byte word, and check a) directly on the packed bytes.
-// We perform the "packed verification" computing a boolean formula evaluated on the bits of 
-// code[j],..., code[j+31] of the form p_1 AND p_2 AND p_3 AND p_4 AND p_5, where:
-//     - p_k is either TRUE, for one subset of the j's which depends on k (for example,
-//       for k = 1, it is TRUE for the first 15 positions), or has_prefix_k => bit_{k + 1}_is_0
-//       for the j's not in the subset.
-//     - has_prefix_k is a predicate that is TRUE if and only if code[j] has the same prefix of size k + 2
-//       as PUSH{32-(j-i)}.
+// We perform the "packed verification" by checking, for every byte, that it's not part
+// of the forbidden opcodes. For byte n in {1, 32}, this means:
+//     - The first three bits are the PUSH prefix 011.
+//     - The five last bits are > 32 - n.
 // stack: proof_prefix_addr, jumpdest, ctx, retdest
 // stack: (empty)
 global write_table_if_jumpdest:
@@ -142,9 +139,8 @@ global write_table_if_jumpdest:
 
 
     // stack: proof_prefix_addr, ctx, jumpdest, retdest
-    // If we are here we need to check that the next 32 bytes are less
-    // than PUSHXX for XX < 32 - i <=> opcode < 0x7f - i = 127 - i, 0 <= i < 32,
-    // or larger than 127
+    // If we are here we need to check that the next 32 bytes are not
+    // PUSHXX for XX > 32 - n, n in {1, 32}.
     
     %stack
         (proof_prefix_addr, ctx) ->
@@ -167,11 +163,11 @@ global write_table_if_jumpdest:
     DUP3
     %and_const(0x1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F)
     // stack: (000|X⁵)³², mask, (is_push|X⁷)³², packed_opcodes, proof_prefix_addr, ctx, jumpdest, retdest
-    // For opcode PUSHXX, the right-most 5 bits contain X-1.
+    // For opcode PUSHXX, the right-most 5 bits contain XX - 1.
     // Ignoring the first 3 bits of prefix, the first opcode must NOT be PUSH32, the second opcode
     // must NOT be PUSH31 or PUSH32 [...], the 32-th opcode must NOT be a PUSH.
     // We can check it by adding the trimmed opcodes with a certain value such that the addition overflows iff
-    // the five bits of an opcode is forbidden:
+    // the five bits of an opcode are forbidden:
     //     000xxxxx|000xxxxx|...|000xxxxx|000xxxxx
     //   + 00000001|00000010|...|00011111|00100000
     // For e.g. the first opcode, the addition will overflow iff xxxxx = 0b11111 = 0d31.
