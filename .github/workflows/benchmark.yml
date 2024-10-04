@@ -6,12 +6,7 @@ on:
   workflow_dispatch:
     branches:
       - "**"
-  #TODO REMOVE PR EXECUTION
-  push:
-    branches: [develop, main]
-  pull_request:
-    branches:
-      - "**"
+
 
 env:
   BENCHMARK_WITNESS: artifacts/witness_b19807080.json
@@ -39,12 +34,6 @@ jobs:
           name: proving_benchmark
           path: ./
           if_no_artifact_found: ignore
-
-      - name: Initialise the results file if necessary
-        run: |
-          ls -la ./
-          cat ./proving_benchmark_results.txt
-          printf '                                 TIME                           \n'  > ./proving_benchmark_results.txt
 
       - name: Run the script
         # TODO - run the benchmark with 20 blocks file
