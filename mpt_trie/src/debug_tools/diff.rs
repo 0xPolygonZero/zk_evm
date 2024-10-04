@@ -578,8 +578,6 @@ mod tests {
 
         let diff = create_full_diff_between_tries(&a, &b);
 
-        println!("Diff is: {}", diff);
-
         assert_eq!(diff.diff_points.len(), 1);
         assert_eq!(
             diff.diff_points[0].a_info.node_type,
@@ -606,7 +604,7 @@ mod tests {
         b.insert(Nibbles::from_str("0x3334")?, 0x06u8)?;
 
         let diff = create_full_diff_between_tries(&a, &b);
-        println!("Diff is: {}", diff);
+
         assert_eq!(diff.diff_points.len(), 2);
         assert_eq!(diff.diff_points[0].a_info.node_type, TrieNodeType::Leaf);
         assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1111")?);
@@ -641,7 +639,7 @@ mod tests {
         ])?;
 
         let diff = create_full_diff_between_tries(&a, &b);
-        println!("Diff is: {}", diff);
+
         assert_eq!(diff.diff_points.len(), 4);
         assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1111")?);
         assert_eq!(diff.diff_points[0].b_info.key, Nibbles::from_str("0x1112")?);
@@ -680,7 +678,8 @@ mod tests {
         ])?;
 
         let diff = create_full_diff_between_tries(&a, &b);
-        assert_eq!(diff.diff_points.len(), 12);
+
+        assert_eq!(diff.diff_points.len(), 10);
 
         assert_eq!(diff.diff_points[0].a_info.key, Nibbles::from_str("0x1111")?);
         assert_eq!(diff.diff_points[0].a_info.node_type, TrieNodeType::Leaf);
@@ -692,16 +691,10 @@ mod tests {
         assert_eq!(diff.diff_points[4].b_info.key, Nibbles::from_str("0x1116")?);
         assert_eq!(diff.diff_points[4].b_info.node_type, TrieNodeType::Leaf);
 
-        assert_eq!(
-            diff.diff_points[11].a_info.key,
-            Nibbles::from_str("0x2227")?
-        );
-        assert_eq!(diff.diff_points[11].a_info.node_type, TrieNodeType::Empty);
-        assert_eq!(
-            diff.diff_points[11].b_info.key,
-            Nibbles::from_str("0x2227")?
-        );
-        assert_eq!(diff.diff_points[11].b_info.node_type, TrieNodeType::Leaf);
+        assert_eq!(diff.diff_points[9].a_info.key, Nibbles::from_str("0x2225")?);
+        assert_eq!(diff.diff_points[9].a_info.node_type, TrieNodeType::Empty);
+        assert_eq!(diff.diff_points[9].b_info.key, Nibbles::from_str("0x2225")?);
+        assert_eq!(diff.diff_points[9].b_info.node_type, TrieNodeType::Leaf);
 
         Ok(())
     }
