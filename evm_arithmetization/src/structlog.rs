@@ -74,7 +74,10 @@ where
 fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>, serde_json::Error> {
     match trace {
         GethTrace::Default(it) => Ok(Some(it.struct_logs)),
-        GethTrace::JS(it) => Ok(Some(compat::deserialize(it)?.struct_logs)),
+        GethTrace::JS(it) => Ok(Some({
+            let compat::Compat(default_frame) = serde::Deserialize::deserialize(it)?;
+            default_frame.struct_logs
+        })),
         _ => Ok(None),
     }
 }
@@ -84,11 +87,12 @@ mod compat {
 
     use alloy::rpc::types::trace::geth::{DefaultFrame, StructLog};
     use alloy_primitives::{Bytes, B256, U256};
-    use serde::{de::SeqAccess, Deserialize, Deserializer};
+    use serde::{de::SeqAccess, Deserialize, Deserializer, Serialize};
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<DefaultFrame, D::Error> {
-        _DefaultFrame::deserialize(d)
-    }
+    // We care about shimming [`Serialize`] too because [alloy skips fields](https://docs.rs/alloy-rpc-types-trace/0.4.2/src/alloy_rpc_types_trace/geth/mod.rs.html#84)
+    // which breaks our binary serialization pipeline in paladin.
+    #[derive(Deserialize, Serialize)]
+    pub struct Compat(#[serde(with = "_DefaultFrame")] pub DefaultFrame);
 
     /// The `error` field is a `string` in `geth` etc. but an empty `object` in
     /// `erigon`.
@@ -115,37 +119,53 @@ mod compat {
         })
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Serialize)]
     #[serde(remote = "DefaultFrame", rename_all = "camelCase")]
     struct _DefaultFrame {
         failed: bool,
         gas: u64,
         return_value: Bytes,
-        #[serde(deserialize_with = "vec_structlog")]
+        #[serde(with = "vec_structlog")]
         struct_logs: Vec<StructLog>,
     }
 
-    fn vec_structlog<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<StructLog>, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = Vec<StructLog>;
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("an array of `StructLog`")
+    mod vec_structlog {
+        use serde::{ser::SerializeSeq, Serializer};
+
+        use super::*;
+
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<StructLog>, D::Error> {
+            struct Visitor;
+            impl<'de> serde::de::Visitor<'de> for Visitor {
+                type Value = Vec<StructLog>;
+                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.write_str("an array of `StructLog`")
+                }
+                fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                    #[derive(Deserialize)]
+                    struct With(#[serde(with = "_StructLog")] StructLog);
+                    let v = iter::from_fn(|| seq.next_element().transpose())
+                        .map(|it| it.map(|With(it)| it))
+                        .collect::<Result<_, _>>()?;
+                    Ok(v)
+                }
             }
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                #[derive(Deserialize)]
-                struct With(#[serde(with = "_StructLog")] StructLog);
-                let v = iter::from_fn(|| seq.next_element().transpose())
-                    .map(|it| it.map(|With(it)| it))
-                    .collect::<Result<_, _>>()?;
-                Ok(v)
-            }
+
+            d.deserialize_seq(Visitor)
         }
 
-        d.deserialize_seq(Visitor)
+        pub fn serialize<S: Serializer>(logs: &[StructLog], s: S) -> Result<S::Ok, S::Error> {
+            let mut seq = s.serialize_seq(Some(logs.len()))?;
+            #[derive(Serialize)]
+            struct With<'a>(#[serde(with = "_StructLog")] &'a StructLog);
+            for it in logs {
+                seq.serialize_element(&With(it))?
+            }
+            seq.end()
+        }
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Serialize)]
     #[serde(remote = "StructLog", rename_all = "camelCase")]
     struct _StructLog {
         pc: u64,
@@ -167,12 +187,9 @@ mod compat {
 
     #[test]
     fn investigate() {
-        let mut track = serde_path_to_error::Track::new();
-        let default_frame = deserialize(serde_path_to_error::Deserializer::new(
+        let Compat(default_frame) = serde_path_to_error::deserialize(
             &mut serde_json::Deserializer::from_str(include_str!("example.json")),
-            &mut track,
-        ))
-        .map_err(|e| serde_path_to_error::Error::new(track.path(), e))
+        )
         .unwrap();
         for (ix, struct_log) in default_frame.struct_logs.into_iter().enumerate() {
             println!("{ix}: {:?}", struct_log.error);
