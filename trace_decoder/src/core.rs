@@ -176,7 +176,7 @@ fn start(
                         .map(|v| (k, v))
                 })
                 .collect::<Result<_, _>>()?;
-            (state, storage, Hash2Code::new())
+            (state, storage, Hash2Code::new(false))
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
@@ -433,9 +433,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     acct.code_hash = code_usage
                         .map(|it| match it {
                             ContractCodeUsage::Read(hash) => {
-                                let _ = code
-                                    .get(hash)
-                                    .map(|bytecode| batch_contract_code.insert(bytecode));
+                                if let Some(bytecode) = code.get(hash)? {
+                                    batch_contract_code.insert(bytecode);
+                                };
 
                                 anyhow::Ok(hash)
                             }
@@ -760,20 +760,29 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 struct Hash2Code {
     /// Key must always be [`hash`] of value.
     inner: HashMap<H256, Vec<u8>>,
+    /// Flag to allow missing values in the inner map.
+    allow_missing_code: bool,
 }
 
 impl Hash2Code {
-    pub fn new() -> Self {
+    pub fn new(allow_missing_code: bool) -> Self {
         let mut this = Self {
             inner: HashMap::new(),
+            allow_missing_code,
         };
         this.insert(vec![]);
         this
     }
-    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
+    pub fn get(&mut self, hash: H256) -> anyhow::Result<Option<Vec<u8>>> {
         match self.inner.get(&hash) {
-            Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {:x}", hash),
+            Some(code) => Ok(Some(code.clone())),
+            None => {
+                if self.allow_missing_code {
+                    Ok(None)
+                } else {
+                    bail!("no code for hash {:x}", hash)
+                }
+            }
         }
     }
     pub fn insert(&mut self, code: Vec<u8>) {
@@ -791,7 +800,7 @@ impl Extend<Vec<u8>> for Hash2Code {
 
 impl FromIterator<Vec<u8>> for Hash2Code {
     fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
-        let mut this = Self::new();
+        let mut this = Self::new(true);
         this.extend(iter);
         this
     }
