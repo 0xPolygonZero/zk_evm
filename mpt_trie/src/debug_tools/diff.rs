@@ -10,6 +10,7 @@ use std::fmt::{self, Debug};
 use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
+use log::warn;
 
 use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
 use crate::{
@@ -17,6 +18,8 @@ use crate::{
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     utils::TrieNodeType,
 };
+
+const MAX_DIFF_POINTS_TO_COLLECT: usize = 10;
 
 /// Get the key piece from the given node if applicable. Note that
 /// [branch][`Node::Branch`]s have no [`Nibble`] directly associated with them.
@@ -170,13 +173,26 @@ fn find_all_diff_points_between_tries(
 
     find_all_diff_points_between_tries_rec(&state, &mut longest_states);
 
-    longest_states
+    let diff_points = longest_states
         .into_iter()
         .filter_map(|longest_state| {
             longest_state
                 .longest_key_node_diff
                 .or(longest_state.longest_key_hash_diff)
         })
+        .collect::<Vec<DiffPoint>>();
+
+    if diff_points.len() > MAX_DIFF_POINTS_TO_COLLECT {
+        warn!(
+            "More than {} diff points found, only collecting the first {}.",
+            diff_points.len(),
+            MAX_DIFF_POINTS_TO_COLLECT
+        );
+    }
+
+    diff_points
+        .into_iter()
+        .take(MAX_DIFF_POINTS_TO_COLLECT)
         .collect()
 }
 
