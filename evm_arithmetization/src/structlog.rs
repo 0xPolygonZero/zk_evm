@@ -90,7 +90,7 @@ mod compat {
         _DefaultFrame::deserialize(d)
     }
 
-    /// The `error` field is a `string` in `geth` etc. but an `object` in
+    /// The `error` field is a `string` in `geth` etc. but an empty `object` in
     /// `erigon`.
     fn error<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
         #[derive(Deserialize)]
@@ -102,7 +102,16 @@ mod compat {
         }
         Ok(match Error::deserialize(d)? {
             Error::String(it) => Some(it),
-            Error::Object(_) => Some("".to_string()),
+            Error::Object(map) => match map.is_empty() {
+                true => Some("".to_string()), // signal that we had an error
+                false => {
+                    // refuse to lose information
+                    return Err(serde::de::Error::custom(format_args!(
+                        "expected empty object, got {} members",
+                        map.len()
+                    )));
+                }
+            },
         })
     }
 
@@ -144,7 +153,7 @@ mod compat {
         gas: u64,
         gas_cost: u64,
         depth: u64,
-        #[serde(deserialize_with = "error")]
+        #[serde(default, deserialize_with = "error")]
         error: Option<String>,
         stack: Option<Vec<U256>>,
         return_data: Option<Bytes>,
@@ -158,9 +167,12 @@ mod compat {
 
     #[test]
     fn test() {
-        let default_frame = deserialize(&mut serde_json::Deserializer::from_str(include_str!(
-            "example.json"
-        )))
+        let mut track = serde_path_to_error::Track::new();
+        let default_frame = deserialize(serde_path_to_error::Deserializer::new(
+            &mut serde_json::Deserializer::from_str(include_str!("example.json")),
+            &mut track,
+        ))
+        .map_err(|e| serde_path_to_error::Error::new(track.path(), e))
         .unwrap();
         for (ix, struct_log) in default_frame.struct_logs.into_iter().enumerate() {
             println!("{ix}: {:?}", struct_log.error);
