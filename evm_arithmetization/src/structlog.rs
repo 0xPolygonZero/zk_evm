@@ -155,4 +155,15 @@ mod compat {
         #[serde(rename = "refund")]
         refund_counter: Option<u64>,
     }
+
+    #[test]
+    fn test() {
+        let default_frame = deserialize(&mut serde_json::Deserializer::from_str(include_str!(
+            "example.json"
+        )))
+        .unwrap();
+        for (ix, struct_log) in default_frame.struct_logs.into_iter().enumerate() {
+            println!("{ix}: {:?}", struct_log.error);
+        }
+    }
 }
