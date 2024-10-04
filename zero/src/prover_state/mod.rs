@@ -175,7 +175,7 @@ impl ProverStateManager {
         config: &StarkConfig,
         all_proof: &AllProof,
     ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
-        let default_degree = 5; // default value for None
+        let default_degree = 8; // default value for None
         let degrees = all_proof
             .degree_bits(config)
             .map(|opt| opt.unwrap_or(default_degree));
