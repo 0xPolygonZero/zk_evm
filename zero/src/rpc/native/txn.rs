@@ -25,7 +25,7 @@ use anyhow::{bail, Context as _, Ok};
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 use crate::rpc::jumpdest::get_block_normalized_structlogs;
 use crate::rpc::Compat;
@@ -149,14 +149,11 @@ where
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
 
-    let (mut code_db, mut tx_traces) = match (pre_trace, diff_trace) {
+    let (code_db, mut tx_traces) = match (pre_trace, diff_trace) {
         (
             GethTrace::PreStateTracer(PreStateFrame::Default(read)),
             GethTrace::PreStateTracer(PreStateFrame::Diff(diff)),
-        ) => {
-            info!("{:?} {:?} {:?}", tx.hash, read, diff);
-            process_tx_traces(access_list, read, diff).await?
-        }
+        ) => process_tx_traces(access_list, read, diff).await?,
         _ => unreachable!(),
     };
 
@@ -165,7 +162,7 @@ where
         tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
     };
 
-    let jc: Option<(JumpDestTableWitness, CodeDb)> = structlog_opt.and_then(|struct_logs| {
+    let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_logs| {
         jumpdest::generate_jumpdest_table(tx, &struct_logs, tx_traces.iter().map(|(a, t)| (*a, t)))
             .map_or_else(
                 |error| {
@@ -176,13 +173,8 @@ where
                     );
                     None
                 },
-                |(jdt, code_db)| Some((jdt, code_db)),
+                Some,
             )
-    });
-
-    let jumpdest_table = jc.map(|(j, c)| {
-        code_db.extend(c);
-        j
     });
 
     let tx_meta = TxnMeta {

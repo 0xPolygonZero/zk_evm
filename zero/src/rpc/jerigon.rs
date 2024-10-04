@@ -9,7 +9,7 @@ use alloy::{
 };
 use anyhow::Context as _;
 use compat::Compat;
-use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
+use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
@@ -62,36 +62,31 @@ where
         .get_block(target_block_id, BlockTransactionsKind::Full)
         .await?;
 
-    let block_jumpdest_table_witnesses: Vec<Option<(JumpDestTableWitness, CodeDb)>> =
-        match jumpdest_src {
-            JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],
-            JumpdestSrc::ClientFetchedStructlogs => {
-                // In case of the error with retrieving structlogs from the server,
-                // continue without interruption. Equivalent to `ProverSimulation` case.
-                process_transactions(
-                    &block,
-                    cached_provider.get_provider().await?.deref(),
-                    &tx_results,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    warn!("failed to fetch server structlogs for block {target_block_id}: {e}");
-                    Vec::new()
-                })
-            }
-            JumpdestSrc::Serverside => todo!(),
-        };
+    let block_jumpdest_table_witnesses: Vec<Option<JumpDestTableWitness>> = match jumpdest_src {
+        JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],
+        JumpdestSrc::ClientFetchedStructlogs => {
+            // In case of the error with retrieving structlogs from the server,
+            // continue without interruption. Equivalent to `ProverSimulation` case.
+            process_transactions(
+                &block,
+                cached_provider.get_provider().await?.deref(),
+                &tx_results,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                warn!("failed to fetch server structlogs for block {target_block_id}: {e}");
+                Vec::new()
+            })
+        }
+        JumpdestSrc::Serverside => todo!(),
+    };
 
-    let mut code_db = CodeDb::default();
     // weave in the JDTs
     let txn_info = tx_results
         .into_iter()
         .zip(block_jumpdest_table_witnesses)
-        .map(|(mut tx_info, jdt)| {
-            tx_info.meta.jumpdest_table = jdt.map(|(j, c)| {
-                code_db.extend(c);
-                j
-            });
+        .map(|(mut tx_info, jdtw)| {
+            tx_info.meta.jumpdest_table = jdtw;
             tx_info
         })
         .collect();
@@ -107,7 +102,7 @@ where
                     .context("invalid hex returned from call to eth_getWitness")?,
             }),
             txn_info,
-            code_db,
+            code_db: Default::default(),
         },
         other_data,
     })
@@ -119,7 +114,7 @@ pub async fn process_transactions<'i, ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
     tx_results: &[TxnInfo],
-) -> anyhow::Result<Vec<Option<(JumpDestTableWitness, CodeDb)>>>
+) -> anyhow::Result<Vec<Option<JumpDestTableWitness>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
