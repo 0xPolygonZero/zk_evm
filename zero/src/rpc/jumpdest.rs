@@ -383,7 +383,7 @@ pub(crate) fn generate_jumpdest_table(
                     );
                     continue;
                 }
-                assert!(jumpdest_offset.unwrap() < 24576);
+                ensure!(jumpdest_offset.unwrap() < 24576);
                 jumpdest_table.insert(*code_hash, *ctx, jumpdest_offset.unwrap());
             }
             "EXTCODECOPY" | "EXTCODESIZE" => {
@@ -474,7 +474,7 @@ mod compat {
         gas: u64,
         gas_cost: u64,
         depth: u64,
-        #[serde(deserialize_with = "error")]
+        #[serde(default, deserialize_with = "error")]
         error: Option<String>,
         stack: Option<Vec<U256>>,
         return_data: Option<Bytes>,
