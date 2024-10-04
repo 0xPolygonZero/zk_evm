@@ -144,7 +144,7 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let tx_receipt = fetch_tx_data(provider, &tx.hash).await?;
+    let tx_receipt = fetch_tx_receipt(provider, &tx.hash).await?;
     let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
@@ -205,7 +205,7 @@ where
 }
 
 /// Fetches the transaction data for the given transaction hash.
-async fn fetch_tx_data<ProviderT, TransportT>(
+async fn fetch_tx_receipt<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
 ) -> anyhow::Result<<Ethereum as Network>::ReceiptResponse>
