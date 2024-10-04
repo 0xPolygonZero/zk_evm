@@ -9,19 +9,18 @@ use alloy::{
         Provider,
     },
     rpc::types::{
-        eth::Transaction,
-        eth::{AccessList, Block},
+        eth::{AccessList, Block, Transaction},
         trace::geth::{
-            AccountState, DiffMode, GethDebugBuiltInTracerType, GethTrace, PreStateConfig,
-            PreStateFrame, PreStateMode,
+            AccountState, DiffMode, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingOptions, GethTrace, PreStateConfig, PreStateFrame, PreStateMode,
+            StructLog,
         },
-        trace::geth::{GethDebugTracerType, GethDebugTracingOptions},
     },
     transports::Transport,
 };
 use anyhow::Context as _;
 use compat::Compat;
-use evm_arithmetization::structlog::{get_structlog_for_debug, zerostructlog::ZeroStructLog};
+use evm_arithmetization::structlog::get_structlog_for_debug;
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
@@ -114,7 +113,7 @@ async fn fetch_tx_data<ProviderT, TransportT>(
         <Ethereum as Network>::ReceiptResponse,
         GethTrace,
         GethTrace,
-        Option<Vec<ZeroStructLog>>,
+        Option<Vec<StructLog>>,
     ),
     anyhow::Error,
 >

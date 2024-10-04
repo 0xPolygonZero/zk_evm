@@ -1,10 +1,10 @@
 use std::ops::Deref;
 
+use alloy::rpc::types::trace::geth::StructLog;
 use alloy::rpc::types::{Block, BlockTransactionsKind};
 use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport};
 use anyhow::Context as _;
 use evm_arithmetization::structlog::get_structlog_for_debug;
-use evm_arithmetization::structlog::zerostructlog::ZeroStructLog;
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
@@ -81,7 +81,7 @@ where
 async fn process_txns<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
-) -> anyhow::Result<Vec<Option<Vec<ZeroStructLog>>>>
+) -> anyhow::Result<Vec<Option<Vec<StructLog>>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,

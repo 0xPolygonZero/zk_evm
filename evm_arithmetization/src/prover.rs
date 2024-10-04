@@ -370,12 +370,13 @@ pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
 
+    use alloy::rpc::types::trace::geth::StructLog;
+
     use super::*;
     use crate::generation::ErrorWithTries;
     use crate::{
         cpu::kernel::interpreter::Interpreter,
         generation::segments::{SegmentDataIterator, SegmentError},
-        structlog::zerostructlog::ZeroStructLog,
     };
 
     /// Simulates the zkEVM CPU execution.
@@ -401,7 +402,7 @@ pub mod testing {
         config: &StarkConfig,
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: Option<Vec<Option<Vec<StructLog>>>>,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> Result<Vec<AllProof<F, C, D>>>
@@ -433,7 +434,7 @@ pub mod testing {
     pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: Option<Vec<Option<Vec<StructLog>>>>,
     ) -> Result<(), ErrorWithTries<SegmentError>>
     where
         F: RichField,

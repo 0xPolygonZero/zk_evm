@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use alloy::rpc::types::trace::geth::StructLog;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
@@ -54,7 +55,6 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
-use crate::structlog::zerostructlog::ZeroStructLog;
 use crate::util::h256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
@@ -1907,7 +1907,7 @@ where
         config: &StarkConfig,
         generation_inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: Option<Vec<Option<Vec<StructLog>>>>,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {

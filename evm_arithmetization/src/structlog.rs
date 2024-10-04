@@ -1,11 +1,12 @@
 use alloy::primitives::B256;
 use alloy::providers::ext::DebugApi;
 use alloy::providers::Provider;
-use alloy::rpc::types::trace::geth::{GethDebugTracingOptions, GethDefaultTracingOptions};
+use alloy::rpc::types::trace::geth::{
+    GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace, StructLog,
+};
 use alloy::transports::RpcError;
 use alloy::transports::Transport;
 use alloy::transports::TransportErrorKind;
-use zerostructlog::{normalize_structlog, ZeroStructLog};
 
 /// Pass `true` for the components needed.
 fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDebugTracingOptions {
@@ -26,7 +27,7 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
 pub async fn get_structlog_for_debug<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
-) -> Result<Option<Vec<ZeroStructLog>>, RpcError<TransportErrorKind>>
+) -> Result<Option<Vec<StructLog>>, RpcError<TransportErrorKind>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -35,125 +36,114 @@ where
         .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
         .await?;
 
-    let structlogs: Option<Vec<ZeroStructLog>> = normalize_structlog(structlog_trace);
+    let res = trace2structlog(structlog_trace);
+    println!("retrieved struct logs {:?}", res);
+    let structlogs: Option<Vec<StructLog>> = res.unwrap_or_default();
 
     Ok(structlogs)
 }
 
-pub mod zerostructlog {
-    use std::collections::BTreeMap;
+// pub(crate) fn normalize_structlog(unnormalized_structlog: GethTrace) ->
+// Option<Vec<StructLog>> {     match unnormalized_structlog {
+//         GethTrace::Default(structlog_frame) => {
+//             let all_struct_logs = structlog_frame
+//                 .struct_logs
+//                 .into_iter()
+//                 .collect::<Vec<ZeroStructLog>>();
+//             Some(all_struct_logs)
+//         }
+//         GethTrace::JS(structlog_js_object) =>
+// try_reserialize(&structlog_js_object).ok().map(|s| {
+// s.struct_logs                 .into_iter()
+//                 .map(ZeroStructLog::from)
+//                 .collect::<Vec<ZeroStructLog>>()
+//         }),
+//         _ => None,
+//     }
+// }
 
-    use alloy::rpc::types::trace::geth::{DefaultFrame, GethTrace, StructLog};
+fn trace2structlog(trace: GethTrace) -> Result<Option<Vec<StructLog>>, serde_json::Error> {
+    match trace {
+        GethTrace::Default(it) => Ok(Some(it.struct_logs)),
+        GethTrace::JS(it) => Ok(Some(compat::deserialize(it)?.struct_logs)),
+        _ => Ok(None),
+    }
+}
+
+mod compat {
+    use std::{collections::BTreeMap, fmt, iter};
+
+    use alloy::rpc::types::trace::geth::{DefaultFrame, StructLog};
     use alloy_primitives::{Bytes, B256, U256};
-    use serde::{Deserialize, Serialize};
-    use serde_json::Value;
+    use serde::{de::SeqAccess, Deserialize, Deserializer};
 
-    /// Geth Default struct log trace frame
-    ///
-    /// <https://github.com/ethereum/go-ethereum/blob/a9ef135e2dd53682d106c6a2aede9187026cc1de/eth/tracers/logger/logger.go#L406-L411>
-    #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    pub(crate) struct ZeroDefaultFrame {
-        /// Whether the transaction failed
-        pub failed: bool,
-        /// How much gas was used.
-        pub gas: u64,
-        /// Output of the transaction
-        #[serde(serialize_with = "alloy_serde::serialize_hex_string_no_prefix")]
-        pub return_value: Bytes,
-        /// Recorded traces of the transaction
-        pub struct_logs: Vec<ZeroStructLog>,
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<DefaultFrame, D::Error> {
+        _DefaultFrame::deserialize(d)
     }
 
-    /// Represents a struct log entry in a trace
-    ///
-    /// <https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L413-L426>
-    #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-    pub struct ZeroStructLog {
-        /// program counter
-        pub pc: u64,
-        /// opcode to be executed
-        pub op: String,
-        /// remaining gas
-        pub gas: u64,
-        /// cost for executing op
-        #[serde(rename = "gasCost")]
-        pub gas_cost: u64,
-        /// Current call depth
-        pub depth: u64,
-        /// Error message if any
-        #[serde(default)]
-        pub error: Option<String>,
-        /// EVM stack
-        #[serde(default)]
-        pub stack: Option<Vec<U256>>,
-        /// Last call's return data. Enabled via enableReturnData
-        #[serde(default, rename = "returnData")]
-        pub return_data: Option<Bytes>,
-        /// ref <https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L450-L452>
-        #[serde(default)]
-        pub memory: Option<Vec<String>>,
-        /// Size of memory.
-        #[serde(default, rename = "memSize")]
-        pub memory_size: Option<u64>,
-        /// Storage slots of current contract read from and written to. Only
-        /// emitted for SLOAD and SSTORE. Disabled via disableStorage
-        #[serde(default)]
-        pub storage: Option<BTreeMap<B256, B256>>,
-        /// Refund counter
-        #[serde(default, rename = "refund")]
-        pub refund_counter: Option<u64>,
+    /// The `error` field is a `string` in `geth` etc. but an `object` in
+    /// `erigon`.
+    fn error<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Error {
+            String(String),
+            #[allow(dead_code)]
+            Object(serde_json::Map<String, serde_json::Value>),
+        }
+        Ok(match Error::deserialize(d)? {
+            Error::String(it) => Some(it),
+            Error::Object(_) => Some("".to_string()),
+        })
     }
 
-    impl From<StructLog> for ZeroStructLog {
-        fn from(struct_log: StructLog) -> Self {
-            ZeroStructLog {
-                pc: struct_log.pc,
-                op: struct_log.op,
-                gas: struct_log.gas,
-                gas_cost: struct_log.gas_cost,
-                depth: struct_log.depth,
-                error: struct_log.error,
-                stack: struct_log.stack,
-                return_data: struct_log.return_data,
-                memory: struct_log.memory,
-                memory_size: struct_log.memory_size,
-                storage: struct_log.storage,
-                refund_counter: struct_log.refund_counter,
+    #[derive(Deserialize)]
+    #[serde(remote = "DefaultFrame", rename_all = "camelCase")]
+    struct _DefaultFrame {
+        failed: bool,
+        gas: u64,
+        return_value: Bytes,
+        #[serde(deserialize_with = "vec_structlog")]
+        struct_logs: Vec<StructLog>,
+    }
+
+    fn vec_structlog<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<StructLog>, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Vec<StructLog>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("an array of `StructLog`")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                #[derive(Deserialize)]
+                struct With(#[serde(with = "_StructLog")] StructLog);
+                let v = iter::from_fn(|| seq.next_element().transpose())
+                    .map(|it| it.map(|With(it)| it))
+                    .collect::<Result<_, _>>()?;
+                Ok(v)
             }
         }
+
+        d.deserialize_seq(Visitor)
     }
 
-    pub fn try_reserialize(structlog_object: &Value) -> anyhow::Result<DefaultFrame> {
-        let mut a = serde_json::to_string(structlog_object)?;
-        a = a.replace("\"error\":{},", "");
-
-        let b = serde_json::from_str::<DefaultFrame>(&a)?;
-
-        Ok(b)
-    }
-
-    pub(crate) fn normalize_structlog(
-        unnormalized_structlog: GethTrace,
-    ) -> Option<Vec<ZeroStructLog>> {
-        match unnormalized_structlog {
-            GethTrace::Default(structlog_frame) => {
-                let all_struct_logs = structlog_frame
-                    .struct_logs
-                    .into_iter()
-                    .map(ZeroStructLog::from)
-                    .collect::<Vec<ZeroStructLog>>();
-                Some(all_struct_logs)
-            }
-            GethTrace::JS(structlog_js_object) => {
-                try_reserialize(&structlog_js_object).ok().map(|s| {
-                    s.struct_logs
-                        .into_iter()
-                        .map(ZeroStructLog::from)
-                        .collect::<Vec<ZeroStructLog>>()
-                })
-            }
-            _ => None,
-        }
+    #[derive(Deserialize)]
+    #[serde(remote = "StructLog", rename_all = "camelCase")]
+    struct _StructLog {
+        pc: u64,
+        op: String,
+        gas: u64,
+        gas_cost: u64,
+        depth: u64,
+        #[serde(deserialize_with = "error")]
+        error: Option<String>,
+        stack: Option<Vec<U256>>,
+        return_data: Option<Bytes>,
+        memory: Option<Vec<String>>,
+        #[serde(rename = "memSize")]
+        memory_size: Option<u64>,
+        storage: Option<BTreeMap<B256, B256>>,
+        #[serde(rename = "refund")]
+        refund_counter: Option<u64>,
     }
 }

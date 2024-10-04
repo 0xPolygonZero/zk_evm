@@ -4,12 +4,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use alloy::rpc::types::trace::geth::StructLog;
 use ethereum_types::{Address, U256};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::ConsolidatedHash;
-use evm_arithmetization::{
-    proof::{BlockHashes, BlockMetadata},
-    structlog::zerostructlog::ZeroStructLog,
-};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
@@ -117,7 +115,7 @@ pub struct TxnMeta {
 
     /// Optional logs for a transaction's user code. Used for debugging purposes
     /// only.
-    pub struct_log: Option<Vec<ZeroStructLog>>,
+    pub struct_log: Option<Vec<StructLog>>,
 }
 
 /// A "trace" specific to an account for a txn.

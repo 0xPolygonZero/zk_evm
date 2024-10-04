@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
+use alloy::rpc::types::trace::geth::StructLog;
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use log::{log_enabled, Level};
@@ -31,7 +32,6 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
-use crate::structlog::zerostructlog::ZeroStructLog;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -67,7 +67,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
     /// Optional logs for transactions code.
-    pub(crate) struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+    pub(crate) struct_logs: Option<Vec<Option<Vec<StructLog>>>>,
     /// Counter within a transaction.
     pub(crate) struct_log_debugger_info: StructLogDebuggerInfo,
 }
@@ -175,7 +175,7 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: &Option<Vec<Option<Vec<StructLog>>>>,
     ) -> Self {
         debug_inputs(inputs);
 
@@ -188,7 +188,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: &Option<Vec<Option<Vec<StructLog>>>>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -225,7 +225,7 @@ impl<F: RichField> Interpreter<F> {
         halt_offset: usize,
         halt_context: usize,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: Option<Vec<Option<Vec<StructLog>>>>,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
@@ -557,9 +557,11 @@ impl<F: RichField> State<F> for Interpreter<F> {
             && is_user_mode
             && log_enabled!(log::Level::Debug)
         {
+            log::info!("yo!!");
             let txn_idx = self.generation_state.next_txn_index;
 
             if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
+                log::info!("yo2");
                 let counter = self.struct_log_debugger_info.counter;
                 if counter == 0 {
                     // Initialize txn gas.

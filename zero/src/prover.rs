@@ -6,9 +6,9 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use alloy::rpc::types::trace::geth::StructLog;
 use alloy_primitives::U256;
 use anyhow::{Context, Result};
-use evm_arithmetization::structlog::zerostructlog::ZeroStructLog;
 use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use hashbrown::HashMap;
@@ -58,7 +58,7 @@ pub struct ProverConfig {
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
-    pub struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+    pub struct_logs: Option<Vec<Option<Vec<StructLog>>>>,
 }
 
 impl BlockProverInput {

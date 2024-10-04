@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use alloy::rpc::types::trace::geth::StructLog;
 use anyhow::Result;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,6 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::State;
 use crate::generation::{collect_debug_tries, debug_inputs, ErrorWithTries, GenerationInputs};
-use crate::structlog::zerostructlog::ZeroStructLog;
 use crate::witness::memory::MemoryState;
 use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
@@ -104,7 +104,7 @@ impl<F: RichField> SegmentDataIterator<F> {
     pub fn new(
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: &Option<Vec<Option<Vec<StructLog>>>>,
     ) -> Self {
         debug_inputs(inputs);
 
