@@ -246,6 +246,8 @@ global process_message_txn:
     // stack: code_empty, retdest
     %jumpi(process_message_txn_return)
 
+    %checkpoint
+
     // Otherwise, load to's code and execute it in a new context.
     // stack: retdest
     %create_context
@@ -322,6 +324,7 @@ process_message_txn_after_call_contd:
 process_message_txn_fail:
     // stack: leftover_gas, new_ctx, retdest, success, leftover_gas
     // Transfer value back to the caller.
+    %revert_checkpoint
     %mload_txn_field(@TXN_FIELD_VALUE) ISZERO %jumpi(process_message_txn_after_call_contd)
     %mload_txn_field(@TXN_FIELD_VALUE)
     %mload_txn_field(@TXN_FIELD_ORIGIN)
