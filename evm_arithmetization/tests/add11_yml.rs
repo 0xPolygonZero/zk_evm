@@ -8,14 +8,17 @@ use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use evm_arithmetization::prover::prove;
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::witness::operation::Operation::KeccakGeneral;
 use evm_arithmetization::{
-    AllStark, GenerationInputs, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH,
+    AllStark, GenerationInputs, Node, SegmentDataIterator, StarkConfig,
+    EMPTY_CONSOLIDATED_BLOCKHASH,
 };
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -23,7 +26,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
-use plonky2::plonk::config::KeccakGoldilocksConfig;
+use plonky2::plonk::config::{KeccakGoldilocksConfig, PoseidonGoldilocksConfig};
 use plonky2::util::timing::TimingTree;
 
 type F = GoldilocksField;
@@ -202,6 +205,7 @@ fn get_generation_inputs() -> GenerationInputs {
         },
     }
 }
+
 /// The `add11_yml` test case from https://github.com/ethereum/tests
 #[test]
 fn add11_yml() -> anyhow::Result<()> {
@@ -223,6 +227,44 @@ fn add11_yml() -> anyhow::Result<()> {
         &mut timing,
         None,
     )?;
+
+    timing.filter(Duration::from_millis(100)).print();
+
+    verify_all_proofs(&all_stark, &proofs, &config)
+}
+
+/// This test focuses on testing zkVM proofs with some empty tables.
+#[test]
+fn add11_yml_first_segment() -> anyhow::Result<()> {
+    type F = GoldilocksField;
+    const D: usize = 2;
+    type C = PoseidonGoldilocksConfig;
+
+    init_logger();
+
+    let all_stark = AllStark::<F, D>::default();
+    let config = StarkConfig::standard_fast_config();
+    let inputs = get_generation_inputs();
+
+    let mut timing = TimingTree::new("prove", log::Level::Debug);
+
+    let max_cpu_len_log = 7;
+    let mut segment_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
+    let mut proofs = vec![];
+    let (_, mut segment_data) = segment_iterator.next().unwrap()?;
+
+    let opcode_counts = &segment_data.opcode_counts;
+    assert!(!opcode_counts.contains_key(&KeccakGeneral));
+
+    let proof = prove::<F, C, D>(
+        &all_stark,
+        &config,
+        inputs.trim(),
+        &mut segment_data,
+        &mut timing,
+        None,
+    )?;
+    proofs.push(proof);
 
     timing.filter(Duration::from_millis(100)).print();
 

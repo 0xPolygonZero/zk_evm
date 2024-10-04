@@ -26,7 +26,7 @@ pub(crate) mod columns;
 /// `Shl` and `Shr` are handled differently, by leveraging `Mul` and `Div`
 /// respectively.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub(crate) enum BinaryOperator {
+pub enum BinaryOperator {
     Add,
     Mul,
     Sub,
@@ -116,7 +116,7 @@ impl BinaryOperator {
 /// An enum representing different ternary operations.
 #[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub(crate) enum TernaryOperator {
+pub enum TernaryOperator {
     AddMod,
     MulMod,
     SubMod,

@@ -33,7 +33,7 @@ pub struct GenerationSegmentData {
     /// Log of the maximal cpu length.
     pub(crate) max_cpu_len_log: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
-    pub(crate) opcode_counts: HashMap<Operation, usize>,
+    pub opcode_counts: HashMap<Operation, usize>,
 }
 
 impl GenerationSegmentData {
