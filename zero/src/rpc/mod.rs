@@ -63,10 +63,13 @@ where
             .await
         }
         RpcType::Native => {
-            if get_struct_logs {
-                warn!("struct logs are not supported in native. They will not be gathered in this run.")
-            }
-            native::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
+            native::block_prover_input(
+                cached_provider,
+                block_id,
+                checkpoint_block_number,
+                get_struct_logs,
+            )
+            .await
         }
     }
 }

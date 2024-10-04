@@ -367,6 +367,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         byte_code,
                         new_receipt_trie_node_byte,
                         gas_used: txn_gas_used,
+                        struct_log: _,
                     },
             } = txn.unwrap_or_default();
 
