@@ -166,7 +166,7 @@ mod compat {
     }
 
     #[test]
-    fn test() {
+    fn investigate() {
         let mut track = serde_path_to_error::Track::new();
         let default_frame = deserialize(serde_path_to_error::Deserializer::new(
             &mut serde_json::Deserializer::from_str(include_str!("example.json")),
@@ -177,5 +177,35 @@ mod compat {
         for (ix, struct_log) in default_frame.struct_logs.into_iter().enumerate() {
             println!("{ix}: {:?}", struct_log.error);
         }
+    }
+
+    #[test]
+    fn test() {
+        let example = serde_json::json! {{
+            "depth": 22,
+            "error": {},
+            "gas": 4122,
+            "gasCost": 13222,
+            "op": "CALL",
+            "pc": 324,
+            "stack": [
+                "0xb2041d21",
+                "0x36",
+                "0x16",
+                "0x0",
+                "0xb4b46bdaa835f8e4b4d8e208b6559cd267851051",
+                "0x16",
+                "0xe8",
+                "0x0",
+                "0xc4",
+                "0x24",
+                "0xc4",
+                "0x16",
+                "0xb4b46bdaa835f8e4b4d8e208b6559cd267851051",
+                "0x101a"
+            ]
+        }};
+        let struct_log = _StructLog::deserialize(example).unwrap();
+        assert!(struct_log.error.is_some());
     }
 }
