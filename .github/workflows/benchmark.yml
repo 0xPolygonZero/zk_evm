@@ -1,0 +1,33 @@
+name: Benchmark proving
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+  #TODO REMOVE PR EXECUTION
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  benchmark_proving:
+    name: Benchmark proving for representative blocks
+    runs-on: zero-reg
+    timeout-minutes: 200 # TBD
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Build the project
+        run: |
+          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld' cargo build --release
+          sudo su -c "echo 0 > /proc/sys/kernel/perf_event_paranoid"
+
+      - name: Run the script
+        # TODO - run the benchmark with 20 blocks file
+        run: |  
+          ./scripts/benchmark_input.sh artifacts/witness_b19807080.json
