@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:
+    branches:
+      - "**"
   #TODO REMOVE PR EXECUTION
   push:
     branches: [develop, main]
@@ -11,11 +13,14 @@ on:
     branches:
       - "**"
 
+env:
+  BENCHMARK_WITNESS: artifacts/witness_b19807080.json
+
 jobs:
   benchmark_proving:
     name: Benchmark proving for representative blocks
     runs-on: zero-reg
-    timeout-minutes: 200 # TBD
+    timeout-minutes: 200 # Timeout TBD
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -24,10 +29,36 @@ jobs:
 
       - name: Build the project
         run: |
-          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld' cargo build --release
-          sudo su -c "echo 0 > /proc/sys/kernel/perf_event_paranoid"
+          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
+
+      - name: Download previous results
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: benchmark.yml
+          workflow_conclusion: success
+          name: proving_benchmark
+          path: ./
+          if_no_artifact_found: ignore
+
+      - name: Initialise the results file if necessary
+        run: |
+          ls -la ./
+          cat ./proving_benchmark_results.txt
+          printf '                                 TIME                           \n'  > ./proving_benchmark_results.txt
 
       - name: Run the script
         # TODO - run the benchmark with 20 blocks file
         run: |  
-          ./scripts/benchmark_input.sh artifacts/witness_b19807080.json
+          echo "Benchmarking proving with $BENCHMARK_WITNESS"
+          ./scripts/benchmark_input.sh $BENCHMARK_WITNESS | tee benchmark_output.log
+          MEASURED_PROVING_TIME_SEC=`cat benchmark_output.log | grep 'Proving duration:' | tail -1 | awk '{ print int($3)}'`
+          printf '%s      sec: %10s    %s\n' `date --utc +%y-%m-%d-%H:%M:%S` $MEASURED_PROVING_TIME_SEC $BENCHMARK_WITNESS >> proving_benchmark_results.txt
+
+      - name: Upload new results
+        uses: actions/upload-artifact@v4
+        with:
+          name: proving_benchmark
+          path: ./proving_benchmark_results.txt
+          retention-days: 90
+          overwrite: true
+
