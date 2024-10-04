@@ -16,6 +16,7 @@ use alloy::rpc::types::trace::geth::{
 };
 use alloy::transports::Transport;
 use alloy_primitives::{TxHash, U256};
+use anyhow::bail;
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use evm_arithmetization::CodeDb;
@@ -92,7 +93,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
     trace!("Generating JUMPDEST table for tx: {}", tx.hash);
 
     let mut jumpdest_table = JumpDestTableWitness::default();
-    let mut code_db = CodeDb::default();
+    let code_db = CodeDb::default();
 
     // This map does neither contain the `init` field of Contract Deployment
     // transactions nor CREATE, CREATE2 payloads.
@@ -225,68 +226,75 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 next_ctx_available += 1;
             }
             "CREATE" | "CREATE2" => {
-                prev_jump = None;
-                ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
-                // We reverse the stack, so the order matches our assembly code.
-                let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
-                let operands_used = 3;
+                bail!(format!(
+                    "{} required memory, aborting JUMPDEST-table generation.",
+                    tx.hash
+                ));
+                #[allow(unreachable_code)]
+                {
+                    prev_jump = None;
+                    ensure!(entry.stack.as_ref().is_some(), "No evm stack found.");
+                    // We reverse the stack, so the order matches our assembly code.
+                    let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
+                    let operands_used = 3;
 
-                if evm_stack.len() < operands_used {
-                    trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len() );
-                    continue;
-                };
+                    if evm_stack.len() < operands_used {
+                        trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len() );
+                        continue;
+                    };
 
-                let [_value, offset, size, ..] = evm_stack[..] else {
-                    unreachable!()
-                };
-                if *offset > U256::from(usize::MAX) {
-                    trace!(
-                        "{op}: Offset {offset} was too large to fit in usize {}.",
-                        usize::MAX
-                    );
-                    continue;
-                };
-                let offset: usize = offset.to();
+                    let [_value, offset, size, ..] = evm_stack[..] else {
+                        unreachable!()
+                    };
+                    if *offset > U256::from(usize::MAX) {
+                        trace!(
+                            "{op}: Offset {offset} was too large to fit in usize {}.",
+                            usize::MAX
+                        );
+                        continue;
+                    };
+                    let offset: usize = offset.to();
 
-                if *size > U256::from(usize::MAX) {
-                    trace!(
-                        "{op}: Size {size} was too large to fit in usize {}.",
-                        usize::MAX
-                    );
-                    continue;
-                };
-                let size: usize = size.to();
+                    if *size > U256::from(usize::MAX) {
+                        trace!(
+                            "{op}: Size {size} was too large to fit in usize {}.",
+                            usize::MAX
+                        );
+                        continue;
+                    };
+                    let size: usize = size.to();
 
-                let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
+                    let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
 
-                if entry.memory.is_none() || offset + size > memory_size {
-                    trace!("Insufficient memory available for {op}. Contract has size {size} and is supposed to be stored between offset {offset} and {}, but memory size is only {memory_size}.", offset+size);
-                    continue;
+                    if entry.memory.is_none() || offset + size > memory_size {
+                        trace!("Insufficient memory available for {op}. Contract has size {size} and is supposed to be stored between offset {offset} and {}, but memory size is only {memory_size}.", offset+size);
+                        continue;
+                    }
+                    let memory_raw: &[String] = entry.memory.as_ref().unwrap();
+                    let memory_parsed: Vec<anyhow::Result<Word>> = memory_raw
+                        .iter()
+                        .map(|mem_line| {
+                            let mem_line_parsed = U256::from_str_radix(mem_line, 16)?;
+                            Ok(mem_line_parsed.to_be_bytes())
+                        })
+                        .collect();
+                    let mem_res: anyhow::Result<Vec<Word>> = memory_parsed.into_iter().collect();
+                    if mem_res.is_err() {
+                        trace!(
+                            "{op}: Parsing memory failed with error: {}",
+                            mem_res.unwrap_err()
+                        );
+                        continue;
+                    }
+                    let memory: Vec<u8> = mem_res.unwrap().concat();
+
+                    let init_code = &memory[offset..offset + size];
+                    code_db.insert(init_code.to_vec());
+                    let init_code_hash = keccak(init_code);
+                    call_stack.push((init_code_hash, next_ctx_available));
+
+                    next_ctx_available += 1;
                 }
-                let memory_raw: &[String] = entry.memory.as_ref().unwrap();
-                let memory_parsed: Vec<anyhow::Result<Word>> = memory_raw
-                    .iter()
-                    .map(|mem_line| {
-                        let mem_line_parsed = U256::from_str_radix(mem_line, 16)?;
-                        Ok(mem_line_parsed.to_be_bytes())
-                    })
-                    .collect();
-                let mem_res: anyhow::Result<Vec<Word>> = memory_parsed.into_iter().collect();
-                if mem_res.is_err() {
-                    trace!(
-                        "{op}: Parsing memory failed with error: {}",
-                        mem_res.unwrap_err()
-                    );
-                    continue;
-                }
-                let memory: Vec<u8> = mem_res.unwrap().concat();
-
-                let init_code = &memory[offset..offset + size];
-                code_db.insert(init_code.to_vec());
-                let init_code_hash = keccak(init_code);
-                call_stack.push((init_code_hash, next_ctx_available));
-
-                next_ctx_available += 1;
             }
             "JUMP" => {
                 prev_jump = None;
