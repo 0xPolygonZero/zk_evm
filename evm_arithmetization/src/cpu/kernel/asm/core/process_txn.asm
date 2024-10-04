@@ -327,10 +327,15 @@ process_message_txn_fail:
     %balance
     %mload_txn_field(@TXN_FIELD_VALUE)
     %min // min(to_balance, original_value)
+    DUP1 ISZERO %jumpi(process_message_txn_after_call_contd_with_pop)
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     %mload_txn_field(@TXN_FIELD_TO)
     %transfer_eth %jumpi(panic)
     %jump(process_message_txn_after_call_contd)
+
+process_message_txn_after_call_contd_with_pop:
+    // stack: 0, leftover_gas, new_ctx, retdest, success, leftover_gas
+    POP %jump(process_message_txn_after_call_contd)
 
 %macro pay_coinbase_and_refund_sender
     // stack: leftover_gas
