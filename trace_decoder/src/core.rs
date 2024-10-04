@@ -221,6 +221,7 @@ fn start(
                         code,
                         collation,
                     } = crate::type2::frontend(instructions)?;
+
                     todo!()
                 }
             };

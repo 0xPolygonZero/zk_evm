@@ -26,6 +26,7 @@ use regex::Regex;
 use trace_decoder::observer::TriesObserver;
 use tracing::{error, info};
 use zero::ops::register;
+use zero::prover::WIRE_DISPOSITION;
 use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
 
 #[derive(Parser)]
@@ -89,6 +90,7 @@ async fn main() -> Result<()> {
             block_prover_input.other_data.clone(),
             prover_config.batch_size,
             &mut observer,
+            WIRE_DISPOSITION,
         )?;
         info!(
             "Number of collected batch tries for block {}: {}",
@@ -138,6 +140,9 @@ async fn main() -> Result<()> {
                         state_trie: observer.data[prover_tries.batch_index]
                             .tries
                             .state
+                            .as_ref()
+                            .left()
+                            .unwrap()
                             .as_hashed_partial_trie()
                             .clone(),
                         transaction_trie: observer.data[prover_tries.batch_index]

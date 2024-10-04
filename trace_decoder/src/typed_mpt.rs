@@ -3,9 +3,10 @@
 use core::fmt;
 use std::{collections::BTreeMap, marker::PhantomData};
 
+use bitvec::{order::Msb0, view::BitView as _};
 use copyvec::CopyVec;
 use either::Either;
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, BigEndianHash as _, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
@@ -162,6 +163,17 @@ impl TrieKey {
         }
         Self(ours)
     }
+    fn into_bits(self) -> smt_trie::bits::Bits {
+        let mut bits = smt_trie::bits::Bits::default();
+        for component in self.0 {
+            let byte = component as u8;
+            // the four high bits are zero
+            for bit in byte.view_bits::<Msb0>().into_iter().by_vals().skip(4) {
+                bits.push_bit(bit);
+            }
+        }
+        bits
+    }
 
     pub fn into_hash(self) -> Option<H256> {
         let Self(nibbles) = self;
@@ -279,7 +291,6 @@ pub trait StateTrie {
         address: Address,
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>>;
-    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
     /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
@@ -304,6 +315,10 @@ impl StateMpt {
                 _ty: PhantomData,
             },
         }
+    }
+    /// Insert a _hashed out_ part of the trie
+    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.typed.insert_hash(key, hash)
     }
     #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
     pub fn insert_by_hashed_address(
@@ -331,10 +346,6 @@ impl StateTrie for StateMpt {
     ) -> anyhow::Result<Option<AccountRlp>> {
         #[expect(deprecated)]
         self.insert_by_hashed_address(keccak_hash::keccak(address), account)
-    }
-    /// Insert an _hashed out_ part of the trie
-    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.typed.insert_hash(key, hash)
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.typed
@@ -378,6 +389,10 @@ impl From<StateMpt> for HashedPartialTrie {
     }
 }
 
+// TODO(0xaatif): trackme
+// We're covering for [`smt_trie`] in a couple of ways:
+// - insertion operations aren't fallible, they just panic.
+// - it documents a requirement that `set_hash` is called before `set`.
 #[derive(Clone, Debug)]
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
@@ -391,10 +406,6 @@ impl StateTrie for StateSmt {
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>> {
         Ok(self.address2state.insert(address, account))
-    }
-    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.hashed_out.insert(key, hash);
-        Ok(())
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.address2state.get(&address).copied()
@@ -413,7 +424,84 @@ impl StateTrie for StateSmt {
             .map(|(addr, acct)| (keccak_hash::keccak(addr), *acct))
     }
     fn root(&self) -> H256 {
-        todo!()
+        conv_hash::smt2eth(self.as_smt().root)
+    }
+}
+
+impl StateSmt {
+    fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
+        let Self {
+            address2state,
+            hashed_out,
+        } = self;
+        let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
+        for (k, v) in hashed_out {
+            smt.set_hash(k.into_bits(), conv_hash::eth2smt(*v));
+        }
+        for (
+            addr,
+            AccountRlp {
+                nonce,
+                balance,
+                storage_root,
+                code_hash,
+            },
+        ) in address2state
+        {
+            smt.set(smt_trie::keys::key_nonce(*addr), *nonce);
+            smt.set(smt_trie::keys::key_balance(*addr), *balance);
+            smt.set(smt_trie::keys::key_code(*addr), code_hash.into_uint());
+            smt.set(
+                // REVIEW(0xaatif): I don't know what to do here
+                smt_trie::keys::key_storage(*addr, U256::zero()),
+                storage_root.into_uint(),
+            );
+        }
+        smt
+    }
+}
+
+mod conv_hash {
+    use std::array;
+
+    use ethereum_types::H256;
+    use itertools::Itertools as _;
+    use plonky2::{field::goldilocks_field::GoldilocksField, hash::hash_types::HashOut};
+
+    pub fn eth2smt(H256(bytes): H256) -> smt_trie::smt::HashOut {
+        let mut bytes = bytes.into_iter();
+        // (no unsafe, no unstable)
+        let ret = HashOut {
+            elements: array::from_fn(|_ix| {
+                let (a, b, c, d, e, f, g, h) = bytes.next_tuple().unwrap();
+                // REVIEW(0xaatif): what endianness?
+                GoldilocksField(u64::from_be_bytes([a, b, c, d, e, f, g, h]))
+            }),
+        };
+        assert_eq!(bytes.len(), 0);
+        ret
+    }
+    pub fn smt2eth(HashOut { elements }: smt_trie::smt::HashOut) -> H256 {
+        H256(
+            build_array::ArrayBuilder::from_iter(
+                elements
+                    .into_iter()
+                    .flat_map(|GoldilocksField(u)| u.to_be_bytes()),
+            )
+            .build_exact()
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn test() {
+        for h in [
+            H256::zero(),
+            H256(array::from_fn(|ix| ix as u8)),
+            H256([u8::MAX; 32]),
+        ] {
+            assert_eq!(smt2eth(eth2smt(h)), h);
+        }
     }
 }
 
@@ -499,7 +587,6 @@ where
             address: Address,
             account: AccountRlp,
         ) -> anyhow::Result<Option<AccountRlp>>;
-        fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
         fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
         fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
         fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;

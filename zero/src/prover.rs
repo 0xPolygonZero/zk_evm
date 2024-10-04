@@ -39,12 +39,14 @@ use crate::proof_types::GeneratedBlockProof;
 // batches as soon as they are generated.
 static PARALLEL_BLOCK_PROVING_PERMIT_POOL: Semaphore = Semaphore::const_new(0);
 
-const WIRE_DISPOSITION: WireDisposition = {
-    cfg_if::cfg_if!(if #[cfg(feature = "eth_mainnet")] {
-        WireDisposition::Type1
-    } else {
-        compile_error!("must select a feature");
-    })
+pub const WIRE_DISPOSITION: WireDisposition = {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "eth_mainnet")] {
+            WireDisposition::Type1
+        } else {
+            compile_error!("must select a feature");
+        }
+    }
 };
 
 #[derive(Debug, Clone)]
