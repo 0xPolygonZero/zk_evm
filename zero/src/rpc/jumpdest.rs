@@ -135,9 +135,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
     // true condition and target `jump_target`.
     let mut prev_jump: Option<U256> = None;
 
-    // Call depth of the previous `entry`. We initialize to 0 as this compares
-    // smaller to 1.
-    //let mut prev_depth = 0;
     // The next available context. Starts at 1. Never decrements.
     let mut next_ctx_available = 1;
     // Immediately use context 1;

@@ -64,7 +64,7 @@ where
 
     let block_jumpdest_table_witnesses: Vec<Option<(JumpDestTableWitness, CodeDb)>> =
         match jumpdest_src {
-            JumpdestSrc::ProverSimulation => Vec::new(),
+            JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],
             JumpdestSrc::ClientFetchedStructlogs => {
                 // In case of the error with retrieving structlogs from the server,
                 // continue without interruption. Equivalent to `ProverSimulation` case.
