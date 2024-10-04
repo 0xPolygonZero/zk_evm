@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use alloy::primitives::B256;
 use alloy::providers::ext::DebugApi;
 use alloy::providers::Provider;
@@ -35,6 +37,13 @@ where
     let structlog_trace = provider
         .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
         .await?;
+    if let Some(path) = std::env::var_os("aatif_log") {
+        if let Ok(file) = File::options().create(true).append(true).open(path) {
+            use std::io::Write as _;
+            let _ = serde_json::to_writer(&file, &structlog_trace);
+            let _ = writeln!(&file);
+        }
+    }
 
     let res = trace2structlog(structlog_trace);
     println!("retrieved struct logs {:?}", res);
