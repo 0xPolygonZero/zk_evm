@@ -31,6 +31,7 @@ use super::CodeDb;
 pub(super) async fn process_transactions<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
+    get_struct_logs: bool,
 ) -> anyhow::Result<(CodeDb, Vec<TxnInfo>)>
 where
     ProviderT: Provider<TransportT>,
@@ -41,7 +42,7 @@ where
         .as_transactions()
         .context("No transactions in block")?
         .iter()
-        .map(|tx| process_transaction(provider, tx))
+        .map(|tx| process_transaction(provider, tx, get_struct_logs))
         .collect::<FuturesOrdered<_>>()
         .try_fold(
             (BTreeSet::new(), Vec::new()),
@@ -59,12 +60,14 @@ where
 async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
+    get_struct_logs: bool,
 ) -> anyhow::Result<(CodeDb, TxnInfo)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let (tx_receipt, pre_trace, diff_trace, struct_log) = fetch_tx_data(provider, &tx.hash).await?;
+    let (tx_receipt, pre_trace, diff_trace, struct_log) =
+        fetch_tx_data(provider, &tx.hash, get_struct_logs).await?;
     let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
@@ -105,6 +108,7 @@ where
 async fn fetch_tx_data<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
+    get_struct_logs: bool,
 ) -> anyhow::Result<
     (
         <Ethereum as Network>::ReceiptResponse,
@@ -121,14 +125,14 @@ where
     let tx_receipt_fut = provider.get_transaction_receipt(*tx_hash);
     let pre_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(false));
     let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
-    let struct_logs_fut = get_structlog_for_debug(provider, tx_hash);
+    let struct_logs = if get_struct_logs {
+        get_structlog_for_debug(provider, tx_hash).await?
+    } else {
+        None
+    };
 
-    let (tx_receipt, pre_trace, diff_trace, struct_logs) = futures::try_join!(
-        tx_receipt_fut,
-        pre_trace_fut,
-        diff_trace_fut,
-        struct_logs_fut
-    )?;
+    let (tx_receipt, pre_trace, diff_trace) =
+        futures::try_join!(tx_receipt_fut, pre_trace_fut, diff_trace_fut)?;
 
     Ok((
         tx_receipt.context("Transaction receipt not found.")?,
