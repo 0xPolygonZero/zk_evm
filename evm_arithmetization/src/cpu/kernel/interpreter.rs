@@ -616,7 +616,10 @@ impl<F: RichField> State<F> for Interpreter<F> {
                 // Check stack.
                 if let Some(txn_stack) = cur_txn_struct_logs.stack {
                     let cur_stack = self.get_full_stack();
-                    let txn_stack = txn_stack.into_iter().map(U256::from).collect::<Vec<_>>();
+                    let txn_stack = txn_stack
+                        .into_iter()
+                        .map(|s| U256(*s.as_limbs()))
+                        .collect::<Vec<_>>();
 
                     if txn_stack != cur_stack {
                         log::warn!(
