@@ -1,7 +1,9 @@
 #![allow(clippy::needless_range_loop)]
 
+use core::fmt::Debug;
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::{Display, Formatter};
 
 use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -11,7 +13,7 @@ use plonky2::plonk::config::Hasher;
 use serde::{Deserialize, Serialize};
 
 use crate::bits::Bits;
-use crate::db::Db;
+use crate::db::{Db, MemoryDb};
 use crate::utils::{
     f2limbs, get_unique_sibling, hash0, hash_key_hash, hashout2u, key2u, limbs2f, u2h, u2k,
 };
@@ -440,27 +442,56 @@ impl<D: Db> Smt<D> {
         v
     }
 
-    pub fn load_linked_list_data<const O: usize>(
+    pub fn load_linked_list_data<const OFFSET: usize>(
         &self,
         linked_list_mem: &mut Vec<Option<U256>>,
         state_ptrs: &mut BTreeMap<U256, usize>,
     ) {
-        let key = Key(self.root.elements);
+        let mut kv_sorted_by_k: Vec<(U256, U256)> = self
+            .kv_store
+            .iter()
+            .map(|(&key, &val)| (key2u(key), val))
+            .collect();
+        kv_sorted_by_k.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+        // The next node of the dummy node must be the first node. If the
+        // list is empty, this value is set to its original value after
+        // the loop
+        linked_list_mem[3] = Some(U256::from(OFFSET + 4));
+        for (i, &(key, value)) in kv_sorted_by_k.iter().enumerate() {
+            // The nibbles are the address.
+            linked_list_mem.push(Some(key));
+            log::debug!("setting linked_list_mem[i + 0] to {:?}", key);
+            // Set the value.
+            linked_list_mem.push(Some(value));
+            log::debug!("setting linked_list_mem[i + 1] to {:?}", value);
+            // Set the original value.
+            linked_list_mem.push(Some(value));
+            log::debug!("setting linked_list_mem[i + 2] to {:?}", value);
+            // Set the next node as the initial node.
+            linked_list_mem.push(Some(U256::from(OFFSET + 4 * (i + 2))));
+            log::debug!("setting linked_list_mem[i + 3] to {:?}", U256::from(OFFSET));
 
-        load_linked_list_data_with_key_and_bits::<_, O>(
-            self,
-            key,
-            Bits::empty(),
-            linked_list_mem,
-            state_ptrs,
-        );
+            // Put the pointer in state_ptrs
+            state_ptrs.insert(key, OFFSET + 4 * (i + 1));
+        }
+        // the lats node must point to the initial node
+        let last_index = linked_list_mem.len() - 1;
+        linked_list_mem[last_index] = Some(U256::from(OFFSET));
     }
 
     pub fn to_vec(&self) -> Vec<U256> {
         // Include all keys.
         self.serialize_and_prune(self.kv_store.keys())
     }
+}
 
+impl Display for Smt<MemoryDb> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        for (key, val) in self.kv_store.iter().map(|(&key, &val)| (key2u(key), val)) {
+            write!(f, "({:?}, {:?})\n", key, val)?;
+        }
+        Ok(())
+    }
 }
 
 fn serialize<D: Db>(
@@ -516,7 +547,7 @@ fn serialize<D: Db>(
     }
 }
 
-fn load_linked_list_data_with_key_and_bits<D: Db, const O: usize>(
+fn _load_linked_list_data_with_key_and_bits<D: Db, const OFFSET: usize>(
     smt: &Smt<D>,
     key: Key,
     cur_bits: Bits,
@@ -542,30 +573,41 @@ fn load_linked_list_data_with_key_and_bits<D: Db, const O: usize>(
 
             // The last leaf must point to the new one.
             let len = linked_list_mem.len();
-            linked_list_mem[len - 1] = Some(U256::from(O + len));
+            linked_list_mem[len - 1] = Some(U256::from(OFFSET + len));
+            log::debug!(
+                "setting linked_list_mem[{len} - 1] to {:?}",
+                U256::from(OFFSET + len)
+            );
             // The nibbles are the address.
             linked_list_mem.push(Some(key2u(rem_key)));
+            log::debug!("setting linked_list_mem[{len}] to {:?}", key2u(rem_key));
             // Set the value.
             linked_list_mem.push(Some(val));
+            log::debug!("setting linked_list_mem[{len} + 1] to {:?}", val);
             // Set the original value.
             linked_list_mem.push(Some(val));
+            log::debug!("setting linked_list_mem[{len} + 2] to {:?}", val);
             // Set the next node as the initial node.
-            linked_list_mem.push(Some(U256::from(O)));
+            linked_list_mem.push(Some(U256::from(OFFSET)));
+            log::debug!(
+                "setting linked_list_mem[{len} + 3] to {:?}",
+                U256::from(OFFSET)
+            );
 
             // Put the pointer in state_ptrs
-            state_ptrs.insert(key2u(rem_key), O + len);
+            state_ptrs.insert(key2u(rem_key), OFFSET + len);
         } else {
             let key_left = Key(node.0[0..4].try_into().unwrap());
             let key_right = Key(node.0[4..8].try_into().unwrap());
 
-            load_linked_list_data_with_key_and_bits::<_, O>(
+            _load_linked_list_data_with_key_and_bits::<_, OFFSET>(
                 smt,
                 key_left,
                 cur_bits.add_bit(false),
                 linked_list_mem,
                 state_ptrs,
             );
-            load_linked_list_data_with_key_and_bits::<_, O>(
+            _load_linked_list_data_with_key_and_bits::<_, OFFSET>(
                 smt,
                 key_right,
                 cur_bits.add_bit(true),

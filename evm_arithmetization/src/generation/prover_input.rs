@@ -358,8 +358,7 @@ impl<F: RichField> GenerationState<F> {
     #[cfg(feature = "eth_mainnet")]
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
-            "insert_account" | "search_account" => 
-            self.run_next_insert_account(input_fn),
+            "insert_account" | "search_account" => self.run_next_insert_account(input_fn),
 
             "remove_account" => self.run_next_remove_account(),
             "insert_slot" | "search_slot" => self.run_next_insert_slot(input_fn),
@@ -373,10 +372,18 @@ impl<F: RichField> GenerationState<F> {
     /// jump address.
     #[cfg(feature = "cdk_erigon")]
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        use crate::generation::linked_list::StateLinkedList;
+        let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!(
+            "state ll = {:?}",
+            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
+        log::debug!("state btree = {:?}", self.state_pointers);
+        log::debug!("input state = {}", self.inputs.trimmed_tries.state_trie);
+
         match input_fn.0[1].as_str() {
-            "insert_state" => 
-            self.run_next_insert_state(input_fn),
-            "remove_statt" => self.run_next_remove_state(),
+            "insert_state" | "search_state" => self.run_next_insert_state(input_fn),
+            "remove_state" => self.run_next_remove_state(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -554,7 +561,7 @@ impl<F: RichField> GenerationState<F> {
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
-        if pred_key != key && input_fn.0[1].as_str() == "insert_account" {
+        if pred_key != key && input_fn.0[1].as_str() == "insert_state" {
             self.state_pointers.insert(
                 key,
                 u256_to_usize(
@@ -616,7 +623,7 @@ impl<F: RichField> GenerationState<F> {
         Ok(U256::from(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }
 
-     /// Returns a pointer `ptr` to a node of the form [..] -> [next_key, ..]
+    /// Returns a pointer `ptr` to a node of the form [..] -> [next_key, ..]
     /// list such that `next_key = addr` and `key` is the top of the stack.
     /// If the element is not in the list, returns an error.
     #[cfg(feature = "cdk_erigon")]
@@ -682,7 +689,8 @@ impl<F: RichField> GenerationState<F> {
             (pred_ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE,
         ))
     }
-    // TODO: We're missing a cdk_erigon counterpart for `run_next_remove_address_slots`
+    // TODO: We're missing a cdk_erigon counterpart for
+    // `run_next_remove_address_slots`
 
     /// Returns the first part of the KZG precompile output.
     fn run_kzg_point_eval(&mut self) -> Result<U256, ProgramError> {

@@ -96,20 +96,10 @@ global after_store_initial:
 global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
-    // The trie data segment is already written by the linked lists
+    // The trie data segment contains only the empty node
 
-    // First, we compute the initial size of the trie data segment.
-    PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
-    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
-    SUB
-    // stack: accounts_ll_full_len, accounts_ll_node_size
-    DIV
-    %decrement
-    // stack: actual_nb_accounts
     // The initial payloads are written twice, and each payload requires 4 elements.
-    PUSH 8 MUL
-    %increment
+    PUSH 2
     // stack: init_trie_data_len
     PUSH @INITIAL_RLP_ADDR
     // stack: rlp_start, init_trie_data_len
@@ -120,6 +110,7 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     // Check that the trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+global debug_el_size:
     %assert_eq
 
 global start_txns:

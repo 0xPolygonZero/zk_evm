@@ -419,7 +419,7 @@ const LINKED_LISTS_CONSTANTS: [(&str, u16); 8] = [
     ("STORAGE_NEXT_NODE_PTR", 4),
     ("STATE_NEXT_NODE_PTR", 3),
     ("STORAGE_COPY_PAYLOAD_PTR", 3),
-    ("STATE_COPY_PAYLOAD_PTR", 4),
+    ("STATE_COPY_PAYLOAD_PTR", 2),
 ];
 
 /// Cancun-related constants

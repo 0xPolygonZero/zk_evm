@@ -127,7 +127,6 @@
         %read_code %mload_trie_data
         // stack: codehash
         %eq_const(@EMPTY_STRING_POSEIDON_HASH)
-        %jump(%%after)
     } 
     %jump(%%after)
 %%false:

@@ -308,6 +308,28 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
         ),
     );
 
+    // state.log(
+    //     level,
+    //     format!(
+    //         "state memory = {:?}",
+    //         state
+    //             .get_generation_state()
+    //             .memory
+    //             .get_preinit_memory(Segment::AccountsLinkedList),
+    //     ),
+    // );
+    // state.log(
+    //     level,
+    //     format!(
+    //         "smt = {}",
+    //         state
+    //             .get_generation_state()
+    //             .inputs
+    //             .trimmed_tries
+    //             .state_trie
+    //     ),
+    // );
+
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 

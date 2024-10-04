@@ -97,16 +97,22 @@ global create_scalable_l2_account:
     // stack: (empty)
     PUSH update_scalable_block_number
     // stack: retdest
-    %get_trie_data_size // pointer to new account we're about to create
     // stack: new_account_ptr, retdest
-    PUSH 0 %append_to_trie_data // nonce
-    PUSH 0 %append_to_trie_data // balance
-    PUSH 0 %append_to_trie_data // storage root pointer
-    PUSH @EMPTY_STRING_HASH %append_to_trie_data // code hash
-    // stack: new_account_ptr, retdest
+    PUSH 0
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
-    // stack: key, new_account_ptr, retdest
-    %jump(mpt_insert_state_trie)
+    %set_nonce
+    
+    PUSH 0 
+    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
+    %set_balance // balance
+    
+    PUSH @EMPTY_STRING_HASH
+    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
+    %set_codehash // code hash
+
+    PUSH 0 
+    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
+    %set_code_length // code_length
 
 %macro write_scalable_storage
     // stack: slot, value

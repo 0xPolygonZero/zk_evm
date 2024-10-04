@@ -4585,6 +4585,7 @@ version = "0.1.1"
 dependencies = [
  "ethereum-types",
  "hex-literal",
+ "log",
  "plonky2",
  "rand",
  "serde",
