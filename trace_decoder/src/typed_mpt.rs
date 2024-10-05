@@ -4,9 +4,8 @@ use core::fmt;
 use std::{cmp, collections::BTreeMap, marker::PhantomData};
 
 use anyhow::ensure;
-use bitvec::{order::Msb0, slice::BitSlice, view::BitView as _};
+use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
-use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
@@ -164,17 +163,6 @@ impl MptKey {
         }
         Self(ours)
     }
-    fn into_bits(self) -> smt_trie::bits::Bits {
-        let mut bits = smt_trie::bits::Bits::default();
-        for component in self.0 {
-            let byte = component as u8;
-            // the four high bits are zero
-            for bit in byte.view_bits::<Msb0>().into_iter().by_vals().skip(4) {
-                bits.push_bit(bit);
-            }
-        }
-        bits
-    }
 
     pub fn into_hash(self) -> Option<H256> {
         let Self(nibbles) = self;
@@ -255,11 +243,20 @@ impl SmtKey {
         }
         Ok(Self { bits, len })
     }
+
+    fn into_bits(self) -> smt_trie::bits::Bits {
+        let mut bits = smt_trie::bits::Bits::default();
+        for bit in self.as_bitslice() {
+            bits.push_bit(*bit)
+        }
+        bits
+    }
 }
 
 impl From<Address> for SmtKey {
-    fn from(value: Address) -> Self {
-        todo!()
+    fn from(addr: Address) -> Self {
+        let H256(bytes) = keccak_hash::keccak(addr);
+        Self::new(BitArray::<_>::new(bytes)).unwrap()
     }
 }
 
@@ -270,7 +267,7 @@ impl Ord for SmtKey {
 }
 impl PartialOrd for SmtKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.as_bitslice().partial_cmp(other.as_bitslice())
+        Some(self.cmp(other))
     }
 }
 impl Eq for SmtKey {}
@@ -380,7 +377,7 @@ pub trait StateTrie {
     ) -> anyhow::Result<Option<AccountRlp>>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
-    /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
+    /// _Hash out_ parts of the trie that aren't in `addresses`.
     fn mask(&mut self, address: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
@@ -484,7 +481,7 @@ impl From<StateMpt> for HashedPartialTrie {
 #[derive(Clone, Debug)]
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
-    hashed_out: BTreeMap<MptKey, H256>,
+    hashed_out: BTreeMap<SmtKey, H256>,
 }
 
 impl StateTrie for StateSmt {

@@ -75,9 +75,9 @@ pub fn entrypoint(
         *amt = gwei_to_wei(*amt)
     }
 
-    match state {
-        Either::Left(mpt) => {
-            let batches = middle(
+    let batches = match state {
+        Either::Left(mpt) => Either::Left(
+            middle(
                 mpt,
                 storage,
                 batch(txn_info, batch_size_hint),
@@ -86,21 +86,27 @@ pub fn entrypoint(
                 ger_data,
                 withdrawals,
                 observer,
-            )?;
-        }
+            )?
+            .into_iter()
+            .map(|it| it.map(Either::Left)),
+        ),
         Either::Right(smt) => {
-            let batches = middle(
-                smt,
-                storage,
-                batch(txn_info, batch_size_hint),
-                &mut code,
-                &b_meta,
-                ger_data,
-                withdrawals,
-                &mut DummyObserver::new(), // TODO(0xaatif)
-            )?;
+            Either::Right(
+                middle(
+                    smt,
+                    storage,
+                    batch(txn_info, batch_size_hint),
+                    &mut code,
+                    &b_meta,
+                    ger_data,
+                    withdrawals,
+                    &mut DummyObserver::new(), // TODO(0xaatif)
+                )?
+                .into_iter()
+                .map(|it| it.map(Either::Right)),
+            )
         }
-    }
+    };
 
     let mut running_gas_used = 0;
     Ok(batches
