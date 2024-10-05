@@ -32,13 +32,13 @@ impl<T> TypedMpt<T> {
     /// Insert a node which represents an out-of-band sub-trie.
     ///
     /// See [module documentation](super) for more.
-    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+    fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.inner.insert(key.into_nibbles(), hash)?;
         Ok(())
     }
     /// Returns an [`Error`] if the `key` crosses into a part of the trie that
     /// isn't hydrated.
-    fn insert(&mut self, key: TrieKey, value: T) -> anyhow::Result<Option<T>>
+    fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<Option<T>>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
@@ -52,7 +52,7 @@ impl<T> TypedMpt<T> {
     ///
     /// # Panics
     /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
-    fn get(&self, key: TrieKey) -> Option<T>
+    fn get(&self, key: MptKey) -> Option<T>
     where
         T: rlp::Decodable,
     {
@@ -69,12 +69,12 @@ impl<T> TypedMpt<T> {
         self.inner.hash()
     }
     /// Note that this returns owned paths and items.
-    fn iter(&self) -> impl Iterator<Item = (TrieKey, T)> + '_
+    fn iter(&self) -> impl Iterator<Item = (MptKey, T)> + '_
     where
         T: rlp::Decodable,
     {
         self.inner.keys().filter_map(|nib| {
-            let path = TrieKey::from_nibbles(nib);
+            let path = MptKey::from_nibbles(nib);
             Some((path, self.get(path)?))
         })
     }
@@ -90,7 +90,7 @@ impl<'a, T> IntoIterator for &'a TypedMpt<T>
 where
     T: rlp::Decodable,
 {
-    type Item = (TrieKey, T);
+    type Item = (MptKey, T);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
     fn into_iter(self) -> Self::IntoIter {
         Box::new(self.iter())
@@ -102,9 +102,9 @@ where
 ///
 /// Semantically equivalent to [`mpt_trie::nibbles::Nibbles`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct TrieKey(CopyVec<U4, 64>);
+pub struct MptKey(CopyVec<U4, 64>);
 
-impl fmt::Display for TrieKey {
+impl fmt::Display for MptKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for u in self.0 {
             f.write_fmt(format_args!("{:x}", u))?
@@ -113,9 +113,9 @@ impl fmt::Display for TrieKey {
     }
 }
 
-impl TrieKey {
+impl MptKey {
     pub fn new(components: impl IntoIterator<Item = U4>) -> anyhow::Result<Self> {
-        Ok(TrieKey(CopyVec::try_from_iter(components)?))
+        Ok(MptKey(CopyVec::try_from_iter(components)?))
     }
     pub fn into_hash_left_padded(mut self) -> H256 {
         for _ in 0..self.0.spare_capacity_mut().len() {
@@ -138,7 +138,7 @@ impl TrieKey {
     }
 
     pub fn from_txn_ix(txn_ix: usize) -> Self {
-        TrieKey::new(AsNibbles(rlp::encode(&txn_ix))).expect(
+        MptKey::new(AsNibbles(rlp::encode(&txn_ix))).expect(
             "\
             rlp of an usize goes through a u64, which is 8 bytes,
             which will be 9 bytes RLP'ed.
@@ -185,9 +185,9 @@ impl TrieKey {
 
 #[test]
 fn key_into_hash() {
-    assert_eq!(TrieKey::new([]).unwrap().into_hash(), None);
+    assert_eq!(MptKey::new([]).unwrap().into_hash(), None);
     assert_eq!(
-        TrieKey::new(itertools::repeat_n(u4::u4!(0), 64))
+        MptKey::new(itertools::repeat_n(u4::u4!(0), 64))
             .unwrap()
             .into_hash(),
         Some(H256::zero())
@@ -209,10 +209,10 @@ impl TransactionTrie {
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
-            .get(TrieKey::from_txn_ix(txn_ix).into_nibbles())
+            .get(MptKey::from_txn_ix(txn_ix).into_nibbles())
             .map(Vec::from);
         self.untyped
-            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
+            .insert(MptKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
         Ok(prev)
     }
     pub fn root(&self) -> H256 {
@@ -227,7 +227,7 @@ impl TransactionTrie {
             &self.untyped,
             txn_ixs
                 .into_iter()
-                .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
+                .map(|it| MptKey::from_txn_ix(it).into_nibbles()),
         )?;
         Ok(())
     }
@@ -254,10 +254,10 @@ impl ReceiptTrie {
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
-            .get(TrieKey::from_txn_ix(txn_ix).into_nibbles())
+            .get(MptKey::from_txn_ix(txn_ix).into_nibbles())
             .map(Vec::from);
         self.untyped
-            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
+            .insert(MptKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
         Ok(prev)
     }
     pub fn root(&self) -> H256 {
@@ -272,7 +272,7 @@ impl ReceiptTrie {
             &self.untyped,
             txn_ixs
                 .into_iter()
-                .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
+                .map(|it| MptKey::from_txn_ix(it).into_nibbles()),
         )?;
         Ok(())
     }
@@ -292,9 +292,9 @@ pub trait StateTrie {
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>>;
     /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
-    fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+    fn mask(&mut self, address: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
 }
@@ -317,7 +317,7 @@ impl StateMpt {
         }
     }
     /// Insert a _hashed out_ part of the trie
-    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+    pub fn insert_hash_by_key(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.typed.insert_hash(key, hash)
     }
     #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
@@ -326,7 +326,7 @@ impl StateMpt {
         key: H256,
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>> {
-        self.typed.insert(TrieKey::from_hash(key), account)
+        self.typed.insert(MptKey::from_hash(key), account)
     }
     pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.typed
@@ -349,20 +349,20 @@ impl StateTrie for StateMpt {
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.typed
-            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
+            .get(MptKey::from_hash(keccak_hash::keccak(address)))
     }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(
             self.typed.as_mut_hashed_partial_trie_unchecked(),
-            TrieKey::from_address(address),
+            MptKey::from_address(address),
         )
     }
-    fn mask(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
             self.typed.as_hashed_partial_trie(),
-            addresses.into_iter().map(TrieKey::into_nibbles),
+            addresses.into_iter().map(MptKey::into_nibbles),
         )?;
         self.typed = TypedMpt {
             inner,
@@ -396,7 +396,7 @@ impl From<StateMpt> for HashedPartialTrie {
 #[derive(Clone, Debug)]
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
-    hashed_out: BTreeMap<TrieKey, H256>,
+    hashed_out: BTreeMap<MptKey, H256>,
 }
 
 impl StateTrie for StateSmt {
@@ -410,11 +410,11 @@ impl StateTrie for StateSmt {
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.address2state.get(&address).copied()
     }
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
         self.address2state.remove(&address);
         Ok(None)
     }
-    fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    fn mask(&mut self, address: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
     }
@@ -518,15 +518,15 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
-    pub fn get(&mut self, key: &TrieKey) -> Option<&[u8]> {
+    pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
         self.untyped.get(key.into_nibbles())
     }
-    pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
+    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self.get(&key).map(Vec::from);
         self.untyped.insert(key.into_nibbles(), value)?;
         Ok(prev)
     }
-    pub fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+    pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), hash)?;
         Ok(())
     }
@@ -536,17 +536,17 @@ impl StorageTrie {
     pub const fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.untyped
     }
-    pub fn reporting_remove(&mut self, key: TrieKey) -> anyhow::Result<Option<TrieKey>> {
+    pub fn reporting_remove(&mut self, key: MptKey) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(&mut self.untyped, key)
     }
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
     }
     /// _Hash out_ the parts of the trie that aren't in `paths`.
-    pub fn mask(&mut self, paths: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    pub fn mask(&mut self, paths: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
-            paths.into_iter().map(TrieKey::into_nibbles),
+            paths.into_iter().map(MptKey::into_nibbles),
         )?;
         Ok(())
     }
@@ -588,8 +588,8 @@ where
             account: AccountRlp,
         ) -> anyhow::Result<Option<AccountRlp>>;
         fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-        fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
-        fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+        fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>>;
+        fn mask(&mut self, address: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()>;
         fn root(&self) -> H256;
     }
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
@@ -604,18 +604,18 @@ where
 /// plonky2. Returns the key to the remaining child if a collapse occurred.
 fn delete_node_and_report_remaining_key_if_branch_collapsed(
     trie: &mut HashedPartialTrie,
-    key: TrieKey,
-) -> anyhow::Result<Option<TrieKey>> {
+    key: MptKey,
+) -> anyhow::Result<Option<MptKey>> {
     let old_trace = get_trie_trace(trie, key);
     trie.delete(key.into_nibbles())?;
     let new_trace = get_trie_trace(trie, key);
     Ok(
         node_deletion_resulted_in_a_branch_collapse(&old_trace, &new_trace)
-            .map(TrieKey::from_nibbles),
+            .map(MptKey::from_nibbles),
     )
 }
 
-fn get_trie_trace(trie: &HashedPartialTrie, k: TrieKey) -> mpt_trie::utils::TriePath {
+fn get_trie_trace(trie: &HashedPartialTrie, k: MptKey) -> mpt_trie::utils::TriePath {
     mpt_trie::special_query::path_for_query(trie, k.into_nibbles(), true).collect()
 }
 
