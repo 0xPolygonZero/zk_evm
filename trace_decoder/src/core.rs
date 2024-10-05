@@ -20,7 +20,10 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
-use crate::{observer::Observer, typed_mpt::StateSmt};
+use crate::{
+    observer::{DummyObserver, Observer},
+    typed_mpt::StateSmt,
+};
 use crate::{
     typed_mpt::{MptKey, ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -28,7 +31,7 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-/// When parsing tries, which type to deserialize as.
+/// When parsing tries from binary format, which type to deserialize as.
 #[derive(Debug)]
 pub enum WireDisposition {
     /// MPT
@@ -42,7 +45,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-    observer: &mut impl Observer<Either<StateMpt, StateSmt>>,
+    observer: &mut impl Observer<StateMpt>,
     wire_disposition: WireDisposition,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
@@ -72,16 +75,32 @@ pub fn entrypoint(
         *amt = gwei_to_wei(*amt)
     }
 
-    let batches = middle(
-        state,
-        storage,
-        batch(txn_info, batch_size_hint),
-        &mut code,
-        &b_meta,
-        ger_data,
-        withdrawals,
-        observer,
-    )?;
+    match state {
+        Either::Left(mpt) => {
+            let batches = middle(
+                mpt,
+                storage,
+                batch(txn_info, batch_size_hint),
+                &mut code,
+                &b_meta,
+                ger_data,
+                withdrawals,
+                observer,
+            )?;
+        }
+        Either::Right(smt) => {
+            let batches = middle(
+                smt,
+                storage,
+                batch(txn_info, batch_size_hint),
+                &mut code,
+                &b_meta,
+                ger_data,
+                withdrawals,
+                &mut DummyObserver::new(), // TODO(0xaatif)
+            )?;
+        }
+    }
 
     let mut running_gas_used = 0;
     Ok(batches
@@ -299,6 +318,29 @@ struct Batch<StateTrieT> {
     pub withdrawals: Vec<(Address, U256)>,
 }
 
+impl<T> Batch<T> {
+    fn map<U>(self, f: impl FnMut(T) -> U) -> Batch<U> {
+        let Self {
+            first_txn_ix,
+            gas_used,
+            contract_code,
+            byte_code,
+            before,
+            after,
+            withdrawals,
+        } = self;
+        Batch {
+            first_txn_ix,
+            gas_used,
+            contract_code,
+            byte_code,
+            before: before.map(f),
+            after,
+            withdrawals,
+        }
+    }
+}
+
 /// [`evm_arithmetization::generation::TrieInputs`],
 /// generic over state trie representation.
 #[derive(Debug)]
@@ -307,6 +349,23 @@ pub struct IntraBlockTries<StateTrieT> {
     pub storage: BTreeMap<H256, StorageTrie>,
     pub transaction: TransactionTrie,
     pub receipt: ReceiptTrie,
+}
+
+impl<T> IntraBlockTries<T> {
+    fn map<U>(self, mut f: impl FnMut(T) -> U) -> IntraBlockTries<U> {
+        let Self {
+            state,
+            storage,
+            transaction,
+            receipt,
+        } = self;
+        IntraBlockTries {
+            state: f(state),
+            storage,
+            transaction,
+            receipt,
+        }
+    }
 }
 
 /// Does the main work mentioned in the [module documentation](super).
@@ -326,7 +385,10 @@ fn middle<StateTrieT: StateTrie + Clone>(
     mut withdrawals: Vec<(Address, U256)>,
     // called with the untrimmed tries after each batch
     observer: &mut impl Observer<StateTrieT>,
-) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
+) -> anyhow::Result<Vec<Batch<StateTrieT>>>
+where
+    StateTrieT::Key: Ord + From<Address>,
+{
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
         let storage = storage_tries.entry(haddr).or_insert({
@@ -367,7 +429,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
         // but won't know the bounds until after the loop below,
         // so store that information here.
         let mut storage_masks = BTreeMap::<_, BTreeSet<MptKey>>::new();
-        let mut state_mask = BTreeSet::new();
+        let mut state_mask = BTreeSet::<StateTrieT::Key>::new();
 
         if txn_ix == 0 {
             do_pre_execution(
@@ -499,7 +561,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
-                    state_mask.insert(MptKey::from_address(addr));
+                    state_mask.insert(<StateTrieT::Key>::from(addr));
                 } else {
                     // Simple state access
 
@@ -524,7 +586,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
                         //                masking like this SHOULD be a space-saving optimization,
                         //                BUT if it's omitted, we actually get state root mismatches
-                        state_mask.insert(MptKey::from_address(addr));
+                        state_mask.insert(<StateTrieT::Key>::from(addr));
                     }
                 }
 
@@ -548,7 +610,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
             withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
-                        state_mask.insert(MptKey::from_address(*addr));
+                        state_mask.insert(<StateTrieT::Key>::from(*addr));
                         let mut acct = state_trie
                             .get_by_address(*addr)
                             .context("missing address for withdrawal")?;
@@ -607,9 +669,12 @@ fn do_pre_execution<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
-    trim_state: &mut BTreeSet<MptKey>,
+    trim_state: &mut BTreeSet<StateTrieT::Key>,
     state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    StateTrieT::Key: From<Address> + Ord,
+{
     // Ethereum mainnet: EIP-4788
     if cfg!(feature = "eth_mainnet") {
         return do_beacon_hook(
@@ -646,9 +711,12 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
-    trim_state: &mut BTreeSet<MptKey>,
+    trim_state: &mut BTreeSet<StateTrieT::Key>,
     state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    StateTrieT::Key: From<Address> + Ord,
+{
     use evm_arithmetization::testing_utils::{
         ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
         GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS, LAST_BLOCK_STORAGE_POS,
@@ -695,7 +763,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
     scalable_trim.insert(slot);
 
-    trim_state.insert(MptKey::from_address(ADDRESS_SCALABLE_L2));
+    trim_state.insert(<StateTrieT::Key>::from(ADDRESS_SCALABLE_L2));
     let mut scalable_acct = state_trie
         .get_by_address(ADDRESS_SCALABLE_L2)
         .context("missing scalable contract address")?;
@@ -721,7 +789,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
         ger_trim.insert(slot);
 
-        trim_state.insert(MptKey::from_address(GLOBAL_EXIT_ROOT_ADDRESS));
+        trim_state.insert(<StateTrieT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
         let mut ger_acct = state_trie
             .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
             .context("missing GER contract address")?;
@@ -746,9 +814,12 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     parent_beacon_block_root: H256,
-    trim_state: &mut BTreeSet<MptKey>,
+    trim_state: &mut BTreeSet<StateTrieT::Key>,
     state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    StateTrieT::Key: From<Address> + Ord,
+{
     use evm_arithmetization::testing_utils::{
         BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
     };
@@ -780,7 +851,7 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
             }
         }
     }
-    trim_state.insert(MptKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS));
+    trim_state.insert(<StateTrieT::Key>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
     let mut beacon_acct = state_trie
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context("missing beacon contract address")?;

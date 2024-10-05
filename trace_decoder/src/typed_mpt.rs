@@ -1,9 +1,10 @@
 //! Principled MPT types used in this library.
 
 use core::fmt;
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::{cmp, collections::BTreeMap, marker::PhantomData};
 
-use bitvec::{order::Msb0, view::BitView as _};
+use anyhow::ensure;
+use bitvec::{order::Msb0, slice::BitSlice, view::BitView as _};
 use copyvec::CopyVec;
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
@@ -183,8 +184,14 @@ impl MptKey {
     }
 }
 
+impl From<Address> for MptKey {
+    fn from(value: Address) -> Self {
+        Self::from_hash(keccak_hash::keccak(value))
+    }
+}
+
 #[test]
-fn key_into_hash() {
+fn mpt_key_into_hash() {
     assert_eq!(MptKey::new([]).unwrap().into_hash(), None);
     assert_eq!(
         MptKey::new(itertools::repeat_n(u4::u4!(0), 64))
@@ -192,6 +199,85 @@ fn key_into_hash() {
             .into_hash(),
         Some(H256::zero())
     )
+}
+
+/// Bounded sequence of bits,
+/// used as a key for [`StateSmt`].
+///
+/// Semantically equivalent to
+#[derive(Clone, Copy)]
+pub struct SmtKey {
+    bits: bitvec::array::BitArray<[u8; 32]>,
+    len: usize,
+}
+
+impl SmtKey {
+    fn as_bitslice(&self) -> &BitSlice<u8> {
+        self.bits.as_bitslice().get(..self.len).unwrap()
+    }
+}
+
+impl fmt::Debug for SmtKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.as_bitslice().iter().map(|it| match *it {
+                true => 1,
+                false => 0,
+            }))
+            .finish()
+    }
+}
+
+impl fmt::Display for SmtKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for bit in self.as_bitslice() {
+            f.write_str(match *bit {
+                true => "1",
+                false => "0",
+            })?
+        }
+        Ok(())
+    }
+}
+
+impl SmtKey {
+    pub fn new(components: impl IntoIterator<Item = bool>) -> anyhow::Result<Self> {
+        let mut bits = bitvec::array::BitArray::default();
+        let mut len = 0;
+        for (ix, bit) in components.into_iter().enumerate() {
+            ensure!(
+                bits.get(ix).is_some(),
+                "expected at most {} components",
+                bits.len()
+            );
+            bits.set(ix, bit);
+            len += 1
+        }
+        Ok(Self { bits, len })
+    }
+}
+
+impl From<Address> for SmtKey {
+    fn from(value: Address) -> Self {
+        todo!()
+    }
+}
+
+impl Ord for SmtKey {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.as_bitslice().cmp(other.as_bitslice())
+    }
+}
+impl PartialOrd for SmtKey {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        self.as_bitslice().partial_cmp(other.as_bitslice())
+    }
+}
+impl Eq for SmtKey {}
+impl PartialEq for SmtKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_bitslice().eq(other.as_bitslice())
+    }
 }
 
 /// Per-block, `txn_ix -> [u8]`.
@@ -286,15 +372,16 @@ impl From<ReceiptTrie> for HashedPartialTrie {
 
 /// TODO(0xaatif): document this after refactoring is done https://github.com/0xPolygonZero/zk_evm/issues/275
 pub trait StateTrie {
+    type Key;
     fn insert_by_address(
         &mut self,
         address: Address,
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>>;
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
     /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
-    fn mask(&mut self, address: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()>;
+    fn mask(&mut self, address: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
 }
@@ -339,6 +426,7 @@ impl StateMpt {
 }
 
 impl StateTrie for StateMpt {
+    type Key = MptKey;
     fn insert_by_address(
         &mut self,
         address: Address,
@@ -400,6 +488,7 @@ pub struct StateSmt {
 }
 
 impl StateTrie for StateSmt {
+    type Key = SmtKey;
     fn insert_by_address(
         &mut self,
         address: Address,
@@ -410,11 +499,11 @@ impl StateTrie for StateSmt {
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.address2state.get(&address).copied()
     }
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<SmtKey>> {
         self.address2state.remove(&address);
         Ok(None)
     }
-    fn mask(&mut self, address: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
+    fn mask(&mut self, address: impl IntoIterator<Item = SmtKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
     }
@@ -555,47 +644,6 @@ impl StorageTrie {
 impl From<StorageTrie> for HashedPartialTrie {
     fn from(value: StorageTrie) -> Self {
         value.untyped
-    }
-}
-
-macro_rules! either {
-    ($(fn $name:ident $params:tt -> $ret:ty);* $(;)?) => {
-        $(either!{ @ fn $name $params -> $ret })*
-    };
-    (@ fn $name:ident(&self $(, $var:ident : $ty:ty)* $(,)?) -> $ret:ty) => {
-        fn $name(&self $(, $var: $ty)*) -> $ret { match self {
-                Either::Left(it) => it.$name($($var),*),
-                Either::Right(it) => it.$name($($var),*),
-        }}
-    };
-    (@ fn $name:ident(&mut self $(, $var:ident : $ty:ty)* $(,)?) -> $ret:ty) => {
-        fn $name(&mut self $(, $var: $ty)*) -> $ret { match self {
-                Either::Left(it) => it.$name($($var),*),
-                Either::Right(it) => it.$name($($var),*),
-        }}
-    };
-}
-
-impl<L, R> StateTrie for Either<L, R>
-where
-    L: StateTrie,
-    R: StateTrie,
-{
-    either! {
-        fn insert_by_address(
-            &mut self,
-            address: Address,
-            account: AccountRlp,
-        ) -> anyhow::Result<Option<AccountRlp>>;
-        fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-        fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>>;
-        fn mask(&mut self, address: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()>;
-        fn root(&self) -> H256;
-    }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.as_ref()
-            .map_left(|it| it.iter())
-            .map_right(|it| it.iter())
     }
 }
 
