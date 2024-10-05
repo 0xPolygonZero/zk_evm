@@ -273,7 +273,6 @@ where
     let (arithmetic_proof, _) = prove_table!(arithmetic_stark, Table::Arithmetic);
     let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
     let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
-    let challenger_after_cpu = challenger.clone();
     let keccak_proof = if use_keccak_tables {
         Some(prove_table!(keccak_stark, Table::Keccak).0)
     } else {
@@ -284,11 +283,6 @@ where
     } else {
         None
     };
-    if !use_keccak_tables {
-        // We need to connect the challenger state of Logic and CPU tables when the
-        // Keccak tables are not in use.
-        *challenger = challenger_after_cpu;
-    }
     let (logic_proof, _) = prove_table!(logic_stark, Table::Logic);
     let (memory_proof, _) = prove_table!(memory_stark, Table::Memory);
     let (mem_before_proof, mem_before_cap) = prove_table!(mem_before_stark, Table::MemBefore);

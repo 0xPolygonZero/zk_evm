@@ -1,7 +1,6 @@
 use anyhow::{ensure, Result};
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
-use log::info;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
@@ -173,7 +172,6 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
                     &num_helpers_by_ctl,
                 )
             };
-            info!("verify table: {}", *$table);
             verify_stark_proof_with_challenges(
                 $stark,
                 stark_proof,
