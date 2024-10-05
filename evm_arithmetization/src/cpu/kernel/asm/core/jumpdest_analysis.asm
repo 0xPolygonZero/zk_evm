@@ -172,7 +172,7 @@ global write_table_if_jumpdest:
     //   + 00000001|00000010|...|00011111|00100000
     // For e.g. the first opcode, the addition will overflow iff xxxxx = 0b11111 = 0d31.
     // For the last opcode, since any PUSHXX operation is forbidden, the overflow bit is set manually.
-    // Note that since a five-bit addition will always use at most six bits, the overflow bit will always be
+    // Note that since the result of a five-bit addition will always use at most six bits, the overflow bit will always be
     // bit number 3, and all opcodes are checked in parallel without overflowing into each other.
     %add_const(0x0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20)
     %shl_const(2)
