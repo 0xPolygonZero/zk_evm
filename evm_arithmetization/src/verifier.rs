@@ -10,9 +10,7 @@ use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
 use starky::config::StarkConfig;
-use starky::cross_table_lookup::{
-    get_ctl_vars_from_proofs, verify_cross_table_lookups, CrossTableLookup,
-};
+use starky::cross_table_lookup::{verify_cross_table_lookups, CrossTableLookup, CtlCheckVars};
 use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
@@ -148,42 +146,39 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
         cross_table_lookups,
     } = all_stark;
 
-    let auxiliary_polys = core::array::from_fn(|i| {
-        all_proof.multi_proof.stark_proofs[i]
-            .as_ref()
-            .map(|proof| &proof.proof.openings.auxiliary_polys)
-            .unwrap_or(&None)
-    });
-    let auxiliary_polys_next = core::array::from_fn(|i| {
-        all_proof.multi_proof.stark_proofs[i]
-            .as_ref()
-            .map(|proof| &proof.proof.openings.auxiliary_polys_next)
-            .unwrap_or(&None)
-    });
-
-    let ctl_vars_per_table = get_ctl_vars_from_proofs::<F, C, D, NUM_TABLES>(
-        &auxiliary_polys,
-        &auxiliary_polys_next,
-        cross_table_lookups,
-        &ctl_challenges,
-        &num_lookup_columns,
-        all_stark.arithmetic_stark.constraint_degree(),
-    );
-
     let stark_proofs = &all_proof.multi_proof.stark_proofs;
 
     macro_rules! verify_table {
         ($stark:ident, $table:expr) => {
+            let stark_proof = &stark_proofs[*$table]
+                .as_ref()
+                .expect("Missing stark_proof")
+                .proof;
+            let ctl_vars = {
+                let (total_num_helpers, _, num_helpers_by_ctl) =
+                    CrossTableLookup::num_ctl_helpers_zs_all(
+                        &all_stark.cross_table_lookups,
+                        *$table,
+                        config.num_challenges,
+                        $stark.constraint_degree(),
+                    );
+                CtlCheckVars::from_proof(
+                    *$table,
+                    &stark_proof,
+                    &all_stark.cross_table_lookups,
+                    &ctl_challenges,
+                    num_lookup_columns[*$table],
+                    total_num_helpers,
+                    &num_helpers_by_ctl,
+                )
+            };
             verify_stark_proof_with_challenges(
                 $stark,
-                &stark_proofs[*$table]
-                    .as_ref()
-                    .expect("Missing stark_proof")
-                    .proof,
+                stark_proof,
                 &stark_challenges[*$table]
                     .as_ref()
                     .expect("Missing challenges"),
-                Some(&ctl_vars_per_table[*$table]),
+                Some(&ctl_vars),
                 &[],
                 config,
             )?;
