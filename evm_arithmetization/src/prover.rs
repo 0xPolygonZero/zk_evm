@@ -279,7 +279,7 @@ where
     let (keccak_proof, _) = prove_table!(keccak_stark, Table::Keccak);
     let (keccak_sponge_proof, _) = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
     if !use_keccak_tables {
-        // We need to connect the challenger state of Logic and CPU tables when the
+        // We need to connect the challenger state of CPU and Logic tables when the
         // Keccak tables are not in use.
         *challenger = challenger_after_cpu;
     }
