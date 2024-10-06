@@ -54,8 +54,8 @@ pub(crate) async fn stdio_main(
         }
     }
 
-    proof_runtime.light_proof_runtime.close().await?;
-    proof_runtime.heavy_proof_runtime.close().await?;
+    proof_runtime.light_proof.close().await?;
+    proof_runtime.heavy_proof.close().await?;
 
     if prover_config.test_only {
         info!("All proof witnesses have been generated successfully.");

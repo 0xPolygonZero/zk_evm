@@ -32,9 +32,16 @@ use crate::fs::generate_block_proof_file_name;
 use crate::ops;
 use crate::proof_types::GeneratedBlockProof;
 
+/// `ProofRuntime` represents the runtime environments used for generating
+/// different types of proofs. It contains separate runtimes for handling:
+///
+/// - `light_proof`: Typically for smaller, less resource-intensive tasks, such
+///   as aggregation.
+/// - `heavy_proof`: For larger, more computationally expensive tasks, such as
+///   STARK proof generation.
 pub struct ProofRuntime {
-    pub light_proof_runtime: Runtime,
-    pub heavy_proof_runtime: Runtime,
+    pub light_proof: Runtime,
+    pub heavy_proof: Runtime,
 }
 
 // All proving tasks are executed concurrently, which can cause issues for large
@@ -122,7 +129,7 @@ impl BlockProverInput {
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
-                    .run(&proof_runtime.heavy_proof_runtime)
+                    .run(&proof_runtime.heavy_proof)
                     .map(move |e| {
                         e.map(|p| (idx, crate::proof_types::BatchAggregatableProof::from(p)))
                     })
@@ -132,7 +139,7 @@ impl BlockProverInput {
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
             Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
-                .run(&proof_runtime.light_proof_runtime)
+                .run(&proof_runtime.light_proof)
                 .await?;
 
         if let crate::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
@@ -149,7 +156,7 @@ impl BlockProverInput {
                     prev,
                     save_inputs_on_error,
                 })
-                .run(&proof_runtime.light_proof_runtime)
+                .run(&proof_runtime.light_proof)
                 .await?;
 
             info!("Successfully proved block {block_number}");
@@ -207,7 +214,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(&proof_runtime.light_proof_runtime)
+            .run(&proof_runtime.light_proof)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;

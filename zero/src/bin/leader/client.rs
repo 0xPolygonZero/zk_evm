@@ -113,8 +113,8 @@ pub(crate) async fn client_main(
         }
     }
 
-    proof_runtime.light_proof_runtime.close().await?;
-    proof_runtime.heavy_proof_runtime.close().await?;
+    proof_runtime.light_proof.close().await?;
+    proof_runtime.heavy_proof.close().await?;
 
     if test_only {
         info!("All proof witnesses have been generated successfully.");

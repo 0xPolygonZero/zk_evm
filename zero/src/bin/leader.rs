@@ -61,12 +61,12 @@ async fn main() -> Result<()> {
         ..args.paladin
     };
 
-    let light_proof_runtime = Runtime::from_config(&light_proof_paladin_args, register()).await?;
-    let heavy_proof_runtime = Runtime::from_config(&heavy_proof_paladin_args, register()).await?;
+    let light_proof = Runtime::from_config(&light_proof_paladin_args, register()).await?;
+    let heavy_proof = Runtime::from_config(&heavy_proof_paladin_args, register()).await?;
 
     let proof_runtime = Arc::new(ProofRuntime {
-        light_proof_runtime,
-        heavy_proof_runtime,
+        light_proof,
+        heavy_proof,
     });
     let prover_config: ProverConfig = args.prover_config.into();
     if prover_config.block_pool_size == 0 {

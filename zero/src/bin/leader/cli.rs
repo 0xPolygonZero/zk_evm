@@ -31,6 +31,14 @@ pub(crate) struct Cli {
     pub(crate) worker_run_mode: WorkerRunMode,
 }
 
+/// Defines the mode for worker setup in terms of job allocation:
+///
+/// - `Affinity`: Workers are assigned specific types of jobs based on their
+///   capabilities, distinguishing between heavy and light jobs.
+/// - `Default`: No job distinction is made—any worker can handle any type of
+///   job, whether heavy or light.
+///
+/// This enum allows for flexible worker configuration based on workload needs.
 #[derive(ValueEnum, Clone, PartialEq, Debug)]
 pub enum WorkerRunMode {
     Affinity,
