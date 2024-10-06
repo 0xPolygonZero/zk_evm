@@ -244,7 +244,7 @@ impl SmtKey {
         Ok(Self { bits, len })
     }
 
-    fn into_bits(self) -> smt_trie::bits::Bits {
+    pub fn into_smt_bits(self) -> smt_trie::bits::Bits {
         let mut bits = smt_trie::bits::Bits::default();
         for bit in self.as_bitslice() {
             bits.push_bit(*bit)
@@ -522,7 +522,7 @@ impl StateSmt {
         } = self;
         let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
         for (k, v) in hashed_out {
-            smt.set_hash(k.into_bits(), conv_hash::eth2smt(*v));
+            smt.set_hash(k.into_smt_bits(), conv_hash::eth2smt(*v));
         }
         for (
             addr,

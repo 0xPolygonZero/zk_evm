@@ -12,7 +12,7 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateMpt, StateTrie as _, StorageTrie, MptKey};
+use crate::typed_mpt::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone)]
@@ -380,6 +380,8 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 
 #[test]
 fn test_tries() {
+    use crate::typed_mpt::StateTrie as _;
+
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/zero_jerigon.json"))
             .unwrap()

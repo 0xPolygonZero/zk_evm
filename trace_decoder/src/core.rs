@@ -241,11 +241,8 @@ fn start(
                     )
                 }
                 WireDisposition::Type2 => {
-                    let crate::type2::Frontend {
-                        trie,
-                        code,
-                        collation,
-                    } = crate::type2::frontend(instructions)?;
+                    let crate::type2::Frontend { trie, code } =
+                        crate::type2::frontend(instructions)?;
 
                     todo!()
                 }

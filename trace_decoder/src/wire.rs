@@ -82,8 +82,8 @@ pub enum Instruction {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SmtLeaf {
     pub node_type: SmtLeafType,
-    pub address: NonEmpty<Vec<u8>>,
-    pub value: NonEmpty<Vec<u8>>,
+    pub address: NonEmpty<Vec<u8>>, // TODO(0xaatif): this should be a fixed length
+    pub value: NonEmpty<Vec<u8>>,   // TODO(0xaatif): this should be a fixed length
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -91,7 +91,7 @@ pub enum SmtLeafType {
     Balance,
     Nonce,
     Code,
-    Storage(NonEmpty<Vec<u8>>),
+    Storage(NonEmpty<Vec<u8>>), // TODO(0xaatif): this should be a fixed length
     CodeLength,
 }
 
