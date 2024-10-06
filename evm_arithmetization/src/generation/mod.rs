@@ -585,8 +585,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
-    let use_keccak_tables =
-        !state.traces.keccak_inputs.is_empty() || !state.traces.keccak_sponge_ops.is_empty();
+    let use_keccak_tables = !state.traces.keccak_inputs.is_empty();
 
     let tables = timed!(
         timing,

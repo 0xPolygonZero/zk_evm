@@ -1919,25 +1919,23 @@ where
             let table_circuits = &self.by_table[table];
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
                 // generate and set a dummy `index_verifier_data` and `proof_with_pis`
-                let index_verifier_data = table_circuits
-                    .by_stark_size
-                    .keys()
-                    .min()
-                    .expect("No valid size in shrinking circuits");
+                let index_verifier_data =
+                    table_circuits.by_stark_size.keys().min().ok_or_else(|| {
+                        anyhow::format_err!("No valid size in shrinking circuits")
+                    })?;
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(*index_verifier_data),
                 );
-                let common_data = &table_circuits
+                let table_circuit = table_circuits
                     .by_stark_size
                     .get(index_verifier_data)
-                    .expect("No valid size in shrinking circuits")
+                    .ok_or_else(|| anyhow::format_err!("No valid size in shrinking circuits"))?
                     .shrinking_wrappers
                     .last()
-                    .expect("No shrinking circuits")
-                    .circuit
-                    .common;
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
+                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?;
+                let dummy_circuit: CircuitData<F, C, D> =
+                    dummy_circuit(&table_circuit.circuit.common);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");
@@ -2114,7 +2112,7 @@ where
                 let common_date = &table_circuit
                     .shrinking_wrappers
                     .last()
-                    .expect("No shrinking circuits")
+                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?
                     .circuit
                     .common;
                 let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
