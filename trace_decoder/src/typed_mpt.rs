@@ -38,14 +38,13 @@ impl<T> TypedMpt<T> {
     }
     /// Returns an [`Error`] if the `key` crosses into a part of the trie that
     /// isn't hydrated.
-    fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<Option<T>>
+    fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
-        let prev = self.get(key);
         self.inner
             .insert(key.into_nibbles(), rlp::encode(&value).to_vec())?;
-        Ok(prev)
+        Ok(())
     }
     /// Note that this returns [`None`] if `key` crosses into a part of the
     /// trie that isn't hydrated.
@@ -370,11 +369,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
 /// TODO(0xaatif): document this after refactoring is done https://github.com/0xPolygonZero/zk_evm/issues/275
 pub trait StateTrie {
     type Key;
-    fn insert_by_address(
-        &mut self,
-        address: Address,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>>;
+    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
     /// _Hash out_ parts of the trie that aren't in `addresses`.
@@ -409,7 +404,7 @@ impl StateMpt {
         &mut self,
         key: H256,
         account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
+    ) -> anyhow::Result<()> {
         self.typed.insert(MptKey::from_hash(key), account)
     }
     pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
@@ -424,11 +419,7 @@ impl StateMpt {
 
 impl StateTrie for StateMpt {
     type Key = MptKey;
-    fn insert_by_address(
-        &mut self,
-        address: Address,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
+    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
         #[expect(deprecated)]
         self.insert_by_hashed_address(keccak_hash::keccak(address), account)
     }
@@ -486,12 +477,9 @@ pub struct StateSmt {
 
 impl StateTrie for StateSmt {
     type Key = SmtKey;
-    fn insert_by_address(
-        &mut self,
-        address: Address,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
-        Ok(self.address2state.insert(address, account))
+    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
+        self.address2state.insert(address, account);
+        Ok(())
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.address2state.get(&address).copied()
