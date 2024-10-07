@@ -96,7 +96,8 @@ jobs:
   test_zero_bin:
     name: Test zero_bin
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
