@@ -23,7 +23,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::cyclic_base_proof;
+use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -1916,30 +1916,57 @@ where
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-            let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
             let table_circuits = &self.by_table[table];
-            let shrunk_proof = table_circuits
-                .by_stark_size
-                .get(&original_degree_bits)
-                .ok_or_else(|| {
-                    anyhow!(format!(
-                        "Missing preprocessed circuits for {:?} table with size {}.",
-                        Table::all()[table],
-                        original_degree_bits,
-                    ))
-                })?
-                .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            let index_verifier_data = table_circuits
-                .by_stark_size
-                .keys()
-                .position(|&size| size == original_degree_bits)
-                .unwrap();
-            root_inputs.set_target(
-                self.root.index_verifier_data[table],
-                F::from_canonical_usize(index_verifier_data),
-            );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
+                // generate and set a dummy `index_verifier_data` and `proof_with_pis`
+                let index_verifier_data =
+                    table_circuits.by_stark_size.keys().min().ok_or_else(|| {
+                        anyhow::format_err!("No valid size in shrinking circuits")
+                    })?;
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(*index_verifier_data),
+                );
+                let table_circuit = table_circuits
+                    .by_stark_size
+                    .get(index_verifier_data)
+                    .ok_or_else(|| anyhow::format_err!("No valid size in shrinking circuits"))?
+                    .shrinking_wrappers
+                    .last()
+                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?;
+                let dummy_circuit: CircuitData<F, C, D> =
+                    dummy_circuit(&table_circuit.circuit.common);
+                let dummy_pis = HashMap::new();
+                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
+            } else {
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
+                let shrunk_proof = table_circuits
+                    .by_stark_size
+                    .get(&original_degree_bits)
+                    .ok_or_else(|| {
+                        anyhow!(format!(
+                            "Missing preprocessed circuits for {:?} table with size {}.",
+                            Table::all()[table],
+                            original_degree_bits,
+                        ))
+                    })?
+                    .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                let index_verifier_data = table_circuits
+                    .by_stark_size
+                    .keys()
+                    .position(|&size| size == original_degree_bits)
+                    .unwrap();
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(index_verifier_data),
+                );
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            }
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -1958,8 +1985,7 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        // TODO(sdeng): Set to false when this segment contains no Keccak operations.
-        root_inputs.set_bool_target(self.root.use_keccak_tables, true);
+        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2033,16 +2059,36 @@ where
 
         for table in 0..NUM_TABLES {
             let (table_circuit, index_verifier_data) = &table_circuits[table];
+            if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_u8(*index_verifier_data),
+                );
+                // generate and set a dummy `proof_with_pis`
+                let common_data = &table_circuit
+                    .shrinking_wrappers
+                    .last()
+                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?
+                    .circuit
+                    .common;
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
+                let dummy_pis = HashMap::new();
+                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
+            } else {
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
 
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-
-            let shrunk_proof =
-                table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            root_inputs.set_target(
-                self.root.index_verifier_data[table],
-                F::from_canonical_u8(*index_verifier_data),
-            );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+                let shrunk_proof =
+                    table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_u8(*index_verifier_data),
+                );
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            }
 
             check_abort_signal(abort_signal.clone())?;
         }
@@ -2061,8 +2107,7 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        // TODO(sdeng): Set to false when this segment contains no Keccak operations.
-        root_inputs.set_bool_target(self.root.use_keccak_tables, true);
+        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -3103,7 +3148,6 @@ mod tests {
     type C = PoseidonGoldilocksConfig;
 
     #[test]
-    #[ignore]
     fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
         init_logger();
 

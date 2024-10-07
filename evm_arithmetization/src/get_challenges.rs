@@ -254,6 +254,7 @@ pub mod testing {
     use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet};
     use starky::proof::StarkProofChallenges;
 
+    use crate::all_stark::KECCAK_TABLES_INDICES;
     use crate::get_challenges::observe_public_values;
     use crate::proof::*;
     use crate::witness::errors::ProgramError;
@@ -262,7 +263,7 @@ pub mod testing {
     /// Randomness for all STARKs.
     pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
         /// Randomness used in each STARK proof.
-        pub stark_challenges: [StarkProofChallenges<F, D>; NUM_TABLES],
+        pub stark_challenges: [Option<StarkProofChallenges<F, D>>; NUM_TABLES],
         /// Randomness used for cross-table lookups. It is shared by all STARKs.
         pub ctl_challenges: GrandProductChallengeSet<F>,
     }
@@ -277,8 +278,20 @@ pub mod testing {
 
             let stark_proofs = &self.multi_proof.stark_proofs;
 
-            for proof in stark_proofs {
-                challenger.observe_cap(&proof.proof.trace_cap);
+            for (i, proof) in stark_proofs.iter().enumerate() {
+                if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
+                    // Observe zero merkle caps when skipping Keccak tables.
+                    let zero_merkle_cap = proof
+                        .proof
+                        .trace_cap
+                        .flatten()
+                        .iter()
+                        .map(|_| F::ZERO)
+                        .collect::<Vec<F>>();
+                    challenger.observe_elements(&zero_merkle_cap);
+                } else {
+                    challenger.observe_cap(&proof.proof.trace_cap);
+                }
             }
 
             observe_public_values::<F, C, D>(&mut challenger, &self.public_values)?;
@@ -288,13 +301,17 @@ pub mod testing {
 
             Ok(AllProofChallenges {
                 stark_challenges: core::array::from_fn(|i| {
-                    challenger.compact();
-                    stark_proofs[i].proof.get_challenges(
-                        &mut challenger,
-                        Some(&ctl_challenges),
-                        true,
-                        config,
-                    )
+                    if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
+                        None
+                    } else {
+                        challenger.compact();
+                        Some(stark_proofs[i].proof.get_challenges(
+                            &mut challenger,
+                            Some(&ctl_challenges),
+                            true,
+                            config,
+                        ))
+                    }
                 }),
                 ctl_challenges,
             })
