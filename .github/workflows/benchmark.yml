@@ -6,7 +6,9 @@ on:
   workflow_dispatch:
     branches:
       - "**"
-
+  pull_request:
+    branches:
+      - "**"
 
 env:
   BENCHMARK_WITNESS: artifacts/witness_b19807080.json
@@ -25,6 +27,7 @@ jobs:
       - name: Build the project
         run: |
           RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
+          sudo echo 0 > /proc/sys/kernel/perf_event_paranoid
 
       - name: Download previous results
         uses: dawidd6/action-download-artifact@v6
@@ -40,8 +43,12 @@ jobs:
         run: |  
           echo "Benchmarking proving with $BENCHMARK_WITNESS"
           ./scripts/benchmark_input.sh $BENCHMARK_WITNESS | tee benchmark_output.log
-          MEASURED_PROVING_TIME_SEC=`cat benchmark_output.log | grep 'Proving duration:' | tail -1 | awk '{ print int($3)}'`
-          printf '%s      sec: %10s    %s\n' `date --utc +%y-%m-%d-%H:%M:%S` $MEASURED_PROVING_TIME_SEC $BENCHMARK_WITNESS >> proving_benchmark_results.txt
+          MEASURED_PROVING_TIME_SEC=`cat benchmark_output.log | grep 'Proving duration:' | tail -1 | awk '{ print $3}'`
+          PERF_TIME=`cat output.log | grep "seconds time elapsed" |  tail -1 | awk '{ print ($1)}'`
+          PERF_USER_TIME=`cat output.log | grep "seconds user" |  tail -1 | awk '{ print ($1)}'`
+          PERF_SYS_TIME=`cat output.log | grep "seconds sys" |  tail -1 | awk '{ print ($1)}'`
+          printf 'TIME OF TEST          RUN ID           WALL CLOCK TIME(s)   PERF TIME(s)      PERF USER TIME(s)  PERF SYS TIME(s)  WITNESS FILE\n' > proving_benchmark_results.txt
+          printf '%12s     %-12s     %-12s         %-12s      %-12s      %-12s    %-s\n' `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME $PERF_SYS_TIME $BENCHMARK_WITNESS >> proving_benchmark_results.txt
 
       - name: Upload new results
         uses: actions/upload-artifact@v4

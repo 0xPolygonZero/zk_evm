@@ -39,7 +39,7 @@ if [[ $INPUT_FILE == "" ]]; then
 fi
 
 start_time=$(date +%s%N)
-"${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy monolithic --block-batch-size $BLOCK_BATCH_SIZE \
+perf stat -e cycles "${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy monolithic --block-batch-size $BLOCK_BATCH_SIZE \
  --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
 end_time=$(date +%s%N)
 
