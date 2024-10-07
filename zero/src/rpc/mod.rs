@@ -46,8 +46,7 @@ pub enum RpcType {
 pub enum JumpdestSrc {
     ProverSimulation,
     ClientFetchedStructlogs,
-    ServerFetchedStructlogs, // later
-    Serverside,              // later
+    Serverside, // later
 }
 
 /// Obtain the prover input for one block

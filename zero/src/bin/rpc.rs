@@ -38,7 +38,7 @@ struct RpcToolConfig {
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
     /// The source of jumpdest tables.
-    #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "prover-simulation"), ("rpc_type", "native", "client-fetched-structlogs")], required = false)]
+    #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "client-fetched-structlogs"), ("rpc_type", "native", "client-fetched-structlogs")], required = false)]
     jumpdest_src: JumpdestSrc,
     /// Backoff in milliseconds for retry requests.
     #[arg(long, default_value_t = 0)]
