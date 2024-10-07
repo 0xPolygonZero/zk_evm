@@ -12,7 +12,7 @@ use nunny::NonEmpty;
 use stackstack::Stack;
 
 use crate::{
-    typed_mpt::{SmtKey, StateSmt},
+    tries::{SmtKey, StateSmt},
     wire::{Instruction, SmtLeaf, SmtLeafType},
 };
 

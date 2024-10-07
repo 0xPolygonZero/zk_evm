@@ -21,10 +21,10 @@ use zk_evm_common::gwei_to_wei;
 
 use crate::{
     observer::{DummyObserver, Observer},
-    typed_mpt::StateSmt,
+    tries::StateSmt,
 };
 use crate::{
-    typed_mpt::{MptKey, ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie},
+    tries::{MptKey, ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,

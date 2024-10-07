@@ -56,9 +56,9 @@ mod interface;
 
 pub use interface::*;
 
+mod tries;
 mod type1;
 mod type2;
-mod typed_mpt;
 mod wire;
 
 pub use core::{entrypoint, WireDisposition};

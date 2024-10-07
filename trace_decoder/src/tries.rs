@@ -1,4 +1,4 @@
-//! Principled MPT types used in this library.
+//! Principled trie types and abstractions used in this library.
 
 use core::fmt;
 use std::{cmp, collections::BTreeMap, marker::PhantomData};
