@@ -57,8 +57,8 @@ global update_scalable_l1blockhash:
     // stack: retdest
     PROVER_INPUT(ger)
     // stack: l1blockhash?, retdest
+    DUP1 %eq_const(@U256_MAX) %jumpi(skip_and_exit)
     PUSH @SEGMENT_KERNEL_GENERAL
-    DUP2 %eq_const(@U256_MAX) %jumpi(skip_and_exit)
     // stack: addr, l1blockhash, retdest
     PUSH @GLOBAL_EXIT_ROOT_STORAGE_POS
     PROVER_INPUT(ger)
@@ -82,8 +82,8 @@ global update_scalable_l1blockhash:
     JUMP
 
 skip_and_exit:
-    // stack: garbage, null, retdest
-    %pop2
+    // stack: null, retdest
+    POP
     JUMP
 
 global update_scalable_timestamp:

@@ -49,12 +49,11 @@ bn_add_return:
     // Store the result (x, y) to the parent's return data using `mstore_unpacking`.
     %mstore_parent_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 64)
     %mload_context_metadata(@CTX_METADATA_PARENT_CONTEXT)
-    %stack (parent_ctx, x, y) -> (parent_ctx, @SEGMENT_RETURNDATA, x, parent_ctx, y)
+    %stack (parent_ctx, x, y) -> (parent_ctx, @SEGMENT_RETURNDATA, x, y)
     %build_address_no_offset
+    // stack: addr_x, x, y, base_addr, kexit_info
     MSTORE_32BYTES_32
-    POP
-    %stack (parent_ctx, y) -> (parent_ctx, @SEGMENT_RETURNDATA, 32, y)
-    %build_address
+    // stack: addr_y = addr_x + 32, y, base_addr, kexit_info
     MSTORE_32BYTES_32
     // stack: addr, base_addr, kexit_info
     POP
