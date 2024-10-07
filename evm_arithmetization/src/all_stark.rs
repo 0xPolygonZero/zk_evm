@@ -4,10 +4,8 @@ use std::iter;
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use starky::config::StarkConfig;
 use starky::cross_table_lookup::{CrossTableLookup, TableIdx, TableWithColumns};
 use starky::evaluation_frame::StarkFrame;
-use starky::stark::Stark;
 
 use crate::arithmetic::arithmetic_stark;
 use crate::arithmetic::arithmetic_stark::ArithmeticStark;
@@ -66,24 +64,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
             poseidon_stark: PoseidonStark::default(),
             cross_table_lookups: all_cross_table_lookups(),
         }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> AllStark<F, D> {
-    pub(crate) fn num_lookups_helper_columns(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
-        [
-            self.arithmetic_stark.num_lookup_helper_columns(config),
-            self.byte_packing_stark.num_lookup_helper_columns(config),
-            self.cpu_stark.num_lookup_helper_columns(config),
-            self.keccak_stark.num_lookup_helper_columns(config),
-            self.keccak_sponge_stark.num_lookup_helper_columns(config),
-            self.logic_stark.num_lookup_helper_columns(config),
-            self.memory_stark.num_lookup_helper_columns(config),
-            self.mem_before_stark.num_lookup_helper_columns(config),
-            self.mem_after_stark.num_lookup_helper_columns(config),
-            #[cfg(feature = "cdk_erigon")]
-            self.poseidon_stark.num_lookup_helper_columns(config),
-        ]
     }
 }
 

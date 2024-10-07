@@ -3,10 +3,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use starky::config::StarkConfig;
-use starky::lookup::get_grand_product_challenge_set;
 
-use crate::all_stark::KECCAK_TABLES_INDICES;
 use crate::proof::*;
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -248,52 +245,76 @@ pub(crate) fn observe_public_values_target<
     observe_burn_addr_target::<F, C, D>(challenger, public_values.burn_addr.clone());
 }
 
-impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
-    /// Computes all Fiat-Shamir challenges used in the STARK proof.
-    pub(crate) fn get_challenges(
-        &self,
-        config: &StarkConfig,
-    ) -> Result<AllProofChallenges<F, D>, ProgramError> {
-        let mut challenger = Challenger::<F, C::Hasher>::new();
+pub mod testing {
+    use plonky2::field::extension::Extendable;
+    use plonky2::hash::hash_types::RichField;
+    use plonky2::iop::challenger::Challenger;
+    use plonky2::plonk::config::GenericConfig;
+    use starky::config::StarkConfig;
+    use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet};
+    use starky::proof::StarkProofChallenges;
 
-        let stark_proofs = &self.multi_proof.stark_proofs;
+    use crate::all_stark::KECCAK_TABLES_INDICES;
+    use crate::get_challenges::observe_public_values;
+    use crate::proof::*;
+    use crate::witness::errors::ProgramError;
+    use crate::NUM_TABLES;
 
-        for (i, proof) in stark_proofs.iter().enumerate() {
-            if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
-                // Observe zero merkle caps when skipping Keccak tables.
-                let zero_merkle_cap = proof
-                    .proof
-                    .trace_cap
-                    .flatten()
-                    .iter()
-                    .map(|_| F::ZERO)
-                    .collect::<Vec<F>>();
-                challenger.observe_elements(&zero_merkle_cap);
-            } else {
-                challenger.observe_cap(&proof.proof.trace_cap);
-            }
-        }
+    /// Randomness for all STARKs.
+    pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
+        /// Randomness used in each STARK proof.
+        pub stark_challenges: [Option<StarkProofChallenges<F, D>>; NUM_TABLES],
+        /// Randomness used for cross-table lookups. It is shared by all STARKs.
+        pub ctl_challenges: GrandProductChallengeSet<F>,
+    }
 
-        observe_public_values::<F, C, D>(&mut challenger, &self.public_values)?;
+    impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
+        /// Computes all Fiat-Shamir challenges used in the STARK proof.
+        pub(crate) fn get_challenges(
+            &self,
+            config: &StarkConfig,
+        ) -> Result<AllProofChallenges<F, D>, ProgramError> {
+            let mut challenger = Challenger::<F, C::Hasher>::new();
 
-        let ctl_challenges =
-            get_grand_product_challenge_set(&mut challenger, config.num_challenges);
+            let stark_proofs = &self.multi_proof.stark_proofs;
 
-        Ok(AllProofChallenges {
-            stark_challenges: core::array::from_fn(|i| {
+            for (i, proof) in stark_proofs.iter().enumerate() {
                 if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
-                    None
+                    // Observe zero merkle caps when skipping Keccak tables.
+                    let zero_merkle_cap = proof
+                        .proof
+                        .trace_cap
+                        .flatten()
+                        .iter()
+                        .map(|_| F::ZERO)
+                        .collect::<Vec<F>>();
+                    challenger.observe_elements(&zero_merkle_cap);
                 } else {
-                    challenger.compact();
-                    Some(stark_proofs[i].proof.get_challenges(
-                        &mut challenger,
-                        Some(&ctl_challenges),
-                        true,
-                        config,
-                    ))
+                    challenger.observe_cap(&proof.proof.trace_cap);
                 }
-            }),
-            ctl_challenges,
-        })
+            }
+
+            observe_public_values::<F, C, D>(&mut challenger, &self.public_values)?;
+
+            let ctl_challenges =
+                get_grand_product_challenge_set(&mut challenger, config.num_challenges);
+
+            Ok(AllProofChallenges {
+                stark_challenges: core::array::from_fn(|i| {
+                    if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
+                        None
+                    } else {
+                        challenger.compact();
+                        Some(stark_proofs[i].proof.get_challenges(
+                            &mut challenger,
+                            Some(&ctl_challenges),
+                            true,
+                            config,
+                        ))
+                    }
+                }),
+                ctl_challenges,
+            })
+        }
     }
 }

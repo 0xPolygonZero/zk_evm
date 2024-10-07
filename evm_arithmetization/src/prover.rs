@@ -22,10 +22,10 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
+use crate::GenerationSegmentData;
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(

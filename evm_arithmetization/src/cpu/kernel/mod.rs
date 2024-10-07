@@ -6,7 +6,7 @@ mod cost_estimator;
 pub(crate) mod keccak_util;
 pub mod opcodes;
 mod optimizer;
-mod parser;
+pub mod parser;
 pub mod stack;
 mod utils;
 
