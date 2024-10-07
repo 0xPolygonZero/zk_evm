@@ -28,6 +28,7 @@ jobs:
         run: |
           RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
           sudo sysctl kernel.perf_event_paranoid=0
+#          printf 'TIME OF TEST          RUN ID           WALL CLOCK TIME(s)          PERF WALL TIME(s)       PERF USER TIME(s)       PERF SYS TIME(s)        WITNESS FILE\n' > proving_benchmark_results.txt
 
       - name: Download previous results
         uses: dawidd6/action-download-artifact@v6
@@ -47,7 +48,6 @@ jobs:
           PERF_TIME=`cat output.log | grep "seconds time elapsed" |  tail -1 | awk '{ print ($1)}'`
           PERF_USER_TIME=`cat output.log | grep "seconds user" |  tail -1 | awk '{ print ($1)}'`
           PERF_SYS_TIME=`cat output.log | grep "seconds sys" |  tail -1 | awk '{ print ($1)}'`
-          printf 'TIME OF TEST          RUN ID           WALL CLOCK TIME(s)          PERF WALL TIME(s)       PERF USER TIME(s)       PERF SYS TIME(s)        WITNESS FILE\n' > proving_benchmark_results.txt
           printf '%12s     %-12s     %-24s    %-20s    %-20s    %-20s    %-s\n' `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} \
                $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME $PERF_SYS_TIME $BENCHMARK_WITNESS >> proving_benchmark_results.txt
 
@@ -55,7 +55,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: proving_benchmark
-          path: ./proving_benchmark_results.txt
+          path: | 
+            ./proving_benchmark_results.txt
+            ./output.log
           retention-days: 90
           overwrite: true
 
