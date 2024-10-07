@@ -323,8 +323,10 @@ process_message_txn_after_call_contd:
 
 process_message_txn_fail:
     // stack: leftover_gas, new_ctx, retdest, success, leftover_gas
-    // Transfer value back to the caller.
+
+    // Revert txn execution, then transfer value back to the caller.
     %revert_checkpoint
+
     %mload_txn_field(@TXN_FIELD_VALUE) ISZERO %jumpi(process_message_txn_after_call_contd)
     %mload_txn_field(@TXN_FIELD_VALUE)
     %mload_txn_field(@TXN_FIELD_ORIGIN)
