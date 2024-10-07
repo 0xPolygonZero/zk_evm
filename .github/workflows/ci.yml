@@ -45,7 +45,7 @@ jobs:
   test_trace_decoder:
     name: Test trace_decoder
     runs-on: zero-ci
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
       RUST_LOG: info
       CARGO_INCREMENTAL: 1
@@ -72,7 +72,7 @@ jobs:
   test_evm_arithmetization:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
@@ -96,7 +96,7 @@ jobs:
   test_zero_bin:
     name: Test zero_bin
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
@@ -122,7 +122,7 @@ jobs:
   test_zk_evm_proc_macro:
     name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
@@ -146,7 +146,7 @@ jobs:
   simple_proof_regular:
     name: Execute bash script to generate and verify a proof for a small block.
     runs-on: zero-ci
-
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -157,7 +157,7 @@ jobs:
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
     runs-on: zero-ci
-
+    timeout-minutes: 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -168,7 +168,7 @@ jobs:
   multi_blocks_proof_regular:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
     runs-on: zero-ci
-
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v3

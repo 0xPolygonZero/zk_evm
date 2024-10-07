@@ -19,6 +19,7 @@ env:
 jobs:
   clippy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
@@ -26,6 +27,7 @@ jobs:
       - run: cargo clippy --all-targets --no-default-features --features cdk_erigon -- -D warnings
   udeps:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
@@ -36,18 +38,21 @@ jobs:
       - run: cargo udeps --quiet --tests --benches --examples
   rustdoc:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
       - run: cargo doc --all --no-deps
   cargo-fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
       - run: cargo fmt --check
   taplo-fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
