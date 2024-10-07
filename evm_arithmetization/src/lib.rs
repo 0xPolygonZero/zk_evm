@@ -266,7 +266,6 @@ pub mod memory;
 pub mod memory_continuation;
 #[cfg(feature = "cdk_erigon")]
 pub mod poseidon;
-pub mod structlog;
 
 // Proving system components
 pub mod all_stark;
@@ -294,3 +293,4 @@ pub use starky::config::StarkConfig;
 
 pub use crate::all_stark::{AllStark, NUM_TABLES};
 pub use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
+pub mod structlog;
