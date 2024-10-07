@@ -2,8 +2,8 @@ use std::{collections::HashSet, str::FromStr};
 
 use ethereum_types::U256;
 use itertools::Itertools;
-use pest::iterators::Pair;
-use pest::Parser;
+use pest::iterators::{Pair, Pairs};
+use pest::{Parser, Span};
 
 use super::ast::{BytesTarget, StackPlaceholder};
 use crate::cpu::kernel::ast::{File, Item, PushTarget, StackReplacement};
@@ -11,18 +11,54 @@ use crate::cpu::kernel::ast::{File, Item, PushTarget, StackReplacement};
 /// Parses EVM assembly code.
 #[derive(pest_derive::Parser)]
 #[grammar = "cpu/kernel/evm_asm.pest"]
-struct AsmParser;
+pub struct AsmParser;
 
 pub(crate) fn parse(s: &str, active_features: &HashSet<&str>) -> File {
-    let file = AsmParser::parse(Rule::file, s)
+    let s = strip_comments(s);
+    let file = AsmParser::parse(Rule::file, &s)
         .expect("Parsing failed")
         .next()
         .unwrap();
+
     let body = file
         .into_inner()
         .map(|i| parse_item(i, active_features))
         .collect();
     File { body }
+}
+
+/// - We want one grammar to parse from.
+/// - We want a comment-aware parse tree to provide syntax highlighting.
+/// - The rest of the parsing code does not handle [`Rule::COMMENT`]s, and it
+///   would be a pain to add.
+/// - The AST doesn't track source locations, so changing positions doesn't
+///   matter.
+///
+/// So just strip before parsing.
+fn strip_comments(s: &str) -> String {
+    return match AsmParser::parse(Rule::file, s) {
+        Ok(tree) => {
+            let mut spans = vec![];
+            comment_spans(&mut spans, tree);
+            spans.sort_by_key(|it| std::cmp::Reverse(it.start()));
+
+            let mut s = String::from(s);
+            for span in spans {
+                s.replace_range(span.start()..span.end(), "");
+            }
+            s
+        }
+        Err(_) => String::from(s), // let the rest of the compiler bail
+    };
+
+    fn comment_spans<'a>(spans: &mut Vec<Span<'a>>, pairs: Pairs<'a, Rule>) {
+        for pair in pairs {
+            if let Rule::COMMENT = pair.as_rule() {
+                spans.push(pair.as_span());
+            }
+            comment_spans(spans, pair.into_inner());
+        }
+    }
 }
 
 fn parse_item(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {

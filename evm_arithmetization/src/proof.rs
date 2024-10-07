@@ -64,14 +64,6 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
     }
 }
 
-/// Randomness for all STARKs.
-pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
-    /// Randomness used in each STARK proof.
-    pub stark_challenges: [Option<StarkProofChallenges<F, D>>; NUM_TABLES],
-    /// Randomness used for cross-table lookups. It is shared by all STARKs.
-    pub ctl_challenges: GrandProductChallengeSet<F>,
-}
-
 /// Memory values which are public.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(bound = "")]

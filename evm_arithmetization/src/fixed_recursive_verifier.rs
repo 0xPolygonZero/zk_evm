@@ -1943,7 +1943,7 @@ where
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
-                    .as_ref()
+                .as_ref()
                     .expect("Unable to get stark proof");
                 let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
                 let shrunk_proof = table_circuits
@@ -1999,48 +1999,6 @@ where
                 intern: root_proof,
             },
         })
-    }
-
-    /// Returns a proof for each segment that is part of a full transaction
-    /// proof.
-    pub fn prove_all_segments(
-        &self,
-        all_stark: &AllStark<F, D>,
-        config: &StarkConfig,
-        generation_inputs: GenerationInputs<F>,
-        max_cpu_len_log: usize,
-        timing: &mut TimingTree,
-        abort_signal: Option<Arc<AtomicBool>>,
-    ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        features_check(&generation_inputs.clone().trim());
-
-        let segment_iterator =
-            SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
-
-        let mut proofs = vec![];
-
-        for segment_run in segment_iterator {
-            let (_, mut next_data) = segment_run?;
-            let proof = self.prove_segment(
-                all_stark,
-                config,
-                generation_inputs.trim(),
-                &mut next_data,
-                timing,
-                abort_signal.clone(),
-            )?;
-            proofs.push(proof);
-        }
-
-        // Since aggregations require at least two segment proofs, add a dummy proof if
-        // there is only one proof.
-        if proofs.len() == 1 {
-            let mut first_proof = proofs[0].clone();
-            first_proof.is_dummy = true;
-            proofs.push(first_proof);
-        }
-
-        Ok(proofs)
     }
 
     /// From an initial set of STARK proofs passed with their associated
@@ -2109,13 +2067,13 @@ where
                     F::from_canonical_u8(*index_verifier_data),
                 );
                 // generate and set a dummy `proof_with_pis`
-                let common_date = &table_circuit
+                let common_data = &table_circuit
                     .shrinking_wrappers
                     .last()
                     .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?
                     .circuit
                     .common;
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");
@@ -2124,7 +2082,7 @@ where
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
-                    .expect("Unable to get stark proof");
+                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
 
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
@@ -2161,10 +2119,6 @@ where
             public_values: all_proof.public_values,
             intern: root_proof,
         })
-    }
-
-    pub fn verify_root(&self, agg_proof: ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {
-        self.root.circuit.verify(agg_proof)
     }
 
     /// Create a segment aggregation proof, combining two contiguous proofs into
@@ -2280,18 +2234,6 @@ where
         Ok(agg_output)
     }
 
-    pub fn verify_segment_aggregation(
-        &self,
-        agg_proof: &ProofWithPublicInputs<F, C, D>,
-    ) -> anyhow::Result<()> {
-        self.segment_aggregation.circuit.verify(agg_proof.clone())?;
-        check_cyclic_proof_verifier_data(
-            agg_proof,
-            &self.segment_aggregation.circuit.verifier_only,
-            &self.segment_aggregation.circuit.common,
-        )
-    }
-
     /// Creates a final batch proof, once all segments of a given
     /// transaction batch have been combined into a single aggregation proof.
     ///
@@ -2369,18 +2311,6 @@ where
             public_values: batch_public_values,
             intern: batch_proof,
         })
-    }
-
-    pub fn verify_batch_aggregation(
-        &self,
-        txn_proof: &ProofWithPublicInputs<F, C, D>,
-    ) -> anyhow::Result<()> {
-        self.batch_aggregation.circuit.verify(txn_proof.clone())?;
-        check_cyclic_proof_verifier_data(
-            txn_proof,
-            &self.batch_aggregation.circuit.verifier_only,
-            &self.batch_aggregation.circuit.common,
-        )
     }
 
     /// If the proof is not an aggregation, we set the cyclic vk to a dummy
@@ -3123,6 +3053,87 @@ where
 {
     circuit.verifier_only.circuit_digest.elements.len()
         + (1 << circuit.common.config.fri_config.cap_height) * NUM_HASH_OUT_ELTS
+}
+
+pub mod testing {
+    use super::*;
+
+    impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F> + 'static,
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        /// Returns a proof for each segment that is part of a full transaction
+        /// proof.
+        pub fn prove_all_segments(
+            &self,
+            all_stark: &AllStark<F, D>,
+            config: &StarkConfig,
+            generation_inputs: GenerationInputs<F>,
+            max_cpu_len_log: usize,
+            timing: &mut TimingTree,
+            abort_signal: Option<Arc<AtomicBool>>,
+        ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
+            features_check(&generation_inputs.clone().trim());
+
+            let segment_iterator =
+                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
+
+            let mut proofs = vec![];
+
+            for segment_run in segment_iterator {
+                let (_, mut next_data) = segment_run?;
+                let proof = self.prove_segment(
+                    all_stark,
+                    config,
+                    generation_inputs.trim(),
+                    &mut next_data,
+                    timing,
+                    abort_signal.clone(),
+                )?;
+                proofs.push(proof);
+            }
+
+            // Since aggregations require at least two segment proofs, add a dummy proof if
+            // there is only one proof.
+            if proofs.len() == 1 {
+                let mut first_proof = proofs[0].clone();
+                first_proof.is_dummy = true;
+                proofs.push(first_proof);
+            }
+
+            Ok(proofs)
+        }
+
+        pub fn verify_root(&self, agg_proof: ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {
+            self.root.circuit.verify(agg_proof)
+        }
+
+        pub fn verify_segment_aggregation(
+            &self,
+            agg_proof: &ProofWithPublicInputs<F, C, D>,
+        ) -> anyhow::Result<()> {
+            self.segment_aggregation.circuit.verify(agg_proof.clone())?;
+            check_cyclic_proof_verifier_data(
+                agg_proof,
+                &self.segment_aggregation.circuit.verifier_only,
+                &self.segment_aggregation.circuit.common,
+            )
+        }
+
+        pub fn verify_batch_aggregation(
+            &self,
+            txn_proof: &ProofWithPublicInputs<F, C, D>,
+        ) -> anyhow::Result<()> {
+            self.batch_aggregation.circuit.verify(txn_proof.clone())?;
+            check_cyclic_proof_verifier_data(
+                txn_proof,
+                &self.batch_aggregation.circuit.verifier_only,
+                &self.batch_aggregation.circuit.common,
+            )
+        }
+    }
 }
 
 #[cfg(test)]
