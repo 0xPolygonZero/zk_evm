@@ -36,7 +36,9 @@ use starky::lookup::{get_grand_product_challenge_set_target, GrandProductChallen
 use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
@@ -151,6 +153,8 @@ where
     /// for EVM root proofs; the circuit has them just to match the
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
+    /// We can skip verifying Keccak tables when they are not in use.
+    use_keccak_tables: BoolTarget,
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -173,6 +177,7 @@ where
         }
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
+        buffer.write_target_bool(self.use_keccak_tables)?;
         Ok(())
     }
 
@@ -192,6 +197,7 @@ where
         }
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
+        let use_keccak_tables = buffer.read_target_bool()?;
 
         Ok(Self {
             circuit,
@@ -199,6 +205,7 @@ where
             index_verifier_data: index_verifier_data.try_into().unwrap(),
             public_values,
             cyclic_vk,
+            use_keccak_tables,
         })
     }
 }
@@ -807,6 +814,8 @@ where
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
+        let use_keccak_tables = builder.add_virtual_bool_target_safe();
+        let skip_keccak_tables = builder.not(use_keccak_tables);
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -826,6 +835,16 @@ where
             }
         }
 
+        // Ensures that the trace cap is set to 0 when skipping Keccak tables.
+        for i in KECCAK_TABLES_INDICES {
+            for h in &pis[i].trace_cap {
+                for t in h {
+                    let trace_cap_check = builder.mul(skip_keccak_tables.target, *t);
+                    builder.assert_zero(trace_cap_check);
+                }
+            }
+        }
+
         observe_public_values_target::<F, C, D>(&mut challenger, &public_values);
 
         let ctl_challenges = get_grand_product_challenge_set_target(
@@ -834,16 +853,31 @@ where
             stark_config.num_challenges,
         );
         // Check that the correct CTL challenges are used in every proof.
-        for pi in &pis {
-            for i in 0..stark_config.num_challenges {
-                builder.connect(
-                    ctl_challenges.challenges[i].beta,
-                    pi.ctl_challenges.challenges[i].beta,
-                );
-                builder.connect(
-                    ctl_challenges.challenges[i].gamma,
-                    pi.ctl_challenges.challenges[i].gamma,
-                );
+        for (i, pi) in pis.iter().enumerate() {
+            for j in 0..stark_config.num_challenges {
+                if KECCAK_TABLES_INDICES.contains(&i) {
+                    // Ensures that the correct CTL challenges are used in Keccak tables when
+                    // `enable_keccak_tables` is true.
+                    builder.conditional_assert_eq(
+                        use_keccak_tables.target,
+                        ctl_challenges.challenges[j].beta,
+                        pi.ctl_challenges.challenges[j].beta,
+                    );
+                    builder.conditional_assert_eq(
+                        use_keccak_tables.target,
+                        ctl_challenges.challenges[j].gamma,
+                        pi.ctl_challenges.challenges[j].gamma,
+                    );
+                } else {
+                    builder.connect(
+                        ctl_challenges.challenges[j].beta,
+                        pi.ctl_challenges.challenges[j].beta,
+                    );
+                    builder.connect(
+                        ctl_challenges.challenges[j].gamma,
+                        pi.ctl_challenges.challenges[j].gamma,
+                    );
+                }
             }
         }
 
@@ -852,12 +886,28 @@ where
             builder.connect(before, s);
         }
         // Check that the challenger state is consistent between proofs.
+        let mut prev_state = pis[0].challenger_state_after.as_ref().to_vec();
+        let state_len = prev_state.len();
         for i in 1..NUM_TABLES {
-            for (&before, &after) in zip_eq(
-                pis[i].challenger_state_before.as_ref(),
-                pis[i - 1].challenger_state_after.as_ref(),
-            ) {
-                builder.connect(before, after);
+            let current_state_before = pis[i].challenger_state_before.as_ref();
+            let current_state_after = pis[i].challenger_state_after.as_ref();
+            for j in 0..state_len {
+                if KECCAK_TABLES_INDICES.contains(&i) {
+                    // Ensure the challenger state:
+                    // 1) prev == current_before when using Keccak
+                    builder.conditional_assert_eq(
+                        use_keccak_tables.target,
+                        prev_state[j],
+                        current_state_before[j],
+                    );
+                    // 2) Update prev <- current_after when using Keccak
+                    // 3) Keep prev <- prev when skipping Keccak
+                    prev_state[j] =
+                        builder.select(use_keccak_tables, current_state_after[j], prev_state[j]);
+                } else {
+                    builder.connect(prev_state[j], current_state_before[j]);
+                    prev_state[j] = current_state_after[j];
+                }
             }
         }
 
@@ -876,6 +926,15 @@ where
                 )
             })
             .collect_vec();
+
+        // Ensure that when Keccak tables are skipped, the Keccak tables' ctl_zs_first
+        // are all zeros.
+        for &i in KECCAK_TABLES_INDICES.iter() {
+            for &t in pis[i].ctl_zs_first.iter() {
+                let ctl_check = builder.mul(skip_keccak_tables.target, t);
+                builder.assert_zero(ctl_check);
+            }
+        }
 
         // Verify the CTL checks.
         verify_cross_table_lookups_circuit::<F, D, NUM_TABLES>(
@@ -906,11 +965,22 @@ where
             let inner_verifier_data =
                 builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
 
-            builder.verify_proof::<C>(
-                &recursive_proofs[i],
-                &inner_verifier_data,
-                inner_common_data[i],
-            );
+            if KECCAK_TABLES_INDICES.contains(&i) {
+                builder
+                    .conditionally_verify_proof_or_dummy::<C>(
+                        use_keccak_tables,
+                        &recursive_proofs[i],
+                        &inner_verifier_data,
+                        inner_common_data[i],
+                    )
+                    .expect("Unable conditionally verify Keccak proofs in the root circuit");
+            } else {
+                builder.verify_proof::<C>(
+                    &recursive_proofs[i],
+                    &inner_verifier_data,
+                    inner_common_data[i],
+                );
+            }
         }
 
         let merkle_before =
@@ -941,6 +1011,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
+            use_keccak_tables,
         }
     }
 
@@ -1841,6 +1912,7 @@ where
             timing,
             abort_signal.clone(),
         )?;
+
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
@@ -1885,6 +1957,9 @@ where
         .map_err(|_| {
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
+
+        // TODO(sdeng): Set to false when this segment contains no Keccak operations.
+        root_inputs.set_bool_target(self.root.use_keccak_tables, true);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -1985,6 +2060,9 @@ where
         .map_err(|_| {
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
+
+        // TODO(sdeng): Set to false when this segment contains no Keccak operations.
+        root_inputs.set_bool_target(self.root.use_keccak_tables, true);
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
