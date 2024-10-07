@@ -1938,9 +1938,9 @@ where
                     dummy_circuit(&table_circuit.circuit.common);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .or_else(|_| Err(anyhow::format_err!("Unable to generate dummy proofs")))?;
+                    .map_err(|_| anyhow::format_err!("Unable to generate dummy proofs"));
                 root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof?);
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
@@ -2076,9 +2076,9 @@ where
                 let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .or_else(|_| Err(anyhow::format_err!("Unable to generate dummy proofs")))?;
+                    .map_err(|_| anyhow::format_err!("Unable to generate dummy proofs"));
                 root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof?);
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
