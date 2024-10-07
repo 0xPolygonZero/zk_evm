@@ -859,8 +859,8 @@ pub(crate) fn generate_exit_kernel<F: RichField, T: Transition<F>>(
         let init_gas_limit = state
             .get_mut_generation_state()
             .get_from_memory(gas_limit_address)
-            .as_usize();
-        let txn_gas = init_gas_limit - gas_used_val as usize;
+            .low_u64();
+        let txn_gas = init_gas_limit - gas_used_val;
 
         state.update_struct_logs_gas(txn_gas);
     }

@@ -197,7 +197,7 @@ pub(crate) trait State<F: RichField> {
     }
 
     /// Updates the gas field in `struct_logs_debugger_info`.
-    fn update_struct_logs_gas(&mut self, _n: usize) {}
+    fn update_struct_logs_gas(&mut self, _n: u64) {}
 
     /// Returns all the memory from non-stale contexts.
     /// This is only necessary during segment data generation, hence the blanket

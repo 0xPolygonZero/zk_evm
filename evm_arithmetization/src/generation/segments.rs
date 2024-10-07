@@ -104,7 +104,7 @@ impl<F: RichField> SegmentDataIterator<F> {
     pub fn new(
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: &Option<&[Option<Vec<ZeroStructLog>>]>,
     ) -> Self {
         debug_inputs(inputs);
 

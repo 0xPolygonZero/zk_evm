@@ -9,7 +9,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
-use log::{log_enabled, Level};
+use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -79,7 +79,9 @@ pub(crate) struct StructLogDebuggerInfo {
     pub(crate) counter: usize,
     /// Gas value in the kernel for a transaction (starting at `GasLimit` and
     /// decreasing with each user opcode).
-    pub(crate) gas: usize,
+    pub(crate) gas: u64,
+    /// Gas consumed by the previous operation.
+    pub(crate) prev_op_gas: u64,
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -175,7 +177,7 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: &Option<&[Option<Vec<ZeroStructLog>>]>,
     ) -> Self {
         debug_inputs(inputs);
 
@@ -188,7 +190,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: &Option<&[Option<Vec<ZeroStructLog>>]>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -202,8 +204,12 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
-            struct_logs: struct_logs.clone(),
-            struct_log_debugger_info: StructLogDebuggerInfo { counter: 0, gas: 0 },
+            struct_logs: struct_logs.as_ref().map(|struct_log| struct_log.to_vec()),
+            struct_log_debugger_info: StructLogDebuggerInfo {
+                counter: 0,
+                gas: 0,
+                prev_op_gas: 0,
+            },
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -237,7 +243,11 @@ impl<F: RichField> Interpreter<F> {
             clock: 0,
             max_cpu_len_log,
             struct_logs,
-            struct_log_debugger_info: StructLogDebuggerInfo { counter: 0, gas: 0 },
+            struct_log_debugger_info: StructLogDebuggerInfo {
+                counter: 0,
+                gas: 0,
+                prev_op_gas: 0,
+            },
         }
     }
 
@@ -555,7 +565,6 @@ impl<F: RichField> State<F> for Interpreter<F> {
     ) -> Result<(), ProgramError> {
         if let Some(struct_logs) = &self.struct_logs
             && is_user_mode
-            && log_enabled!(log::Level::Debug)
         {
             let txn_idx = self.generation_state.next_txn_index;
 
@@ -569,10 +578,14 @@ impl<F: RichField> State<F> for Interpreter<F> {
                         ContextMetadata::GasLimit.unscale(), // context offsets are already scaled
                     );
                     let gas_limit = self.generation_state.get_from_memory(gas_limit_address);
-                    self.struct_log_debugger_info.gas = gas_limit.as_usize();
+                    self.struct_log_debugger_info.gas = gas_limit.low_u64();
                     // Check against actual initial gas.
-                    if gas_limit.as_u64() != txn_struct_logs[0].gas {
-                        log::warn!("Wrong initial transaction gas: it is {:?} in the Kernel but {:?} in the struct logs.", gas_limit.as_u64(), txn_struct_logs[0].gas);
+                    if gas_limit.low_u64() != txn_struct_logs[0].gas {
+                        log::warn!(
+                            "Wrong Initial txn gas: expected {:?}, got {:?}.",
+                            txn_struct_logs[0].gas,
+                            gas_limit.as_u64()
+                        );
                         return Err(ProgramError::StructLogDebuggerError);
                     }
                 }
@@ -585,11 +598,7 @@ impl<F: RichField> State<F> for Interpreter<F> {
                     Ok(cur_op_str) => {
                         let cur_op = cur_op_str.to_string();
                         if struct_op != cur_op {
-                            log::warn!(
-                                "Wrong opcode: it is {} in the Kernel but {} in the struct logs.",
-                                cur_op,
-                                struct_op
-                            );
+                            log::warn!("Wrong opcode: expected {}, got {}.", struct_op, cur_op);
                             return Err(ProgramError::StructLogDebuggerError);
                         }
                     }
@@ -606,9 +615,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
                 let txn_pc = cur_txn_struct_logs.pc;
                 if txn_pc != self.get_registers().program_counter as u64 {
                     log::warn!(
-                        "Wrong pc: it is {} in the Kernel but {} in the struct logs",
-                        self.get_registers().program_counter,
-                        txn_pc
+                        "Wrong pc: expected {} but got {}.",
+                        txn_pc,
+                        self.get_registers().program_counter
                     );
                     return Err(ProgramError::StructLogDebuggerError);
                 }
@@ -623,10 +632,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
 
                     if txn_stack != cur_stack {
                         log::warn!(
-                            "Wrong stack: it is {:?} in the Kernel but {:?} in
-                    the struct logs.",
-                            cur_stack,
-                            txn_stack
+                            "Wrong stack: expected {:?} but got {:?}.",
+                            txn_stack,
+                            cur_stack
                         );
                         return Err(ProgramError::StructLogDebuggerError);
                     }
@@ -644,32 +652,38 @@ impl<F: RichField> State<F> for Interpreter<F> {
     ) -> Result<(), ProgramError> {
         if let Some(struct_logs) = &self.struct_logs
             && is_user_mode
-            && log_enabled!(log::Level::Debug)
         {
             let txn_idx = self.generation_state.next_txn_index;
             // First, update the gas.
-            self.struct_log_debugger_info.gas -= consumed_gas as usize;
+            self.struct_log_debugger_info.gas -= self.struct_log_debugger_info.prev_op_gas;
+            self.struct_log_debugger_info.prev_op_gas = consumed_gas;
 
             if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
                 let cur_txn_struct_logs =
                     txn_struct_logs[self.struct_log_debugger_info.counter].clone();
                 let cur_txn_struct_logs_e = cur_txn_struct_logs.error;
-                if cur_txn_struct_logs_e.is_some() && res.is_err() {
-                    log::warn!("The kernel
-                transaction and struct_logs disagree on error. The struct logs return an errorwhile the Kernel doesn't.");
-                    return Err(ProgramError::StructLogDebuggerError);
-                }
-
-                if res.is_err() && cur_txn_struct_logs_e.is_none() {
-                    // This is not necessarily a discrepancy: the struct logs might not hold
-                    // an error message in case of an error.
-                    log::warn!("There is an error on the Kernel side but no error message in the struct logs.");
+                match cur_txn_struct_logs_e {
+                    Some(e) => {
+                        if !res.is_err() {
+                            log::warn!("Expected error {:?} but didn't get any.", e);
+                            return Err(ProgramError::StructLogDebuggerError);
+                        }
+                    }
+                    None => {
+                        if res.is_err() {
+                            log::warn!("No error expected but got {:?}.", res);
+                        }
+                    }
                 }
 
                 // Check opcode gas.
-                let txn_op_gas = cur_txn_struct_logs.gas;
+                let txn_op_gas = self.struct_log_debugger_info.gas;
                 if txn_op_gas != cur_txn_struct_logs.gas {
-                    log::warn!("Wrong gas update in the last operation. The current remaining gas in the Kernel is {} but {} in the struct logs.", cur_txn_struct_logs.gas, txn_op_gas);
+                    log::warn!(
+                        "Wrong gas update in the last operation: expected {} but got {}.",
+                        cur_txn_struct_logs.gas,
+                        txn_op_gas
+                    );
                     return Err(ProgramError::StructLogDebuggerError);
                 }
 
@@ -683,7 +697,7 @@ impl<F: RichField> State<F> for Interpreter<F> {
         Ok(())
     }
 
-    fn update_struct_logs_gas(&mut self, n: usize) {
+    fn update_struct_logs_gas(&mut self, n: u64) {
         self.struct_log_debugger_info.gas = n;
     }
 

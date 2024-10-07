@@ -1907,7 +1907,7 @@ where
         config: &StarkConfig,
         generation_inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: Option<&[Option<Vec<ZeroStructLog>>]>,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
