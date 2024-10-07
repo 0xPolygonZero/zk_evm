@@ -43,6 +43,8 @@ pub const WIRE_DISPOSITION: WireDisposition = {
     cfg_if::cfg_if! {
         if #[cfg(feature = "eth_mainnet")] {
             WireDisposition::Type1
+        } else if #[cfg(feature = "cdk_erigon")] {
+            WireDisposition::Type2
         } else {
             compile_error!("must select a feature");
         }

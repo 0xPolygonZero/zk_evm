@@ -140,9 +140,6 @@ async fn main() -> Result<()> {
                         state_trie: observer.data[prover_tries.batch_index]
                             .tries
                             .state
-                            .as_ref()
-                            .left()
-                            .unwrap()
                             .as_hashed_partial_trie()
                             .clone(),
                         transaction_trie: observer.data[prover_tries.batch_index]

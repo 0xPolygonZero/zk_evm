@@ -243,8 +243,11 @@ fn start(
                 WireDisposition::Type2 => {
                     let crate::type2::Frontend { trie, code } =
                         crate::type2::frontend(instructions)?;
-
-                    todo!()
+                    (
+                        Either::Right(trie),
+                        BTreeMap::new(),
+                        Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
+                    )
                 }
             };
             (state, storage, code)

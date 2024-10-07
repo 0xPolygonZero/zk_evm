@@ -465,7 +465,7 @@ impl From<StateMpt> for HashedPartialTrie {
     }
 }
 
-// TODO(0xaatif): trackme
+// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/706
 // We're covering for [`smt_trie`] in a couple of ways:
 // - insertion operations aren't fallible, they just panic.
 // - it documents a requirement that `set_hash` is called before `set`.
@@ -503,6 +503,17 @@ impl StateTrie for StateSmt {
 }
 
 impl StateSmt {
+    #[deprecated = "this should only be called from the frontend parsing"]
+    pub(crate) fn new_unchecked(
+        address2state: BTreeMap<Address, AccountRlp>,
+        hashed_out: BTreeMap<SmtKey, H256>,
+    ) -> Self {
+        Self {
+            address2state,
+            hashed_out,
+        }
+    }
+
     fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
         let Self {
             address2state,
@@ -526,7 +537,8 @@ impl StateSmt {
             smt.set(smt_trie::keys::key_balance(*addr), *balance);
             smt.set(smt_trie::keys::key_code(*addr), code_hash.into_uint());
             smt.set(
-                // REVIEW(0xaatif): I don't know what to do here
+                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
+                //                combined abstraction for state and storage
                 smt_trie::keys::key_storage(*addr, U256::zero()),
                 storage_root.into_uint(),
             );
@@ -549,6 +561,8 @@ mod conv_hash {
             elements: array::from_fn(|_ix| {
                 let (a, b, c, d, e, f, g, h) = bytes.next_tuple().unwrap();
                 // REVIEW(0xaatif): what endianness?
+                //                  do we want the `canonical_u64` methods like
+                //                  the frontend uses?
                 GoldilocksField(u64::from_be_bytes([a, b, c, d, e, f, g, h]))
             }),
         };
@@ -560,6 +574,9 @@ mod conv_hash {
             build_array::ArrayBuilder::from_iter(
                 elements
                     .into_iter()
+                    // REVIEW(0xaatif): what endianness?
+                    //                  do we want the `canonical_u64` methods
+                    //                  like the frontend uses?
                     .flat_map(|GoldilocksField(u)| u.to_be_bytes()),
             )
             .build_exact()
