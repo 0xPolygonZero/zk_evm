@@ -29,9 +29,17 @@ use zero::ops::register;
 use zero::prover::WIRE_DISPOSITION;
 use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
 
+/// This binary is a debugging tool used to compare
+/// the trace decoder output tries and the post kernel execution tries (state,
+/// transaction and receipt).
+///
+/// Usage:
+///
+/// `trie_diff <OPTIONS> < ./witness_json_input.json`
 #[derive(Parser)]
 #[command(version = zero::version(), propagate_version = true)]
 pub(crate) struct Cli {
+    /// Prover configuration
     #[clap(flatten)]
     pub(crate) prover_config: CliProverConfig,
 

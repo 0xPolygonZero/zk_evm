@@ -520,13 +520,11 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let registers_after: RegistersData = RegistersData::from(*registers_after);
     apply_metadata_and_tries_memops(&mut state, inputs, &registers_before, &registers_after);
 
-    let cpu_res = timed!(
+    timed!(
         timing,
         "simulate CPU",
         simulate_cpu(&mut state, *max_cpu_len_log)
-    );
-
-    cpu_res?;
+    )?;
 
     let trace_lengths = state.traces.get_lengths();
 

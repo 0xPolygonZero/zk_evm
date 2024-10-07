@@ -4,11 +4,10 @@ use std::{
     mem,
 };
 
-use alloy::primitives::address;
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
-use ethereum_types::{Address, H160, U256};
+use ethereum_types::{Address, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -55,7 +54,13 @@ pub fn entrypoint(
         code_db,
         txn_info,
     } = trace;
+
+    let fatal_missing_code = match trie_pre_images {
+        BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
+        BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
+    };
     let (state, storage, mut code) = start(trie_pre_images, wire_disposition)?;
+
     code.extend(code_db);
 
     let OtherBlockData {
@@ -85,6 +90,7 @@ pub fn entrypoint(
                 &b_meta,
                 ger_data,
                 withdrawals,
+                fatal_missing_code,
                 observer,
             )?
             .into_iter()
@@ -100,6 +106,7 @@ pub fn entrypoint(
                     &b_meta,
                     ger_data,
                     withdrawals,
+                    fatal_missing_code,
                     &mut DummyObserver::new(), // TODO(0xaatif)
                 )?
                 .into_iter()
@@ -373,6 +380,13 @@ impl<T> IntraBlockTries<T> {
         }
     }
 }
+/// Hacky handling of possibly missing contract bytecode in `Hash2Code` inner
+/// map.
+/// Allows incomplete payloads fetched with the zero tracer to skip these
+/// silently.
+// TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+#[derive(Copy, Clone)]
+pub struct FatalMissingCode(pub bool);
 
 /// Does the main work mentioned in the [module documentation](super).
 #[allow(clippy::too_many_arguments)]
@@ -389,6 +403,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
+    fatal_missing_code: FatalMissingCode,
     // called with the untrimmed tries after each batch
     observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>>
@@ -460,6 +475,8 @@ where
                     },
             } = txn.unwrap_or_default();
 
+            let tx_hash = keccak_hash::keccak(&byte_code);
+
             if let Ok(nonempty) = nunny::Vec::new(byte_code) {
                 batch_byte_code.push(nonempty.clone());
                 transaction_trie.insert(txn_ix, nonempty.into())?;
@@ -490,19 +507,25 @@ where
                     &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                 )
                 .map_err(|e| anyhow!("{e:?}"))
-                .context("couldn't decode receipt")?;
+                .context(format!("couldn't decode receipt in txn {tx_hash:x}"))?;
 
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
+                if born {
+                    // Empty accounts cannot have non-empty storage,
+                    // so we can safely insert a default trie.
+                    storage_tries.insert(keccak_hash::keccak(addr), StorageTrie::default());
+                }
+
                 if born || just_access {
                     state_trie
                         .clone()
                         .insert_by_address(addr, acct)
                         .context(format!(
-                            "couldn't reach state of {} address {addr:x}",
+                            "couldn't reach state of {} address {addr:x} in txn {tx_hash:x}",
                             match born {
                                 true => "created",
                                 false => "accessed",
@@ -532,7 +555,21 @@ where
                     acct.code_hash = code_usage
                         .map(|it| match it {
                             ContractCodeUsage::Read(hash) => {
-                                batch_contract_code.insert(code.get(hash)?);
+                                // TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+                                // This is a bug in the zero tracer, which shouldn't be giving us
+                                // this read at all. Workaround for now.
+                                match (fatal_missing_code, code.get(hash)) {
+                                    (FatalMissingCode(true), None) => {
+                                        bail!("no code for hash {hash:x}")
+                                    }
+                                    (_, Some(byte_code)) => {
+                                        batch_contract_code.insert(byte_code);
+                                    }
+                                    (_, None) => {
+                                        log::warn!("no code for {hash:x}")
+                                    }
+                                }
+
                                 anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
@@ -548,9 +585,11 @@ where
                     if !storage_written.is_empty() {
                         let storage = match born {
                             true => storage_tries.entry(keccak_hash::keccak(addr)).or_default(),
-                            false => storage_tries
-                                .get_mut(&keccak_hash::keccak(addr))
-                                .context(format!("missing storage trie for address {addr:x}"))?,
+                            false => storage_tries.get_mut(&keccak_hash::keccak(addr)).context(
+                                format!(
+                                    "missing storage trie for address {addr:x} in txn {tx_hash:x}"
+                                ),
+                            )?,
                         };
 
                         for (k, v) in storage_written {
@@ -570,30 +609,7 @@ where
                     state_mask.insert(<StateTrieT::Key>::from(addr));
                 } else {
                     // Simple state access
-
-                    fn is_precompile(addr: H160) -> bool {
-                        let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
-                            address!("0000000000000000000000000000000000000001")
-                                ..address!("000000000000000000000000000000000000000a")
-                        } else {
-                            // Remove KZG Peval for non-Eth mainnet networks
-                            address!("0000000000000000000000000000000000000001")
-                                ..address!("0000000000000000000000000000000000000009")
-                        };
-
-                        precompiled_addresses.contains(&addr.compat())
-                            || (cfg!(feature = "polygon_pos")
-                            // Include P256Verify for Polygon PoS
-                            && addr.compat()
-                                == address!("0000000000000000000000000000000000000100"))
-                    }
-
-                    if receipt.status || !is_precompile(addr) {
-                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
-                        //                masking like this SHOULD be a space-saving optimization,
-                        //                BUT if it's omitted, we actually get state root mismatches
-                        state_mask.insert(<StateTrieT::Key>::from(addr));
-                    }
+                    state_mask.insert(<StateTrieT::Key>::from(addr));
                 }
 
                 if self_destructed {
@@ -619,7 +635,7 @@ where
                         state_mask.insert(<StateTrieT::Key>::from(*addr));
                         let mut acct = state_trie
                             .get_by_address(*addr)
-                            .context("missing address for withdrawal")?;
+                            .context(format!("missing address {addr:x} for withdrawal"))?;
                         acct.balance += *amt;
                         state_trie
                             .insert_by_address(*addr, acct)
@@ -896,11 +912,8 @@ impl Hash2Code {
         this.insert(vec![]);
         this
     }
-    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
-        match self.inner.get(&hash) {
-            Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {}", hash),
-        }
+    pub fn get(&mut self, hash: H256) -> Option<Vec<u8>> {
+        self.inner.get(&hash).cloned()
     }
     pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(keccak_hash::keccak(&code), code);
