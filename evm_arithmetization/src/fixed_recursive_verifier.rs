@@ -2065,13 +2065,13 @@ where
                     F::from_canonical_u8(*index_verifier_data),
                 );
                 // generate and set a dummy `proof_with_pis`
-                let common_date = &table_circuit
+                let common_data = &table_circuit
                     .shrinking_wrappers
                     .last()
                     .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?
                     .circuit
                     .common;
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_date);
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");
