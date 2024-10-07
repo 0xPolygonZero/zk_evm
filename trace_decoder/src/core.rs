@@ -47,6 +47,12 @@ pub fn entrypoint(
         code_db,
         txn_info,
     } = trace;
+
+    let fatal_missing_code = match trie_pre_images {
+        BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
+        BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
+    };
+
     let (state, storage, mut code) = start(trie_pre_images)?;
     code.extend(code_db);
 
@@ -75,6 +81,7 @@ pub fn entrypoint(
         &b_meta,
         ger_data,
         withdrawals,
+        fatal_missing_code,
         observer,
     )?;
 
@@ -287,6 +294,14 @@ pub struct IntraBlockTries<StateTrieT> {
     pub receipt: ReceiptTrie,
 }
 
+/// Hacky handling of possibly missing contract bytecode in `Hash2Code` inner
+/// map.
+/// Allows incomplete payloads fetched with the zero tracer to skip these
+/// silently.
+// TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+#[derive(Copy, Clone)]
+pub struct FatalMissingCode(pub bool);
+
 /// Does the main work mentioned in the [module documentation](super).
 #[allow(clippy::too_many_arguments)]
 fn middle<StateTrieT: StateTrie + Clone>(
@@ -302,6 +317,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
+    fatal_missing_code: FatalMissingCode,
     // called with the untrimmed tries after each batch
     observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
@@ -451,7 +467,21 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     acct.code_hash = code_usage
                         .map(|it| match it {
                             ContractCodeUsage::Read(hash) => {
-                                batch_contract_code.insert(code.get(hash)?);
+                                // TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+                                // This is a bug in the zero tracer, which shouldn't be giving us
+                                // this read at all. Workaround for now.
+                                match (fatal_missing_code, code.get(hash)) {
+                                    (FatalMissingCode(true), None) => {
+                                        bail!("no code for hash {hash:x}")
+                                    }
+                                    (_, Some(byte_code)) => {
+                                        batch_contract_code.insert(byte_code);
+                                    }
+                                    (_, None) => {
+                                        log::warn!("no code for {hash:x}")
+                                    }
+                                }
+
                                 anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
@@ -785,11 +815,8 @@ impl Hash2Code {
         this.insert(vec![]);
         this
     }
-    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
-        match self.inner.get(&hash) {
-            Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {:x}", hash),
-        }
+    pub fn get(&mut self, hash: H256) -> Option<Vec<u8>> {
+        self.inner.get(&hash).cloned()
     }
     pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(keccak_hash::keccak(&code), code);
