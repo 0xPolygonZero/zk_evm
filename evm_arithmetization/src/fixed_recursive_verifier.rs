@@ -1938,13 +1938,13 @@ where
                     dummy_circuit(&table_circuit.circuit.common);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .expect("Unable to generate dummy proofs");
+                    .ok_or_else(|| anyhow::format_err!("Unable to generate dummy proofs"))?;
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
-                    .expect("Unable to get stark proof");
+                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
                 let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
                 let shrunk_proof = table_circuits
                     .by_stark_size
@@ -2076,7 +2076,7 @@ where
                 let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
                 let dummy_pis = HashMap::new();
                 let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .expect("Unable to generate dummy proofs");
+                    .ok_or_else(|| anyhow::format_err!("Unable to generate dummy proofs"))?;
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
             } else {
