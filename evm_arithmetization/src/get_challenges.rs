@@ -1,10 +1,9 @@
 use ethereum_types::{BigEndianHash, H256, U256};
 use plonky2::field::extension::Extendable;
-use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
+use plonky2::hash::hash_types::RichField;
 use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use crate::all_stark::KECCAK_TABLES_INDICES;
 use crate::proof::*;
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -248,7 +247,7 @@ pub(crate) fn observe_public_values_target<
 
 pub mod testing {
     use plonky2::field::extension::Extendable;
-    use plonky2::hash::hash_types::RichField;
+    use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
     use plonky2::iop::challenger::Challenger;
     use plonky2::plonk::config::GenericConfig;
     use starky::config::StarkConfig;
@@ -269,7 +268,7 @@ pub mod testing {
         pub ctl_challenges: GrandProductChallengeSet<F>,
     }
 
-    impl<F: RichField + Extendable<D>, C: GenericConfig<D, F=F>, const D: usize> AllProof<F, C, D> {
+    impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
         /// Computes all Fiat-Shamir challenges used in the STARK proof.
         pub(crate) fn get_challenges(
             &self,

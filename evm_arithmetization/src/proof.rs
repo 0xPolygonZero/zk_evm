@@ -11,7 +11,7 @@ use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{StarkProofChallenges, StarkProofWithMetadata};
+use starky::proof::StarkProofWithMetadata;
 
 use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
