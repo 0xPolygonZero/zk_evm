@@ -372,7 +372,7 @@ pub mod testing {
 
     use super::*;
     use crate::generation::ErrorWithTries;
-    use crate::structlog::OptionalZeroStructLogs;
+    use crate::structlog::TxZeroStructLogs;
     use crate::{
         cpu::kernel::interpreter::Interpreter,
         generation::segments::{SegmentDataIterator, SegmentError},
@@ -401,7 +401,7 @@ pub mod testing {
         config: &StarkConfig,
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> Result<Vec<AllProof<F, C, D>>>
@@ -433,7 +433,7 @@ pub mod testing {
     pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
     ) -> Result<(), ErrorWithTries<SegmentError>>
     where
         F: RichField,

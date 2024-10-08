@@ -7,7 +7,7 @@ use std::{
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
-use evm_arithmetization::structlog::OptionalZeroStructLogs;
+use evm_arithmetization::structlog::TxZeroStructLogs;
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -27,16 +27,13 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-type GenerationAndStructLogs = (
-    Vec<GenerationInputs>,
-    Option<Vec<Vec<OptionalZeroStructLogs>>>,
-);
+type GenerationAndStructLogs = (Vec<GenerationInputs>, Option<Vec<Vec<TxZeroStructLogs>>>);
 
 /// TODO(0xaatif): document this after <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    all_struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+    all_struct_logs: Option<Vec<TxZeroStructLogs>>,
     batch_size_hint: usize,
     observer: &mut impl Observer<StateMpt>,
 ) -> anyhow::Result<GenerationAndStructLogs> {

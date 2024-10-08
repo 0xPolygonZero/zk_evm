@@ -21,7 +21,7 @@ use alloy::{
 };
 use anyhow::Context as _;
 use compat::Compat;
-use evm_arithmetization::structlog::{get_structlog_for_debug, OptionalZeroStructLogs};
+use evm_arithmetization::structlog::{get_structlog_for_debug, TxZeroStructLogs};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
@@ -114,7 +114,7 @@ async fn fetch_tx_data<ProviderT, TransportT>(
         <Ethereum as Network>::ReceiptResponse,
         GethTrace,
         GethTrace,
-        OptionalZeroStructLogs,
+        TxZeroStructLogs,
     ),
     anyhow::Error,
 >

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use alloy_primitives::U256;
 use anyhow::{Context, Result};
-use evm_arithmetization::structlog::OptionalZeroStructLogs;
+use evm_arithmetization::structlog::TxZeroStructLogs;
 use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use hashbrown::HashMap;
@@ -58,7 +58,7 @@ pub struct ProverConfig {
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
-    pub struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+    pub struct_logs: Option<Vec<TxZeroStructLogs>>,
 }
 
 impl BlockProverInput {

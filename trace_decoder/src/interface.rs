@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ethereum_types::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
-use evm_arithmetization::structlog::OptionalZeroStructLogs;
+use evm_arithmetization::structlog::TxZeroStructLogs;
 use evm_arithmetization::ConsolidatedHash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
@@ -115,7 +115,7 @@ pub struct TxnMeta {
 
     /// Optional logs for a transaction's user code. Used for debugging purposes
     /// only.
-    pub struct_log: OptionalZeroStructLogs,
+    pub struct_log: TxZeroStructLogs,
 }
 
 /// A "trace" specific to an account for a txn.

@@ -31,7 +31,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
-use crate::structlog::OptionalZeroStructLogs;
+use crate::structlog::TxZeroStructLogs;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -67,7 +67,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
     /// Optional logs for transactions code.
-    pub(crate) struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+    pub(crate) struct_logs: Option<Vec<TxZeroStructLogs>>,
     /// Counter within a transaction.
     pub(crate) struct_log_debugger_info: StructLogDebuggerInfo,
 }
@@ -177,7 +177,7 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         debug_inputs(inputs);
 
@@ -190,7 +190,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -231,7 +231,7 @@ impl<F: RichField> Interpreter<F> {
         halt_offset: usize,
         halt_context: usize,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
