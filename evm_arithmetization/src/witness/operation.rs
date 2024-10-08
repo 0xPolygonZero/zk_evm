@@ -31,7 +31,7 @@ use crate::witness::util::{
 use crate::{arithmetic, logic};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum Operation {
+pub(crate) enum Operation {
     Iszero,
     Not,
     /// (syscall number, minimum stack length, increases stack length)

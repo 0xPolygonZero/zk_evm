@@ -3144,8 +3144,7 @@ mod tests {
     use plonky2::timed;
 
     use super::*;
-    use crate::testing_utils::{empty_payload, init_logger};
-    use crate::witness::operation::Operation;
+    use crate::testing_utils::{init_logger, segment_without_keccak};
 
     type F = GoldilocksField;
     const D: usize = 2;
@@ -3157,15 +3156,6 @@ mod tests {
 
         let all_stark = AllStark::<F, D>::default();
         let config = StarkConfig::standard_fast_config();
-
-        // Generate a dummy payload for testing
-        let payload = empty_payload()?;
-        let max_cpu_len_log = Some(7);
-        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log);
-        let (_, mut segment_data) = segment_iterator.next().unwrap()?;
-
-        let opcode_counts = &segment_data.opcode_counts;
-        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
 
         let timing = &mut TimingTree::new(
             "Segment Proof Generation Without Keccak Test",
@@ -3183,6 +3173,7 @@ mod tests {
             )
         );
 
+        let (payload, mut segment_data) = segment_without_keccak()?;
         let segment_proof = timed!(
             timing,
             log::Level::Info,

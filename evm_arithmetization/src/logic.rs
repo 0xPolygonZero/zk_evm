@@ -120,7 +120,7 @@ pub(crate) struct LogicStark<F, const D: usize> {
 
 /// Logic operations.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum Op {
+pub(crate) enum Op {
     And,
     Or,
     Xor,
