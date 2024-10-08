@@ -229,7 +229,7 @@ impl<F: RichField> GenerationInputs<F> {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
-    pub fn trim(&self) -> TrimmedGenerationInputs<F> {
+    pub(crate) fn trim(&self) -> TrimmedGenerationInputs<F> {
         let txn_hashes = self
             .signed_txns
             .iter()
