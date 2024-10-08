@@ -224,10 +224,9 @@ pub fn segment_without_keccak() -> Result<(
     GenerationSegmentData,
 )> {
     let payload = empty_payload()?;
-    let max_cpu_len_log = None;
-    let halt_after_init = true;
+    let max_cpu_len_log = Some(7);
     let mut segment_iterator =
-        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log, halt_after_init);
+        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
     let opcode_counts = &segment_data.opcode_counts;

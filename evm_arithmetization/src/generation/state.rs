@@ -179,7 +179,6 @@ pub(crate) trait State<F: RichField> {
     fn run_cpu(
         &mut self,
         max_cpu_len_log: Option<usize>,
-        halt_after_init: bool,
     ) -> anyhow::Result<(RegistersState, Option<MemoryState>)>
     where
         Self: Transition<F>,
@@ -198,7 +197,7 @@ pub(crate) trait State<F: RichField> {
             let pc = registers.program_counter;
 
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
-            if running && (self.at_halt() || self.at_end_segment(cycle_limit) || halt_after_init) {
+            if running && (self.at_halt() || self.at_end_segment(cycle_limit)) {
                 running = false;
                 final_registers = registers;
 
@@ -341,7 +340,6 @@ pub struct GenerationState<F: RichField> {
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
-    pub(crate) halt_after_init: bool,
 
     pub(crate) next_txn_index: usize,
 
@@ -435,7 +433,6 @@ impl<F: RichField> GenerationState<F> {
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
-            halt_after_init: false,
             next_txn_index: 0,
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
@@ -551,7 +548,6 @@ impl<F: RichField> GenerationState<F> {
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),
-            halt_after_init: self.halt_after_init,
             next_txn_index: 0,
             stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),

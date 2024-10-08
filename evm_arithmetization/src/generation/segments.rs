@@ -100,11 +100,7 @@ pub struct SegmentError {
 }
 
 impl<F: RichField> SegmentDataIterator<F> {
-    pub fn new(
-        inputs: &GenerationInputs<F>,
-        max_cpu_len_log: Option<usize>,
-        halt_after_init: bool,
-    ) -> Self {
+    pub fn new(inputs: &GenerationInputs<F>, max_cpu_len_log: Option<usize>) -> Self {
         debug_inputs(inputs);
 
         let interpreter = Interpreter::<F>::new_with_generation_inputs(
@@ -112,7 +108,6 @@ impl<F: RichField> SegmentDataIterator<F> {
             vec![],
             inputs,
             max_cpu_len_log,
-            halt_after_init,
         );
 
         Self {

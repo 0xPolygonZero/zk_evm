@@ -54,12 +54,10 @@ pub(crate) struct Interpreter<F: RichField> {
     /// The interpreter will halt only if the current context matches
     /// halt_context
     pub(crate) halt_context: Option<usize>,
-    /// Flag to indicate whether to halt after init.
-    pub(crate) halt_after_init: bool,
     /// Counts the number of appearances of each opcode. For debugging purposes.
     pub(crate) opcode_count: HashMap<Operation, usize>,
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
-    /// `true` if we are currently carrying out a jumpdest analysis.
+    /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
     /// Holds the value of the clock: the clock counts the number of operations
     /// in the execution.
@@ -84,7 +82,6 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
                 halt_pc,
                 initial_context,
                 None,
-                false,
             );
 
             log::debug!("Simulating CPU for jumpdest analysis.");
@@ -161,16 +158,10 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        halt_after_init: bool,
     ) -> Self {
         debug_inputs(inputs);
 
-        let mut result = Self::new(
-            initial_offset,
-            initial_stack,
-            max_cpu_len_log,
-            halt_after_init,
-        );
+        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
         result.initialize_interpreter_state(inputs);
         result
     }
@@ -179,7 +170,6 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
-        halt_after_init: bool,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -187,7 +177,6 @@ impl<F: RichField> Interpreter<F> {
             // `DEFAULT_HALT_OFFSET` is used as a halting point for the interpreter,
             // while the label `halt` is the halting label in the kernel.
             halt_offsets: vec![DEFAULT_HALT_OFFSET, KERNEL.global_labels["halt_final"]],
-            halt_after_init: halt_after_init,
             halt_context: None,
             opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),
@@ -215,13 +204,11 @@ impl<F: RichField> Interpreter<F> {
         halt_offset: usize,
         halt_context: usize,
         max_cpu_len_log: Option<usize>,
-        halt_after_init: bool,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
             halt_offsets: vec![halt_offset],
             halt_context: Some(halt_context),
-            halt_after_init,
             opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
@@ -433,7 +420,7 @@ impl<F: RichField> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        self.run_cpu(self.max_cpu_len_log, false)
+        self.run_cpu(self.max_cpu_len_log)
     }
 
     /// Returns the max number of CPU cycles.

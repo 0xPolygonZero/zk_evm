@@ -609,7 +609,7 @@ fn simulate_cpu<F: RichField>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log, false)?;
+    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log)?;
 
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.
