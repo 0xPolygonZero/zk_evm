@@ -8,17 +8,14 @@ use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::prove;
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::witness::operation::Operation::KeccakGeneral;
 use evm_arithmetization::{
-    AllStark, GenerationInputs, Node, SegmentDataIterator, StarkConfig,
-    EMPTY_CONSOLIDATED_BLOCKHASH,
+    AllStark, GenerationInputs, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH,
 };
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -26,7 +23,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
-use plonky2::plonk::config::{KeccakGoldilocksConfig, PoseidonGoldilocksConfig};
+use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 
 type F = GoldilocksField;
@@ -113,7 +110,7 @@ fn get_generation_inputs() -> GenerationInputs {
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
         )
-        .unwrap();
+            .unwrap();
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
@@ -134,7 +131,7 @@ fn get_generation_inputs() -> GenerationInputs {
                 nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
                 value: vec![2],
             })
-            .hash(),
+                .hash(),
             ..AccountRlp::default()
         };
 
@@ -177,7 +174,7 @@ fn get_generation_inputs() -> GenerationInputs {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     }
-    .into();
+        .into();
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -205,7 +202,6 @@ fn get_generation_inputs() -> GenerationInputs {
         },
     }
 }
-
 /// The `add11_yml` test case from https://github.com/ethereum/tests
 #[test]
 fn add11_yml() -> anyhow::Result<()> {
