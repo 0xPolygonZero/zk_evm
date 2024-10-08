@@ -31,7 +31,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
-use crate::structlog::zerostructlog::ZeroStructLog;
+use crate::structlog::OptionalZeroStructLogs;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -67,7 +67,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
     /// Optional logs for transactions code.
-    pub(crate) struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+    pub(crate) struct_logs: Option<Vec<OptionalZeroStructLogs>>,
     /// Counter within a transaction.
     pub(crate) struct_log_debugger_info: StructLogDebuggerInfo,
 }
@@ -177,7 +177,7 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<&[Option<Vec<ZeroStructLog>>]>,
+        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
     ) -> Self {
         debug_inputs(inputs);
 
@@ -190,7 +190,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: &Option<&[Option<Vec<ZeroStructLog>>]>,
+        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -231,7 +231,7 @@ impl<F: RichField> Interpreter<F> {
         halt_offset: usize,
         halt_context: usize,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+        struct_logs: Option<Vec<OptionalZeroStructLogs>>,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
@@ -591,14 +591,14 @@ impl<F: RichField> State<F> for Interpreter<F> {
                 }
 
                 // Check opcode.
-                let cur_txn_struct_logs = txn_struct_logs[counter].clone();
-                let struct_op = cur_txn_struct_logs.op;
+                let cur_txn_struct_logs = &txn_struct_logs[counter];
+                let struct_op = cur_txn_struct_logs.op.as_str();
                 let op_string_res = get_mnemonic(opcode);
                 match op_string_res {
                     Ok(cur_op_str) => {
                         let cur_op = cur_op_str.to_string();
                         if struct_op != cur_op {
-                            log::warn!("Wrong opcode: expected {}, got {}.", struct_op, cur_op);
+                            log::warn!("Wrong opcode: expected {struct_op}, got {cur_op}.");
                             return Err(ProgramError::StructLogDebuggerError);
                         }
                     }
@@ -619,14 +619,13 @@ impl<F: RichField> State<F> for Interpreter<F> {
                 }
 
                 // Check stack.
-                if let Some(txn_stack) = cur_txn_struct_logs.stack {
+                if let Some(txn_stack) = &cur_txn_struct_logs.stack {
                     let cur_stack = self.get_full_stack();
-                    let txn_stack = txn_stack
-                        .into_iter()
-                        .map(|s| U256(*s.as_limbs()))
-                        .collect::<Vec<_>>();
-
-                    if txn_stack != cur_stack {
+                    if !cur_stack
+                        .iter()
+                        .copied()
+                        .eq(txn_stack.iter().map(|s| U256(*s.as_limbs())))
+                    {
                         log::warn!(
                             "Wrong stack: expected {:?} but got {:?}.",
                             txn_stack,
@@ -657,8 +656,7 @@ impl<F: RichField> State<F> for Interpreter<F> {
             if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
                 // If the transaction errors, we simply log a warning, since struct logs do not
                 // actually return an error in that case.
-                let cur_txn_struct_logs =
-                    txn_struct_logs[self.struct_log_debugger_info.counter].clone();
+                let cur_txn_struct_logs = &txn_struct_logs[self.struct_log_debugger_info.counter];
 
                 if res.is_err() {
                     log::warn!("Kernel execution errored with: {:?}.", res);
@@ -1177,7 +1175,7 @@ mod tests {
             0x60, 0xff, 0x60, 0x0, 0x52, 0x60, 0, 0x51, 0x60, 0x1, 0x51, 0x60, 0x42, 0x60, 0x27,
             0x53,
         ];
-        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
+        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, None);
 
         interpreter.set_code(1, code.to_vec());
 

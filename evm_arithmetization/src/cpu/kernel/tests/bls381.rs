@@ -117,8 +117,7 @@ fn test_kzg_peval_precompile() -> Result<()> {
         stack.reverse();
 
         let verify_kzg_proof = KERNEL.global_labels["verify_kzg_proof"];
-        let mut interpreter: Interpreter<F> =
-            Interpreter::new(verify_kzg_proof, stack, None, &None);
+        let mut interpreter: Interpreter<F> = Interpreter::new(verify_kzg_proof, stack, None, None);
         interpreter.halt_offsets = vec![
             KERNEL.global_labels["store_kzg_verification"],
             KERNEL.global_labels["fault_exception"],

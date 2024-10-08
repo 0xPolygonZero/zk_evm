@@ -270,7 +270,7 @@ fn test_extcodesize() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, None);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -305,7 +305,7 @@ fn test_extcodecopy() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, None);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -489,7 +489,7 @@ fn sstore() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None, None);
 
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
@@ -583,7 +583,7 @@ fn sload() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None, None);
 
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];

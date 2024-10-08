@@ -21,7 +21,7 @@ fn test_correct_block_hash() -> Result<()> {
     let hashes: Vec<U256> = vec![U256::from_big_endian(&thread_rng().gen::<H256>().0); 257];
 
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(blockhash_label, initial_stack, None, &None);
+        Interpreter::new(blockhash_label, initial_stack, None, None);
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, 256.into());
@@ -51,7 +51,7 @@ fn test_big_index_block_hash() -> Result<()> {
     let hashes: Vec<U256> = vec![U256::from_big_endian(&thread_rng().gen::<H256>().0); 257];
 
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(blockhash_label, initial_stack, None, &None);
+        Interpreter::new(blockhash_label, initial_stack, None, None);
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, cur_block_number.into());
@@ -82,7 +82,7 @@ fn test_small_index_block_hash() -> Result<()> {
     let hashes: Vec<U256> = vec![U256::from_big_endian(&thread_rng().gen::<H256>().0); 257];
 
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(blockhash_label, initial_stack, None, &None);
+        Interpreter::new(blockhash_label, initial_stack, None, None);
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, cur_block_number.into());
@@ -111,7 +111,7 @@ fn test_block_hash_with_overflow() -> Result<()> {
     let hashes: Vec<U256> = vec![U256::from_big_endian(&thread_rng().gen::<H256>().0); 257];
 
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(blockhash_label, initial_stack, None, &None);
+        Interpreter::new(blockhash_label, initial_stack, None, None);
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, cur_block_number.into());

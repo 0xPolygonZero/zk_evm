@@ -7,6 +7,9 @@ use alloy::transports::Transport;
 use alloy::transports::TransportErrorKind;
 use zerostructlog::{normalize_structlog, ZeroStructLog};
 
+/// Contains a transaction's `StructLogs` if they are fetched.
+pub type OptionalZeroStructLogs = Option<Vec<ZeroStructLog>>;
+
 /// Pass `true` for the components needed.
 fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDebugTracingOptions {
     GethDebugTracingOptions {
@@ -26,7 +29,7 @@ fn structlog_tracing_options(stack: bool, memory: bool, storage: bool) -> GethDe
 pub async fn get_structlog_for_debug<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
-) -> Result<Option<Vec<ZeroStructLog>>, RpcError<TransportErrorKind>>
+) -> Result<OptionalZeroStructLogs, RpcError<TransportErrorKind>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -35,7 +38,7 @@ where
         .debug_trace_transaction(*tx_hash, structlog_tracing_options(true, false, false))
         .await?;
 
-    let structlogs: Option<Vec<ZeroStructLog>> = normalize_structlog(structlog_trace);
+    let structlogs: OptionalZeroStructLogs = normalize_structlog(structlog_trace);
 
     Ok(structlogs)
 }
@@ -47,6 +50,8 @@ pub mod zerostructlog {
     use alloy_primitives::{Bytes, B256, U256};
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
+
+    use super::OptionalZeroStructLogs;
 
     /// Geth Default struct log trace frame
     ///
@@ -133,9 +138,7 @@ pub mod zerostructlog {
         Ok(b)
     }
 
-    pub(crate) fn normalize_structlog(
-        unnormalized_structlog: GethTrace,
-    ) -> Option<Vec<ZeroStructLog>> {
+    pub(crate) fn normalize_structlog(unnormalized_structlog: GethTrace) -> OptionalZeroStructLogs {
         match unnormalized_structlog {
             GethTrace::Default(structlog_frame) => {
                 let all_struct_logs = structlog_frame

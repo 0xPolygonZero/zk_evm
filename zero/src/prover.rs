@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use alloy_primitives::U256;
 use anyhow::{Context, Result};
-use evm_arithmetization::structlog::zerostructlog::ZeroStructLog;
+use evm_arithmetization::structlog::OptionalZeroStructLogs;
 use evm_arithmetization::Field;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use hashbrown::HashMap;
@@ -58,7 +58,7 @@ pub struct ProverConfig {
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
-    pub struct_logs: Option<Vec<Option<Vec<ZeroStructLog>>>>,
+    pub struct_logs: Option<Vec<OptionalZeroStructLogs>>,
 }
 
 impl BlockProverInput {
@@ -119,10 +119,10 @@ impl BlockProverInput {
                     SegmentDataIterator::<Field>::new(
                         txn_batch,
                         Some(max_cpu_len_log),
-                        &Some(&all_struct_logs[idx].clone()),
+                        Some(all_struct_logs[idx].clone()),
                     )
                 } else {
-                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log), &None)
+                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log), None)
                 };
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)

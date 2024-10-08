@@ -23,7 +23,7 @@ fn process_type_3_txn() -> Result<()> {
         code_hash: H256::default(),
     };
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, None);
     // Prepare the interpreter by inserting the sender account in the state trie.
     prepare_interpreter(&mut interpreter, sender_address, &sender_account)?;
 
@@ -114,7 +114,7 @@ fn process_type_3_txn_invalid_sig() -> Result<()> {
         code_hash: H256::default(),
     };
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, None);
     // Prepare the interpreter by inserting the sender account in the state trie.
     prepare_interpreter(&mut interpreter, sender_address, &sender_account)?;
 
@@ -124,7 +124,7 @@ fn process_type_3_txn_invalid_sig() -> Result<()> {
     // It should fail according to EIP-2 (`s` must be no greater than `N/2`).
     let txn = hex!("03f8b1820539018203e88201f482520894000000000000000000000000000000000000000201824242c08203e8f842a00101010101010101010101010101010101010101010101010101010101010101a0010101010101010101010101010101010101010101010101010101010101010180a076e2a81a28e69fb1e96f5e9470b454b80663197b416c3783be98a6b5bd162b21a0e5e7d285c7907e4342338eb4d4b7e4866633b5fc0893c1fa4105226ffafb8908").to_vec();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, None);
     prepare_interpreter_for_txn_parsing(
         &mut interpreter,
         KERNEL.global_labels["process_type_3_txn"],

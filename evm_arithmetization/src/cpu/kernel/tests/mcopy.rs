@@ -22,7 +22,7 @@ fn test_mcopy(
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);
     let initial_stack = vec![size.into(), offset.into(), dest_offset.into(), kexit_info];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(sys_mcopy, initial_stack, None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(sys_mcopy, initial_stack, None, None);
     interpreter.set_context_metadata_field(
         0,
         ContextMetadata::GasLimit,

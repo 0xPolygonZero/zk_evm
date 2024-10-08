@@ -19,7 +19,7 @@ fn test_valid_blobhash() -> Result<()> {
     let index = 3;
     let target_hash = versioned_hashes[index];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(blobhash_label, vec![], None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(blobhash_label, vec![], None, None);
     interpreter
         .generation_state
         .memory
@@ -60,7 +60,7 @@ fn test_invalid_blobhash() -> Result<()> {
     let index = 7;
     let target_hash = U256::zero(); // out of bound indexing yields 0.
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(blobhash_label, vec![], None, &None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(blobhash_label, vec![], None, None);
     interpreter
         .generation_state
         .memory
