@@ -162,6 +162,12 @@ pub(crate) trait State<F: RichField> {
     /// Applies a `State`'s operations since a checkpoint.
     fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint);
 
+    /// Returns whether the state has been halted.
+    fn halted(&self) -> bool;
+
+    /// Sets whether the state is halted.
+    fn set_halted(&mut self, value: bool);
+
     /// Returns the offsets at which execution must halt
     fn get_halt_offsets(&self) -> Vec<usize>;
 
@@ -233,6 +239,18 @@ pub(crate) trait State<F: RichField> {
             }
 
             self.transition()?;
+
+            // Check if execution should halt
+            if self.halted() {
+                let final_registers = self.get_registers();
+                let final_mem = self.get_active_memory();
+                #[cfg(not(test))]
+                self.log(
+                    Level::Info,
+                    format!("CPU halted after {} cycles", self.get_clock()),
+                );
+                return Ok((final_registers, final_mem));
+            }
         }
     }
 
@@ -267,6 +285,15 @@ pub(crate) trait State<F: RichField> {
         Self: Transition<F>,
         Self: Sized,
     {
+        // Check if we should halt before executing the next instruction
+        let pc = self.get_registers().program_counter;
+        self.log_debug(format!("Checking halt condition at pc={}", pc));
+        if self.get_halt_offsets().contains(&pc) {
+            self.log_debug(format!("Halting execution at pc={}", pc));
+            self.set_halted(true);
+            return Ok(());
+        }
+
         let checkpoint = self.checkpoint();
         let result = self.try_perform_instruction();
 
@@ -279,6 +306,33 @@ pub(crate) trait State<F: RichField> {
                 }
 
                 Ok(())
+            }
+            Err(ProgramError::KernelPanic) => {
+                if self.get_registers().is_kernel {
+                    let pc = self.get_registers().program_counter;
+                    if self.get_halt_offsets().contains(&pc) {
+                        // Treat as normal termination at halt offsets
+                        self.apply_ops(checkpoint);
+                        self.set_halted(true); // Use accessor method
+                        Ok(())
+                    } else {
+                        // Handle other KernelPanic occurrences as errors
+                        let offset_name = KERNEL.offset_name(pc);
+                        bail!(
+                            "{:?} in kernel at pc={}, stack={:?}, memory={:?}",
+                            ProgramError::KernelPanic,
+                            offset_name,
+                            self.get_stack(),
+                            self.mem_get_kernel_content()
+                                .iter()
+                                .map(|c| c.unwrap_or_default())
+                                .collect_vec(),
+                        );
+                    }
+                } else {
+                    self.rollback(checkpoint);
+                    self.handle_error(ProgramError::KernelPanic)
+                }
             }
             Err(e) => {
                 if self.get_registers().is_kernel {
@@ -385,6 +439,7 @@ pub struct GenerationState<F: RichField> {
     pub(crate) state_ptrs: LinkedListsPtrs,
 
     pub(crate) halt_offsets: Vec<usize>,
+    pub(crate) halted: bool,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -453,6 +508,7 @@ impl<F: RichField> GenerationState<F> {
             state_ptrs: LinkedListsPtrs::default(),
             ger_prover_inputs,
             halt_offsets,
+            halted: false,
         };
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
@@ -469,6 +525,7 @@ impl<F: RichField> GenerationState<F> {
             inputs: trimmed_inputs.clone(),
             state_ptrs: segment_data.extra_data.state_ptrs.clone(),
             access_lists_ptrs: segment_data.extra_data.access_lists_ptrs.clone(),
+            halted: false,
             ..Default::default()
         };
 
@@ -569,6 +626,7 @@ impl<F: RichField> GenerationState<F> {
             access_lists_ptrs: self.access_lists_ptrs.clone(),
             state_ptrs: self.state_ptrs.clone(),
             halt_offsets: self.halt_offsets.clone(),
+            halted: false,
         }
     }
 
@@ -664,8 +722,16 @@ impl<F: RichField> State<F> for GenerationState<F> {
             .apply_ops(self.traces.mem_ops_since(checkpoint.traces))
     }
 
+    fn halted(&self) -> bool {
+        self.halted
+    }
+
+    fn set_halted(&mut self, value: bool) {
+        self.halted = value;
+    }
+
     fn get_halt_offsets(&self) -> Vec<usize> {
-        vec![KERNEL.global_labels["halt_final"]]
+        self.halt_offsets.clone()
     }
 
     fn try_perform_instruction(&mut self) -> Result<Operation, ProgramError> {

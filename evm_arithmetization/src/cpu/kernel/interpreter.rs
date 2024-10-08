@@ -64,6 +64,8 @@ pub(crate) struct Interpreter<F: RichField> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
+    /// Indicates whether the interpreter has been halted.
+    pub(crate) halted: bool,
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -164,6 +166,7 @@ impl<F: RichField> Interpreter<F> {
 
         let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log, halt_offsets);
         result.initialize_interpreter_state(inputs);
+        result.halted = false;
         result
     }
 
@@ -188,6 +191,7 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
+            halted: false,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -219,6 +223,7 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
+            halted: false,
         }
     }
 
@@ -610,6 +615,14 @@ impl<F: RichField> State<F> for Interpreter<F> {
         stack
     }
 
+    fn halted(&self) -> bool {
+        false
+    }
+
+    fn set_halted(&mut self, value: bool) {
+        self.halted = value;
+    }
+    
     fn get_halt_offsets(&self) -> Vec<usize> {
         self.halt_offsets.clone()
     }

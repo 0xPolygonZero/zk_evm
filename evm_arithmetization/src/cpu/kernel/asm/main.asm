@@ -60,6 +60,9 @@ global init:
     // Now, we set the PC, is_kernel and gas_used to the correct values and continue the execution.
     EXIT_KERNEL
 
+global post_init_halt:
+    // No code here; it's just a label to mark the halt point
+
 global main:
     // Initialize accessed addresses and storage keys lists
     %init_access_lists
