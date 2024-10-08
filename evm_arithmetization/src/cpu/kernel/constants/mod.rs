@@ -371,11 +371,14 @@ const PRECOMPILES_GAS: [(&str, u16); 14] = [
 
 const SNARKV_POINTERS: [(&str, u64); 2] = [("SNARKV_INP", 112), ("SNARKV_OUT", 100)];
 
+pub(crate) const MAX_CODE_SIZE: u64 = if cfg!(feature = "polygon_pos") {
+    0x8000 // Polygon PoS value, see PIP-30.
+} else {
+    0x6000 // default Ethereum value
+};
+
 const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
-    #[cfg(not(feature = "polygon_pos"))]
-    ("MAX_CODE_SIZE", 0x6000), // default Ethereum value
-    #[cfg(feature = "polygon_pos")]
-    ("MAX_CODE_SIZE", 0x8000), // Polygon PoS value, see PIP-30.
+    ("MAX_CODE_SIZE", MAX_CODE_SIZE),
     ("MAX_INITCODE_SIZE", 0xc000),
     ("INITCODE_WORD_COST", 2),
 ];
