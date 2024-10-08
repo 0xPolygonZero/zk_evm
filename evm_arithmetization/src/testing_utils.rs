@@ -12,6 +12,7 @@ use mpt_trie::{
 };
 use plonky2::field::goldilocks_field::GoldilocksField;
 
+use crate::cpu::kernel::aggregator::KERNEL;
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
 use crate::generation::{TrieInputs, TrimmedGenerationInputs};
@@ -225,8 +226,9 @@ pub fn segment_without_keccak() -> Result<(
 )> {
     let payload = empty_payload()?;
     let max_cpu_len_log = Some(7);
+    let halt_offsets = Some(vec![KERNEL.global_labels["halt"]]);
     let mut segment_iterator =
-        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
+        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log, halt_offsets);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
     let opcode_counts = &segment_data.opcode_counts;

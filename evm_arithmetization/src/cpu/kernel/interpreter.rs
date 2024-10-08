@@ -158,10 +158,11 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
+        halt_offsets: Option<Vec<usize>>,
     ) -> Self {
         debug_inputs(inputs);
 
-        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
+        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log, halt_offsets);
         result.initialize_interpreter_state(inputs);
         result
     }
@@ -170,13 +171,17 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
+        halt_offsets: Option<Vec<usize>>,
     ) -> Self {
+        let default_halt_offsets = vec![DEFAULT_HALT_OFFSET, KERNEL.global_labels["halt_final"]];
+        let halt_offsets_clone = halt_offsets.clone().unwrap_or(default_halt_offsets.clone());
+        let generation_state =
+            GenerationState::new(&GenerationInputs::default(), &KERNEL.code, halt_offsets)
+                .expect("Default inputs are known-good");
+
         let mut interpreter = Self {
-            generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
-                .expect("Default inputs are known-good"),
-            // `DEFAULT_HALT_OFFSET` is used as a halting point for the interpreter,
-            // while the label `halt` is the halting label in the kernel.
-            halt_offsets: vec![DEFAULT_HALT_OFFSET, KERNEL.global_labels["halt_final"]],
+            generation_state,
+            halt_offsets: halt_offsets_clone,
             halt_context: None,
             opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),

@@ -402,8 +402,13 @@ pub mod testing {
 
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["init"];
-        let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
+        let mut interpreter: Interpreter<F> = Interpreter::new_with_generation_inputs(
+            initial_offset,
+            initial_stack,
+            &inputs,
+            None,
+            None,
+        );
         interpreter.run()?;
         Ok(())
     }
@@ -420,7 +425,8 @@ pub mod testing {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
     {
-        let segment_data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
+        let segment_data_iterator =
+            SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log), None);
         let inputs = inputs.trim();
         let mut proofs = vec![];
 
@@ -449,7 +455,7 @@ pub mod testing {
     {
         features_check(&inputs.clone().trim());
 
-        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
+        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log), None) {
             segment?;
         }
 
