@@ -3181,7 +3181,7 @@ mod tests {
             all_circuits.prove_segment(
                 &all_stark,
                 &config,
-                payload.trim(),
+                payload,
                 &mut segment_data,
                 timing,
                 None,

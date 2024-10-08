@@ -14,7 +14,7 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::generation::TrieInputs;
+use crate::generation::{TrieInputs, TrimmedGenerationInputs};
 use crate::proof::TrieRoots;
 use crate::witness::operation::Operation;
 use crate::{
@@ -219,15 +219,18 @@ fn empty_payload() -> Result<GenerationInputs> {
     Ok(inputs)
 }
 
-pub fn segment_without_keccak() -> Result<(GenerationInputs, GenerationSegmentData)> {
+pub fn segment_without_keccak() -> Result<(
+    TrimmedGenerationInputs<GoldilocksField>,
+    GenerationSegmentData,
+)> {
     let payload = empty_payload()?;
     let max_cpu_len_log = Some(7);
     let mut segment_iterator =
         SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
-    let (_, segment_data) = segment_iterator.next().unwrap()?;
+    let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
     let opcode_counts = &segment_data.opcode_counts;
     assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
 
-    Ok((payload, segment_data))
+    Ok((trimmed_inputs, segment_data))
 }

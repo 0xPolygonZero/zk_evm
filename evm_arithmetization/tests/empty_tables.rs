@@ -29,7 +29,7 @@ fn empty_tables() -> anyhow::Result<()> {
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
-        payload.trim(),
+        payload,
         &mut segment_data,
         &mut timing,
         None,

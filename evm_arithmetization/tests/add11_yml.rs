@@ -110,7 +110,7 @@ fn get_generation_inputs() -> GenerationInputs {
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
         )
-            .unwrap();
+        .unwrap();
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
@@ -131,7 +131,7 @@ fn get_generation_inputs() -> GenerationInputs {
                 nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
                 value: vec![2],
             })
-                .hash(),
+            .hash(),
             ..AccountRlp::default()
         };
 
@@ -174,7 +174,7 @@ fn get_generation_inputs() -> GenerationInputs {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     }
-        .into();
+    .into();
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
