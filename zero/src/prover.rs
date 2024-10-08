@@ -112,7 +112,7 @@ impl BlockProverInput {
             .enumerate()
             .map(|(idx, txn_batch)| {
                 let segment_data_iterator =
-                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log), None);
+                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log));
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)

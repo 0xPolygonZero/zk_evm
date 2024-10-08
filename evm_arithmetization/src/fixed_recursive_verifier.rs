@@ -3078,7 +3078,7 @@ pub mod testing {
             features_check(&generation_inputs.clone().trim());
 
             let segment_iterator =
-                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log), None);
+                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
 
             let mut proofs = vec![];
 
