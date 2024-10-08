@@ -127,7 +127,7 @@ run_constructor:
     // stack: kexit_info, address, new_ctx
     %drain_all_but_one_64th_gas
     %stack (kexit_info, drained_gas, address, new_ctx) -> (drained_gas, new_ctx, address, kexit_info)
-    %set_new_ctx_gas_limit
+    %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, address, kexit_info
 
     // Create the new contract account in the state trie.
