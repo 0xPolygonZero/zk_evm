@@ -20,7 +20,7 @@ use starky::proof::{MultiProof, StarkProofWithMetadata};
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
@@ -47,7 +47,7 @@ where
 
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
 
-    let (traces, mut public_values) = timed!(
+    let mut tables_with_pvs = timed!(
         timing,
         "generate all traces",
         generate_traces(all_stark, &inputs, config, segment_data, timing)?
@@ -58,8 +58,9 @@ where
     let proof = prove_with_traces(
         all_stark,
         config,
-        traces,
-        &mut public_values,
+        tables_with_pvs.tables,
+        tables_with_pvs.use_keccak_tables,
+        &mut tables_with_pvs.public_values,
         timing,
         abort_signal,
     )?;
@@ -72,6 +73,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    use_keccak_tables: bool,
     public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -114,8 +116,14 @@ where
         .map(|c| c.merkle_tree.cap.clone())
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
-    for cap in &trace_caps {
-        challenger.observe_cap(cap);
+    for (i, cap) in trace_caps.iter().enumerate() {
+        if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
+            // Observe zero merkle caps when skipping Keccak tables.
+            let zero_merkle_cap = cap.flatten().iter().map(|_| F::ZERO).collect::<Vec<F>>();
+            challenger.observe_elements(&zero_merkle_cap);
+        } else {
+            challenger.observe_cap(cap);
+        }
     }
 
     observe_public_values::<F, C, D>(&mut challenger, public_values)
@@ -143,6 +151,7 @@ where
             config,
             &trace_poly_values,
             trace_commitments,
+            use_keccak_tables,
             ctl_data_per_table,
             &mut challenger,
             &ctl_challenges,
@@ -206,6 +215,7 @@ where
             ctl_challenges,
         },
         public_values: public_values.clone(),
+        use_keccak_tables,
     })
 }
 
@@ -229,6 +239,7 @@ fn prove_with_commitments<F, C, const D: usize>(
     config: &StarkConfig,
     trace_poly_values: &[Vec<PolynomialValues<F>>; NUM_TABLES],
     trace_commitments: Vec<PolynomialBatch<F, C, D>>,
+    use_keccak_tables: bool,
     ctl_data_per_table: [CtlData<F>; NUM_TABLES],
     challenger: &mut Challenger<F, C::Hasher>,
     ctl_challenges: &GrandProductChallengeSet<F>,
@@ -262,8 +273,16 @@ where
     let (arithmetic_proof, _) = prove_table!(arithmetic_stark, Table::Arithmetic);
     let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
     let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
+    let challenger_after_cpu = challenger.clone();
+    // TODO(sdeng): Keccak proofs are still required for CTLs, etc. Refactor the
+    // code and remove the unnecessary parts.
     let (keccak_proof, _) = prove_table!(keccak_stark, Table::Keccak);
     let (keccak_sponge_proof, _) = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
+    if !use_keccak_tables {
+        // We need to connect the challenger state of CPU and Logic tables when the
+        // Keccak tables are not in use.
+        *challenger = challenger_after_cpu;
+    }
     let (logic_proof, _) = prove_table!(logic_stark, Table::Logic);
     let (memory_proof, _) = prove_table!(memory_stark, Table::Memory);
     let (mem_before_proof, mem_before_cap) = prove_table!(mem_before_stark, Table::MemBefore);

@@ -83,6 +83,9 @@ pub(crate) trait State<F: RichField> {
         vec![]
     }
 
+    /// Indicates whether we are in kernel mode.
+    fn is_kernel(&self) -> bool;
+
     /// Returns the current context.
     fn get_context(&self) -> usize;
 
@@ -690,6 +693,10 @@ impl<F: RichField> State<F> for GenerationState<F> {
 
     fn get_stack(&self) -> Vec<U256> {
         self.stack()
+    }
+
+    fn is_kernel(&self) -> bool {
+        self.registers.is_kernel
     }
 
     fn get_context(&self) -> usize {

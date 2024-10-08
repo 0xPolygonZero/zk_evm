@@ -6,6 +6,7 @@ use super::util::stack_pop_with_log_and_fill;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
@@ -386,6 +387,10 @@ where
             .try_into()
             .map_err(|_| ProgramError::InvalidJumpDestination)?;
 
+        if !self.is_kernel() && dst > MAX_CODE_SIZE as u32 {
+            return Err(ProgramError::InvalidJumpDestination);
+        }
+
         if !self.generate_jumpdest_analysis(dst as usize) {
             row.mem_channels[1].value[0] = F::ONE;
 
@@ -454,6 +459,11 @@ where
             let dst: u32 = dst
                 .try_into()
                 .map_err(|_| ProgramError::InvalidJumpiDestination)?;
+
+            if !self.is_kernel() && dst > MAX_CODE_SIZE as u32 {
+                return Err(ProgramError::InvalidJumpiDestination);
+            }
+
             if !self.generate_jumpdest_analysis(dst as usize) {
                 row.general.jumps_mut().should_jump = F::ONE;
                 let cond_sum_u64 = cond
