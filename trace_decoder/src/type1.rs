@@ -12,12 +12,12 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::tries::{MptKey, StateMpt, StorageTrie};
+use crate::tries::{MptKey, StorageTrie, Type1World};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone)]
 pub struct Frontend {
-    pub state: StateMpt,
+    pub state: Type1World,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     pub storage: BTreeMap<H256, StorageTrie>,
 }
@@ -27,7 +27,7 @@ impl Default for Frontend {
     // which covers branch-to-extension collapse edge cases.
     fn default() -> Self {
         Self {
-            state: StateMpt::new(OnOrphanedHashNode::CollapseToExtension),
+            state: Type1World::new(OnOrphanedHashNode::CollapseToExtension),
             code: BTreeSet::new(),
             storage: BTreeMap::new(),
         }
@@ -379,7 +379,7 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 
 #[test]
 fn test_tries() {
-    use crate::tries::StateTrie as _;
+    use crate::tries::World as _;
 
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/zero_jerigon.json"))
@@ -393,7 +393,7 @@ fn test_tries() {
         assert_eq!(case.expected_state_root, frontend.state.root());
 
         for (haddr, acct) in frontend.state.iter() {
-            if acct.storage_root != StateMpt::default().root() {
+            if acct.storage_root != Type1World::default().root() {
                 assert!(frontend.storage.contains_key(&haddr))
             }
         }

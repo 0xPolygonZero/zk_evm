@@ -12,7 +12,7 @@ use nunny::NonEmpty;
 use stackstack::Stack;
 
 use crate::{
-    tries::{SmtKey, StateSmt},
+    tries::{SmtKey, Type2World},
     wire::{Instruction, SmtLeaf, SmtLeafType},
 };
 
@@ -27,7 +27,7 @@ pub struct CollatedLeaf {
 }
 
 pub struct Frontend {
-    pub trie: StateSmt,
+    pub trie: Type2World,
     pub code: HashSet<NonEmpty<Vec<u8>>>,
 }
 
@@ -113,11 +113,11 @@ fn fold1(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<
     }
 }
 
-fn node2trie(node: Node) -> anyhow::Result<StateSmt> {
+fn node2trie(node: Node) -> anyhow::Result<Type2World> {
     let mut hashes = BTreeMap::new();
     let mut leaves = BTreeMap::new();
     visit(&mut hashes, &mut leaves, Stack::new(), node)?;
-    Ok(StateSmt::new_unchecked(
+    Ok(Type2World::new_unchecked(
         leaves
             .into_iter()
             .map(

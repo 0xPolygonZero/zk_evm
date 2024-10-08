@@ -21,10 +21,10 @@ use zk_evm_common::gwei_to_wei;
 
 use crate::{
     observer::{DummyObserver, Observer},
-    tries::StateSmt,
+    tries::Type2World,
 };
 use crate::{
-    tries::{MptKey, ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie},
+    tries::{MptKey, ReceiptTrie, StorageTrie, TransactionTrie, Type1World, World},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,
@@ -46,7 +46,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
-    observer: &mut impl Observer<StateMpt>,
+    observer: &mut impl Observer<Type1World>,
     wire_disposition: WireDisposition,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
@@ -179,7 +179,7 @@ fn start(
     pre_images: BlockTraceTriePreImages,
     wire_disposition: WireDisposition,
 ) -> anyhow::Result<(
-    Either<StateMpt, StateSmt>,
+    Either<Type1World, Type2World>,
     BTreeMap<H256, StorageTrie>,
     Hash2Code,
 )> {
@@ -191,7 +191,7 @@ fn start(
             storage: SeparateStorageTriesPreImage::MultipleTries(storage),
         }) => {
             let state = state.items().try_fold(
-                StateMpt::default(),
+                Type1World::default(),
                 |mut acc, (nibbles, hash_or_val)| {
                     let path = MptKey::from_nibbles(nibbles);
                     match hash_or_val {
@@ -391,7 +391,7 @@ pub struct FatalMissingCode(pub bool);
 
 /// Does the main work mentioned in the [module documentation](super).
 #[allow(clippy::too_many_arguments)]
-fn middle<StateTrieT: StateTrie + Clone>(
+fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
     // storage at the beginning of the block
@@ -409,7 +409,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
     observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>>
 where
-    StateTrieT::Key: Ord + From<Address>,
+    StateTrieT::StateKey: Ord + From<Address>,
 {
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
@@ -451,7 +451,7 @@ where
         // but won't know the bounds until after the loop below,
         // so store that information here.
         let mut storage_masks = BTreeMap::<_, BTreeSet<MptKey>>::new();
-        let mut state_mask = BTreeSet::<StateTrieT::Key>::new();
+        let mut state_mask = BTreeSet::<StateTrieT::StateKey>::new();
 
         if txn_ix == 0 {
             do_pre_execution(
@@ -511,7 +511,7 @@ where
                 .context(format!("couldn't decode receipt in txn {tx_hash:x}"))?;
 
                 let (mut acct, born) = state_trie
-                    .get_by_address(addr)
+                    .get_account_info(addr)
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
@@ -524,7 +524,7 @@ where
                 if born || just_access {
                     state_trie
                         .clone()
-                        .insert_by_address(addr, acct)
+                        .insert_account_info(addr, acct)
                         .context(format!(
                             "couldn't reach state of {} address {addr:x} in txn {tx_hash:x}",
                             match born {
@@ -606,11 +606,11 @@ where
                         acct.storage_root = storage.root();
                     }
 
-                    state_trie.insert_by_address(addr, acct)?;
-                    state_mask.insert(<StateTrieT::Key>::from(addr));
+                    state_trie.insert_account_info(addr, acct)?;
+                    state_mask.insert(<StateTrieT::StateKey>::from(addr));
                 } else {
                     // Simple state access
-                    state_mask.insert(<StateTrieT::Key>::from(addr));
+                    state_mask.insert(<StateTrieT::StateKey>::from(addr));
                 }
 
                 if self_destructed {
@@ -633,13 +633,13 @@ where
             withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
-                        state_mask.insert(<StateTrieT::Key>::from(*addr));
+                        state_mask.insert(<StateTrieT::StateKey>::from(*addr));
                         let mut acct = state_trie
-                            .get_by_address(*addr)
+                            .get_account_info(*addr)
                             .context(format!("missing address {addr:x} for withdrawal"))?;
                         acct.balance += *amt;
                         state_trie
-                            .insert_by_address(*addr, acct)
+                            .insert_account_info(*addr, acct)
                             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
                             //                Add an entry API
                             .expect("insert must succeed with the same key as a successful `get`");
@@ -687,16 +687,16 @@ where
 }
 
 /// Performs all the pre-txn execution rules of the targeted network.
-fn do_pre_execution<StateTrieT: StateTrie + Clone>(
+fn do_pre_execution<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
-    trim_state: &mut BTreeSet<StateTrieT::Key>,
+    trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::Key: From<Address> + Ord,
+    StateTrieT::StateKey: From<Address> + Ord,
 {
     // Ethereum mainnet: EIP-4788
     if cfg!(feature = "eth_mainnet") {
@@ -729,16 +729,16 @@ where
 ///
 /// This is Polygon-CDK-specific, and runs at the start of the block,
 /// before any transactions (as per the Etrog specification).
-fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
+fn do_scalable_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
-    trim_state: &mut BTreeSet<StateTrieT::Key>,
+    trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::Key: From<Address> + Ord,
+    StateTrieT::StateKey: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
         ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
@@ -786,13 +786,13 @@ where
     scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
     scalable_trim.insert(slot);
 
-    trim_state.insert(<StateTrieT::Key>::from(ADDRESS_SCALABLE_L2));
+    trim_state.insert(<StateTrieT::StateKey>::from(ADDRESS_SCALABLE_L2));
     let mut scalable_acct = state_trie
-        .get_by_address(ADDRESS_SCALABLE_L2)
+        .get_account_info(ADDRESS_SCALABLE_L2)
         .context("missing scalable contract address")?;
     scalable_acct.storage_root = scalable_storage.root();
     state_trie
-        .insert_by_address(ADDRESS_SCALABLE_L2, scalable_acct)
+        .insert_account_info(ADDRESS_SCALABLE_L2, scalable_acct)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
         //                Add an entry API
         .expect("insert must succeed with the same key as a successful `get`");
@@ -812,13 +812,13 @@ where
         ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
         ger_trim.insert(slot);
 
-        trim_state.insert(<StateTrieT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
+        trim_state.insert(<StateTrieT::StateKey>::from(GLOBAL_EXIT_ROOT_ADDRESS));
         let mut ger_acct = state_trie
-            .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
+            .get_account_info(GLOBAL_EXIT_ROOT_ADDRESS)
             .context("missing GER contract address")?;
         ger_acct.storage_root = ger_storage.root();
         state_trie
-            .insert_by_address(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
+            .insert_account_info(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
             //                Add an entry API
             .expect("insert must succeed with the same key as a successful `get`");
@@ -832,16 +832,16 @@ where
 ///
 /// This is Cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
-fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
+fn do_beacon_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     parent_beacon_block_root: H256,
-    trim_state: &mut BTreeSet<StateTrieT::Key>,
+    trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::Key: From<Address> + Ord,
+    StateTrieT::StateKey: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
         BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
@@ -874,13 +874,13 @@ where
             }
         }
     }
-    trim_state.insert(<StateTrieT::Key>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
+    trim_state.insert(<StateTrieT::StateKey>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
     let mut beacon_acct = state_trie
-        .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
+        .get_account_info(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context("missing beacon contract address")?;
     beacon_acct.storage_root = beacon_storage.root();
     state_trie
-        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
+        .insert_account_info(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
         //                Add an entry API
         .expect("insert must succeed with the same key as a successful `get`");

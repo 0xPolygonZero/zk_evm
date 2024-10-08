@@ -366,15 +366,23 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
-/// TODO(0xaatif): document this after refactoring is done <https://github.com/0xPolygonZero/zk_evm/issues/275>
-pub trait StateTrie {
-    type Key;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()>;
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
-    /// _Hash out_ parts of the trie that aren't in `addresses`.
-    fn mask(&mut self, address: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
+/// The state and storage of all accounts.
+///
+/// Some parts of the tries may be _hashed out_.
+pub trait World {
+    type StateKey;
+    type AccountInfo;
+    fn insert_account_info(
+        &mut self,
+        address: Address,
+        account: Self::AccountInfo,
+    ) -> anyhow::Result<()>;
+    fn get_account_info(&self, address: Address) -> Option<Self::AccountInfo>;
+    /// Hacky method to workaround MPT shenanigans.
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::StateKey>>;
+    /// _Hash out_ parts of the (state) trie that aren't in `addresses`.
+    fn mask(&mut self, addresses: impl IntoIterator<Item = Self::StateKey>) -> anyhow::Result<()>;
+    fn iter(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
     fn root(&self) -> H256;
 }
 
@@ -382,14 +390,14 @@ pub trait StateTrie {
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
-pub struct StateMpt {
-    typed: TypedMpt<AccountRlp>,
+pub struct Type1World {
+    state: TypedMpt<AccountRlp>,
 }
 
-impl StateMpt {
+impl Type1World {
     pub fn new(strategy: OnOrphanedHashNode) -> Self {
         Self {
-            typed: TypedMpt {
+            state: TypedMpt {
                 inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
                 _ty: PhantomData,
             },
@@ -397,7 +405,7 @@ impl StateMpt {
     }
     /// Insert a _hashed out_ part of the trie
     pub fn insert_hash_by_key(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
-        self.typed.insert_hash(key, hash)
+        self.state.insert_hash(key, hash)
     }
     #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
     pub fn insert_by_hashed_address(
@@ -405,61 +413,62 @@ impl StateMpt {
         key: H256,
         account: AccountRlp,
     ) -> anyhow::Result<()> {
-        self.typed.insert(MptKey::from_hash(key), account)
+        self.state.insert(MptKey::from_hash(key), account)
     }
     pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
+        self.state
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
+        self.state.as_hashed_partial_trie()
     }
 }
 
-impl StateTrie for StateMpt {
-    type Key = MptKey;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
+impl World for Type1World {
+    type StateKey = MptKey;
+    type AccountInfo = AccountRlp;
+    fn insert_account_info(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
         #[expect(deprecated)]
         self.insert_by_hashed_address(keccak_hash::keccak(address), account)
     }
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.typed
+    fn get_account_info(&self, address: Address) -> Option<AccountRlp> {
+        self.state
             .get(MptKey::from_hash(keccak_hash::keccak(address)))
     }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(
-            self.typed.as_mut_hashed_partial_trie_unchecked(),
+            self.state.as_mut_hashed_partial_trie_unchecked(),
             MptKey::from_address(address),
         )
     }
     fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
-            self.typed.as_hashed_partial_trie(),
+            self.state.as_hashed_partial_trie(),
             addresses.into_iter().map(MptKey::into_nibbles),
         )?;
-        self.typed = TypedMpt {
+        self.state = TypedMpt {
             inner,
             _ty: PhantomData,
         };
         Ok(())
     }
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
+        self.state
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
     fn root(&self) -> H256 {
-        self.typed.root()
+        self.state.root()
     }
 }
 
-impl From<StateMpt> for HashedPartialTrie {
-    fn from(value: StateMpt) -> Self {
-        let StateMpt {
-            typed: TypedMpt { inner, _ty },
+impl From<Type1World> for HashedPartialTrie {
+    fn from(value: Type1World) -> Self {
+        let Type1World {
+            state: TypedMpt { inner, _ty },
         } = value;
         inner
     }
@@ -470,18 +479,19 @@ impl From<StateMpt> for HashedPartialTrie {
 // - insertion operations aren't fallible, they just panic.
 // - it documents a requirement that `set_hash` is called before `set`.
 #[derive(Clone, Debug)]
-pub struct StateSmt {
+pub struct Type2World {
     address2state: BTreeMap<Address, AccountRlp>,
     hashed_out: BTreeMap<SmtKey, H256>,
 }
 
-impl StateTrie for StateSmt {
-    type Key = SmtKey;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
+impl World for Type2World {
+    type StateKey = SmtKey;
+    type AccountInfo = AccountRlp;
+    fn insert_account_info(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
         self.address2state.insert(address, account);
         Ok(())
     }
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+    fn get_account_info(&self, address: Address) -> Option<AccountRlp> {
         self.address2state.get(&address).copied()
     }
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<SmtKey>> {
@@ -502,7 +512,7 @@ impl StateTrie for StateSmt {
     }
 }
 
-impl StateSmt {
+impl Type2World {
     pub(crate) fn new_unchecked(
         address2state: BTreeMap<Address, AccountRlp>,
         hashed_out: BTreeMap<SmtKey, H256>,
