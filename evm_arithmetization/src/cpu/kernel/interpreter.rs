@@ -603,7 +603,15 @@ impl<F: RichField> State<F> for Interpreter<F> {
                         }
                     }
                     Err(_) => {
-                        log::warn!("There is a wrong opcode on the Kernel side.");
+                        // Update the counter since we will not get to the next
+                        // check.
+                        self.struct_log_debugger_info.counter += 1;
+                        if self.struct_log_debugger_info.counter == txn_struct_logs.len() {
+                            self.struct_log_debugger_info.counter = 0;
+                        }
+                        if struct_op != "INVALID" {
+                            return Err(ProgramError::StructLogDebuggerError);
+                        }
                     }
                 }
 
@@ -839,8 +847,6 @@ impl<F: RichField> State<F> for Interpreter<F> {
         let registers = self.generation_state.registers;
         let (mut row, opcode) = self.base_row();
 
-        let op = decode(registers, opcode)?;
-
         let is_user_mode = !self.is_kernel();
 
         // If we are in user and debug mode, and have extracted the struct logs, check
@@ -849,6 +855,8 @@ impl<F: RichField> State<F> for Interpreter<F> {
             && (self.get_registers().program_counter != 0 || opcode != 0x00)
             && !self.is_jumpdest_analysis;
         self.check_against_struct_logs_before_op(opcode, to_check)?;
+
+        let op = decode(registers, opcode)?;
 
         // Increment the opcode count
         *self.opcode_count.entry(op).or_insert(0) += 1;
@@ -1143,7 +1151,6 @@ fn get_mnemonic(opcode: u8) -> anyhow::Result<&'static str> {
         0xfb => Ok("MLOAD_GENERAL"),
         0xfc => Ok("MSTORE_GENERAL"),
         0xfd => Ok("REVERT"),
-        0xfe => Ok("INVALID"),
         0xff => Ok("SELFDESTRUCT"),
         _ => Err(anyhow!("Invalid opcode: {}", opcode)),
     }
