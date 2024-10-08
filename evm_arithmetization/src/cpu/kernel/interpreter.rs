@@ -561,10 +561,10 @@ impl<F: RichField> State<F> for Interpreter<F> {
     fn check_against_struct_logs_before_op(
         &mut self,
         opcode: u8,
-        is_user_mode: bool,
+        to_check: bool,
     ) -> Result<(), ProgramError> {
         if let Some(struct_logs) = &self.struct_logs
-            && is_user_mode
+            && to_check
         {
             let txn_idx = self.generation_state.next_txn_index;
 
@@ -603,11 +603,7 @@ impl<F: RichField> State<F> for Interpreter<F> {
                         }
                     }
                     Err(_) => {
-                        if cur_txn_struct_logs.error.is_none() {
-                            // This is not necessarily a discrepancy: the struct logs might not hold
-                            // an error message in case of an error.
-                            log::warn!("There is a wrong opcode on the Kernel side but no error message in the struct logs.");
-                        }
+                        log::warn!("There is a wrong opcode on the Kernel side.");
                     }
                 }
 
@@ -648,10 +644,10 @@ impl<F: RichField> State<F> for Interpreter<F> {
         &mut self,
         res: &Result<Operation, ProgramError>,
         consumed_gas: u64,
-        is_user_mode: bool,
+        to_check: bool,
     ) -> Result<(), ProgramError> {
         if let Some(struct_logs) = &self.struct_logs
-            && is_user_mode
+            && to_check
         {
             let txn_idx = self.generation_state.next_txn_index;
             // First, update the gas.
@@ -659,21 +655,13 @@ impl<F: RichField> State<F> for Interpreter<F> {
             self.struct_log_debugger_info.prev_op_gas = consumed_gas;
 
             if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
+                // If the transaction errors, we simply log a warning, since struct logs do not
+                // actually return an error in that case.
                 let cur_txn_struct_logs =
                     txn_struct_logs[self.struct_log_debugger_info.counter].clone();
-                let cur_txn_struct_logs_e = cur_txn_struct_logs.error;
-                match cur_txn_struct_logs_e {
-                    Some(e) => {
-                        if !res.is_err() {
-                            log::warn!("Expected error {:?} but didn't get any.", e);
-                            return Err(ProgramError::StructLogDebuggerError);
-                        }
-                    }
-                    None => {
-                        if res.is_err() {
-                            log::warn!("No error expected but got {:?}.", res);
-                        }
-                    }
+
+                if res.is_err() {
+                    log::warn!("Kernel execution errored with: {:?}.", res);
                 }
 
                 // Check opcode gas.
@@ -855,7 +843,10 @@ impl<F: RichField> State<F> for Interpreter<F> {
 
         // If we are in user and debug mode, and have extracted the struct logs, check
         // the kernel run against the struct logs.
-        self.check_against_struct_logs_before_op(opcode, is_user_mode)?;
+        let to_check = is_user_mode
+            && (self.get_registers().program_counter != 0 || opcode != 0x00)
+            && !self.is_jumpdest_analysis;
+        self.check_against_struct_logs_before_op(opcode, to_check)?;
 
         // Increment the opcode count
         *self.opcode_count.entry(op).or_insert(0) += 1;
@@ -891,7 +882,7 @@ impl<F: RichField> State<F> for Interpreter<F> {
         };
 
         // Final checks against struct logs in debug and user mode.
-        self.check_against_struct_logs_after_op(&res, consumed_gas, is_user_mode)?;
+        self.check_against_struct_logs_after_op(&res, consumed_gas, to_check)?;
         res
     }
 

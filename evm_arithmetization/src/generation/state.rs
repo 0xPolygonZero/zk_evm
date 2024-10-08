@@ -179,7 +179,7 @@ pub(crate) trait State<F: RichField> {
     fn check_against_struct_logs_before_op(
         &mut self,
         _opcode: u8,
-        _is_user_mode: bool,
+        _to_check: bool,
     ) -> Result<(), ProgramError> {
         Ok(())
     }
@@ -191,7 +191,7 @@ pub(crate) trait State<F: RichField> {
         &mut self,
         _res: &Result<Operation, ProgramError>,
         _consumed_gas: u64,
-        _is_user_mode: bool,
+        _to_check: bool,
     ) -> Result<(), ProgramError> {
         Ok(())
     }
