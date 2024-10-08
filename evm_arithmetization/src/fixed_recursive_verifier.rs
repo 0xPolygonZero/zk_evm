@@ -3078,7 +3078,7 @@ pub mod testing {
             features_check(&generation_inputs.clone().trim());
 
             let segment_iterator =
-                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
+                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log), false);
 
             let mut proofs = vec![];
 
@@ -3137,7 +3137,7 @@ pub mod testing {
 }
 
 #[cfg(test)]
-#[cfg(not(feature = "cdk_erigon"))]
+// #[cfg(not(feature = "cdk_erigon"))]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::plonk::config::PoseidonGoldilocksConfig;
@@ -3161,6 +3161,9 @@ mod tests {
             "Segment Proof Generation Without Keccak Test",
             log::Level::Info,
         );
+
+        let (payload, mut segment_data) = segment_without_keccak()?;
+
         // Process and prove segment
         let all_circuits = timed!(
             timing,
@@ -3173,7 +3176,6 @@ mod tests {
             )
         );
 
-        let (payload, mut segment_data) = segment_without_keccak()?;
         let segment_proof = timed!(
             timing,
             log::Level::Info,
