@@ -225,8 +225,8 @@ pub fn segment_without_keccak() -> Result<(
     GenerationSegmentData,
 )> {
     let payload = empty_payload()?;
-    let max_cpu_len_log = None;
-    let halt_offsets = Some(vec![KERNEL.global_labels["post_init_halt"]]);
+    let max_cpu_len_log = Some(7);
+    let halt_offsets = Some(vec![KERNEL.global_labels["halt"]]);
     let mut segment_iterator =
         SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log, halt_offsets);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
