@@ -106,36 +106,23 @@ async fn main() -> Result<()> {
         );
 
         info!("Running trie diff simulation for block {block_number} ...");
-        let simulation = if let Some(struct_logs) = opt_struct_logs {
-            Directive::map(
-                IndexedStream::from(
-                    block_generation_inputs
-                        .clone()
-                        .into_iter()
-                        .enumerate()
-                        .zip(repeat(prover_config.max_cpu_len_log))
-                        .zip(struct_logs)
-                        .map(|(((batch_index, inputs), max_cpu_len_log), struct_log)| {
-                            (inputs, max_cpu_len_log, batch_index, Some(struct_log))
-                        }),
-                ),
-                &seg_ops,
-            )
-        } else {
-            Directive::map(
-                IndexedStream::from(
-                    block_generation_inputs
-                        .clone()
-                        .into_iter()
-                        .enumerate()
-                        .zip(repeat(prover_config.max_cpu_len_log))
-                        .map(|((batch_index, inputs), max_cpu_len_log)| {
-                            (inputs, max_cpu_len_log, batch_index, None)
-                        }),
-                ),
-                &seg_ops,
-            )
-        };
+        let nb_gen_inps = block_generation_inputs.len();
+        let simulation = Directive::map(
+            IndexedStream::from(
+                block_generation_inputs
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .zip(repeat(prover_config.max_cpu_len_log))
+                    .zip(opt_struct_logs.map_or(vec![None; nb_gen_inps], |x| {
+                        x.into_iter().map(Some).collect()
+                    }))
+                    .map(|(((batch_index, inputs), max_cpu_len_log), struct_log)| {
+                        (inputs, max_cpu_len_log, batch_index, struct_log)
+                    }),
+            ),
+            &seg_ops,
+        );
 
         if let Err(e2) = simulation
             .run(&runtime)
