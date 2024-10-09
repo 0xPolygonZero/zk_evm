@@ -3,7 +3,8 @@
 use core::fmt;
 use std::{cmp, collections::BTreeMap, marker::PhantomData};
 
-use anyhow::ensure;
+use alloy_compat::Compat as _;
+use anyhow::{ensure, Context};
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
@@ -382,8 +383,9 @@ pub trait World {
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::StateKey>>;
     /// _Hash out_ parts of the (state) trie that aren't in `addresses`.
     fn mask(&mut self, addresses: impl IntoIterator<Item = Self::StateKey>) -> anyhow::Result<()>;
-    fn iter(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
+    fn iter_account_info(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
     fn root(&self) -> H256;
+    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
 }
 
 /// Global, [`Address`] `->` [`AccountRlp`].
@@ -392,6 +394,7 @@ pub trait World {
 #[derive(Debug, Clone, Default)]
 pub struct Type1World {
     state: TypedMpt<AccountRlp>,
+    storage: BTreeMap<H256, StorageTrie>,
 }
 
 impl Type1World {
@@ -401,6 +404,7 @@ impl Type1World {
                 inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
                 _ty: PhantomData,
             },
+            storage: BTreeMap::new(),
         }
     }
     /// Insert a _hashed out_ part of the trie
@@ -455,7 +459,7 @@ impl World for Type1World {
         };
         Ok(())
     }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+    fn iter_account_info(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.state
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
@@ -463,12 +467,16 @@ impl World for Type1World {
     fn root(&self) -> H256 {
         self.state.root()
     }
+    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        todo!()
+    }
 }
 
 impl From<Type1World> for HashedPartialTrie {
     fn from(value: Type1World) -> Self {
         let Type1World {
             state: TypedMpt { inner, _ty },
+            storage: _,
         } = value;
         inner
     }
@@ -502,13 +510,16 @@ impl World for Type2World {
         let _ = address;
         Ok(())
     }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+    fn iter_account_info(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.address2state
             .iter()
             .map(|(addr, acct)| (keccak_hash::keccak(addr), *acct))
     }
     fn root(&self) -> H256 {
         conv_hash::smt2eth(self.as_smt().root)
+    }
+    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        todo!()
     }
 }
 
@@ -625,13 +636,23 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
-    pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
-        self.untyped.get(key.into_nibbles())
+    pub fn load_int(&mut self, key: MptKey) -> anyhow::Result<U256> {
+        let bytes = self.untyped.get(key.into_nibbles()).context("no item")?;
+        Ok(rlp::decode(bytes)?)
     }
-    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
-        let prev = self.get(&key).map(Vec::from);
+    pub fn store_int(&mut self, key: MptKey, value: U256) -> anyhow::Result<()> {
+        self.untyped
+            .insert(key.into_nibbles(), alloy::rlp::encode(value.compat()))?;
+        Ok(())
+    }
+    pub fn store_hash(&mut self, key: MptKey, value: H256) -> anyhow::Result<()> {
+        self.untyped
+            .insert(key.into_nibbles(), alloy::rlp::encode(value.compat()))?;
+        Ok(())
+    }
+    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), value)?;
-        Ok(prev)
+        Ok(())
     }
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), hash)?;

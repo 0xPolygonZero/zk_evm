@@ -412,7 +412,7 @@ where
     StateTrieT::StateKey: Ord + From<Address>,
 {
     // Initialise the storage tries.
-    for (haddr, acct) in state_trie.iter() {
+    for (haddr, acct) in state_trie.iter_account_info() {
         let storage = storage_tries.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
             it.insert_hash(MptKey::default(), acct.storage_root)
@@ -599,7 +599,7 @@ where
                                 // this is actually a delete
                                 true => storage_mask.extend(storage.reporting_remove(slot)?),
                                 false => {
-                                    storage.insert(slot, rlp::encode(&v).to_vec())?;
+                                    storage.store_int(slot, v)?;
                                 }
                             }
                         }
@@ -757,9 +757,8 @@ where
     let timestamp_slot_key = MptKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
 
     let timestamp = scalable_storage
-        .get(&timestamp_slot_key)
-        .map(rlp::decode::<U256>)
-        .unwrap_or(Ok(0.into()))?;
+        .load_int(timestamp_slot_key)
+        .unwrap_or_default();
     let timestamp = core::cmp::max(timestamp, block.block_timestamp);
 
     // Store block number and largest timestamp
@@ -770,8 +769,8 @@ where
     ] {
         let slot = MptKey::from_slot_position(ix);
 
-        // These values are never 0.
-        scalable_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+        ensure!(u != U256::zero());
+        scalable_storage.store_int(slot, u)?;
         scalable_trim.insert(slot);
     }
 
@@ -783,7 +782,7 @@ where
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
-    scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
+    scalable_storage.store_hash(slot, prev_block_root_hash)?;
     scalable_trim.insert(slot);
 
     trim_state.insert(<StateTrieT::StateKey>::from(ADDRESS_SCALABLE_L2));
@@ -809,7 +808,7 @@ where
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
         let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
-        ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
+        ger_storage.store_hash(slot, l1blockhash)?;
         ger_trim.insert(slot);
 
         trim_state.insert(<StateTrieT::StateKey>::from(GLOBAL_EXIT_ROOT_ADDRESS));
@@ -869,7 +868,7 @@ where
         match u.is_zero() {
             true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
             false => {
-                beacon_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+                beacon_storage.store_int(slot, u)?;
                 beacon_trim.insert(slot);
             }
         }
