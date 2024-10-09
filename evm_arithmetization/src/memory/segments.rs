@@ -105,6 +105,7 @@ impl Segment {
         *self as usize >> SEGMENT_SCALING_FACTOR
     }
 
+    #[inline(always)]
     pub(crate) const fn all() -> [Self; Self::COUNT] {
         [
             Self::Code,
