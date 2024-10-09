@@ -23,7 +23,8 @@ use crate::witness::errors::ProgramError;
 use crate::witness::errors::ProgramError::MemoryError;
 
 impl MemoryChannel {
-    pub(crate) fn index(&self) -> usize {
+    #[inline(always)]
+    pub(crate) const fn index(&self) -> usize {
         match *self {
             Code => 0,
             GeneralPurpose(n) => {
@@ -43,6 +44,7 @@ pub struct MemoryAddress {
 }
 
 impl MemoryAddress {
+    #[inline(always)]
     pub(crate) const fn new(context: usize, segment: Segment, virt: usize) -> Self {
         Self {
             context,
@@ -69,7 +71,8 @@ impl MemoryAddress {
         Ok(Self::new(context, Segment::all()[segment], virt))
     }
 
-    pub(crate) fn increment(&mut self) {
+    #[inline(always)]
+    pub(crate) const fn increment(&mut self) {
         self.virt = self.virt.saturating_add(1);
     }
 }
@@ -104,7 +107,8 @@ pub(crate) static DUMMY_MEMOP: MemoryOp = MemoryOp {
 };
 
 impl MemoryOp {
-    pub(crate) fn new(
+    #[inline(always)]
+    pub(crate) const fn new(
         channel: MemoryChannel,
         clock: usize,
         address: MemoryAddress,
@@ -123,6 +127,7 @@ impl MemoryOp {
         }
     }
 
+    #[inline(always)]
     pub(crate) const fn new_dummy_read(
         address: MemoryAddress,
         timestamp: usize,
@@ -137,6 +142,7 @@ impl MemoryOp {
         }
     }
 
+    #[inline(always)]
     pub(crate) const fn sorting_key(&self) -> (usize, usize, usize, usize) {
         (
             self.address.context,
@@ -175,6 +181,7 @@ impl MemoryState {
         }
     }
 
+    #[inline]
     pub(crate) fn get(&self, address: MemoryAddress) -> Option<U256> {
         if address.context >= self.contexts.len() {
             return None;
@@ -188,7 +195,7 @@ impl MemoryState {
             return None;
         }
         let val = self.contexts[address.context].segments[address.segment].get(address.virt);
-        assert!(
+        debug_assert!(
             val.bits() <= segment.bit_range(),
             "Value {} exceeds {:?} range of {} bits",
             val,
@@ -245,6 +252,7 @@ impl MemoryState {
         }
     }
 
+    #[inline]
     pub(crate) fn set(&mut self, address: MemoryAddress, val: U256) {
         while address.context >= self.contexts.len() {
             self.contexts.push(MemoryContextState::default());
@@ -252,7 +260,7 @@ impl MemoryState {
 
         let segment = Segment::all()[address.segment];
 
-        assert!(
+        debug_assert!(
             val.bits() <= segment.bit_range(),
             "Value {} exceeds {:?} range of {} bits",
             val,

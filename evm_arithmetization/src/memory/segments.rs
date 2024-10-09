@@ -100,6 +100,7 @@ impl Segment {
     pub(crate) const COUNT: usize = 39;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
+    #[inline(always)]
     pub(crate) const fn unscale(&self) -> usize {
         *self as usize >> SEGMENT_SCALING_FACTOR
     }
