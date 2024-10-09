@@ -75,7 +75,7 @@ where
             .await
             .unwrap_or_else(|e| {
                 warn!("failed to fetch server structlogs for block {target_block_id}: {e}");
-                Vec::new()
+                vec![None; tx_results.len()]
             })
         }
         JumpdestSrc::Serverside => todo!(),

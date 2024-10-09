@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-set -uo pipefail
+set -uxo pipefail
 
-RPC=${RPC_NATIVE}
 if [ -z $RPC ]; then
   # You must set an RPC endpoint
   exit 1
@@ -33,8 +32,22 @@ PRECANCUN="
 19240700
 "
 
+
 #It's visible with block 20727641 
 ROUND1=`echo {20727640..20727650}`
+
+ROUND2="
+20727641
+20727643
+20727644
+20727645
+20727646
+20727647
+20727648
+20727649
+20727650
+"
+
 
 
 
@@ -48,12 +61,12 @@ GITHASH=`git rev-parse --short HEAD`
 echo "Testing against mainnet, current revision: $GITHASH."
 
 #BLOCKS="$CANCUNBLOCKS $RANDOMBLOCKS"
-BLOCKS="$ROUND1"
+BLOCKS="20727641"
 #BLOCKS="$CANCUNBLOCKS"
 echo "Testing blocks: $BLOCKS"
 
 echo "Testing:  $BLOCKS"
-printf "githash       block verdict duration\n" | tee -a witnesses/native_results.txt
+printf "\n\ngithash       block verdict duration\n" | tee -a witnesses/native_results.txt
 echo   "------------------------------------"   | tee -a witnesses/native_results.txt
 
 for BLOCK in $BLOCKS; do
@@ -61,12 +74,13 @@ for BLOCK in $BLOCKS; do
   WITNESS="witnesses/$BLOCK.native.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
-  cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native --jumpdest-src client-fetched-structlogs fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  rg "jump" $WITNESS
   echo "Testing blocks: $BLOCKS."
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 30m ./prove_stdio.sh $WITNESS test_only
+  timeout 10m ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   DURATION=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   echo $DURATION

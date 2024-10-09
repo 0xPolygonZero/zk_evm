@@ -815,10 +815,22 @@ impl<F: RichField> GenerationState<F> {
 
         info!("Generating JUMPDEST tables: finished");
 
-        info!("SIMW {:#?}", &simw);
-        info!("RPCW {:#?}", &rpcw);
-        info!("SIMP {:#?}", &simp);
-        info!("RPCP {:#?}", &rpcp);
+        if simw != &rpcw {
+            if let Some(s) = simw {
+                info!("SIMW {}", s);
+            }
+            if let Some(r) = rpcw.as_ref() {
+                info!("RPCW {}", r);
+            }
+            info!("SIMW == RPCW ? {}", simw == &rpcw);
+            info!("tx: {:?}", self.inputs.txn_hashes);
+            panic!();
+            // info!("SIMP {:?}", &simp);
+            // info!("RPCP {:?}", &rpcp);
+            // info!("SIMP == RPCP ? {}", &simp == &rpcp);
+        } else {
+            info!("JUMPDEST tables similar");
+        }
 
         self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
 

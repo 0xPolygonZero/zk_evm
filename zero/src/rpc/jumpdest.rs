@@ -4,10 +4,11 @@ use core::str::FromStr as _;
 use std::collections::HashMap;
 use std::ops::Not as _;
 
+use ::compat::Compat;
 use __compat_primitive_types::H160;
 use __compat_primitive_types::H256;
 use alloy::eips::BlockNumberOrTag;
-use alloy::primitives::{Address, U160};
+use alloy::primitives::Address;
 use alloy::providers::ext::DebugApi;
 use alloy::providers::Provider;
 use alloy::rpc::types::eth::Transaction;
@@ -196,16 +197,21 @@ pub(crate) fn generate_jumpdest_table<'a>(
                     unreachable!()
                 };
 
-                if *address > U256::from(U160::MAX) {
-                    trace!(
-                        "{op}: Callee address {} was larger than possible {}.",
-                        *address,
-                        U256::from(U160::MAX)
-                    );
-                    // Se note above.
-                    continue;
-                };
-                let lower_20_bytes = U160::from(*address);
+                // if *address > U256::from(U160::MAX) {
+                //     trace!(
+                //         "{op}: Callee address {} was larger than possible {}.",
+                //         *address,
+                //         U256::from(U160::MAX)
+                //     );
+                //     // Se note above.
+                //     continue;
+                // };
+                let a: [u8; 32] = address.compat().into();
+                // a <<= 96;
+                // a >>= 96;
+                // let aa: [u8; 32] = a.into();
+                let aaa: H256 = a.into();
+                let lower_20_bytes: [u8; 20] = H160::from(aaa).into();
                 let callee_address = Address::from(lower_20_bytes);
 
                 if callee_addr_to_code_hash.contains_key(&callee_address) {
