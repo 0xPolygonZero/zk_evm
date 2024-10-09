@@ -121,3 +121,7 @@ starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"
+
+[profile.release]
+lto = true
+opt-level = 3
