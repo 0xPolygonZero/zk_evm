@@ -234,6 +234,7 @@ impl<F: RichField> GenerationState<F> {
     /// Initializes the code segment of the given context with the code
     /// corresponding to the provided hash.
     /// Returns the length of the code.
+    #[cfg(feature = "eth_mainnet")]
     fn run_account_code(&mut self) -> Result<U256, ProgramError> {
         // stack: codehash, ctx, ...
         let codehash = stack_peek(self, 0)?;
@@ -250,6 +251,36 @@ impl<F: RichField> GenerationState<F> {
             address.increment();
         }
         Ok(code.len().into())
+    }
+    #[cfg(feature = "cdk_erigon")]
+    fn run_account_code(&mut self) -> Result<U256, ProgramError> {
+        // stack: codehash, ctx, ...
+        let codehash = stack_peek(self, 0)?;
+        let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
+        let context = u256_to_usize(context)?;
+        let mut address = MemoryAddress::new(context, Segment::Code, 0);
+        let code = self
+            .inputs
+            .contract_code
+            .get(&codehash)
+            .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
+        let code_len = code.len();
+
+        for &byte in code {
+            self.memory.set(address, byte.into());
+            address.increment();
+        }
+
+        // Padding
+        self.memory.set(address, 1.into());
+        let mut len = code_len + 1;
+        len = 56 * ((len + 55) / 56);
+        let last_byte_addr = MemoryAddress::new(context, Segment::Code, len - 1);
+        let mut last_byte = u256_to_usize(self.memory.get_with_init(last_byte_addr))?;
+        last_byte |= 0x80;
+        self.memory.set(last_byte_addr, last_byte.into());
+
+        Ok(len.into())
     }
 
     // Bignum modular multiplication.
@@ -378,7 +409,7 @@ impl<F: RichField> GenerationState<F> {
             "state ll = {:?}",
             StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
         );
-        log::debug!("state btree = {:?}", self.state_pointers);
+        log::debug!("state btree = {:#?}", self.state_pointers);
         log::debug!("input state = {}", self.inputs.trimmed_tries.state_trie);
 
         match input_fn.0[1].as_str() {
@@ -570,7 +601,7 @@ impl<F: RichField> GenerationState<F> {
                 )?,
             );
         }
-        Ok(U256::from(pred_key / ACCOUNTS_LINKED_LIST_NODE_SIZE))
+        Ok(U256::from(pred_ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }
 
     /// Returns an unscaled pointer to a node in the list such that

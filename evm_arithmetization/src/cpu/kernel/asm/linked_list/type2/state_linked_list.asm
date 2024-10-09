@@ -51,7 +51,6 @@ global store_initial_state:
     // stack: next_node_ptr, cur_len', retdest
  
 loop_store_initial_state:
-global debug_loop:
     // stack: current_node_ptr, cur_len, retdest
     DUP1
     %increment
@@ -81,9 +80,7 @@ global debug_loop:
     // stack: next_node_ptr, current_key, cur_len', retdest
     SWAP1
     DUP2
-global debug_loading:
     MLOAD_GENERAL
-global debug_este_es_el_problema_baby:
     %assert_gt // next_key > current_key
     // stack: next_node_ptr, cur_len', retdest
     %jump(loop_store_initial_state)
@@ -278,7 +275,9 @@ global search_key:
     // stack: key, retdest
     PROVER_INPUT(linked_list::search_state)
     // stack: pred_ptr/4, key, retdest
+global debug_pred_ptr_p_4:
     %get_valid_state_ptr
+global debug_pred_ptr:
 
     // stack: pred_ptr, key, retdest
     DUP1
@@ -293,7 +292,7 @@ global search_key:
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // the key was not found.
     %jumpi(key_not_found)
-    // stack: pred_addr_key, pred_ptr, addr_key, key, retdest
+    // stack: pred_key, pred_ptr, key, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
 global debug_fail_1:
@@ -319,8 +318,10 @@ key_found:
     JUMP
 
 key_not_found:
+global debug_key_not_found:
     // stack: pred_key, pred_ptr, key, retdest
     %stack (pred_key, pred_ptr, key, retdest) -> (retdest, 0)
+global debug_o_margot:
     JUMP
 
 %macro search_key
@@ -413,7 +414,6 @@ global remove_key:
 %macro read_slot_from_current_addr
     // stack: slot
     %address
-    %addr_to_state_key
     %key_storage
     %stack (storage_key) -> (storage_key, %%after)
     // stack: storage_key, %%after
@@ -424,7 +424,7 @@ global remove_key:
 
 %macro read_slot_from_addr_key
     // stack: state_key, slot
-    %slot_to_storage_key
+    %key_storage
     %stack (storage_key) -> (storage_key, %%after)
     %jump(search_key)
 %%after:

@@ -41,7 +41,7 @@ global balance:
     #[cfg(feature = cdk_erigon)]
     {
         // stack: address, retdest
-        %read_balance %mload_trie_data
+        %read_balance
         // stack: balance, retdest
     SWAP1 JUMP
     }

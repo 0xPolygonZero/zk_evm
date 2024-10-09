@@ -58,23 +58,21 @@ global increment_nonce:
         // stack: address, retdest
         DUP1
         %read_nonce
-        // stack: nonce_ptr, address, retdest
+        // stack: nonce, address, retdest
         DUP1 ISZERO %jumpi(create_nonce)
-        // stack: nonce_ptr, address, retdest
-        DUP1 %mload_trie_data
-        // stack: nonce, nonce_ptr, address, retdest
-        DUP1 DUP4 %journal_add_nonce_change
-        // stack: nonce, nonce_ptr, address, retdest
+        // stack: nonce, address, retdest
+        // stack: nonce, address, retdest
+        DUP1 DUP3 %journal_add_nonce_change
+        // stack: nonce, address, retdest
         %increment
         SWAP1
-        // stack: nonce_ptr, nonce', address, retdest
-        %mstore_trie_data
-        // stack: address, retdest
-        POP
+        // stack: address, nonce', retdest
+        %set_nonce
+        // stack: retdest
         JUMP
 
         create_nonce:
-            // stack: nonce_ptr, address, retdest
+            // stack: nonce, address, retdest
             POP
             // stack: address, retdest
             PUSH 0 DUP2 %journal_add_nonce_change
@@ -82,6 +80,7 @@ global increment_nonce:
             PUSH 1
             SWAP1
             %set_nonce
+            JUMP
     }
 
 

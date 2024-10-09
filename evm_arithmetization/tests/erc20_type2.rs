@@ -113,7 +113,7 @@ fn test_erc20() -> anyhow::Result<()> {
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]
-        .map(|v| (keccak(v.clone()), v))
+        .map(|v| (hash_bytecode_u256(v.clone()), v))
         .into();
 
     let expected_smt_after: Smt<MemoryDb> = {

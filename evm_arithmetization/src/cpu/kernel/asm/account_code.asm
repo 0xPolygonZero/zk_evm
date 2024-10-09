@@ -42,7 +42,7 @@ global extcodehash:
 {
 global extcodehash:
     // stack: address, retdest
-    %read_code %mload_trie_data
+    %read_code
     // stack: codehash, retdest
     SWAP1 JUMP
 }
@@ -110,7 +110,10 @@ load_code_ctd:
     // stack: codehash, ctx, retdest
     DUP1 ISZERO %jumpi(load_code_non_existent_account)
     // Load the code non-deterministically in memory and return the length.
+global debug_account_code:
     PROVER_INPUT(account_code)
+#[cfg(feature = eth_mainnet)]
+{
     %stack (code_size, codehash, ctx, retdest) -> (ctx, code_size, codehash, retdest, code_size)
     // Check that the hash of the loaded code equals `codehash`.
     // ctx == DST, as SEGMENT_CODE == offset == 0.
@@ -119,6 +122,11 @@ load_code_ctd:
     %assert_eq
     // stack: retdest, code_size
     JUMP
+}
+#[cfg(feature = cdk_erigon)]
+{
+    %jump(poseidon_hash_code)
+}
 
 load_code_non_existent_account:
     // Write 0 at address 0 for soundness: SEGMENT_CODE == 0, hence ctx == addr.
@@ -149,3 +157,28 @@ load_code_padded_ctd:
     MSTORE_GENERAL
     // stack: retdest, code_size
     JUMP
+
+#[cfg(feature = cdk_erigon)]
+{
+    global poseidon_hash_code:
+    // stack: padded_code_size, codehash, ctx, retdest
+    // %stack (padded_code_size, codehash, ctx) -> (0, 0, padded_code_size, ctx, codehash)
+    %stack (padded_code_size, codehash, ctx) -> (ctx, padded_code_size, codehash, padded_code_size, ctx)
+    POSEIDON_GENERAL
+    %assert_eq
+    // stack: padded_code_size, ctx, retdest
+    %decrement
+    remove_padding_loop:
+        // stack: offset, ctx, retdest
+        DUP2 DUP2 ADD DUP1 MLOAD_GENERAL
+        // stack: code[offset], offset+ctx, offset, ctx, retdest
+        SWAP1 PUSH 0 MSTORE_GENERAL
+        // stack: code[offset], offset, ctx, retdest
+        %and_const(1) %jumpi(remove_padding_after)
+        // stack: offset, ctx, retdest
+        %decrement %jump(remove_padding_loop)
+
+    remove_padding_after:
+        %stack (offset, ctx, retdest) -> (retdest, offset)
+        JUMP
+}

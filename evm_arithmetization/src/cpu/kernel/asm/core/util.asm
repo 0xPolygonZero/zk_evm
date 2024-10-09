@@ -80,7 +80,7 @@
     #[cfg(feature = cdk_erigon)]
     {
         // stack: addr
-        DUP1 %read_nonce %mload_trie_data
+        DUP1 %read_nonce
         // stack: nonce, addr
         ISZERO %not_bit
     }   
@@ -95,7 +95,7 @@
      #[cfg(feature = cdk_erigon)]
     {
         // stack: addr
-        DUP1 %read_nonce %mload_trie_data
+        DUP1 %read_nonce
         // stack: nonce, addr
         ISZERO %not_bit
     }  
@@ -109,7 +109,7 @@
      #[cfg(feature = cdk_erigon)]
     {
         // stack: addr
-        DUP1 %read_balance %mload_trie_data
+        DUP1 %read_balance
         // stack: balance, addr
         ISZERO %not_bit
     }  
@@ -124,7 +124,7 @@
      #[cfg(feature = cdk_erigon)]
     {
         // stack: addr
-        %read_code %mload_trie_data
+        %read_code
         // stack: codehash
         %eq_const(@EMPTY_STRING_POSEIDON_HASH)
     } 

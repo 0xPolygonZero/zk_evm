@@ -330,7 +330,12 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
     //     ),
     // );
 
-    assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
+    assert!(
+        pc < KERNEL.code.len(),
+        "Kernel PC is out of range: {} while KERNEL len is {}",
+        pc,
+        KERNEL.code.len()
+    );
 }
 
 pub(crate) trait Transition<F: RichField>: State<F>

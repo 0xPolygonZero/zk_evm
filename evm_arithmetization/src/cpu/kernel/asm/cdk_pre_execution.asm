@@ -19,14 +19,16 @@ global update_scalable_block_number:
     // stack: last_block_slot, block_number, retdest
     %write_scalable_storage
     // stack: retdest
-
+global debug_wtf_is_happening_with_retdest:
     // Check timestamp
     PUSH @TIMESTAMP_STORAGE_POS
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     %read_slot_from_addr_key
     // stack: old_timestamp, retdest
     %timestamp
-    GT %jumpi(update_scalable_timestamp)
+    GT 
+global debug_before_jumpi:
+    %jumpi(update_scalable_timestamp)
 
 global update_scalable_prev_block_root_hash:
     // stack: retdest
@@ -97,22 +99,27 @@ global create_scalable_l2_account:
     // stack: (empty)
     PUSH update_scalable_block_number
     // stack: retdest
-    // stack: new_account_ptr, retdest
     PUSH 0
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     %set_nonce
     
+    // stack: retdest
     PUSH 0 
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     %set_balance // balance
     
+    // stack: retdest
     PUSH @EMPTY_STRING_HASH
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     %set_codehash // code hash
 
+    // stack: retdest
     PUSH 0 
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     %set_code_length // code_length
+
+    // stack: retdest
+    JUMP
 
 %macro write_scalable_storage
     // stack: slot, value

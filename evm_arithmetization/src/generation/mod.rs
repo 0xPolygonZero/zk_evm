@@ -96,7 +96,10 @@ pub struct GenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
+    #[cfg(feature = "eth_mainnet")]
     pub contract_code: HashMap<H256, Vec<u8>>,
+    #[cfg(feature = "cdk_erigon")]
+    pub contract_code: HashMap<U256, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -148,7 +151,10 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
+    #[cfg(feature = "eth_mainnet")]
     pub contract_code: HashMap<H256, Vec<u8>>,
+    #[cfg(feature = "cdk_erigon")]
+    pub contract_code: HashMap<U256, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -242,7 +248,8 @@ impl<F: RichField> GenerationInputs<F> {
         }
         #[cfg(feature = "cdk_erigon")]
         {
-            state_root = H256::from_uint(&hash_serialize_u256(&self.tries.state_trie.to_vec()).into());
+            state_root =
+                H256::from_uint(&hash_serialize_u256(&self.tries.state_trie.to_vec()).into());
         }
 
         TrimmedGenerationInputs {

@@ -27,6 +27,8 @@ use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
 #[cfg(feature = "cdk_erigon")]
 use crate::poseidon::poseidon_stark::PoseidonOp;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::code::hash_bytecode_u256;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -568,8 +570,13 @@ impl<F: RichField> GenerationState<F> {
             self.observe_address(tip_h160);
         } else if dst == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(self, 0)?;
-            let tip_h256 = H256::from_uint(&tip_u256);
-            self.observe_contract(tip_h256)?;
+            #[cfg(feature = "eth_mainnet")]
+            {
+                let tip_h256 = H256::from_uint(&tip_u256);
+                self.observe_contract(tip_h256)?;
+            }
+            #[cfg(feature = "cdk_erigon")]
+            self.observe_contract(tip_u256)?;
         }
 
         Ok(())
@@ -585,6 +592,7 @@ impl<F: RichField> GenerationState<F> {
     /// Observe the given code hash and store the associated code.
     /// When called, the code corresponding to `codehash` should be stored in
     /// the return data.
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) fn observe_contract(&mut self, codehash: H256) -> Result<(), ProgramError> {
         if self.inputs.contract_code.contains_key(&codehash) {
             return Ok(()); // Return early if the code hash has already been
@@ -602,6 +610,29 @@ impl<F: RichField> GenerationState<F> {
             .map(|x| x.unwrap_or_default().low_u32() as u8)
             .collect::<Vec<_>>();
         debug_assert_eq!(keccak(&code), codehash);
+
+        self.inputs.contract_code.insert(codehash, code);
+
+        Ok(())
+    }
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) fn observe_contract(&mut self, codehash: U256) -> Result<(), ProgramError> {
+        if self.inputs.contract_code.contains_key(&codehash) {
+            return Ok(()); // Return early if the code hash has already been
+                           // observed.
+        }
+
+        let ctx = self.registers.context;
+        let returndata_offset = ContextMetadata::ReturndataSize.unscale();
+        let returndata_size_addr =
+            MemoryAddress::new(ctx, Segment::ContextMetadata, returndata_offset);
+        let returndata_size = u256_to_usize(self.memory.get_with_init(returndata_size_addr))?;
+        let code = self.memory.contexts[ctx].segments[Segment::Returndata.unscale()].content
+            [..returndata_size]
+            .iter()
+            .map(|x| x.unwrap_or_default().low_u32() as u8)
+            .collect::<Vec<_>>();
+        debug_assert_eq!(hash_bytecode_u256(code.clone()), codehash);
 
         self.inputs.contract_code.insert(codehash, code);
 

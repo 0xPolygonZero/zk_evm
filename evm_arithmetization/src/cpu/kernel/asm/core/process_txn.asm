@@ -40,6 +40,7 @@ global process_normalized_txn:
     // stack: sender, retdest
 
     // Assert sender balance >= gas_limit * gas_price + value.
+global debug_balance:
     %balance
     // stack: sender_balance, retdest
     %mload_txn_field(@TXN_FIELD_COMPUTED_FEE_PER_GAS)
@@ -221,6 +222,7 @@ global process_contract_creation_txn_after_constructor:
     // stack: leftover_gas', new_ctx, address, retdest, success, leftover_gas
     SWAP5 POP
     %delete_all_touched_addresses
+global debug_jump_to_delete_all_1:
     %delete_all_selfdestructed_addresses
     // stack: new_ctx, address, retdest, success, leftover_gas
     POP
@@ -313,10 +315,12 @@ process_message_txn_after_call_contd:
     %pay_coinbase_and_refund_sender
     // stack: leftover_gas', new_ctx, retdest, success, leftover_gas
     SWAP4 POP
+global debug_delete_all_touched:
     %delete_all_touched_addresses
     %delete_all_selfdestructed_addresses
     // stack: new_ctx, retdest, success, leftover_gas
     POP
+global debug_y_salta_salta_salta:
     JUMP
 
 process_message_txn_fail:
@@ -463,6 +467,7 @@ create_contract_account_fault:
     %pay_coinbase_and_refund_sender
     // stack: leftover_gas', retdest
     %delete_all_touched_addresses
+global debug_jump_to_delete_all_3:
     %delete_all_selfdestructed_addresses
     // stack: leftover_gas', retdest
     SWAP1 PUSH 0 // success
@@ -476,6 +481,7 @@ contract_creation_fault_3:
     %pay_coinbase_and_refund_sender
     // stack: leftover_gas', retdest, success
     %delete_all_touched_addresses
+global debug_jump_to_delete_all_5:
     %delete_all_selfdestructed_addresses
     %stack (leftover_gas, retdest, success) -> (retdest, 0, leftover_gas)
     JUMP
@@ -488,6 +494,7 @@ contract_creation_fault_3_zero_leftover:
     // stack: leftover_gas, retdest, success
     %pay_coinbase_and_refund_sender
     %delete_all_touched_addresses
+global debug_jump_to_delete_all_6:
     %delete_all_selfdestructed_addresses
     %stack (leftover_gas, retdest, success) -> (retdest, 0, leftover_gas)
     JUMP
@@ -500,6 +507,7 @@ contract_creation_fault_4:
     // stack: leftover_gas, retdest, success
     %pay_coinbase_and_refund_sender
     %delete_all_touched_addresses
+global debug_jump_to_delete_all_7:
     %delete_all_selfdestructed_addresses
     %stack (leftover_gas, retdest, success) -> (retdest, 0, leftover_gas)
     JUMP
