@@ -610,8 +610,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
                             self.struct_log_debugger_info.counter = 0;
                             self.struct_log_debugger_info.prev_op_gas = 0;
                         }
-                        if (opcode == 0xfe && struct_op != "INVALID")
-                            || (struct_op != format!("opcode {:#x} not defined", opcode))
+                        if (opcode == 0xfe && !struct_op.contains("INVALID"))
+                            || (opcode != 0xfe
+                                && (struct_op != format!("opcode {:#x} not defined", opcode)))
                         {
                             log::warn!(
                                 "Wrong invalid opcode: expected {} got error {}",
