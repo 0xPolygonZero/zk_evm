@@ -54,7 +54,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         echo "Using specific circuit sizes for witness_b19807080.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
         export BYTE_PACKING_CIRCUIT_SIZE="8..15"
-        export CPU_CIRCUIT_SIZE="14..20"
+        export CPU_CIRCUIT_SIZE="9..20"
         export KECCAK_CIRCUIT_SIZE="10..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..14"
         export LOGIC_CIRCUIT_SIZE="8..17"
