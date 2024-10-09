@@ -5,7 +5,7 @@ pub fn init() {
         .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
-                .compact()
+                .json()
                 .with_filter(EnvFilter::from_default_env()),
         )
         .init();
