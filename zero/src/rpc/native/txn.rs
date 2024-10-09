@@ -206,7 +206,7 @@ where
     TransportT: Transport + Clone,
 {
     let tx_receipt = provider.get_transaction_receipt(*tx_hash).await?;
-    Ok(tx_receipt.context("Transaction receipt not found.")?)
+    tx_receipt.context("Transaction receipt not found.")
 }
 
 /// Parse the access list data into a hashmap.

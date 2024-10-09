@@ -38,7 +38,12 @@ struct RpcToolConfig {
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
     /// The source of jumpdest tables.
-    #[arg(short = 'j', long, default_value_ifs = [("rpc_type", "jerigon", "client-fetched-structlogs"), ("rpc_type", "native", "client-fetched-structlogs")], required = false)]
+    #[arg(
+        short = 'j',
+        long,
+        default_value = "client-fetched-structlogs",
+        required = false
+    )]
     jumpdest_src: JumpdestSrc,
     /// Backoff in milliseconds for retry requests.
     #[arg(long, default_value_t = 0)]
@@ -219,7 +224,6 @@ async fn main() -> anyhow::Result<()> {
                 // With the default configuration trace information is written
                 // to stdout, but we already use stdout to write our payload (the witness).
                 .with_writer(std::io::stderr)
-                .json()
                 .with_ansi(false)
                 .with_filter(EnvFilter::from_default_env()),
         )

@@ -128,14 +128,14 @@ fn test_jumpdest_analysis() -> Result<()> {
 
     // We need to manually pop the jumpdest_table and push its value on the top of
     // the stack
-    (*interpreter
+    interpreter
         .generation_state
         .jumpdest_table
         .as_mut()
-        .unwrap())
-    .get_mut(&CONTEXT)
-    .unwrap()
-    .pop();
+        .unwrap()
+        .get_mut(&CONTEXT)
+        .unwrap()
+        .pop();
     interpreter
         .push(41.into())
         .expect("The stack should not overflow");
