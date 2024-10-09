@@ -98,7 +98,7 @@ tokio = { version = "1.38.0", features = ["full"] }
 toml = "0.8.14"
 tower = "0.4"
 tracing = { version = "0.1", features = ["attributes"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 u4 = "0.1.0"
 uint = "0.9.5"
 url = "2.5.2"

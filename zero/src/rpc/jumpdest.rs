@@ -152,14 +152,25 @@ pub(crate) fn generate_jumpdest_table<'a>(
         let (code_hash, ctx) = call_stack.last().unwrap();
 
         // REVIEW: will be removed before merge
-        trace!("TX:   {:?}", tx.hash);
-        trace!("STEP: {:?}", step);
-        trace!("STEPS: {:?}", struct_log.len());
-        trace!("OPCODE: {}", entry.op.as_str());
-        trace!("CODE: {:?}", code_hash);
-        trace!("CTX:  {:?}", ctx);
-        trace!("CURR_DEPTH:  {:?}", curr_depth);
-        trace!("{:#?}\n", entry);
+        trace!(
+            step,
+            curr_depth,
+            tx_hash = ?tx.hash,
+            ?code_hash,
+            ctx,
+            entry.pc,
+            op,
+            //
+            ?entry,
+        );
+        // trace!("TX:   {:?}", tx.hash);
+        // trace!("STEP: {:?}", step);
+        // trace!("STEPS: {:?}", struct_log.len());
+        // trace!("OPCODE: {}", entry.op.as_str());
+        // trace!("CODE: {:?}", code_hash);
+        // trace!("CTX:  {:?}", ctx);
+        // trace!("CURR_DEPTH:  {:?}", curr_depth);
+        // trace!("{:#?}\n", entry);
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {

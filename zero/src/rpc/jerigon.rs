@@ -13,7 +13,7 @@ use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::{fetch_other_block_data, JumpdestSrc};
 use crate::prover::BlockProverInput;
@@ -135,7 +135,19 @@ where
         .zip(block_structlogs)
         .zip(tx_traces)
         .map(|((tx, structlog), tx_trace)| {
-            structlog.and_then(|it| generate_jumpdest_table(tx, &it.1, tx_trace).ok())
+            structlog.and_then(|it| {
+                generate_jumpdest_table(tx, &it.1, tx_trace).map_or_else(
+                    |error| {
+                        debug!(
+                            "{}: JumpDestTable generation failed with reason: {:?}",
+                            tx.hash.to_string(),
+                            error
+                        );
+                        None
+                    },
+                    Some,
+                )
+            })
         })
         .collect::<Vec<_>>();
 

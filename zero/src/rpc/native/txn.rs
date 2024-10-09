@@ -25,7 +25,7 @@ use anyhow::{bail, Context as _, Ok};
 use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
-use tracing::{error, warn};
+use tracing::{debug, warn};
 
 use crate::rpc::jumpdest::get_block_normalized_structlogs;
 use crate::rpc::Compat;
@@ -166,7 +166,7 @@ where
         jumpdest::generate_jumpdest_table(tx, &struct_logs, tx_traces.iter().map(|(a, t)| (*a, t)))
             .map_or_else(
                 |error| {
-                    error!(
+                    debug!(
                         "{}: JumpDestTable generation failed with reason: {:?}",
                         tx.hash.to_string(),
                         error
