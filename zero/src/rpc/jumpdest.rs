@@ -3,6 +3,7 @@ use core::option::Option::None;
 use core::str::FromStr as _;
 use std::collections::HashMap;
 use std::ops::Not as _;
+use std::time::Duration;
 
 use ::compat::Compat;
 use __compat_primitive_types::H160;
@@ -21,10 +22,15 @@ use anyhow::bail;
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use keccak_hash::keccak;
+use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
 use tracing::{trace, warn};
+
+/// The maximum time we are willing to wait for a block's structlogs  before
+/// failing over to simulating the JumpDest analysis.
+const TIMEOUT_LIMIT: Duration = Duration::from_secs(60);
 #[derive(Debug, Clone)]
 pub struct TxStructLogs(pub Option<TxHash>, pub Vec<StructLog>);
 
@@ -59,9 +65,17 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let block_stackonly_structlog_traces = provider
-        .debug_trace_block_by_number(*block, structlog_tracing_options(true, false, false))
-        .await?;
+    let block_stackonly_structlog_traces_fut =
+        provider.debug_trace_block_by_number(*block, structlog_tracing_options(true, false, false));
+
+    let block_stackonly_structlog_traces =
+        match timeout(TIMEOUT_LIMIT, block_stackonly_structlog_traces_fut).await {
+            Ok(traces) => traces?,
+            Err(elapsed) => {
+                trace!(target: "fetching block structlogs timed out", ?elapsed);
+                bail!(elapsed);
+            }
+        };
 
     let block_normalized_stackonly_structlog_traces = block_stackonly_structlog_traces
         .into_iter()
