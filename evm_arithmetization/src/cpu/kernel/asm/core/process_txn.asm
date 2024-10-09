@@ -175,7 +175,7 @@ global process_contract_creation_txn_after_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_contract_creation_txn_after_constructor)
-    %non_intrinsic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, address, retdest
 
     %enter_new_ctx
@@ -246,6 +246,8 @@ global process_message_txn:
     // stack: code_empty, retdest
     %jumpi(process_message_txn_return)
 
+    %checkpoint
+
     // Otherwise, load to's code and execute it in a new context.
     // stack: retdest
     %create_context
@@ -288,7 +290,7 @@ global process_message_txn_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_message_txn_after_call)
-    %non_intrinsic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, retdest
 
     // Set calldatasize and copy txn data to calldata.
@@ -321,7 +323,10 @@ process_message_txn_after_call_contd:
 
 process_message_txn_fail:
     // stack: leftover_gas, new_ctx, retdest, success, leftover_gas
-    // Transfer value back to the caller.
+
+    // Revert txn execution, then transfer value back to the caller.
+    %revert_checkpoint
+
     %mload_txn_field(@TXN_FIELD_VALUE) ISZERO %jumpi(process_message_txn_after_call_contd)
     %mload_txn_field(@TXN_FIELD_VALUE)
     %mload_txn_field(@TXN_FIELD_ORIGIN)
