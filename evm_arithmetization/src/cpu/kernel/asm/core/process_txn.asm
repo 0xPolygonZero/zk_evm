@@ -175,7 +175,7 @@ global process_contract_creation_txn_after_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_contract_creation_txn_after_constructor)
-    %non_intrinsic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, address, retdest
 
     %enter_new_ctx
@@ -290,7 +290,7 @@ global process_message_txn_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_message_txn_after_call)
-    %non_intrinsic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, retdest
 
     // Set calldatasize and copy txn data to calldata.
