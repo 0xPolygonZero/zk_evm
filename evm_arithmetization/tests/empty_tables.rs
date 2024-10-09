@@ -22,10 +22,7 @@ fn empty_tables() -> anyhow::Result<()> {
 
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
-    let mut timing = &mut TimingTree::new(
-        "Empty Table Test",
-        log::Level::Info,
-    );
+    let timing = &mut TimingTree::new("Empty Table Test", log::Level::Info);
 
     // Generate segment data
     let (payload, mut segment_data) = segment_without_keccak()?;
@@ -41,7 +38,7 @@ fn empty_tables() -> anyhow::Result<()> {
             &config,
             payload,
             &mut segment_data,
-            &mut timing,
+            timing,
             None,
         )?
     );
