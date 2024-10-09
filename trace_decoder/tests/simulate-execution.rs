@@ -36,7 +36,7 @@ fn main() -> anyhow::Result<()> {
                     move || {
                         evm_arithmetization::prover::testing::simulate_execution_all_segments::<
                             GoldilocksField,
-                        >(gi, 19, None)
+                        >(gi, 19, &None)
                         .map_err(|e| format!("{e:?}"))?; // get the full error chain
                         Ok(())
                     },

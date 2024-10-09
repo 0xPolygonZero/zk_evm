@@ -119,10 +119,10 @@ impl BlockProverInput {
                     SegmentDataIterator::<Field>::new(
                         txn_batch,
                         Some(max_cpu_len_log),
-                        Some(all_struct_logs[idx].clone()),
+                        &Some(all_struct_logs[idx].clone()),
                     )
                 } else {
-                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log), None)
+                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log), &None)
                 };
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)

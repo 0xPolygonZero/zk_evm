@@ -409,7 +409,7 @@ pub mod testing {
             initial_stack,
             &inputs,
             None,
-            None,
+            &None,
         );
         interpreter.run()?;
         Ok(())
@@ -429,7 +429,7 @@ pub mod testing {
         C: GenericConfig<D, F = F>,
     {
         let segment_data_iterator =
-            SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log), struct_logs);
+            SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log), &struct_logs);
         let inputs = inputs.trim();
         let mut proofs = vec![];
 
@@ -452,7 +452,7 @@ pub mod testing {
     pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
-        struct_logs: Option<Vec<TxZeroStructLogs>>,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
     ) -> Result<(), ErrorWithTries<SegmentError>>
     where
         F: RichField,

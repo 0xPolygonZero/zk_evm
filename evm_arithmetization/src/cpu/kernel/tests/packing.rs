@@ -17,7 +17,7 @@ fn test_mstore_unpacking() -> Result<()> {
     let initial_stack = vec![retdest, len, value, addr];
 
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(mstore_unpacking, initial_stack, None, None);
+        Interpreter::new(mstore_unpacking, initial_stack, None, &None);
 
     interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![addr + U256::from(4)]);

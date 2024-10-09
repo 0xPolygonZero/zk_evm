@@ -177,7 +177,7 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<TxZeroStructLogs>>,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         debug_inputs(inputs);
 
@@ -190,7 +190,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
-        struct_logs: Option<Vec<TxZeroStructLogs>>,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -1195,7 +1195,7 @@ mod tests {
             0x60, 0xff, 0x60, 0x0, 0x52, 0x60, 0, 0x51, 0x60, 0x1, 0x51, 0x60, 0x42, 0x60, 0x27,
             0x53,
         ];
-        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, None);
+        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
 
         interpreter.set_code(1, code.to_vec());
 

@@ -3078,7 +3078,7 @@ pub mod testing {
             let segment_iterator = SegmentDataIterator::<F>::new(
                 &generation_inputs,
                 Some(max_cpu_len_log),
-                struct_logs,
+                &struct_logs,
             );
 
             let mut proofs = vec![];
@@ -3162,7 +3162,7 @@ mod tests {
         // Generate a dummy payload for testing
         let payload = empty_payload()?;
         let max_cpu_len_log = Some(7);
-        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log, None);
+        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log, &None);
         let (_, mut segment_data) = segment_iterator.next().unwrap()?;
 
         let opcode_counts = &segment_data.opcode_counts;

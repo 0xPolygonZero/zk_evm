@@ -21,7 +21,7 @@ fn test_get_create_address() -> Result<()> {
 
     let initial_stack = vec![retaddr, nonce, sender];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(get_create_address, initial_stack, None, None);
+        Interpreter::new(get_create_address, initial_stack, None, &None);
     interpreter.run()?;
 
     assert_eq!(interpreter.stack(), &[expected_addr]);
@@ -108,7 +108,7 @@ fn test_get_create2_address() -> Result<()> {
     {
         let initial_stack = vec![retaddr, salt, U256::from(code_hash.0), sender];
         let mut interpreter: Interpreter<F> =
-            Interpreter::new(get_create2_address, initial_stack, None, None);
+            Interpreter::new(get_create2_address, initial_stack, None, &None);
         interpreter.run()?;
 
         assert_eq!(interpreter.stack(), &[expected_addr]);
