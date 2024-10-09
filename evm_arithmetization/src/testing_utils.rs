@@ -224,7 +224,7 @@ pub fn segment_without_keccak() -> Result<(
     GenerationSegmentData,
 )> {
     let payload = empty_payload()?;
-    let max_cpu_len_log = Some(7);
+    let max_cpu_len_log = Some(0); // halt after first op
     let mut segment_iterator =
         SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
