@@ -347,9 +347,9 @@ fn trace_to_tx_structlog(tx_hash: Option<TxHash>, trace: GethTrace) -> Option<Tx
 }
 
 /// This module exists as a workaround for parsing `StructLog`.  The `error`
-/// field is a string in Geth and Alloy but an object in Erigon. A PR[^1] has
+/// field is a string in Geth and Alloy but an object in Erigon. A PR[\^1] has
 /// been merged to fix this upstream and should eventually render this
-/// unnecessary. [^1]: `https://github.com/erigontech/erigon/pull/12089`
+/// unnecessary. [\^1]: `https://github.com/erigontech/erigon/pull/12089`
 mod compat {
     use std::{collections::BTreeMap, fmt, iter};
 

@@ -11,14 +11,14 @@
 //! Since an operation like e.g. `PUSH 0x5B` does not encode a valid
 //! [`JUMPDEST`] in its second byte, and `PUSH32
 //! 5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B5B` does not
-//! encode valid [`JUMPDESTS`] in bytes 1-32, some diligence must be exercised
-//! when proving validity of jump operations.
+//! encode any valid [`JUMPDEST`] in bytes 1-32, some diligence must be
+//! exercised when proving validity of jump operations.
 //!
 //! This module concerns itself with data structures for collecting these
 //! offsets for [`JUMPDEST`] that was visited during an execution and are not
-//! recording duplicity. The proofs that each of these offsets are not rendered
-//! invalid by any of the previous 32 bytes `PUSH1`-`PUSH32` is computed later
-//! in [`prove_context_jumpdests`] on basis of these collections.
+//! recording duplicity. The proofs, that each of these offsets are not rendered
+//! invalid by `PUSH1`-`PUSH32` in any of the previous 32 bytes, are computed
+//! later in `prove_context_jumpdests` on basis of these collections.
 //!
 //! [`JUMPDEST`]: https://www.evm.codes/?fork=cancun#5b
 
