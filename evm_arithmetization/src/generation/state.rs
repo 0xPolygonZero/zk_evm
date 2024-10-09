@@ -185,8 +185,15 @@ pub(crate) trait State<F: RichField> {
     {
         let halt_offsets = self.get_halt_offsets();
 
-        let cycle_limit =
-            max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
+        let cycle_limit = max_cpu_len_log.map(|max_len_log| {
+            let target_len = 1 << max_len_log;
+            let min_len = NUM_EXTRA_CYCLES_AFTER.next_power_of_two();
+            if target_len > min_len {
+                target_len - NUM_EXTRA_CYCLES_AFTER
+            } else {
+                target_len
+            }
+        });
 
         let mut final_registers = RegistersState::default();
         let mut running = true;
