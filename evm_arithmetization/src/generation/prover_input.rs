@@ -815,7 +815,7 @@ impl<F: RichField> GenerationState<F> {
 
         info!("Generating JUMPDEST tables: finished");
 
-        if simw != &rpcw {
+        if rpcw.is_some() && simw != &rpcw {
             if let Some(s) = simw {
                 info!("SIMW {}", s);
             }
