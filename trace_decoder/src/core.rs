@@ -4,10 +4,9 @@ use std::{
     mem,
 };
 
-use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, BigEndianHash as _, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -594,12 +593,15 @@ where
                         };
 
                         for (k, v) in storage_written {
-                            let slot = MptKey::from_hash(keccak_hash::keccak(k));
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => storage_mask.extend(storage.reporting_remove(slot)?),
+                                true => {
+                                    storage_mask.extend(storage.reporting_remove(
+                                        MptKey::from_hash(keccak_hash::keccak(k)),
+                                    )?)
+                                }
                                 false => {
-                                    storage.store_int(slot, v)?;
+                                    storage.store_int_at_slot(k.into_uint(), v)?;
                                 }
                             }
                         }
@@ -767,11 +769,9 @@ where
         (U256::from(LAST_BLOCK_STORAGE_POS.1), block.block_number),
         (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
     ] {
-        let slot = MptKey::from_slot_position(ix);
-
         ensure!(u != U256::zero());
-        scalable_storage.store_int(slot, u)?;
-        scalable_trim.insert(slot);
+        scalable_storage.store_int_at_slot(ix, u)?;
+        scalable_trim.insert(MptKey::from_slot_position(ix));
     }
 
     // Store previous block root hash
@@ -863,12 +863,11 @@ where
         ),
     ] {
         let slot = MptKey::from_slot_position(ix);
-        beacon_trim.insert(slot);
 
         match u.is_zero() {
             true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
             false => {
-                beacon_storage.store_int(slot, u)?;
+                beacon_storage.store_int_at_slot(ix, u)?;
                 beacon_trim.insert(slot);
             }
         }

@@ -468,6 +468,7 @@ impl World for Type1World {
         self.state.root()
     }
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        // self.storage.entry(keccak_hash::keccak(address)).or_default()
         todo!()
     }
 }
@@ -640,9 +641,11 @@ impl StorageTrie {
         let bytes = self.untyped.get(key.into_nibbles()).context("no item")?;
         Ok(rlp::decode(bytes)?)
     }
-    pub fn store_int(&mut self, key: MptKey, value: U256) -> anyhow::Result<()> {
-        self.untyped
-            .insert(key.into_nibbles(), alloy::rlp::encode(value.compat()))?;
+    pub fn store_int_at_slot(&mut self, slot: U256, value: U256) -> anyhow::Result<()> {
+        self.untyped.insert(
+            MptKey::from_slot_position(slot).into_nibbles(),
+            alloy::rlp::encode(value.compat()),
+        )?;
         Ok(())
     }
     pub fn store_hash(&mut self, key: MptKey, value: H256) -> anyhow::Result<()> {
