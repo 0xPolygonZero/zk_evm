@@ -10,8 +10,7 @@ use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
-use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{MultiProof, StarkProofChallenges};
+use starky::proof::MultiProof;
 
 use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
@@ -31,6 +30,10 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues<F>,
+    /// A flag indicating whether the Keccak and KeccakSponge tables contain
+    /// only padding values (i.e., no meaningful data). This is set to false
+    /// when no actual Keccak operations were performed.
+    pub use_keccak_tables: bool,
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
@@ -38,14 +41,6 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> A
     pub fn degree_bits(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
         self.multi_proof.recover_degree_bits(config)
     }
-}
-
-/// Randomness for all STARKs.
-pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
-    /// Randomness used in each STARK proof.
-    pub stark_challenges: [StarkProofChallenges<F, D>; NUM_TABLES],
-    /// Randomness used for cross-table lookups. It is shared by all STARKs.
-    pub ctl_challenges: GrandProductChallengeSet<F>,
 }
 
 /// Memory values which are public.

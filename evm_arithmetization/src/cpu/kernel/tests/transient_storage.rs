@@ -224,7 +224,7 @@ fn test_revert() -> Result<()> {
     // where the `checkpoint` macro from file cpu/kernel/asm/journal/journal.asm
     // is expanded.
     const NUMBER_FILES: usize = NUMBER_KERNEL_FILES + 1;
-    static KERNEL: Lazy<Kernel> = Lazy::new(|| {
+    static TEST_KERNEL: Lazy<Kernel> = Lazy::new(|| {
         combined_kernel_from_files(std::array::from_fn::<_, NUMBER_FILES, _>(|i| {
             if i < NUMBER_KERNEL_FILES {
                 KERNEL_FILES[i]
@@ -234,10 +234,10 @@ fn test_revert() -> Result<()> {
         }))
     });
 
-    let sys_tstore = KERNEL.global_labels["sys_tstore"];
+    let sys_tstore = TEST_KERNEL.global_labels["sys_tstore"];
     let mut interpreter = Interpreter::<F>::new(sys_tstore, vec![], None);
     interpreter.generation_state =
-        GenerationState::<F>::new(&GenerationInputs::default(), &KERNEL.code).unwrap();
+        GenerationState::<F>::new(&GenerationInputs::default(), &TEST_KERNEL.code).unwrap();
     initialize_interpreter(&mut interpreter, (20 * 100).into());
 
     // Store different values at slot 1
@@ -269,7 +269,7 @@ fn test_revert() -> Result<()> {
     let gas_before_checkpoint = interpreter.generation_state.registers.gas_used;
 
     // We will revert to the point where `val` was 9
-    let checkpoint = KERNEL.global_labels["checkpoint"];
+    let checkpoint = TEST_KERNEL.global_labels["checkpoint"];
     interpreter.generation_state.registers.program_counter = checkpoint;
     interpreter.generation_state.registers.is_kernel = true;
     interpreter
@@ -325,7 +325,7 @@ fn test_revert() -> Result<()> {
     assert!(interpreter.run().is_err());
 
     // Now we should load the value before the revert
-    let sys_tload = KERNEL.global_labels["sys_tload"];
+    let sys_tload = TEST_KERNEL.global_labels["sys_tload"];
     interpreter.generation_state.registers.program_counter = sys_tload;
     interpreter.generation_state.registers.gas_used = 0;
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);

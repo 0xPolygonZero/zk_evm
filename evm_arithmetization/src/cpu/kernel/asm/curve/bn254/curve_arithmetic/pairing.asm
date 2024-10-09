@@ -196,6 +196,6 @@ bn254_pairing_output_validation:
     ISZERO
     MUL
     // stack: Q==0, P==0
-    OR
+    ADD // OR
     // stack: Q==0||P==0
 %endmacro

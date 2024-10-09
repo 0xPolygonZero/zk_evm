@@ -56,12 +56,12 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
       # These sizes are configured specifically for block 19807080. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b19807080.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
-        export BYTE_PACKING_CIRCUIT_SIZE="9..15"
-        export CPU_CIRCUIT_SIZE="15..20"
-        export KECCAK_CIRCUIT_SIZE="12..18"
+        export BYTE_PACKING_CIRCUIT_SIZE="8..15"
+        export CPU_CIRCUIT_SIZE="14..20"
+        export KECCAK_CIRCUIT_SIZE="10..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..14"
         export LOGIC_CIRCUIT_SIZE="8..17"
-        export MEMORY_CIRCUIT_SIZE="18..22"
+        export MEMORY_CIRCUIT_SIZE="17..22"
         export MEMORY_BEFORE_CIRCUIT_SIZE="16..20"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..20"
         # TODO(Robin): update Poseidon ranges here and below once Kernel ASM supports Poseidon ops
@@ -102,11 +102,13 @@ if [[ $TEST_ONLY == "test_only" ]]; then
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         #rm $TEST_OUT_PATH
-        exit
-      elif grep -q 'Proving task finished with error' $TEST_OUT_PATH; then
-        echo -e "\n\nFailed to create proof witnesses. See \"zk_evm/test.out\" for more details."
+        exit 0
+    elif grep -q 'Proving task finished with error' $TEST_OUT_PATH; then
+        # Some error occurred, display the logs and exit.
+        cat $OUT_LOG_PATH
+        echo "Failed to create proof witnesses. See $OUT_LOG_PATH for more details."
         exit 1
-      else
+    else
         echo -e "\n\nUndecided.  Proving process has stopped but verdict is undecided. See \"zk_evm/test.out\" for more details."
         exit 2
     fi
@@ -122,6 +124,8 @@ end_time=$(date +%s%N)
 set +o pipefail
 cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
+  # Some error occurred, display the logs and exit.
+  cat $OUTPUT_LOG
   echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
   exit 1
 fi
@@ -135,7 +139,9 @@ do
       echo "Proof verification for file $proof_file successful";
       rm $verify_file # we keep the generated proof for potential reuse
   else
-      echo "there was an issue with proof verification";
+      # Some error occurred with verification, display the logs and exit.
+      cat $verify_file
+      echo "There was an issue with proof verification. See $verify_file for more details.";
       exit 1
   fi
 done

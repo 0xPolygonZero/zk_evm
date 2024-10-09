@@ -129,7 +129,7 @@ impl BlockProverInput {
                 .run(&runtime)
                 .await?;
 
-        if let crate::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
+        if let crate::proof_types::BatchAggregatableProof::BatchAgg(proof) = final_batch_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;

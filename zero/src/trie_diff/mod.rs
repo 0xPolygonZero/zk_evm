@@ -1,6 +1,6 @@
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::DebugOutputTries;
-use mpt_trie::debug_tools::diff::{create_diff_between_tries, DiffPoint};
+use mpt_trie::debug_tools::diff::{create_full_diff_between_tries, DiffPoint};
 use mpt_trie::utils::TrieNodeType;
 use tracing::info;
 
@@ -24,13 +24,17 @@ pub fn compare_tries(
         V: rlp::Decodable + std::fmt::Debug,
     >(
         trie_name: &str,
-        diff_point: Option<DiffPoint>,
+        diff_point: Vec<DiffPoint>,
         block_number: u64,
         batch_index: usize,
         decode_key: bool,
         decode_data: bool,
     ) -> anyhow::Result<()> {
-        if let Some(ref trie_diff_point) = diff_point {
+        if diff_point.is_empty() {
+            info!("{trie_name} for block {block_number} batch {batch_index} matches.");
+            return Ok(());
+        }
+        for (index, trie_diff_point) in diff_point.into_iter().enumerate() {
             if trie_diff_point.a_info.node_type == TrieNodeType::Leaf {
                 if let Some(ref td_value) = trie_diff_point.a_info.value {
                     let td_key_str: &str = if decode_key {
@@ -73,19 +77,17 @@ pub fn compare_tries(
             }
 
             info!(
-                "{trie_name} block {block_number} batch {batch_index} diff: {:#?}",
+                "Diff {index} {trie_name} block {block_number} batch {batch_index} diff:\n{}\n",
                 trie_diff_point
             );
-        } else {
-            info!("{trie_name} for block {block_number} batch {batch_index} matches.");
         }
         Ok(())
     }
 
-    let state_trie_diff = create_diff_between_tries(&left.state_trie, &right.state_trie);
+    let state_trie_diff = create_full_diff_between_tries(&left.state_trie, &right.state_trie);
     compare_tries_and_output_results::<usize, AccountRlp>(
         "state trie",
-        state_trie_diff.latest_diff_res,
+        state_trie_diff.diff_points,
         block_number,
         batch_index,
         false,
@@ -93,20 +95,20 @@ pub fn compare_tries(
     )?;
 
     let transaction_trie_diff =
-        create_diff_between_tries(&left.transaction_trie, &right.transaction_trie);
+        create_full_diff_between_tries(&left.transaction_trie, &right.transaction_trie);
     compare_tries_and_output_results::<usize, u8>(
         "transaction trie",
-        transaction_trie_diff.latest_diff_res,
+        transaction_trie_diff.diff_points,
         block_number,
         batch_index,
         false,
         true,
     )?;
 
-    let receipt_trie_diff = create_diff_between_tries(&left.receipt_trie, &right.receipt_trie);
+    let receipt_trie_diff = create_full_diff_between_tries(&left.receipt_trie, &right.receipt_trie);
     compare_tries_and_output_results::<usize, LegacyReceiptRlp>(
         "receipt trie",
-        receipt_trie_diff.latest_diff_res,
+        receipt_trie_diff.diff_points,
         block_number,
         batch_index,
         true,
