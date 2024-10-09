@@ -1,13 +1,13 @@
 #![cfg(feature = "eth_mainnet")]
 
-use std::time::Duration;
-
+use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{init_logger, segment_without_keccak};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
+use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 
@@ -22,21 +22,62 @@ fn empty_tables() -> anyhow::Result<()> {
 
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
-    let mut proofs = vec![];
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
+    let mut timing = &mut TimingTree::new(
+        "Empty Table Test",
+        log::Level::Info,
+    );
 
+    // Generate segment data
     let (payload, mut segment_data) = segment_without_keccak()?;
-    let proof = prove::<F, C, D>(
-        &all_stark,
-        &config,
-        payload,
-        &mut segment_data,
-        &mut timing,
-        None,
-    )?;
+
+    // Create all STARK proofs
+    let mut proofs = vec![];
+    let proof = timed!(
+        timing,
+        log::Level::Info,
+        "Create all STARK proofs",
+        prove::<F, C, D>(
+            &all_stark,
+            &config,
+            payload,
+            &mut segment_data,
+            &mut timing,
+            None,
+        )?
+    );
     proofs.push(proof);
 
-    timing.filter(Duration::from_millis(100)).print();
+    // Verify the generated STARK proofs
+    verify_all_proofs(&all_stark, &proofs, &config)?;
 
-    verify_all_proofs(&all_stark, &proofs, &config)
+    // Process and generate segment proof
+    let all_circuits = timed!(
+        timing,
+        log::Level::Info,
+        "Create all recursive circuits",
+        AllRecursiveCircuits::<F, C, D>::new(
+            &all_stark,
+            &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 17..18, 17..18, 17..18],
+            &config,
+        )
+    );
+    let segment_proof = timed!(
+        timing,
+        log::Level::Info,
+        "Prove segment",
+        all_circuits.prove_segment_with_all_proofs(&proofs[0], &config, None)?
+    );
+
+    // Verify the generated segment proof
+    timed!(
+        timing,
+        log::Level::Info,
+        "Verify segment proof",
+        all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
+    );
+
+    // Print timing details
+    timing.print();
+
+    Ok(())
 }

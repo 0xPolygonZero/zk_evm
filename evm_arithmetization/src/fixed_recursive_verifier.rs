@@ -1903,7 +1903,6 @@ where
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         features_check(&generation_inputs);
-
         let all_proof = prove::<F, C, D>(
             all_stark,
             config,
@@ -1912,7 +1911,15 @@ where
             timing,
             abort_signal.clone(),
         )?;
+        self.prove_segment_with_all_proofs(&all_proof, config, abort_signal.clone())
+    }
 
+    pub fn prove_segment_with_all_proofs(
+        &self,
+        all_proof: &AllProof<F, C, D>,
+        config: &StarkConfig,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
@@ -1995,7 +2002,7 @@ where
             is_agg: false,
             is_dummy: false,
             proof_with_pvs: ProofWithPublicValues {
-                public_values: all_proof.public_values,
+                public_values: all_proof.public_values.clone(),
                 intern: root_proof,
             },
         })
@@ -3133,72 +3140,5 @@ pub mod testing {
                 &self.batch_aggregation.circuit.common,
             )
         }
-    }
-}
-
-#[cfg(test)]
-#[cfg(not(feature = "cdk_erigon"))]
-mod tests {
-    use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
-    use plonky2::timed;
-
-    use super::*;
-    use crate::testing_utils::{init_logger, segment_without_keccak};
-
-    type F = GoldilocksField;
-    const D: usize = 2;
-    type C = PoseidonGoldilocksConfig;
-
-    #[test]
-    fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
-        init_logger();
-
-        let all_stark = AllStark::<F, D>::default();
-        let config = StarkConfig::standard_fast_config();
-
-        let timing = &mut TimingTree::new(
-            "Segment Proof Generation Without Keccak Test",
-            log::Level::Info,
-        );
-        // Process and prove segment
-        let all_circuits = timed!(
-            timing,
-            log::Level::Info,
-            "Create all recursive circuits",
-            AllRecursiveCircuits::<F, C, D>::new(
-                &all_stark,
-                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 17..18, 17..18, 17..18],
-                &config,
-            )
-        );
-
-        let (payload, mut segment_data) = segment_without_keccak()?;
-        let segment_proof = timed!(
-            timing,
-            log::Level::Info,
-            "Prove segment",
-            all_circuits.prove_segment(
-                &all_stark,
-                &config,
-                payload,
-                &mut segment_data,
-                timing,
-                None,
-            )?
-        );
-
-        // Verify the generated segment proof
-        timed!(
-            timing,
-            log::Level::Info,
-            "Verify segment proof",
-            all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
-        );
-
-        // Print timing details
-        timing.print();
-
-        Ok(())
     }
 }
