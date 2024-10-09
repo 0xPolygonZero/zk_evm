@@ -386,6 +386,8 @@ pub trait World {
     fn iter_account_info(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
     fn root(&self) -> H256;
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
+    fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()>;
+    fn load_int(&self, address: Address, slot: U256) -> anyhow::Result<U256>;
 }
 
 /// Global, [`Address`] `->` [`AccountRlp`].
@@ -468,9 +470,36 @@ impl World for Type1World {
         self.state.root()
     }
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
-        // self.storage.entry(keccak_hash::keccak(address)).or_default()
-        todo!()
+        on_storage_trie(self, address, |storage| {
+            storage.store_int_at_slot(slot, value)
+        })
     }
+    fn load_int(&self, address: Address, slot: U256) -> anyhow::Result<U256> {
+        self.storage
+            .get(&keccak_hash::keccak(address))
+            .context("storage for address")?
+            .load_int(MptKey::from_slot_position(slot))
+    }
+    fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()> {
+        on_storage_trie(self, address, |storage| {
+            storage.store_hash(MptKey::from_hash(position), value)
+        })
+    }
+}
+
+fn on_storage_trie(
+    world: &mut Type1World,
+    address: Address,
+    f: impl FnOnce(&mut StorageTrie) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let mut account = world.get_account_info(address).context("no such account")?;
+    let storage = world
+        .storage
+        .entry(keccak_hash::keccak(address))
+        .or_default();
+    f(storage)?;
+    account.storage_root = storage.root();
+    world.insert_account_info(address, account)
 }
 
 impl From<Type1World> for HashedPartialTrie {
@@ -520,6 +549,15 @@ impl World for Type2World {
         conv_hash::smt2eth(self.as_smt().root)
     }
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        let _ = (address, slot, value);
+        todo!()
+    }
+    fn load_int(&self, address: Address, slot: U256) -> anyhow::Result<U256> {
+        let _ = (address, slot);
+        todo!()
+    }
+    fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()> {
+        let _ = (address, position, value);
         todo!()
     }
 }
@@ -637,7 +675,7 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
-    pub fn load_int(&mut self, key: MptKey) -> anyhow::Result<U256> {
+    pub fn load_int(&self, key: MptKey) -> anyhow::Result<U256> {
         let bytes = self.untyped.get(key.into_nibbles()).context("no item")?;
         Ok(rlp::decode(bytes)?)
     }
@@ -648,7 +686,7 @@ impl StorageTrie {
         )?;
         Ok(())
     }
-    pub fn store_hash(&mut self, key: MptKey, value: H256) -> anyhow::Result<()> {
+    fn store_hash(&mut self, key: MptKey, value: H256) -> anyhow::Result<()> {
         self.untyped
             .insert(key.into_nibbles(), alloy::rlp::encode(value.compat()))?;
         Ok(())
@@ -669,9 +707,6 @@ impl StorageTrie {
     }
     pub fn reporting_remove(&mut self, key: MptKey) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(&mut self.untyped, key)
-    }
-    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        &mut self.untyped
     }
     /// _Hash out_ the parts of the trie that aren't in `paths`.
     pub fn mask(&mut self, paths: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {

@@ -743,84 +743,63 @@ where
     StateTrieT::StateKey: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
-        ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
-        GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS, LAST_BLOCK_STORAGE_POS,
-        STATE_ROOT_STORAGE_POS, TIMESTAMP_STORAGE_POS,
+        ADDRESS_SCALABLE_L2, GLOBAL_EXIT_ROOT_ADDRESS, GLOBAL_EXIT_ROOT_STORAGE_POS,
+        LAST_BLOCK_STORAGE_POS, STATE_ROOT_STORAGE_POS, TIMESTAMP_STORAGE_POS,
     };
 
-    if block.block_number.is_zero() {
-        return Err(anyhow!("Attempted to prove the Genesis block!"));
-    }
-    let scalable_storage = storage
-        .get_mut(&ADDRESS_SCALABLE_L2_ADDRESS_HASHED)
-        .context("missing scalable contract storage trie")?;
+    ensure!(
+        block.block_number != U256::zero(),
+        "attempted to prove the genesis block"
+    );
+
     let scalable_trim = trim_storage.entry(ADDRESS_SCALABLE_L2).or_default();
 
-    let timestamp_slot_key = MptKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
-
-    let timestamp = scalable_storage
-        .load_int(timestamp_slot_key)
+    let timestamp = state_trie
+        .load_int(ADDRESS_SCALABLE_L2, U256::from(TIMESTAMP_STORAGE_POS.1))
         .unwrap_or_default();
-    let timestamp = core::cmp::max(timestamp, block.block_timestamp);
-
-    // Store block number and largest timestamp
+    let timestamp = cmp::max(timestamp, block.block_timestamp);
 
     for (ix, u) in [
         (U256::from(LAST_BLOCK_STORAGE_POS.1), block.block_number),
         (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
     ] {
         ensure!(u != U256::zero());
-        scalable_storage.store_int_at_slot(ix, u)?;
+        state_trie.store_int(ADDRESS_SCALABLE_L2, ix, u)?;
         scalable_trim.insert(MptKey::from_slot_position(ix));
     }
 
     // Store previous block root hash
 
-    let prev_block_root_hash = state_trie.root();
     let mut arr = [0; 64];
     (block.block_number - 1).to_big_endian(&mut arr[0..32]);
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
-    scalable_storage.store_hash(slot, prev_block_root_hash)?;
+    let prev_block_root_hash = state_trie.root();
+    state_trie.store_hash(
+        ADDRESS_SCALABLE_L2,
+        keccak_hash::keccak(arr),
+        prev_block_root_hash,
+    )?;
     scalable_trim.insert(slot);
 
     trim_state.insert(<StateTrieT::StateKey>::from(ADDRESS_SCALABLE_L2));
-    let mut scalable_acct = state_trie
-        .get_account_info(ADDRESS_SCALABLE_L2)
-        .context("missing scalable contract address")?;
-    scalable_acct.storage_root = scalable_storage.root();
-    state_trie
-        .insert_account_info(ADDRESS_SCALABLE_L2, scalable_acct)
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-        //                Add an entry API
-        .expect("insert must succeed with the same key as a successful `get`");
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
-        let ger_storage = storage
-            .get_mut(&GLOBAL_EXIT_ROOT_ADDRESS_HASHED)
-            .context("missing GER contract storage trie")?;
         let ger_trim = trim_storage.entry(GLOBAL_EXIT_ROOT_ADDRESS).or_default();
 
         let mut arr = [0; 64];
         arr[0..32].copy_from_slice(&root.0);
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
         let slot = MptKey::from_hash(keccak_hash::keccak(arr));
-
-        ger_storage.store_hash(slot, l1blockhash)?;
+        state_trie.store_hash(
+            GLOBAL_EXIT_ROOT_ADDRESS,
+            keccak_hash::keccak(arr),
+            l1blockhash,
+        )?;
         ger_trim.insert(slot);
-
         trim_state.insert(<StateTrieT::StateKey>::from(GLOBAL_EXIT_ROOT_ADDRESS));
-        let mut ger_acct = state_trie
-            .get_account_info(GLOBAL_EXIT_ROOT_ADDRESS)
-            .context("missing GER contract address")?;
-        ger_acct.storage_root = ger_storage.root();
-        state_trie
-            .insert_account_info(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
-            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-            //                Add an entry API
-            .expect("insert must succeed with the same key as a successful `get`");
     }
 
     Ok(())
@@ -867,7 +846,7 @@ where
         match u.is_zero() {
             true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
             false => {
-                beacon_storage.store_int_at_slot(ix, u)?;
+                state_trie.store_int(BEACON_ROOTS_CONTRACT_ADDRESS, ix, u)?;
                 beacon_trim.insert(slot);
             }
         }
