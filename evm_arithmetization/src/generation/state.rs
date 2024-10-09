@@ -187,8 +187,7 @@ pub(crate) trait State<F: RichField> {
 
         let cycle_limit = max_cpu_len_log.map(|max_len_log| {
             let target_len = 1 << max_len_log;
-            let min_len = NUM_EXTRA_CYCLES_AFTER.next_power_of_two();
-            if target_len > min_len {
+            if target_len > NUM_EXTRA_CYCLES_AFTER {
                 target_len - NUM_EXTRA_CYCLES_AFTER
             } else {
                 target_len
