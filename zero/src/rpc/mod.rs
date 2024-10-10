@@ -1,6 +1,6 @@
 zk_evm_common::check_chain_features!();
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use __compat_primitive_types::{H256, U256};
 use alloy::{
@@ -56,6 +56,7 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     checkpoint_block_number: u64,
     rpc_type: RpcType,
     jumpdest_src: JumpdestSrc,
+    fetch_timeout: Duration,
 ) -> Result<BlockProverInput, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -68,6 +69,7 @@ where
                 block_id,
                 checkpoint_block_number,
                 jumpdest_src,
+                fetch_timeout,
             )
             .await
         }
@@ -77,6 +79,7 @@ where
                 block_id,
                 checkpoint_block_number,
                 jumpdest_src,
+                fetch_timeout,
             )
             .await
         }

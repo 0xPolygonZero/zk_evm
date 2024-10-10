@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::transports::http::reqwest::Url;
@@ -21,6 +22,7 @@ pub struct RpcParams {
     pub max_retries: u32,
     pub block_time: u64,
     pub jumpdest_src: JumpdestSrc,
+    pub timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -94,6 +96,7 @@ pub(crate) async fn client_main(
             leader_config.checkpoint_block_number,
             rpc_params.rpc_type,
             rpc_params.jumpdest_src,
+            rpc_params.timeout,
         )
         .await?;
         block_tx

@@ -79,6 +79,7 @@ async fn main() -> Result<()> {
             block_time,
             backoff,
             max_retries,
+            timeout,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
             let block_interval = BlockInterval::new(&block_interval)?;
@@ -93,6 +94,7 @@ async fn main() -> Result<()> {
                     max_retries,
                     block_time,
                     jumpdest_src,
+                    timeout,
                 },
                 block_interval,
                 LeaderConfig {

@@ -28,9 +28,6 @@ use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
 use tracing::{trace, warn};
 
-/// The maximum time we are willing to wait for a block's structlogs  before
-/// failing over to simulating the JumpDest analysis.
-const TIMEOUT_LIMIT: Duration = Duration::from_secs(60);
 #[derive(Debug, Clone)]
 pub struct TxStructLogs(pub Option<TxHash>, pub Vec<StructLog>);
 
@@ -60,6 +57,7 @@ fn get_code_hash(usage: &ContractCodeUsage) -> H256 {
 pub(crate) async fn get_block_normalized_structlogs<ProviderT, TransportT>(
     provider: &ProviderT,
     block: &BlockNumberOrTag,
+    fetch_timeout: &Duration,
 ) -> anyhow::Result<Vec<Option<TxStructLogs>>>
 where
     ProviderT: Provider<TransportT>,
@@ -69,7 +67,7 @@ where
         provider.debug_trace_block_by_number(*block, structlog_tracing_options(true, false, false));
 
     let block_stackonly_structlog_traces =
-        match timeout(TIMEOUT_LIMIT, block_stackonly_structlog_traces_fut).await {
+        match timeout(*fetch_timeout, block_stackonly_structlog_traces_fut).await {
             Ok(traces) => traces?,
             Err(elapsed) => {
                 trace!(target: "fetching block structlogs timed out", ?elapsed);

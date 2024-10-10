@@ -1,5 +1,6 @@
 use core::iter::Iterator;
 use std::ops::Deref as _;
+use std::time::Duration;
 
 use alloy::eips::BlockNumberOrTag;
 use alloy::{
@@ -33,6 +34,7 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     target_block_id: BlockId,
     checkpoint_block_number: u64,
     jumpdest_src: JumpdestSrc,
+    fetch_timeout: Duration,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
@@ -71,6 +73,7 @@ where
                 &block,
                 cached_provider.get_provider().await?.deref(),
                 &tx_results,
+                &fetch_timeout,
             )
             .await
             .unwrap_or_else(|e| {
@@ -114,14 +117,18 @@ pub async fn process_transactions<'i, ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
     tx_results: &[TxnInfo],
+    fetch_timeout: &Duration,
 ) -> anyhow::Result<Vec<Option<JumpDestTableWitness>>>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let block_structlogs =
-        get_block_normalized_structlogs(provider, &BlockNumberOrTag::from(block.header.number))
-            .await?;
+    let block_structlogs = get_block_normalized_structlogs(
+        provider,
+        &BlockNumberOrTag::from(block.header.number),
+        fetch_timeout,
+    )
+    .await?;
 
     let tx_traces = tx_results
         .iter()

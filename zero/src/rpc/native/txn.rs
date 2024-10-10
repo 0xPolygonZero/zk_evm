@@ -1,5 +1,6 @@
 use core::option::Option::None;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::time::Duration;
 
 use __compat_primitive_types::{H256, U256};
 use alloy::eips::BlockNumberOrTag;
@@ -62,6 +63,7 @@ pub async fn process_transactions<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
     jumpdest_src: JumpdestSrc,
+    fetch_timeout: &Duration,
 ) -> anyhow::Result<(CodeDb, Vec<TxnInfo>)>
 where
     ProviderT: Provider<TransportT>,
@@ -88,20 +90,26 @@ where
         JumpdestSrc::ClientFetchedStructlogs => {
             // In case of the error with retrieving structlogs from the server,
             // continue without interruption. Equivalent to `ProverSimulation` case.
-            get_block_normalized_structlogs(provider, &BlockNumberOrTag::from(block.header.number))
-                .await
-                .unwrap_or_else(|e| {
-                    warn!(
-                        "failed to fetch server structlogs for block {}: {e}",
-                        block.header.number
-                    );
-                    vec![None; block_prestate_trace.len()]
-                })
-                .into_iter()
-                .map(|tx_struct_log| tx_struct_log.map(|it| it.1))
-                .collect()
+            get_block_normalized_structlogs(
+                provider,
+                &BlockNumberOrTag::from(block.header.number),
+                fetch_timeout,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                warn!(
+                    "failed to fetch server structlogs for block {}: {e}",
+                    block.header.number
+                );
+                vec![None; block_prestate_trace.len()]
+            })
+            .into_iter()
+            .map(|tx_struct_log| tx_struct_log.map(|it| it.1))
+            .collect()
         }
-        JumpdestSrc::Serverside => todo!(),
+        JumpdestSrc::Serverside => todo!(
+            "Not implemented. See https://github.com/0xPolygonZero/erigon/issues/20 for details."
+        ),
     };
 
     block
