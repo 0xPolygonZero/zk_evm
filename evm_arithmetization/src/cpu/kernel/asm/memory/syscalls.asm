@@ -102,7 +102,8 @@ calldataload_large_offset:
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
     PUSH $segment
-    // stack: segment, context, kexit_info, dest_offset, offset, size
+    %build_address_no_offset
+    // stack: base_addr, kexit_info, dest_offset, offset, size
     %jump(wcopy_within_bounds)
 %endmacro
 
@@ -130,12 +131,11 @@ codecopy_within_bounds:
     %jump(memcpy_bytes)
 
 wcopy_within_bounds:
-    // TODO: rework address creation to have less stack manipulation overhead
-    // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
+    // stack: base_addr, kexit_info, dest_offset, offset, size
     GET_CONTEXT
-    %stack (context, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
-        (src_ctx, segment, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, size, wcopy_after, kexit_info)
-    %build_address
+    %stack (context, base_addr, kexit_info, dest_offset, offset, size) ->
+        (base_addr, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, size, wcopy_after, kexit_info)
+    ADD // SRC
     SWAP3 %build_address
     // stack: DST, SRC, size, wcopy_after, kexit_info
     %jump(memcpy_bytes)
@@ -287,24 +287,26 @@ global sys_mcopy:
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
     PUSH @SEGMENT_MAIN_MEMORY
+    %build_address_no_offset
 
-    DUP5 DUP5 LT
-    // stack: dest_offset < offset, kexit_info, dest_offset, offset, size
+    DUP4 DUP4 LT
+    // stack: dest_offset < offset, base_addr, kexit_info, dest_offset, offset, size
     %jumpi(wcopy_within_bounds)
 
-    // stack: segment, context, kexit_info, dest_offset, offset, size
-    DUP6 PUSH 32 %min
-    // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
-    DUP6 DUP8 ADD
-    // stack: offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
-    DUP6 LT
-    // stack: dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: base_addr, kexit_info, dest_offset, offset, size
+
+    DUP5 PUSH 32 %min
+    // stack: shift=min(size, 32), base_addr, kexit_info, dest_offset, offset, size
+    DUP5 DUP7 ADD
+    // stack: offset + size, shift, base_addr, kexit_info, dest_offset, offset, size
+    DUP5 LT
+    // stack: dest_offset < offset + size, shift, base_addr, kexit_info, dest_offset, offset, size
     DUP2
-    // stack: shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
-    DUP9 GT
-    // stack: size > shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: shift, dest_offset < offset + size, shift, base_addr, kexit_info, dest_offset, offset, size
+    DUP8 GT
+    // stack: size > shift, dest_offset < offset + size, shift, base_addr, kexit_info, dest_offset, offset, size
     MUL // AND
-    // stack: (size > shift) && (dest_offset < offset + size), shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: (size > shift) && (dest_offset < offset + size), shift, base_addr, kexit_info, dest_offset, offset, size
 
     // If the conditions `size > shift` and `dest_offset < offset + size` are satisfied, that means
     // we will get an overlap that will overwrite some SRC data. In that case, we will proceed to the
@@ -313,7 +315,7 @@ global sys_mcopy:
 
     // Otherwise, we either have `SRC` < `DST`, or a small enough `size` that a single loop of
     // `memcpy_bytes` suffices and does not risk to overwrite `SRC` data before being read.
-    // stack: shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: shift, base_addr, kexit_info, dest_offset, offset, size
     POP
     %jump(wcopy_within_bounds)
 
@@ -323,24 +325,22 @@ mcopy_with_overlap:
     // For this, we need to update `offset` and `dest_offset` to their final position, corresponding
     // to `x + size - min(32, size)`.
 
-    // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
+    // stack: shift=min(size, 32), base_addr, kexit_info, dest_offset, offset, size
     DUP1
-    // stack: shift, shift, segment, context, kexit_info, dest_offset, offset, size
-    DUP8 DUP8 ADD
-    // stack: offset+size, shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: shift, shift, base_addr, kexit_info, dest_offset, offset, size
+    DUP7 DUP7 ADD
+    // stack: offset+size, shift, shift, base_addr, kexit_info, dest_offset, offset, size
     SUB
-    // stack: offset'=offset+size-shift, shift, segment, context, kexit_info, dest_offset, offset, size
-    SWAP5 DUP8 ADD
-    // stack: dest_offset+size, shift, segment, context, kexit_info, offset', offset, size
+    // stack: offset'=offset+size-shift, shift, base_addr, kexit_info, dest_offset, offset, size
+    SWAP4 DUP7 ADD
+    // stack: dest_offset+size, shift, base_addr, kexit_info, offset', offset, size
     SUB
-    // stack: dest_offset'=dest_offset+size-shift, segment, context, kexit_info, offset', offset, size
+    // stack: dest_offset'=dest_offset+size-shift, base_addr, kexit_info, offset', offset, size
 
-    %stack (next_dst_offset, segment, context, kexit_info, new_offset, offset, size) ->
-        (context, segment, new_offset, segment, next_dst_offset, context, size, wcopy_after, kexit_info)
-    %build_address // SRC
-    SWAP3
-    %build_address // DST
-    // stack: DST, SRC, size, wcopy_after, kexit_info
+    DUP2 ADD // DST
+    // stack: DST, base_addr, kexit_info, new_offset, offset, size
+    SWAP3 ADD // SRC
+    %stack (SRC, kexit_info, DST, offset, size) -> (DST, SRC, size, wcopy_after, kexit_info)
     %jump(memcpy_bytes_backwards)
 
 mcopy_empty:

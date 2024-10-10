@@ -54,10 +54,10 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         echo "Using specific circuit sizes for witness_b19807080.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
         export BYTE_PACKING_CIRCUIT_SIZE="8..15"
-        export CPU_CIRCUIT_SIZE="14..20"
-        export KECCAK_CIRCUIT_SIZE="10..18"
+        export CPU_CIRCUIT_SIZE="9..20"
+        export KECCAK_CIRCUIT_SIZE="7..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..14"
-        export LOGIC_CIRCUIT_SIZE="8..17"
+        export LOGIC_CIRCUIT_SIZE="5..17"
         export MEMORY_CIRCUIT_SIZE="17..22"
         export MEMORY_BEFORE_CIRCUIT_SIZE="16..20"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..20"
@@ -73,7 +73,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..9"
         export LOGIC_CIRCUIT_SIZE="4..14"
         export MEMORY_CIRCUIT_SIZE="17..22"
-        export MEMORY_BEFORE_CIRCUIT_SIZE="17..18"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="16..18"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
         export POSEIDON_CIRCUIT_SIZE="4..8"
     else
@@ -112,11 +112,10 @@ cargo build --release --jobs "$num_procs"
 
 
 start_time=$(date +%s%N)
-"${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
+"${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand -n 1 --block-batch-size $BLOCK_BATCH_SIZE \
  --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
 end_time=$(date +%s%N)
 
-set +o pipefail
 cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
   # Some error occurred, display the logs and exit.

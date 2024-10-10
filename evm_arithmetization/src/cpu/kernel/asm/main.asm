@@ -130,14 +130,14 @@ global start_txns:
     #[cfg(feature = eth_mainnet)]
     {
         // If txn_idx == 0, update the beacon_root for Ethereum mainnet.
-        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        DUP4
         ISZERO
         %jumpi(set_beacon_root)
     }
     #[cfg(feature = cdk_erigon)]
     {
         // If txn_idx == 0, perform pre-state execution for CDK erigon.
-        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        DUP4
         ISZERO
         %jumpi(pre_block_execution)
     }

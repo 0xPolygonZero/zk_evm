@@ -85,7 +85,7 @@ store_limbs_return:
 %macro expmod_gas_f
     // stack: x
     // Overflow check
-    DUP1 %ge_const(0x800000000000000000000000000000007) %jumpi(fault_exception)
+    DUP1 %gt_const(0x800000000000000000000000000000006) %jumpi(fault_exception)
     // stack: x
     %ceil_div_const(8)
     // stack: ceil(x/8)
@@ -100,7 +100,7 @@ calculate_l_E_prime:
     DUP1 %gt_const(0x100000000000000000000000000000000) %jumpi(fault_exception)
     DUP1 ISZERO %jumpi(case_le_zero)
     // stack: l_E, l_B, retdest
-    DUP1 %le_const(32)
+    DUP1 %lt_const(33)
     // stack: l_E <= 32, l_E, l_B, retdest
     %jumpi(case_le_32)
     // stack: l_E, l_B, retdest
@@ -121,7 +121,7 @@ calculate_l_E_prime:
     // stack: l_E, log2(i[96 + l_B..128 + l_B]), l_B, retdest
     %sub_const(32)
     // Overflow check
-    DUP1 %ge_const(0x2000000000000000000000000000000000000000000000000000000000000000) %jumpi(fault_exception)
+    DUP1 %gt_const(0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) %jumpi(fault_exception)
     %mul_const(8)
     // stack: 8 * (l_E - 32), log2(i[96 + l_B..128 + l_B]), l_B, retdest
     ADD
