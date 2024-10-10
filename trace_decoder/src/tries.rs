@@ -380,7 +380,10 @@ pub trait World {
     ) -> anyhow::Result<()>;
     fn get_account_info(&self, address: Address) -> Option<Self::AccountInfo>;
     /// Hacky method to workaround MPT shenanigans.
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::StateKey>>;
+    fn reporting_remove_account_info(
+        &mut self,
+        address: Address,
+    ) -> anyhow::Result<Option<Self::StateKey>>;
     /// _Hash out_ parts of the (state) trie that aren't in `addresses`.
     fn mask(&mut self, addresses: impl IntoIterator<Item = Self::StateKey>) -> anyhow::Result<()>;
     fn iter_account_info(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
@@ -388,6 +391,11 @@ pub trait World {
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
     fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()>;
     fn load_int(&self, address: Address, slot: U256) -> anyhow::Result<U256>;
+    fn reporting_remove_storage(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>>;
 }
 
 /// Global, [`Address`] `->` [`AccountRlp`].
@@ -444,7 +452,10 @@ impl World for Type1World {
     }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
+    fn reporting_remove_account_info(
+        &mut self,
+        address: Address,
+    ) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(
             self.state.as_mut_hashed_partial_trie_unchecked(),
             MptKey::from_address(address),
@@ -484,6 +495,21 @@ impl World for Type1World {
         on_storage_trie(self, address, |storage| {
             storage.store_hash(MptKey::from_hash(position), value)
         })
+    }
+    fn reporting_remove_storage(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<Self::StateKey>> {
+        let mut account = self.get_account_info(address).context("no such account")?;
+        let storage = self
+            .storage
+            .get_mut(&keccak_hash::keccak(address))
+            .context("no such account")?;
+        let report = storage.reporting_remove(MptKey::from_slot_position(slot))?;
+        account.storage_root = storage.root();
+        self.insert_account_info(address, account)?;
+        Ok(report)
     }
 }
 
@@ -532,7 +558,10 @@ impl World for Type2World {
     fn get_account_info(&self, address: Address) -> Option<AccountRlp> {
         self.address2state.get(&address).copied()
     }
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<SmtKey>> {
+    fn reporting_remove_account_info(
+        &mut self,
+        address: Address,
+    ) -> anyhow::Result<Option<SmtKey>> {
         self.address2state.remove(&address);
         Ok(None)
     }
@@ -558,6 +587,14 @@ impl World for Type2World {
     }
     fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()> {
         let _ = (address, position, value);
+        todo!()
+    }
+    fn reporting_remove_storage(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>> {
+        let _ = (address, slot);
         todo!()
     }
 }
@@ -675,11 +712,11 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
-    pub fn load_int(&self, key: MptKey) -> anyhow::Result<U256> {
+    fn load_int(&self, key: MptKey) -> anyhow::Result<U256> {
         let bytes = self.untyped.get(key.into_nibbles()).context("no item")?;
         Ok(rlp::decode(bytes)?)
     }
-    pub fn store_int_at_slot(&mut self, slot: U256, value: U256) -> anyhow::Result<()> {
+    fn store_int_at_slot(&mut self, slot: U256, value: U256) -> anyhow::Result<()> {
         self.untyped.insert(
             MptKey::from_slot_position(slot).into_nibbles(),
             alloy::rlp::encode(value.compat()),
@@ -702,10 +739,7 @@ impl StorageTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
-    pub const fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
-        &self.untyped
-    }
-    pub fn reporting_remove(&mut self, key: MptKey) -> anyhow::Result<Option<MptKey>> {
+    fn reporting_remove(&mut self, key: MptKey) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(&mut self.untyped, key)
     }
     /// _Hash out_ the parts of the trie that aren't in `paths`.
@@ -715,6 +749,12 @@ impl StorageTrie {
             paths.into_iter().map(MptKey::into_nibbles),
         )?;
         Ok(())
+    }
+}
+
+impl From<HashedPartialTrie> for StorageTrie {
+    fn from(untyped: HashedPartialTrie) -> Self {
+        Self { untyped }
     }
 }
 

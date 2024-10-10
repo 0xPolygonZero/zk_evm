@@ -212,23 +212,8 @@ fn start(
             )?;
             let storage = storage
                 .into_iter()
-                .map(|(k, SeparateTriePreImage::Direct(v))| {
-                    v.items()
-                        .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                            let path = MptKey::from_nibbles(nibbles);
-                            match hash_or_val {
-                                mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                    acc.insert(path, value)?;
-                                }
-                                mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                    acc.insert_hash(path, h)?;
-                                }
-                            };
-                            anyhow::Ok(acc)
-                        })
-                        .map(|v| (k, v))
-                })
-                .collect::<Result<_, _>>()?;
+                .map(|(k, SeparateTriePreImage::Direct(v))| (k, StorageTrie::from(v)))
+                .collect();
             (Either::Left(state), storage, Hash2Code::new())
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
@@ -456,7 +441,6 @@ where
             do_pre_execution(
                 block,
                 ger_data,
-                &mut storage_tries,
                 &mut storage_masks,
                 &mut state_mask,
                 &mut state_trie,
@@ -595,14 +579,10 @@ where
                         for (k, v) in storage_written {
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => {
-                                    storage_mask.extend(storage.reporting_remove(
-                                        MptKey::from_hash(keccak_hash::keccak(k)),
-                                    )?)
-                                }
-                                false => {
-                                    storage.store_int_at_slot(k.into_uint(), v)?;
-                                }
+                                true => storage_mask.extend(
+                                    state_trie.reporting_remove_storage(addr, k.into_uint())?,
+                                ),
+                                false => state_trie.store_int(addr, k.into_uint(), v)?,
                             }
                         }
                         acct.storage_root = storage.root();
@@ -617,7 +597,7 @@ where
 
                 if self_destructed {
                     storage_tries.remove(&keccak_hash::keccak(addr));
-                    state_mask.extend(state_trie.reporting_remove(addr)?)
+                    state_mask.extend(state_trie.reporting_remove_account_info(addr)?)
                 }
             }
 
@@ -692,7 +672,6 @@ where
 fn do_pre_execution<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
-    storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
@@ -704,7 +683,6 @@ where
     if cfg!(feature = "eth_mainnet") {
         return do_beacon_hook(
             block.block_timestamp,
-            storage,
             trim_storage,
             block.parent_beacon_block_root,
             trim_state,
@@ -713,14 +691,7 @@ where
     }
 
     if cfg!(feature = "cdk_erigon") {
-        return do_scalable_hook(
-            block,
-            ger_data,
-            storage,
-            trim_storage,
-            trim_state,
-            state_trie,
-        );
+        return do_scalable_hook(block, ger_data, trim_storage, trim_state, state_trie);
     }
 
     Ok(())
@@ -734,7 +705,6 @@ where
 fn do_scalable_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
-    storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
@@ -812,7 +782,6 @@ where
 /// before any transactions (as per the EIP).
 fn do_beacon_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block_timestamp: U256,
-    storage: &mut BTreeMap<H256, StorageTrie>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     parent_beacon_block_root: H256,
     trim_state: &mut BTreeSet<StateTrieT::StateKey>,
@@ -822,14 +791,11 @@ where
     StateTrieT::StateKey: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
-        BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
+        BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
     };
 
     let timestamp_idx = block_timestamp % HISTORY_BUFFER_LENGTH.value;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
-    let beacon_storage = storage
-        .get_mut(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
-        .context("missing beacon contract storage trie")?;
     let beacon_trim = trim_storage
         .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
         .or_default();
@@ -844,7 +810,8 @@ where
         let slot = MptKey::from_slot_position(ix);
 
         match u.is_zero() {
-            true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
+            true => beacon_trim
+                .extend(state_trie.reporting_remove_storage(BEACON_ROOTS_CONTRACT_ADDRESS, ix)?),
             false => {
                 state_trie.store_int(BEACON_ROOTS_CONTRACT_ADDRESS, ix, u)?;
                 beacon_trim.insert(slot);
@@ -852,15 +819,6 @@ where
         }
     }
     trim_state.insert(<StateTrieT::StateKey>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
-    let mut beacon_acct = state_trie
-        .get_account_info(BEACON_ROOTS_CONTRACT_ADDRESS)
-        .context("missing beacon contract address")?;
-    beacon_acct.storage_root = beacon_storage.root();
-    state_trie
-        .insert_account_info(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-        //                Add an entry API
-        .expect("insert must succeed with the same key as a successful `get`");
     Ok(())
 }
 
