@@ -219,7 +219,7 @@ fn empty_payload() -> Result<GenerationInputs> {
     Ok(inputs)
 }
 
-pub fn segment_without_keccak() -> Result<(
+pub fn segment_with_empty_tables() -> Result<(
     TrimmedGenerationInputs<GoldilocksField>,
     GenerationSegmentData,
 )> {

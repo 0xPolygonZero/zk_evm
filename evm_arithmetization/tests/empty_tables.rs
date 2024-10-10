@@ -2,7 +2,7 @@
 
 use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
 use evm_arithmetization::prover::prove;
-use evm_arithmetization::testing_utils::{init_logger, segment_without_keccak};
+use evm_arithmetization::testing_utils::{init_logger, segment_with_empty_tables};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -25,7 +25,7 @@ fn empty_tables() -> anyhow::Result<()> {
     let timing = &mut TimingTree::new("Empty Table Test", log::Level::Info);
 
     // Generate segment data
-    let (payload, mut segment_data) = segment_without_keccak()?;
+    let (payload, mut segment_data) = segment_with_empty_tables()?;
 
     // Create all STARK proofs
     let mut proofs = vec![];

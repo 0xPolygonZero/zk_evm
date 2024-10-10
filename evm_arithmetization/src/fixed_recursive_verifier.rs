@@ -1,4 +1,4 @@
-use core::mem::{self, MaybeUninit};
+use core::mem::MaybeUninit;
 use core::ops::Range;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
@@ -25,7 +25,7 @@ use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
-    Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
+    Buffer, GateSerializer, IoError, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
 use plonky2::util::timing::TimingTree;
 use plonky2_util::log2_ceil;
@@ -664,29 +664,39 @@ where
             true => (0..NUM_TABLES)
                 .map(|_| RecursiveCircuitsForTable {
                     by_stark_size: BTreeMap::default(),
+                    dummy_proof_height: None,
+                    dummy_proof: None,
                 })
                 .collect_vec()
                 .try_into()
                 .unwrap(),
             false => {
-                // Tricky use of MaybeUninit to remove the need for implementing Debug
-                // for all underlying types, necessary to convert a by_table Vec to an array.
+                // Initialize an uninitialized array of MaybeUninit
                 let mut by_table: [MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES] =
-                    unsafe { MaybeUninit::uninit().assume_init() };
-                for table in &mut by_table[..] {
-                    let value = RecursiveCircuitsForTable::from_buffer(
+                    MaybeUninit::uninit_array();
+
+                for i in 0..NUM_TABLES {
+                    let value = match RecursiveCircuitsForTable::from_buffer(
                         &mut buffer,
                         gate_serializer,
                         generator_serializer,
-                    )?;
-                    *table = MaybeUninit::new(value);
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            // If there's an error, deinitialize any initialized elements
+                            for initialized in by_table[..i].iter_mut() {
+                                unsafe { std::ptr::drop_in_place(initialized.as_mut_ptr()) };
+                            }
+                            return Err(e);
+                        }
+                    };
+
+                    // Initialize the current element
+                    by_table[i] = MaybeUninit::new(value);
                 }
-                unsafe {
-                    mem::transmute::<
-                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
-                        [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
-                    >(by_table)
-                }
+
+                // Safely convert the array of MaybeUninit to a fully initialized array
+                unsafe { MaybeUninit::array_assume_init(by_table) }
             }
         };
 
@@ -735,6 +745,7 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
+                    true,
                 )
             };
         }
@@ -2759,6 +2770,10 @@ where
     /// A map from `log_2(height)` to a chain of shrinking recursion circuits
     /// starting at that height.
     pub by_stark_size: BTreeMap<usize, RecursiveCircuitsForTableSize<F, C, D>>,
+    /// The initial height for generating the dummy proof.
+    pub dummy_proof_height: Option<usize>,
+    /// The dummy proof after applying shrinking recursion.
+    pub dummy_proof: Option<ProofWithPublicInputs<F, C, D>>,
 }
 
 impl<F, C, const D: usize> RecursiveCircuitsForTable<F, C, D>
@@ -2778,6 +2793,27 @@ where
             buffer.write_usize(size)?;
             table.to_buffer(buffer, gate_serializer, generator_serializer)?;
         }
+
+        // Write dummy_proof_height if it exists
+        match self.dummy_proof_height {
+            Some(height) => {
+                buffer.write_bool(true)?;
+                buffer.write_usize(height)?;
+            }
+            None => buffer.write_bool(false)?,
+        }
+
+        // Write dummy_proof if it exists using `to_bytes`
+        match &self.dummy_proof {
+            Some(proof) => {
+                buffer.write_bool(true)?;
+                let proof_bytes = proof.to_bytes();
+                buffer.write_usize(proof_bytes.len())?;
+                buffer.extend_from_slice(&proof_bytes);
+            }
+            None => buffer.write_bool(false)?,
+        }
+
         Ok(())
     }
 
@@ -2797,7 +2833,40 @@ where
             )?;
             by_stark_size.insert(key, table);
         }
-        Ok(Self { by_stark_size })
+
+        // Read dummy_proof_height if present
+        let dummy_proof_height = if buffer.read_bool()? {
+            Some(buffer.read_usize()?)
+        } else {
+            None
+        };
+
+        // Read dummy_proof if present
+        let dummy_proof = if buffer.read_bool()? {
+            let dummy_proof_height = dummy_proof_height.ok_or_else(|| IoError)?;
+            let common_data = &by_stark_size
+                .get(&dummy_proof_height)
+                .ok_or_else(|| IoError)?
+                .shrinking_wrappers
+                .last()
+                .ok_or_else(|| IoError)?
+                .circuit
+                .common;
+            let proof_len = buffer.read_usize()?;
+            let mut proof_bytes = vec![0u8; proof_len];
+            buffer.read_exact(&mut proof_bytes)?;
+            let proof =
+                ProofWithPublicInputs::from_bytes(proof_bytes, common_data).map_err(|_| IoError)?;
+            Some(proof)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            by_stark_size,
+            dummy_proof_height,
+            dummy_proof,
+        })
     }
 
     fn new<S: Stark<F, D>>(
@@ -2806,8 +2875,10 @@ where
         degree_bits_range: Range<usize>,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        is_optional_table: bool,
     ) -> Self {
-        let by_stark_size = degree_bits_range
+        let by_stark_size: BTreeMap<usize, _> = degree_bits_range
+            .clone()
             .map(|degree_bits| {
                 (
                     degree_bits,
@@ -2821,7 +2892,31 @@ where
                 )
             })
             .collect();
-        Self { by_stark_size }
+        let dummy_proof_height = if is_optional_table {
+            Some(degree_bits_range.start)
+        } else {
+            None
+        };
+        let dummy_proof = if is_optional_table {
+            let dummy_proof_height = dummy_proof_height.expect("Failed to get dummy_proof_height");
+            let dummy_circuit = &by_stark_size
+                .get(&dummy_proof_height)
+                .expect("Failed to get dummy_proof_height in by_stark_size")
+                .shrinking_wrappers
+                .last()
+                .expect("No shrinking_wrappers available")
+                .circuit;
+            let dummy_pis = HashMap::new();
+            Some(dummy_proof(&dummy_circuit, dummy_pis).expect("Unable to generate dummy proofs"))
+        } else {
+            None
+        };
+
+        Self {
+            by_stark_size,
+            dummy_proof_height,
+            dummy_proof,
+        }
     }
 
     /// For each initial `degree_bits`, get the final circuit at the end of that
