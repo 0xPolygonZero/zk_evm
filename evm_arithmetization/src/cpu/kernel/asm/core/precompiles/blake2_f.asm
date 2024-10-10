@@ -95,14 +95,14 @@ global precompile_blake2_f:
     // stack: base_addr, m0_addr = h0_addr + 8 * 8, m_0, ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
 
     %rep 8
-        // stack: base_addr, h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        // stack: base_addr, h0_addr + 8 * (8 - i - 1), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
         DUP2 DUP2
-        // stack: base_addr, h0_addr + 8 * (8 - i), base_addr, h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        // stack: base_addr, h0_addr + 8 * (8 - i - 1), base_addr, h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
         ADD // base_addr + offset
         %mload_packing_u64_LE
-        // stack: h_i, base_addr, h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        // stack: h_i, base_addr, h0_addr + 8 * (8 - i - 1), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
         SWAP2 %sub_const(8) SWAP1
-        // stack: base_addr, h0_addr + 8 * (8 - i), h_i, h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        // stack: base_addr, h0_addr + 8 * (8 - i - 1), h_i, h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     %endrep
     // stack: base_addr, garbage, h_0, ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     

@@ -64,9 +64,9 @@ global update_scalable_l1blockhash:
     PROVER_INPUT(ger)
     // stack: root, GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
     DUP3
-    // stack: addr', root, GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
+    // stack: addr, root, GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
     MSTORE_32BYTES_32
-    // stack: addr'', GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
+    // stack: addr', GLOBAL_EXIT_ROOT_STORAGE_POS, addr, l1blockhash, retdest
     MSTORE_32BYTES_32
     // stack: addr'', addr, l1blockhash, retdest
     %stack (addr_2, addr) -> (addr, 64)
