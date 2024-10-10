@@ -2877,7 +2877,7 @@ where
         stark_config: &StarkConfig,
         is_optional_table: bool,
     ) -> Self {
-        let by_stark_size: BTreeMap<usize, _> = degree_bits_range
+        let by_stark_size = degree_bits_range
             .clone()
             .map(|degree_bits| {
                 (
@@ -2891,26 +2891,21 @@ where
                     ),
                 )
             })
-            .collect();
-        let dummy_proof_height = if is_optional_table {
-            Some(degree_bits_range.start)
-        } else {
-            None
-        };
-        let dummy_proof = if is_optional_table {
-            let dummy_proof_height = dummy_proof_height.expect("Failed to get dummy_proof_height");
+            .collect::<BTreeMap<_, _>>();
+
+        let dummy_proof_height = is_optional_table.then_some(degree_bits_range.start);
+
+        let dummy_proof = dummy_proof_height.map(|height| {
             let dummy_circuit = &by_stark_size
-                .get(&dummy_proof_height)
+                .get(&height)
                 .expect("Failed to get dummy_proof_height in by_stark_size")
                 .shrinking_wrappers
                 .last()
                 .expect("No shrinking_wrappers available")
                 .circuit;
             let dummy_pis = HashMap::new();
-            Some(dummy_proof(&dummy_circuit, dummy_pis).expect("Unable to generate dummy proofs"))
-        } else {
-            None
-        };
+            dummy_proof(dummy_circuit, dummy_pis).expect("Unable to generate dummy proofs")
+        });
 
         Self {
             by_stark_size,
