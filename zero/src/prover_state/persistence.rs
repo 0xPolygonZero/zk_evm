@@ -8,10 +8,7 @@ use std::{
 use alloy::hex;
 use anyhow::anyhow;
 use directories::ProjectDirs;
-use evm_arithmetization::{
-    cpu::kernel::aggregator::KERNEL, AllRecursiveCircuits, RecursionConfig,
-    RecursiveCircuitsForTableSize, VerifierData, EXTENSION_DEGREE,
-};
+use evm_arithmetization::{cpu::kernel::aggregator::KERNEL, AllRecursiveCircuits, ProofWithPublicInputs, RecursionConfig, RecursiveCircuitsForTableSize, VerifierData, EXTENSION_DEGREE};
 use once_cell::sync::Lazy;
 use plonky2::util::serialization::{
     Buffer, DefaultGateSerializer, DefaultGeneratorSerializer, IoError,
@@ -229,6 +226,35 @@ impl DiskResource for RecursiveCircuitResource {
             &witness_serializer,
         )
         .map_err(DiskResourceError::Serialization)
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct DummyProofResource;
+
+impl DiskResource for DummyProofResource {
+    type Resource = ProofWithPublicInputs;
+    type Error = IoError;
+    type PathConstrutor = (Circuit, usize);
+
+    fn path((circuit_type, size): &Self::PathConstrutor) -> impl AsRef<Path> {
+        format!(
+            "{}/{}_dummy_proof_{}_{}",
+            circuit_dir(),
+            PROVER_STATE_FILE_PREFIX,
+            circuit_type.as_short_str(),
+            size
+        )
+    }
+
+    fn serialize(r: &Self::Resource) -> Result<Vec<u8>, DiskResourceError<Self::Error>> {
+        Ok(r.to_bytes())  // Assuming `to_bytes` is implemented for `ProofWithPublicInputs`
+    }
+
+    fn deserialize(
+        bytes: &[u8],
+    ) -> Result<ProofWithPublicInputs, DiskResourceError<Self::Error>> {
+        ProofWithPublicInputs::from_bytes(bytes.to_vec(), &common_data).map_err(DiskResourceError::Serialization)
     }
 }
 

@@ -664,8 +664,7 @@ where
             true => (0..NUM_TABLES)
                 .map(|_| RecursiveCircuitsForTable {
                     by_stark_size: BTreeMap::default(),
-                    dummy_proof_height: None,
-                    dummy_proof: None,
+                    dummy_proof_data: None,
                 })
                 .collect_vec()
                 .try_into()
@@ -1936,29 +1935,18 @@ where
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
-                // generate and set a dummy `index_verifier_data` and `proof_with_pis`
-                let index_verifier_data =
-                    table_circuits.by_stark_size.keys().min().ok_or_else(|| {
-                        anyhow::format_err!("No valid size in shrinking circuits")
-                    })?;
+                let dummy_proof_data = table_circuits
+                    .dummy_proof_data
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
-                    F::from_canonical_usize(*index_verifier_data),
+                    F::from_canonical_usize(dummy_proof_data.init_degree),
                 );
-                let table_circuit = table_circuits
-                    .by_stark_size
-                    .get(index_verifier_data)
-                    .ok_or_else(|| anyhow::format_err!("No valid size in shrinking circuits"))?
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?;
-                let dummy_circuit: CircuitData<F, C, D> =
-                    dummy_circuit(&table_circuit.circuit.common);
-                let dummy_pis = HashMap::new();
-                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .map_err(|_| anyhow::format_err!("Unable to generate dummy proofs"));
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof?);
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof_data.proof,
+                );
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
@@ -2758,6 +2746,20 @@ where
         agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
     }
 }
+
+/// A struct that encapsulates both the init degree and the shrunk proof.
+#[derive(Eq, PartialEq, Debug)]
+pub struct ShrunkProofData<F, C, const D: usize>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    /// The initial degree for generating the proof.
+    pub init_degree: usize,
+    /// The proof after applying shrinking recursion.
+    pub proof: ProofWithPublicInputs<F, C, D>,
+}
+
 /// A map between initial degree sizes and their associated shrinking recursion
 /// circuits.
 #[derive(Eq, PartialEq, Debug)]
@@ -2770,10 +2772,9 @@ where
     /// A map from `log_2(height)` to a chain of shrinking recursion circuits
     /// starting at that height.
     pub by_stark_size: BTreeMap<usize, RecursiveCircuitsForTableSize<F, C, D>>,
-    /// The initial height for generating the dummy proof.
-    pub dummy_proof_height: Option<usize>,
-    /// The dummy proof after applying shrinking recursion.
-    pub dummy_proof: Option<ProofWithPublicInputs<F, C, D>>,
+
+    /// A dummy proof for the root circuit when the table is empty.
+    pub dummy_proof_data: Option<ShrunkProofData<F, C, D>>,
 }
 
 impl<F, C, const D: usize> RecursiveCircuitsForTable<F, C, D>
@@ -2794,20 +2795,12 @@ where
             table.to_buffer(buffer, gate_serializer, generator_serializer)?;
         }
 
-        // Write dummy_proof_height if it exists
-        match self.dummy_proof_height {
-            Some(height) => {
+        // Serialize dummy_proof if it exists
+        match &self.dummy_proof_data {
+            Some(dummy_proof_data) => {
                 buffer.write_bool(true)?;
-                buffer.write_usize(height)?;
-            }
-            None => buffer.write_bool(false)?,
-        }
-
-        // Write dummy_proof if it exists using `to_bytes`
-        match &self.dummy_proof {
-            Some(proof) => {
-                buffer.write_bool(true)?;
-                let proof_bytes = proof.to_bytes();
+                buffer.write_usize(dummy_proof_data.init_degree)?;
+                let proof_bytes = dummy_proof_data.proof.to_bytes();
                 buffer.write_usize(proof_bytes.len())?;
                 buffer.extend_from_slice(&proof_bytes);
             }
@@ -2834,18 +2827,11 @@ where
             by_stark_size.insert(key, table);
         }
 
-        // Read dummy_proof_height if present
-        let dummy_proof_height = if buffer.read_bool()? {
-            Some(buffer.read_usize()?)
-        } else {
-            None
-        };
-
         // Read dummy_proof if present
-        let dummy_proof = if buffer.read_bool()? {
-            let dummy_proof_height = dummy_proof_height.ok_or_else(|| IoError)?;
+        let dummy_proof_data = if buffer.read_bool()? {
+            let init_degree = buffer.read_usize()?;
             let common_data = &by_stark_size
-                .get(&dummy_proof_height)
+                .get(&init_degree)
                 .ok_or_else(|| IoError)?
                 .shrinking_wrappers
                 .last()
@@ -2857,15 +2843,14 @@ where
             buffer.read_exact(&mut proof_bytes)?;
             let proof =
                 ProofWithPublicInputs::from_bytes(proof_bytes, common_data).map_err(|_| IoError)?;
-            Some(proof)
+            Some(ShrunkProofData { init_degree, proof })
         } else {
             None
         };
 
         Ok(Self {
             by_stark_size,
-            dummy_proof_height,
-            dummy_proof,
+            dummy_proof_data,
         })
     }
 
@@ -2893,24 +2878,24 @@ where
             })
             .collect::<BTreeMap<_, _>>();
 
-        let dummy_proof_height = is_optional_table.then_some(degree_bits_range.start);
-
-        let dummy_proof = dummy_proof_height.map(|height| {
-            let dummy_circuit = &by_stark_size
-                .get(&height)
-                .expect("Failed to get dummy_proof_height in by_stark_size")
-                .shrinking_wrappers
-                .last()
-                .expect("No shrinking_wrappers available")
-                .circuit;
-            let dummy_pis = HashMap::new();
-            dummy_proof(dummy_circuit, dummy_pis).expect("Unable to generate dummy proofs")
+        let dummy_proof_data = is_optional_table.then_some(ShrunkProofData {
+            init_degree: degree_bits_range.start,
+            proof: {
+                let dummy_circuit = &by_stark_size
+                    .get(&degree_bits_range.start)
+                    .expect("Failed to get dummy_proof_height in by_stark_size")
+                    .shrinking_wrappers
+                    .last()
+                    .expect("No shrinking_wrappers available")
+                    .circuit;
+                let dummy_pis = HashMap::new();
+                dummy_proof(dummy_circuit, dummy_pis).expect("Unable to generate dummy proofs")
+            },
         });
 
         Self {
             by_stark_size,
-            dummy_proof_height,
-            dummy_proof,
+            dummy_proof_data,
         }
     }
 
