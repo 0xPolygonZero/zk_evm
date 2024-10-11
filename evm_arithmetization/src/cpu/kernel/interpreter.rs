@@ -60,7 +60,7 @@ pub(crate) struct Interpreter<F: RichField> {
     pub(crate) halt_context: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
     pub(crate) opcode_count: HashMap<Operation, usize>,
-    /// A table of contexts and their reached JUMPDESTs.
+    /// A table of call contexts and the JUMPDEST offsets that they jumped to.
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
@@ -105,7 +105,6 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
                 "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
                 clock
             );
-            // (interpreter.generation_state.jumpdest_table).map(|x| (x, jdtw))
             interpreter.generation_state.jumpdest_table = Some(a.clone());
             Some((a, jdtw))
         }

@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "common",
-    "compat",
-    "evm_arithmetization",
-    "mpt_trie",
-    "proc_macro",
-    "smt_trie",
-    "trace_decoder",
-    "zero",
+  "common",
+  "compat",
+  "evm_arithmetization",
+  "mpt_trie",
+  "proc_macro",
+  "smt_trie",
+  "trace_decoder",
+  "zero",
 ]
 resolver = "2"
 
@@ -22,18 +22,18 @@ categories = ["cryptography::cryptocurrencies"]
 [workspace.dependencies]
 __compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 alloy = { version = '0.3.0', default-features = false, features = [
-    "consensus",
-    "reqwest",
-    "json-rpc",
-    "rlp",
-    "rpc",
-    "rpc-client",
-    "rpc-types-eth",
-    "rpc-types-trace",
-    "providers",
-    "transports",
-    "transport-http",
-    "rpc-types-debug",
+  "consensus",
+  "reqwest",
+  "json-rpc",
+  "rlp",
+  "rpc",
+  "rpc-client",
+  "rpc-types-eth",
+  "rpc-types-trace",
+  "providers",
+  "transports",
+  "transport-http",
+  "rpc-types-debug",
 ] }
 alloy-primitives = "0.8.0"
 alloy-serde = "0.3.0"
@@ -52,7 +52,6 @@ criterion = "0.5.1"
 dotenvy = "0.15.7"
 either = "1.12.0"
 enum-as-inner = "0.6.0"
-enumn = "0.1.13"
 env_logger = "0.11.3"
 eth_trie = "0.4.0"
 ethereum-types = "0.14.1"

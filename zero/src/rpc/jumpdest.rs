@@ -1,13 +1,10 @@
 use core::default::Default;
 use core::option::Option::None;
-use core::str::FromStr as _;
 use std::collections::HashMap;
 use std::ops::Not as _;
 use std::time::Duration;
 
 use ::compat::Compat;
-use __compat_primitive_types::H160;
-use __compat_primitive_types::H256;
 use alloy::eips::BlockNumberOrTag;
 use alloy::primitives::Address;
 use alloy::providers::ext::DebugApi;
@@ -22,11 +19,14 @@ use anyhow::bail;
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use keccak_hash::keccak;
+use ruint::Uint;
 use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
 use tracing::{trace, warn};
+
+use crate::rpc::H256;
 
 #[derive(Debug, Clone)]
 pub struct TxStructLogs(pub Option<TxHash>, pub Vec<StructLog>);
@@ -124,9 +124,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
     );
 
     let entrypoint_code_hash: H256 = match tx.to {
-        Some(to_address) if is_precompile(H160::from_str(&to_address.to_string())?) => {
-            return Ok(jumpdest_table)
-        }
+        Some(to_address) if is_precompile(to_address.compat()) => return Ok(jumpdest_table),
         Some(to_address) if callee_addr_to_code_hash.contains_key(&to_address).not() => {
             return Ok(jumpdest_table)
         }
@@ -173,17 +171,8 @@ pub(crate) fn generate_jumpdest_table<'a>(
             ctx,
             entry.pc,
             op,
-            //
             ?entry,
         );
-        // trace!("TX:   {:?}", tx.hash);
-        // trace!("STEP: {:?}", step);
-        // trace!("STEPS: {:?}", struct_log.len());
-        // trace!("OPCODE: {}", entry.op.as_str());
-        // trace!("CODE: {:?}", code_hash);
-        // trace!("CTX:  {:?}", ctx);
-        // trace!("CURR_DEPTH:  {:?}", curr_depth);
-        // trace!("{:#?}\n", entry);
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
@@ -209,34 +198,19 @@ pub(crate) fn generate_jumpdest_table<'a>(
                     unreachable!()
                 };
 
-                // if *address > U256::from(U160::MAX) {
-                //     trace!(
-                //         "{op}: Callee address {} was larger than possible {}.",
-                //         *address,
-                //         U256::from(U160::MAX)
-                //     );
-                //     // Se note above.
-                //     continue;
-                // };
-                let a: [u8; 32] = address.compat().into();
-                // a <<= 96;
-                // a >>= 96;
-                // let aa: [u8; 32] = a.into();
-                let aaa: H256 = a.into();
-                let lower_20_bytes: [u8; 20] = H160::from(aaa).into();
-                let callee_address = Address::from(lower_20_bytes);
+                let callee_address = stack_value_to_address(address);
 
                 if callee_addr_to_code_hash.contains_key(&callee_address) {
                     let next_code_hash = callee_addr_to_code_hash[&callee_address];
                     call_stack.push((next_code_hash, next_ctx_available));
                 };
 
-                if is_precompile(H160::from_str(&callee_address.to_string())?) {
+                if is_precompile(callee_address.compat()) {
                     trace!("Called precompile at address {}.", &callee_address);
                 };
 
                 if callee_addr_to_code_hash.contains_key(&callee_address).not()
-                    && is_precompile(H160::from_str(&callee_address.to_string())?).not()
+                    && is_precompile(callee_address.compat()).not()
                 {
                     // This case happens if calling an EOA. This is described
                     // under opcode `STOP`: https://www.evm.codes/#00?fork=cancun
@@ -327,6 +301,13 @@ pub(crate) fn generate_jumpdest_table<'a>(
         }
     }
     Ok(jumpdest_table)
+}
+
+fn stack_value_to_address(operand: &Uint<256, 4>) -> Address {
+    let all_bytes: [u8; 32] = operand.compat().into();
+    let mut lower_20_bytes = [0u8; 20];
+    lower_20_bytes[0..20].copy_from_slice(&all_bytes[..]);
+    Address::from(lower_20_bytes)
 }
 
 fn trace_to_tx_structlog(tx_hash: Option<TxHash>, trace: GethTrace) -> Option<TxStructLogs> {

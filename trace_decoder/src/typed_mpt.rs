@@ -280,7 +280,6 @@ pub trait StateTrie {
     ) -> anyhow::Result<Option<AccountRlp>>;
     fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-    #[allow(dead_code)]
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
     /// _Hash out_ parts of the trie that aren't in `txn_ixs`.
     fn mask(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
