@@ -23,7 +23,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_proof};
+use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -841,19 +841,23 @@ where
         let table_dummy_proofs = core::array::from_fn(|i| {
             if KECCAK_TABLES_INDICES.contains(&i) {
                 let init_degree = degree_bits_ranges[i].start;
-                let circuit = &by_table[i]
+                let common_circuit_data = by_table[i]
                     .by_stark_size
                     .get(&init_degree)
                     .expect("Unable to get the shrinking circuits")
                     .shrinking_wrappers
                     .last()
                     .expect("Unable to get the last shrinking circuit")
-                    .circuit;
-                let pis = HashMap::new();
-                let proof = dummy_proof(circuit, pis).expect("Unable to generate dummy proof");
+                    .circuit
+                    .common
+                    .clone();
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(&common_circuit_data);
+                let dummy_pis = HashMap::new();
+                let proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
                 Some(ShrunkProofData {
                     init_degree,
-                    common_circuit_data: circuit.common.clone(),
+                    common_circuit_data,
                     proof,
                 })
             } else {
