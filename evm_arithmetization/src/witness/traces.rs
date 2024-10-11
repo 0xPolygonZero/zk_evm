@@ -126,10 +126,12 @@ impl<T: Copy + Field> Traces<T> {
         self.poseidon_ops.truncate(checkpoint.poseidon_len);
     }
 
+    #[inline(always)]
     pub(crate) fn mem_ops_since(&self, checkpoint: TraceCheckpoint) -> &[MemoryOp] {
         &self.memory_ops[checkpoint.memory_len..]
     }
 
+    #[inline(always)]
     pub(crate) fn clock(&self) -> usize {
         self.cpu.len()
     }

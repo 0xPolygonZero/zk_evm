@@ -532,6 +532,10 @@ impl<F: RichField> State<F> for Interpreter<F> {
         self.generation_state.incr_pc(n);
     }
 
+    fn is_kernel(&self) -> bool {
+        self.is_kernel()
+    }
+
     fn get_registers(&self) -> RegistersState {
         self.generation_state.get_registers()
     }

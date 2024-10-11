@@ -16,17 +16,7 @@ global sys_gas:
 %endmacro
 
 
-// TODO: `%refund_gas` and `refund_gas_hook` are hooks used for debugging. They should be removed at some point and `refund_gas_original` renamed to `refund_gas`.
 %macro refund_gas
-    PUSH %%after %jump(refund_gas_hook)
-%%after:
-    %refund_gas_original
-%endmacro
-
-global refund_gas_hook:
-    JUMP
-
-%macro refund_gas_original
     // stack: amount
     DUP1 %journal_refund
     %mload_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
@@ -34,18 +24,8 @@ global refund_gas_hook:
     %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
 %endmacro
 
-// TODO: `%charge_gas` and `charge_gas_hook` are hooks used for debugging. They should be removed at some point and `charge_gas_original` renamed to `charge_gas`.
-%macro charge_gas
-    PUSH %%after %jump(charge_gas_hook)
-%%after:
-    %charge_gas_original
-%endmacro
-
-global charge_gas_hook:
-    JUMP
-
 // Charge gas. Faults if we exceed the limit for the current context.
-%macro charge_gas_original
+%macro charge_gas
     // stack: gas, kexit_info
     %shl_const(192)
     ADD

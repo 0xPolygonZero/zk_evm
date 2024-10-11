@@ -129,13 +129,14 @@ global invalid_jump_jumpi_destination_common:
     {
         // We have a jump destination on the stack. We want to `PANIC` if it is valid, and jump to
         // `fault_exception` if it is not. An address is a valid jump destination if it points to a
-        // `JUMPDEST` instruction. In practice, since in this implementation memory addresses are
-        // limited to 32 bits, we check two things:
-        //  1. the address is no more than 32 bits long, and
+        // `JUMPDEST` instruction. In practice, we check two things:
+        //  1. the address is no greater than MAX_CODE_SIZE, and
         //  2. it points to a `JUMPDEST` instruction.
         // stack: jump_dest
-        DUP1
-        %shr_const(32)
+        PUSH @MAX_CODE_SIZE
+        DUP2
+        // stack: jump_dest, max_size, jump_dest
+        GT // jump_dest > max_size == !(jump_dest <= max_size)
         %jumpi(fault_exception) // This keeps one copy of jump_dest on the stack, but that's fine.
         // jump_dest is a valid address; check if it points to a `JUMP_DEST`.
         DUP1

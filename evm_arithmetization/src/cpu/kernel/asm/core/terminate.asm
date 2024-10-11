@@ -193,7 +193,7 @@ revert_after_gas:
     %stack (addr, size, parent_ctx, kexit_info) ->
         (
         parent_ctx, @SEGMENT_RETURNDATA, // DST
-        addr,  // SRC
+        addr, // SRC
         size, sys_revert_finish, kexit_info // count, retdest, ...
         )
     %build_address_no_offset
