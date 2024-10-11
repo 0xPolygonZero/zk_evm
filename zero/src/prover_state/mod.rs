@@ -31,9 +31,6 @@ use crate::prover_state::persistence::{
     VerifierResource,
 };
 
-// Default degree of the recursive circuit when a proof is missing from AllProof
-const DEFAULT_CIRCUIT_DEGREE: usize = 8;
-
 pub mod circuit;
 pub mod cli;
 pub mod persistence;
@@ -180,7 +177,17 @@ impl ProverStateManager {
     ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
         let degrees = all_proof
             .degree_bits(config)
-            .map(|opt| opt.unwrap_or(DEFAULT_CIRCUIT_DEGREE));
+            .iter()
+            .enumerate()
+            .map(|(i, opt)| {
+                opt.unwrap_or_else(|| {
+                    p_state().state.table_dummy_proofs[i]
+                        .as_ref()
+                        .expect("Unable to get table dummy proof data")
+                        .init_degree
+                })
+            })
+            .collect::<Vec<_>>();
 
         /// Given a recursive circuit index (e.g., Arithmetic / 0), return a
         /// tuple containing the loaded table at the specified size and
