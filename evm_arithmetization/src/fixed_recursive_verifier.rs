@@ -23,9 +23,9 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
+use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_proof};
 use plonky2::util::serialization::{
-    Buffer, GateSerializer, IoError, IoResult, Read, WitnessGeneratorSerializer, Write,
+    Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
 use plonky2::util::timing::TimingTree;
 use plonky2_util::log2_ceil;
@@ -132,7 +132,7 @@ where
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
     /// Dummy proofs of each table for the root circuit.
-    pub table_dummy_proofs: [Option<ShrunkProofData<F, C, D>>; NUM_TABLES],
+    pub table_dummy_proofs: [Option<ShrunkProofData>; NUM_TABLES],
 }
 
 /// Data for the EVM root circuit, which is used to combine each STARK's shrunk
@@ -573,26 +573,18 @@ where
 
 /// A struct that encapsulates both the init degree and the shrunk proof.
 #[derive(Eq, PartialEq, Debug)]
-pub struct ShrunkProofData<F, C, const D: usize>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
+pub struct ShrunkProofData {
     /// The initial degree for generating the proof.
     pub init_degree: usize,
     /// The proof bytes after applying shrinking recursion.
     pub proof_bytes: Vec<u8>,
 }
 
-impl<F, C, const D: usize> ShrunkProofData<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
+impl ShrunkProofData {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
-        buffer.write_usize(self.init_degree);
-        buffer.write_usize(self.proof_bytes.len());
-        buffer.write_all(&self.proof_bytes);
+        buffer.write_usize(self.init_degree)?;
+        buffer.write_usize(self.proof_bytes.len())?;
+        buffer.write_all(&self.proof_bytes)?;
         Ok(())
     }
 
@@ -600,7 +592,7 @@ where
         let init_degree = buffer.read_usize()?;
         let proof_bytes_len = buffer.read_usize()?;
         let mut proof_bytes = vec![0u8; proof_bytes_len];
-        buffer.read_exact(&mut proof_bytes);
+        buffer.read_exact(&mut proof_bytes)?;
         Ok(Self {
             init_degree,
             proof_bytes,
@@ -656,7 +648,7 @@ where
                 Some(dummy_proof_data) => {
                     buffer.write_bool(true)?;
                     dummy_proof_data.to_buffer(&mut buffer)?
-                },
+                }
                 None => buffer.write_bool(false)?,
             }
         }
@@ -746,17 +738,9 @@ where
             }
         };
 
-        let table_dummy_proofs = core::array::from_fn(|i| {
-            if buffer.read_bool()? {
-                let init_degree = buffer.read_usize()?;
-                let proof_bytes_len = buffer.read_usize()?;
-                let mut proof_bytes = vec![0u8; proof_bytes_len];
-                buffer.read_exact(&mut proof_bytes)?;
-
-                Some(ShrunkProofData {
-                    init_degree,
-                    proof_bytes,
-                })
+        let table_dummy_proofs = core::array::from_fn(|_| {
+            if buffer.read_bool().ok()? {
+                Some(ShrunkProofData::from_buffer(&mut buffer).ok()?)
             } else {
                 None
             }
@@ -808,7 +792,6 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
-                    true,
                 )
             };
         }
@@ -848,6 +831,33 @@ where
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
 
+        // TODO(sdeng): enable more optional Tables
+        let table_dummy_proofs = core::array::from_fn(|i| {
+            if KECCAK_TABLES_INDICES.contains(&i) {
+                let init_degree = degree_bits_ranges[i]
+                    .clone()
+                    .last()
+                    .expect("Unable to get the initial degree bit");
+                let circuit = &by_table[i]
+                    .by_stark_size
+                    .get(&init_degree)
+                    .expect("Unable to get the shrinking circuits")
+                    .shrinking_wrappers
+                    .last()
+                    .expect("Unable to get the last shrinking circuit")
+                    .circuit;
+                let pis = HashMap::new();
+                let proof = dummy_proof(circuit, pis).expect("Unable to generate dummy proof");
+                let proof_bytes = proof.to_bytes();
+                Some(ShrunkProofData {
+                    init_degree,
+                    proof_bytes,
+                })
+            } else {
+                None
+            }
+        });
+
         Self {
             root,
             segment_aggregation,
@@ -856,6 +866,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            table_dummy_proofs,
         }
     }
 
@@ -1999,18 +2010,27 @@ where
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
-                let dummy_proof_data = table_circuits
-                    .dummy_proof_data
+                let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(dummy_proof_data.init_degree),
                 );
-                root_inputs.set_proof_with_pis_target(
-                    &self.root.proof_with_pis[table],
-                    &dummy_proof_data.proof,
-                );
+                let common_data = &table_circuits
+                    .by_stark_size
+                    .get(&dummy_proof_data.init_degree)
+                    .ok_or_else(|| anyhow::format_err!("Unable to get shrinking circuits"))?
+                    .shrinking_wrappers
+                    .last()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get circuit"))?
+                    .circuit
+                    .common;
+                let proof: ProofWithPublicInputs<F, C, D> = ProofWithPublicInputs::from_bytes(
+                    dummy_proof_data.proof_bytes.clone(),
+                    common_data,
+                )?;
+                root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &proof);
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
@@ -2147,7 +2167,7 @@ where
                     .ok_or_else(|| anyhow::format_err!("Unable to get circuit"))?
                     .circuit
                     .common;
-                let proof = ProofWithPublicInputs::from_bytes(
+                let proof: ProofWithPublicInputs<F, C, D> = ProofWithPublicInputs::from_bytes(
                     dummy_proof.proof_bytes.clone(),
                     common_data,
                 )?;
@@ -2871,7 +2891,6 @@ where
         degree_bits_range: Range<usize>,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
-        is_optional_table: bool,
     ) -> Self {
         let by_stark_size = degree_bits_range
             .clone()
