@@ -1,4 +1,4 @@
-use core::mem::MaybeUninit;
+use core::mem::{self, MaybeUninit};
 use core::ops::Range;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
@@ -132,7 +132,7 @@ where
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
     /// Dummy proofs of each table for the root circuit.
-    pub table_dummy_proofs: [Option<ShrunkProofData>; NUM_TABLES],
+    pub table_dummy_proofs: [Option<ShrunkProofData<F, C, D>>; NUM_TABLES],
 }
 
 /// Data for the EVM root circuit, which is used to combine each STARK's shrunk
@@ -573,29 +573,43 @@ where
 
 /// A struct that encapsulates both the init degree and the shrunk proof.
 #[derive(Eq, PartialEq, Debug)]
-pub struct ShrunkProofData {
+pub struct ShrunkProofData<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
+{
     /// The initial degree for generating the proof.
     pub init_degree: usize,
-    /// The proof bytes after applying shrinking recursion.
-    pub proof_bytes: Vec<u8>,
+
+    /// The Common Circuit Data from last shrinking circuit.
+    pub common_circuit_data: CommonCircuitData<F, D>,
+
+    /// The proof after applying shrinking recursion.
+    pub proof: ProofWithPublicInputs<F, C, D>,
 }
 
-impl ShrunkProofData {
-    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
+    ShrunkProofData<F, C, D>
+{
+    fn to_buffer(
+        &self,
+        buffer: &mut Vec<u8>,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<()> {
         buffer.write_usize(self.init_degree)?;
-        buffer.write_usize(self.proof_bytes.len())?;
-        buffer.write_all(&self.proof_bytes)?;
+        buffer.write_common_circuit_data(&self.common_circuit_data, gate_serializer)?;
+        buffer.write_proof_with_public_inputs(&self.proof)?;
         Ok(())
     }
 
-    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+    fn from_buffer(
+        buffer: &mut Buffer,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<Self> {
         let init_degree = buffer.read_usize()?;
-        let proof_bytes_len = buffer.read_usize()?;
-        let mut proof_bytes = vec![0u8; proof_bytes_len];
-        buffer.read_exact(&mut proof_bytes)?;
+        let common_circuit_data = buffer.read_common_circuit_data(gate_serializer)?;
+        let proof = buffer.read_proof_with_public_inputs(&common_circuit_data)?;
         Ok(Self {
             init_degree,
-            proof_bytes,
+            common_circuit_data,
+            proof,
         })
     }
 }
@@ -647,7 +661,7 @@ where
             match table {
                 Some(dummy_proof_data) => {
                     buffer.write_bool(true)?;
-                    dummy_proof_data.to_buffer(&mut buffer)?
+                    dummy_proof_data.to_buffer(&mut buffer, gate_serializer)?
                 }
                 None => buffer.write_bool(false)?,
             }
@@ -709,38 +723,30 @@ where
                 .try_into()
                 .unwrap(),
             false => {
-                // Initialize an uninitialized array of MaybeUninit
+                // Tricky use of MaybeUninit to remove the need for implementing Debug
+                // for all underlying types, necessary to convert a by_table Vec to an array.
                 let mut by_table: [MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES] =
-                    MaybeUninit::uninit_array();
-
-                for i in 0..NUM_TABLES {
-                    let value = match RecursiveCircuitsForTable::from_buffer(
+                    unsafe { MaybeUninit::uninit().assume_init() };
+                for table in &mut by_table[..] {
+                    let value = RecursiveCircuitsForTable::from_buffer(
                         &mut buffer,
                         gate_serializer,
                         generator_serializer,
-                    ) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            // If there's an error, deinitialize any initialized elements
-                            for initialized in by_table[..i].iter_mut() {
-                                unsafe { std::ptr::drop_in_place(initialized.as_mut_ptr()) };
-                            }
-                            return Err(e);
-                        }
-                    };
-
-                    // Initialize the current element
-                    by_table[i] = MaybeUninit::new(value);
+                    )?;
+                    *table = MaybeUninit::new(value);
                 }
-
-                // Safely convert the array of MaybeUninit to a fully initialized array
-                unsafe { MaybeUninit::array_assume_init(by_table) }
+                unsafe {
+                    mem::transmute::<
+                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
+                        [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+                    >(by_table)
+                }
             }
         };
 
         let table_dummy_proofs = core::array::from_fn(|_| {
             if buffer.read_bool().ok()? {
-                Some(ShrunkProofData::from_buffer(&mut buffer).ok()?)
+                Some(ShrunkProofData::from_buffer(&mut buffer, gate_serializer).ok()?)
             } else {
                 None
             }
@@ -834,10 +840,7 @@ where
         // TODO(sdeng): enable more optional Tables
         let table_dummy_proofs = core::array::from_fn(|i| {
             if KECCAK_TABLES_INDICES.contains(&i) {
-                let init_degree = degree_bits_ranges[i]
-                    .clone()
-                    .last()
-                    .expect("Unable to get the initial degree bit");
+                let init_degree = degree_bits_ranges[i].start;
                 let circuit = &by_table[i]
                     .by_stark_size
                     .get(&init_degree)
@@ -848,10 +851,10 @@ where
                     .circuit;
                 let pis = HashMap::new();
                 let proof = dummy_proof(circuit, pis).expect("Unable to generate dummy proof");
-                let proof_bytes = proof.to_bytes();
                 Some(ShrunkProofData {
                     init_degree,
-                    proof_bytes,
+                    common_circuit_data: circuit.common.clone(),
+                    proof,
                 })
             } else {
                 None
@@ -2017,20 +2020,10 @@ where
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(dummy_proof_data.init_degree),
                 );
-                let common_data = &table_circuits
-                    .by_stark_size
-                    .get(&dummy_proof_data.init_degree)
-                    .ok_or_else(|| anyhow::format_err!("Unable to get shrinking circuits"))?
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("Unable to get circuit"))?
-                    .circuit
-                    .common;
-                let proof: ProofWithPublicInputs<F, C, D> = ProofWithPublicInputs::from_bytes(
-                    dummy_proof_data.proof_bytes.clone(),
-                    common_data,
-                )?;
-                root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &proof);
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof_data.proof,
+                );
             } else {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
@@ -2150,33 +2143,27 @@ where
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            let (table_circuit, index_verifier_data) = &table_circuits[table];
-            root_inputs.set_target(
-                self.root.index_verifier_data[table],
-                F::from_canonical_u8(*index_verifier_data),
-            );
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
                 let dummy_proof = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
-                assert_eq!(dummy_proof.init_degree, *index_verifier_data as usize);
-
-                let common_data = &table_circuit
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("Unable to get circuit"))?
-                    .circuit
-                    .common;
-                let proof: ProofWithPublicInputs<F, C, D> = ProofWithPublicInputs::from_bytes(
-                    dummy_proof.proof_bytes.clone(),
-                    common_data,
-                )?;
-                root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &proof);
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(dummy_proof.init_degree),
+                );
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof.proof,
+                );
             } else {
+                let (table_circuit, index_verifier_data) = &table_circuits[table];
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_u8(*index_verifier_data),
+                );
                 let stark_proof = all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
-
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
                 root_inputs
