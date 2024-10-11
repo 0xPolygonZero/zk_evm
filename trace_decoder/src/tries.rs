@@ -36,8 +36,8 @@ impl<T> TypedMpt<T> {
         self.inner.insert(key.into_nibbles(), hash)?;
         Ok(())
     }
-    /// Returns an [`Error`] if the `key` crosses into a part of the trie that
-    /// isn't hydrated.
+    /// Returns [`Err`] if the `key` crosses into a part of the trie that
+    /// is hashed out.
     fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
     where
         T: rlp::Encodable + rlp::Decodable,
@@ -47,7 +47,7 @@ impl<T> TypedMpt<T> {
         Ok(())
     }
     /// Note that this returns [`None`] if `key` crosses into a part of the
-    /// trie that isn't hydrated.
+    /// trie that is hashed out.
     ///
     /// # Panics
     /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
@@ -366,7 +366,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
-/// TODO(0xaatif): document this after refactoring is done https://github.com/0xPolygonZero/zk_evm/issues/275
+/// TODO(0xaatif): document this after refactoring is done <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub trait StateTrie {
     type Key;
     fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()>;

@@ -30,7 +30,9 @@ use crate::{
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-/// When parsing tries from binary format, which type to deserialize as.
+/// Expected trie type when parsing from binary in a [`BlockTrace`].
+///
+/// See [`crate::wire`] and [`CombinedPreImages`] for more.
 #[derive(Debug)]
 pub enum WireDisposition {
     /// MPT
@@ -171,8 +173,7 @@ pub fn entrypoint(
 /// [`HashedPartialTrie`](mpt_trie::partial_trie::HashedPartialTrie),
 /// or a [`wire`](crate::wire)-encoded representation of one.
 ///
-/// Turn either of those into our [`typed_mpt`](crate::typed_mpt)
-/// representations.
+/// Turn either of those into our [internal representations](crate::tries).
 #[allow(clippy::type_complexity)]
 fn start(
     pre_images: BlockTraceTriePreImages,
@@ -900,7 +901,7 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
 struct Hash2Code {
-    /// Key must always be [`hash`] of value.
+    /// Key must always be [`hash`](keccak_hash) of value.
     inner: HashMap<H256, Vec<u8>>,
 }
 
