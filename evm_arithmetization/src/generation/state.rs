@@ -185,14 +185,18 @@ pub(crate) trait State<F: RichField> {
     {
         let halt_offsets = self.get_halt_offsets();
 
-        let cycle_limit = max_cpu_len_log.map(|max_len_log| {
-            let target_len = 1 << max_len_log;
-            if target_len > NUM_EXTRA_CYCLES_AFTER {
-                target_len - NUM_EXTRA_CYCLES_AFTER
-            } else {
-                target_len
+        if let Some(max_len_log) = max_cpu_len_log {
+            if (1 << max_len_log) < NUM_EXTRA_CYCLES_AFTER {
+                bail!(
+                    "Target length (2^{}) is less than NUM_EXTRA_CYCLES_AFTER ({})",
+                    max_len_log,
+                    NUM_EXTRA_CYCLES_AFTER
+                );
             }
-        });
+        }
+
+        let cycle_limit =
+            max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
         let mut final_registers = RegistersState::default();
         let mut running = true;
