@@ -117,39 +117,36 @@ fn node2trie(node: Node) -> anyhow::Result<StateSmt> {
     let mut hashes = BTreeMap::new();
     let mut leaves = BTreeMap::new();
     visit(&mut hashes, &mut leaves, Stack::new(), node)?;
-    Ok(
-        #[expect(deprecated, reason = "this is the frontend")]
-        StateSmt::new_unchecked(
-            leaves
-                .into_iter()
-                .map(
-                    |(
-                        addr,
-                        CollatedLeaf {
-                            balance,
-                            nonce,
-                            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-                            //                we shouldn't ignore these fields
-                            code: _,
-                            code_length: _,
-                            storage: _,
-                        },
-                    )| {
-                        (
-                            addr,
-                            AccountRlp {
-                                nonce: nonce.unwrap_or_default(),
-                                balance: balance.unwrap_or_default(),
-                                storage_root: H256::zero(),
-                                code_hash: H256::zero(),
-                            },
-                        )
+    Ok(StateSmt::new_unchecked(
+        leaves
+            .into_iter()
+            .map(
+                |(
+                    addr,
+                    CollatedLeaf {
+                        balance,
+                        nonce,
+                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
+                        //                we shouldn't ignore these fields
+                        code: _,
+                        code_length: _,
+                        storage: _,
                     },
-                )
-                .collect(),
-            hashes,
-        ),
-    )
+                )| {
+                    (
+                        addr,
+                        AccountRlp {
+                            nonce: nonce.unwrap_or_default(),
+                            balance: balance.unwrap_or_default(),
+                            storage_root: H256::zero(),
+                            code_hash: H256::zero(),
+                        },
+                    )
+                },
+            )
+            .collect(),
+        hashes,
+    ))
 }
 
 fn visit(

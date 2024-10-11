@@ -191,7 +191,7 @@ fn mpt_key_into_hash() {
 /// Bounded sequence of bits,
 /// used as a key for [`StateSmt`].
 ///
-/// Semantically equivalent to
+/// Semantically equivalent to [`smt_trie::bits::Bits`].
 #[derive(Clone, Copy)]
 pub struct SmtKey {
     bits: bitvec::array::BitArray<[u8; 32]>,
@@ -255,7 +255,7 @@ impl SmtKey {
 impl From<Address> for SmtKey {
     fn from(addr: Address) -> Self {
         let H256(bytes) = keccak_hash::keccak(addr);
-        Self::new(BitArray::<_>::new(bytes)).unwrap()
+        Self::new(BitArray::<_>::new(bytes)).expect("SmtKey has room for 256 bits")
     }
 }
 
@@ -503,7 +503,6 @@ impl StateTrie for StateSmt {
 }
 
 impl StateSmt {
-    #[deprecated = "this should only be called from the frontend parsing"]
     pub(crate) fn new_unchecked(
         address2state: BTreeMap<Address, AccountRlp>,
         hashed_out: BTreeMap<SmtKey, H256>,
@@ -552,8 +551,17 @@ mod conv_hash {
 
     use ethereum_types::H256;
     use itertools::Itertools as _;
-    use plonky2::{field::goldilocks_field::GoldilocksField, hash::hash_types::HashOut};
+    use plonky2::{
+        field::{
+            goldilocks_field::GoldilocksField,
+            types::{Field as _, PrimeField64},
+        },
+        hash::hash_types::HashOut,
+    };
 
+    /// # Panics
+    /// - On certain inputs if `debug_assertions` are enabled. See
+    ///   [`GoldilocksField::from_canonical_u64`] for more.
     pub fn eth2smt(H256(bytes): H256) -> smt_trie::smt::HashOut {
         let mut bytes = bytes.into_iter();
         // (no unsafe, no unstable)
@@ -561,9 +569,7 @@ mod conv_hash {
             elements: array::from_fn(|_ix| {
                 let (a, b, c, d, e, f, g, h) = bytes.next_tuple().unwrap();
                 // REVIEW(0xaatif): what endianness?
-                //                  do we want the `canonical_u64` methods like
-                //                  the frontend uses?
-                GoldilocksField(u64::from_be_bytes([a, b, c, d, e, f, g, h]))
+                GoldilocksField::from_canonical_u64(u64::from_be_bytes([a, b, c, d, e, f, g, h]))
             }),
         };
         assert_eq!(bytes.len(), 0);
@@ -573,11 +579,9 @@ mod conv_hash {
         H256(
             build_array::ArrayBuilder::from_iter(
                 elements
-                    .into_iter()
-                    // REVIEW(0xaatif): what endianness?
-                    //                  do we want the `canonical_u64` methods
-                    //                  like the frontend uses?
-                    .flat_map(|GoldilocksField(u)| u.to_be_bytes()),
+                    .iter()
+                    .map(GoldilocksField::to_canonical_u64)
+                    .flat_map(u64::to_be_bytes),
             )
             .build_exact()
             .unwrap(),
@@ -586,10 +590,12 @@ mod conv_hash {
 
     #[test]
     fn test() {
+        use plonky2::field::types::Field64 as _;
+        let mut max = std::iter::repeat(GoldilocksField::ORDER - 1).flat_map(u64::to_be_bytes);
         for h in [
             H256::zero(),
             H256(array::from_fn(|ix| ix as u8)),
-            H256([u8::MAX; 32]),
+            H256(array::from_fn(|_| max.next().unwrap())),
         ] {
             assert_eq!(smt2eth(eth2smt(h)), h);
         }
