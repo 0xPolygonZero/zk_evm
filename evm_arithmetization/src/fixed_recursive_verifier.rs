@@ -2137,7 +2137,7 @@ where
     pub fn prove_segment_after_initial_stark(
         &self,
         all_proof: AllProof<F, C, D>,
-        table_circuits: &[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES],
+        table_circuits: &[Option<(RecursiveCircuitsForTableSize<F, C, D>, u8)>; NUM_TABLES],
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
@@ -2156,7 +2156,9 @@ where
                     &dummy_proof.proof,
                 );
             } else {
-                let (table_circuit, index_verifier_data) = &table_circuits[table];
+                let (table_circuit, index_verifier_data) = &table_circuits[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get circuits"))?;
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
@@ -2880,7 +2882,6 @@ where
         stark_config: &StarkConfig,
     ) -> Self {
         let by_stark_size = degree_bits_range
-            .clone()
             .map(|degree_bits| {
                 (
                     degree_bits,
@@ -2893,7 +2894,7 @@ where
                     ),
                 )
             })
-            .collect::<BTreeMap<_, _>>();
+            .collect();
 
         Self { by_stark_size }
     }

@@ -252,8 +252,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::field_reassign_with_default)]
 #![feature(let_chains)]
-#![feature(maybe_uninit_uninit_array)]
-#![feature(maybe_uninit_array_assume_init)]
 
 zk_evm_common::check_chain_features!();
 

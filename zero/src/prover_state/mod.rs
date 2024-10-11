@@ -174,57 +174,34 @@ impl ProverStateManager {
         &self,
         config: &StarkConfig,
         all_proof: &AllProof,
-    ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
-        let degrees = all_proof
-            .degree_bits(config)
-            .iter()
-            .enumerate()
-            .map(|(i, opt)| {
-                opt.unwrap_or_else(|| {
-                    p_state().state.table_dummy_proofs[i]
-                        .as_ref()
-                        .expect("Unable to get table dummy proof data")
-                        .init_degree
-                })
-            })
-            .collect::<Vec<_>>();
+    ) -> anyhow::Result<[Option<(RecursiveCircuitsForTableSize, u8)>; NUM_TABLES]> {
+        let degrees = all_proof.degree_bits(config);
 
-        /// Given a recursive circuit index (e.g., Arithmetic / 0), return a
-        /// tuple containing the loaded table at the specified size and
-        /// its offset relative to the configured range used to pre-process the
-        /// circuits.
-        macro_rules! circuit {
-            ($circuit_index:expr) => {
-                (
-                    RecursiveCircuitResource::get(&(
-                        $circuit_index.into(),
-                        degrees[$circuit_index],
-                    ))
-                    .map_err(|e| {
-                        let circuit: $crate::prover_state::circuit::Circuit = $circuit_index.into();
-                        let size = degrees[$circuit_index];
-                        anyhow::Error::from(e).context(format!(
-                            "Attempting to load circuit: {circuit:?} at size: {size}"
-                        ))
-                    })?,
-                    (degrees[$circuit_index] - self.circuit_config[$circuit_index].start) as u8,
-                )
-            };
-        }
+        // Given a recursive circuit index (e.g., Arithmetic / 0), return a
+        // tuple containing the loaded table at the specified size and
+        // its offset relative to the configured range used to pre-process the
+        // circuits.
+        let circuits = std::array::try_from_fn(
+            |i| -> anyhow::Result<Option<(RecursiveCircuitsForTableSize, u8)>> {
+                match degrees[i] {
+                    Some(size) => {
+                        let circuit_resource = RecursiveCircuitResource::get(&(i.into(), size))
+                            .map_err(|e| {
+                                anyhow::Error::from(e).context(format!(
+                                    "Attempting to load circuit: {i} at size: {size}"
+                                ))
+                            })?;
+                        Ok(Some((
+                            circuit_resource,
+                            (size - self.circuit_config[i].start) as u8,
+                        )))
+                    }
+                    None => Ok(None),
+                }
+            },
+        )?;
 
-        Ok([
-            circuit!(0),
-            circuit!(1),
-            circuit!(2),
-            circuit!(3),
-            circuit!(4),
-            circuit!(5),
-            circuit!(6),
-            circuit!(7),
-            circuit!(8),
-            #[cfg(feature = "cdk_erigon")]
-            circuit!(9),
-        ])
+        Ok(circuits)
     }
 
     /// Generate a segment proof using the specified input, loading

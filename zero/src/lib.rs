@@ -1,3 +1,5 @@
+#![feature(array_try_from_fn)]
+
 zk_evm_common::check_chain_features!();
 
 pub mod block_interval;
