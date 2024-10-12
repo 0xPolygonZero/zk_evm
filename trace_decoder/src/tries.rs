@@ -547,6 +547,11 @@ impl StateSmt {
 }
 
 mod conv_hash {
+    //! We [`u64::to_le_bytes`] because:
+    //! - Reference go code just puns the bytes: <https://github.com/gateway-fm/vectorized-poseidon-gold/blob/7640564fa7d5ed93c829b156a83cb11cef744586/src/vectorizedposeidongold/vectorizedposeidongold_fallback.go#L39-L45>
+    //! - It's better to fix the endianness for correctness.
+    //! - Most (consumer) CPUs are little-endian.
+
     use std::array;
 
     use ethereum_types::H256;
@@ -568,8 +573,7 @@ mod conv_hash {
         let ret = HashOut {
             elements: array::from_fn(|_ix| {
                 let (a, b, c, d, e, f, g, h) = bytes.next_tuple().unwrap();
-                // REVIEW(0xaatif): what endianness?
-                GoldilocksField::from_canonical_u64(u64::from_be_bytes([a, b, c, d, e, f, g, h]))
+                GoldilocksField::from_canonical_u64(u64::from_le_bytes([a, b, c, d, e, f, g, h]))
             }),
         };
         assert_eq!(bytes.len(), 0);
@@ -581,7 +585,7 @@ mod conv_hash {
                 elements
                     .iter()
                     .map(GoldilocksField::to_canonical_u64)
-                    .flat_map(u64::to_be_bytes),
+                    .flat_map(u64::to_le_bytes),
             )
             .build_exact()
             .unwrap(),
@@ -591,7 +595,7 @@ mod conv_hash {
     #[test]
     fn test() {
         use plonky2::field::types::Field64 as _;
-        let mut max = std::iter::repeat(GoldilocksField::ORDER - 1).flat_map(u64::to_be_bytes);
+        let mut max = std::iter::repeat(GoldilocksField::ORDER - 1).flat_map(u64::to_le_bytes);
         for h in [
             H256::zero(),
             H256(array::from_fn(|ix| ix as u8)),
