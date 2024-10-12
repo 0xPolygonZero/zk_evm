@@ -20,7 +20,7 @@ use starky::proof::StarkProofWithMetadata;
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, NUM_TABLES, OPTIONAL_TABLE_INDICES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
@@ -117,7 +117,7 @@ where
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
     for (i, cap) in trace_caps.iter().enumerate() {
-        if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
+        if OPTIONAL_TABLE_INDICES.contains(&i) && !use_keccak_tables {
             // Observe zero merkle caps when skipping Keccak tables.
             let zero_merkle_cap = cap.flatten().iter().map(|_| F::ZERO).collect::<Vec<F>>();
             challenger.observe_elements(&zero_merkle_cap);
