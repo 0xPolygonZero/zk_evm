@@ -1,9 +1,9 @@
 //! Principled trie types and abstractions used in this library.
 
-use core::fmt;
 use std::{
     cmp,
     collections::{BTreeMap, HashSet},
+    fmt,
     marker::PhantomData,
 };
 
@@ -19,9 +19,11 @@ use mpt_trie::{
 };
 use u4::{AsNibbles, U4};
 
+/// A Merkle PATRICIA Trie, where the values are always [RLP](rlp)-encoded `T`s.
+///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
 ///
-/// Portions of the trie may be _hashed out_: see [`Self::insert_hash`].
+/// Portions of the trie may be _hashed out_: see [`Self::insert_hash_by_key`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedMpt<T> {
     inner: HashedPartialTrie,
@@ -35,6 +37,7 @@ impl<T> TypedMpt<T> {
         Self {
             inner: HashedPartialTrie::new_with_strategy(
                 Node::Empty,
+                // These are used in the Type1World, which requires this behaviour.
                 OnOrphanedHashNode::CollapseToExtension,
             ),
             _ty: PhantomData,
@@ -96,17 +99,6 @@ impl<T> Default for TypedMpt<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a TypedMpt<T>
-where
-    T: rlp::Decodable,
-{
-    type Item = (MptKey, T);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.iter())
-    }
-}
-
 impl<T> From<TypedMpt<T>> for HashedPartialTrie {
     fn from(value: TypedMpt<T>) -> Self {
         value.inner
@@ -114,14 +106,14 @@ impl<T> From<TypedMpt<T>> for HashedPartialTrie {
 }
 
 /// Bounded sequence of [`U4`],
-/// used as a key for [`TypedMpt`].
+/// used as a key for [`TypedMpt`] and [`Type1World`].
 ///
 /// Semantically equivalent to [`mpt_trie::nibbles::Nibbles`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct MptKey(CopyVec<U4, 64>);
 
 impl fmt::Display for MptKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for u in self.0 {
             f.write_fmt(format_args!("{:x}", u))?
         }
@@ -141,18 +133,6 @@ impl MptKey {
         AsNibbles(&mut packed).pack_from_slice(&self.0);
         H256::from_slice(&packed)
     }
-    pub fn from_address(address: Address) -> Self {
-        Self::from_hash(keccak_hash::keccak(address))
-    }
-    pub fn from_slot_position(pos: U256) -> Self {
-        let mut bytes = [0; 32];
-        pos.to_big_endian(&mut bytes);
-        Self::from_hash(keccak_hash::keccak(H256::from_slice(&bytes)))
-    }
-    pub fn from_hash(H256(bytes): H256) -> Self {
-        Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
-    }
-
     pub fn from_txn_ix(txn_ix: usize) -> Self {
         MptKey::new(AsNibbles(rlp::encode(&txn_ix))).expect(
             "\
@@ -200,7 +180,7 @@ fn mpt_key_into_hash() {
 }
 
 /// Bounded sequence of bits,
-/// used as a key for [`StateSmt`].
+/// used as a key for [`Type2World`].
 ///
 /// Semantically equivalent to [`smt_trie::bits::Bits`].
 #[derive(Clone, Copy)]
@@ -292,7 +272,11 @@ impl TransactionTrie {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
+    pub fn insert_value_by_index(
+        &mut self,
+        txn_ix: usize,
+        val: Vec<u8>,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
             .get(MptKey::from_txn_ix(txn_ix).into_nibbles())
@@ -370,6 +354,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
+/// [`World::Key`]-agnostic operations.
 pub trait Key {
     fn from_address(address: Address) -> Self;
     fn from_hash(hash: H256) -> Self;
@@ -394,15 +379,18 @@ impl Key for SmtKey {
 
 impl Key for MptKey {
     fn from_hash(hash: H256) -> Self {
-        Self::from_hash(hash)
+        let H256(bytes) = hash;
+        Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
     }
 
     fn from_slot_position(ix: U256) -> Self {
-        Self::from_slot_position(ix)
+        let mut bytes = [0; 32];
+        ix.to_big_endian(&mut bytes);
+        Self::from_hash(keccak_hash::keccak(H256::from_slice(&bytes)))
     }
 
     fn from_address(address: Address) -> Self {
-        Self::from_address(address)
+        Self::from_hash(keccak_hash::keccak(address))
     }
 }
 
@@ -410,7 +398,7 @@ impl Key for MptKey {
 ///
 /// Some parts of the tries may be _hashed out_.
 pub trait World {
-    type StateKey;
+    type Key;
     type AccountInfo;
     fn insert_account_info(
         &mut self,
@@ -418,15 +406,15 @@ pub trait World {
         account: Self::AccountInfo,
     ) -> anyhow::Result<()>;
     fn get_account_info(&self, address: Address) -> Option<Self::AccountInfo>;
-    /// Hacky method to workaround MPT shenanigans.
+    /// Workaround MPT quirks.
     fn reporting_remove_account_info(
         &mut self,
         address: Address,
-    ) -> anyhow::Result<Option<Self::StateKey>>;
+    ) -> anyhow::Result<Option<Self::Key>>;
     /// _Hash out_ parts of the (state) trie that aren't in `addresses`.
     fn mask_accounts(
         &mut self,
-        addresses: impl IntoIterator<Item = Self::StateKey>,
+        addresses: impl IntoIterator<Item = Self::Key>,
     ) -> anyhow::Result<()>;
     fn root(&self) -> H256;
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
@@ -437,7 +425,7 @@ pub trait World {
         &mut self,
         address: Address,
         slot: U256,
-    ) -> anyhow::Result<Option<Self::StateKey>>;
+    ) -> anyhow::Result<Option<Self::Key>>;
     fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()>;
     fn retain_storage(
         &mut self,
@@ -446,13 +434,11 @@ pub trait World {
     fn mask_storage(
         &mut self,
         address: Address,
-        keys: impl IntoIterator<Item = Self::StateKey>,
+        keys: impl IntoIterator<Item = Self::Key>,
     ) -> anyhow::Result<()>;
 }
 
-/// Global, [`Address`] `->` [`AccountRlp`].
-///
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
+/// State and storage based on distinct [MPTs](HashedPartialTrie).
 #[derive(Debug, Clone, Default)]
 pub struct Type1World {
     pub state: TypedMpt<AccountRlp>,
@@ -493,35 +479,15 @@ impl Type1World {
             storage,
         })
     }
-    /// Insert a _hashed out_ part of the trie
-    pub fn insert_hash_by_key(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
-        self.state.insert_hash_by_key(key, hash)
-    }
-    #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
-    pub fn insert_by_hashed_address(
-        &mut self,
-        key: H256,
-        account: AccountRlp,
-    ) -> anyhow::Result<()> {
-        self.state
-            .insert_value_by_key(MptKey::from_hash(key), account)
-    }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.state
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
-    }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.state.as_hashed_partial_trie()
-    }
 }
 
 impl World for Type1World {
-    type StateKey = MptKey;
+    type Key = MptKey;
     type AccountInfo = AccountRlp;
     fn insert_account_info(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
-        #[expect(deprecated)]
-        self.insert_by_hashed_address(keccak_hash::keccak(address), account)
+        let key = keccak_hash::keccak(address);
+        self.state
+            .insert_value_by_key(MptKey::from_hash(key), account)
     }
     fn get_account_info(&self, address: Address) -> Option<AccountRlp> {
         self.state
@@ -579,7 +545,7 @@ impl World for Type1World {
         &mut self,
         address: Address,
         slot: U256,
-    ) -> anyhow::Result<Option<Self::StateKey>> {
+    ) -> anyhow::Result<Option<Self::Key>> {
         let mut account = self.get_account_info(address).context("no such account")?;
         let storage = self
             .storage
@@ -609,7 +575,7 @@ impl World for Type1World {
     fn mask_storage(
         &mut self,
         address: Address,
-        keys: impl IntoIterator<Item = Self::StateKey>,
+        keys: impl IntoIterator<Item = Self::Key>,
     ) -> anyhow::Result<()> {
         if let Some(storage) = self.storage.get_mut(&keccak_hash::keccak(address)) {
             storage.mask(keys)?;
@@ -618,6 +584,7 @@ impl World for Type1World {
     }
 }
 
+/// Update the [`AccountRlp::storage_root`] after running `f`.
 fn on_storage_trie(
     world: &mut Type1World,
     address: Address,
@@ -654,7 +621,7 @@ pub struct Type2World {
 }
 
 impl World for Type2World {
-    type StateKey = SmtKey;
+    type Key = SmtKey;
     type AccountInfo = AccountRlp;
     fn insert_account_info(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
         self.address2state.insert(address, account);
@@ -716,7 +683,7 @@ impl World for Type2World {
     fn mask_storage(
         &mut self,
         address: Address,
-        keys: impl IntoIterator<Item = Self::StateKey>,
+        keys: impl IntoIterator<Item = Self::Key>,
     ) -> anyhow::Result<()> {
         let _ = (address, keys);
         todo!()
@@ -826,14 +793,17 @@ mod conv_hash {
 /// Global, per-account.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }
 impl StorageTrie {
-    pub fn new(strategy: OnOrphanedHashNode) -> Self {
+    pub fn new() -> Self {
         Self {
-            untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
+            untyped: HashedPartialTrie::new_with_strategy(
+                Node::Empty,
+                OnOrphanedHashNode::CollapseToExtension,
+            ),
         }
     }
     fn load_int(&self, key: MptKey) -> anyhow::Result<U256> {
@@ -852,7 +822,7 @@ impl StorageTrie {
             .insert(key.into_nibbles(), alloy::rlp::encode(value.compat()))?;
         Ok(())
     }
-    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<()> {
+    pub fn insert_value(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), value)?;
         Ok(())
     }
@@ -867,12 +837,18 @@ impl StorageTrie {
         delete_node_and_report_remaining_key_if_branch_collapsed(&mut self.untyped, key)
     }
     /// _Hash out_ the parts of the trie that aren't in `paths`.
-    pub fn mask(&mut self, paths: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
+    fn mask(&mut self, paths: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
             paths.into_iter().map(MptKey::into_nibbles),
         )?;
         Ok(())
+    }
+}
+
+impl Default for StorageTrie {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

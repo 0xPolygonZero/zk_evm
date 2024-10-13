@@ -59,7 +59,7 @@ pub fn entrypoint(
         BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
         BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
     };
-    let (state, mut code) = start(trie_pre_images, wire_disposition)?;
+    let (world, mut code) = start(trie_pre_images, wire_disposition)?;
 
     code.extend(code_db);
 
@@ -80,10 +80,10 @@ pub fn entrypoint(
         *amt = gwei_to_wei(*amt)
     }
 
-    let batches = match state {
-        Either::Left(mpt) => Either::Left(
+    let batches = match world {
+        Either::Left(type1world) => Either::Left(
             middle(
-                mpt,
+                type1world,
                 batch(txn_info, batch_size_hint),
                 &mut code,
                 &b_meta,
@@ -95,17 +95,17 @@ pub fn entrypoint(
             .into_iter()
             .map(|it| it.map(Either::Left)),
         ),
-        Either::Right(smt) => {
+        Either::Right(type2world) => {
             Either::Right(
                 middle(
-                    smt,
+                    type2world,
                     batch(txn_info, batch_size_hint),
                     &mut code,
                     &b_meta,
                     ger_data,
                     withdrawals,
                     fatal_missing_code,
-                    &mut DummyObserver::new(), // TODO(0xaatif)
+                    &mut DummyObserver::new(), // TODO(zero): https://github.com/0xPolygonZero/zk_evm/issues/720
                 )?
                 .into_iter()
                 .map(|it| it.map(Either::Right)),
@@ -124,14 +124,14 @@ pub fn entrypoint(
                  byte_code,
                  before:
                      IntraBlockTries {
-                         state,
+                         world,
                          transaction,
                          receipt,
                      },
                  after,
                  withdrawals,
              }| {
-                let (state_trie, storage_tries) = match state {
+                let (state, storage) = match world {
                     Either::Left(Type1World { state, storage }) => (state, storage),
                     Either::Right(_) => todo!("evm_arithmetization accepts an SMT"),
                 };
@@ -146,13 +146,10 @@ pub fn entrypoint(
                     withdrawals,
                     ger_data,
                     tries: TrieInputs {
-                        state_trie: state_trie.into(),
+                        state_trie: state.into(),
                         transactions_trie: transaction.into(),
                         receipts_trie: receipt.into(),
-                        storage_tries: storage_tries
-                            .into_iter()
-                            .map(|(k, v)| (k, v.into()))
-                            .collect(),
+                        storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
                     },
                     trie_roots_after: after,
                     checkpoint_state_trie_root,
@@ -198,7 +195,7 @@ fn start(
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
-            let (state, code) = match wire_disposition {
+            let (world, code) = match wire_disposition {
                 WireDisposition::Type1 => {
                     let crate::type1::Frontend {
                         state,
@@ -223,7 +220,7 @@ fn start(
                     )
                 }
             };
-            (state, code)
+            (world, code)
         }
     })
 }
@@ -282,7 +279,7 @@ fn test_batch() {
 }
 
 #[derive(Debug)]
-struct Batch<StateTrieT> {
+struct Batch<WorldT> {
     pub first_txn_ix: usize,
     pub gas_used: u64,
     /// See [`GenerationInputs::contract_code`].
@@ -290,7 +287,7 @@ struct Batch<StateTrieT> {
     /// For each transaction in batch, in order.
     pub byte_code: Vec<NonEmpty<Vec<u8>>>,
 
-    pub before: IntraBlockTries<StateTrieT>,
+    pub before: IntraBlockTries<WorldT>,
     pub after: TrieRoots,
 
     /// Empty for all but the final batch
@@ -323,8 +320,8 @@ impl<T> Batch<T> {
 /// [`evm_arithmetization::generation::TrieInputs`],
 /// generic over state trie representation.
 #[derive(Debug)]
-pub struct IntraBlockTries<StateTrieT> {
-    pub state: StateTrieT,
+pub struct IntraBlockTries<WorldT> {
+    pub world: WorldT,
     pub transaction: TransactionTrie,
     pub receipt: ReceiptTrie,
 }
@@ -332,12 +329,12 @@ pub struct IntraBlockTries<StateTrieT> {
 impl<T> IntraBlockTries<T> {
     fn map<U>(self, mut f: impl FnMut(T) -> U) -> IntraBlockTries<U> {
         let Self {
-            state,
+            world,
             transaction,
             receipt,
         } = self;
         IntraBlockTries {
-            state: f(state),
+            world: f(world),
             transaction,
             receipt,
         }
@@ -353,9 +350,9 @@ pub struct FatalMissingCode(pub bool);
 
 /// Does the main work mentioned in the [module documentation](super).
 #[allow(clippy::too_many_arguments)]
-fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
+fn middle<WorldT: World<AccountInfo = AccountRlp> + Clone>(
     // state at the beginning of the block
-    mut state_trie: StateTrieT,
+    mut world: WorldT,
     // None represents a dummy transaction that should not increment the transaction index
     // all batches SHOULD not be empty
     batches: Vec<Vec<Option<TxnInfo>>>,
@@ -366,10 +363,10 @@ fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     mut withdrawals: Vec<(Address, U256)>,
     fatal_missing_code: FatalMissingCode,
     // called with the untrimmed tries after each batch
-    observer: &mut impl Observer<StateTrieT>,
-) -> anyhow::Result<Vec<Batch<StateTrieT>>>
+    observer: &mut impl Observer<WorldT>,
+) -> anyhow::Result<Vec<Batch<WorldT>>>
 where
-    StateTrieT::StateKey: Ord + Key,
+    WorldT::Key: Ord + Key,
 {
     // These are the per-block tries.
     let mut transaction_trie = TransactionTrie::new();
@@ -387,7 +384,7 @@ where
         let mut batch_contract_code = BTreeSet::from([vec![]]); // always include empty code
 
         let mut before = IntraBlockTries {
-            state: state_trie.clone(),
+            world: world.clone(),
             transaction: transaction_trie.clone(),
             receipt: receipt_trie.clone(),
         };
@@ -395,8 +392,8 @@ where
         // We want to perform mask the TrieInputs above,
         // but won't know the bounds until after the loop below,
         // so store that information here.
-        let mut storage_masks = BTreeMap::<_, BTreeSet<StateTrieT::StateKey>>::new();
-        let mut state_mask = BTreeSet::<StateTrieT::StateKey>::new();
+        let mut storage_masks = BTreeMap::<_, BTreeSet<WorldT::Key>>::new();
+        let mut state_mask = BTreeSet::<WorldT::Key>::new();
 
         if txn_ix == 0 {
             do_pre_execution(
@@ -404,7 +401,7 @@ where
                 ger_data,
                 &mut storage_masks,
                 &mut state_mask,
-                &mut state_trie,
+                &mut world,
             )?;
         }
 
@@ -424,7 +421,7 @@ where
 
             if let Ok(nonempty) = nunny::Vec::new(byte_code) {
                 batch_byte_code.push(nonempty.clone());
-                transaction_trie.insert(txn_ix, nonempty.into())?;
+                transaction_trie.insert_value_by_index(txn_ix, nonempty.into())?;
                 receipt_trie.insert(
                     txn_ix,
                     map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
@@ -454,17 +451,17 @@ where
                 .map_err(|e| anyhow!("{e:?}"))
                 .context(format!("couldn't decode receipt in txn {tx_hash:x}"))?;
 
-                let (mut acct, born) = state_trie
+                let (mut acct, born) = world
                     .get_account_info(addr)
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
                 if born {
-                    state_trie.create_storage(addr)?;
+                    world.create_storage(addr)?;
                 }
 
                 if born || just_access {
-                    state_trie
+                    world
                         .clone()
                         .insert_account_info(addr, acct)
                         .context(format!(
@@ -489,7 +486,7 @@ where
                     storage_written
                         .keys()
                         .chain(&storage_read)
-                        .map(|it| StateTrieT::StateKey::from_hash(keccak_hash::keccak(it))),
+                        .map(|it| WorldT::Key::from_hash(keccak_hash::keccak(it))),
                 );
 
                 if do_writes {
@@ -529,24 +526,23 @@ where
                         for (k, v) in storage_written {
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => storage_mask.extend(
-                                    state_trie.reporting_remove_storage(addr, k.into_uint())?,
-                                ),
-                                false => state_trie.store_int(addr, k.into_uint(), v)?,
+                                true => storage_mask
+                                    .extend(world.reporting_remove_storage(addr, k.into_uint())?),
+                                false => world.store_int(addr, k.into_uint(), v)?,
                             }
                         }
                     }
 
-                    state_trie.insert_account_info(addr, acct)?;
-                    state_mask.insert(StateTrieT::StateKey::from_address(addr));
+                    world.insert_account_info(addr, acct)?;
+                    state_mask.insert(WorldT::Key::from_address(addr));
                 } else {
                     // Simple state access
-                    state_mask.insert(StateTrieT::StateKey::from_address(addr));
+                    state_mask.insert(WorldT::Key::from_address(addr));
                 }
 
                 if self_destructed {
-                    state_trie.destroy_storage(addr)?;
-                    state_mask.extend(state_trie.reporting_remove_account_info(addr)?)
+                    world.destroy_storage(addr)?;
+                    state_mask.extend(world.reporting_remove_account_info(addr)?)
                 }
             }
 
@@ -564,35 +560,35 @@ where
             withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
-                        state_mask.insert(StateTrieT::StateKey::from_address(*addr));
-                        let mut acct = state_trie
+                        state_mask.insert(WorldT::Key::from_address(*addr));
+                        let mut acct = world
                             .get_account_info(*addr)
                             .context(format!("missing address {addr:x} for withdrawal"))?;
                         acct.balance += *amt;
-                        state_trie
+                        world
                             .insert_account_info(*addr, acct)
                             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
                             //                Add an entry API
-                            .expect("insert must succeed with the same key as a successful `get`");
+                            .expect("insert must succeed with the same key as a successful `get_account_info`");
                     }
                     mem::take(&mut withdrawals)
                 }
                 false => vec![],
             },
             before: {
-                before.state.mask_accounts(state_mask)?;
+                before.world.mask_accounts(state_mask)?;
                 before.receipt.mask(batch_first_txn_ix..txn_ix)?;
                 before.transaction.mask(batch_first_txn_ix..txn_ix)?;
 
-                state_trie.retain_storage(storage_masks.keys().copied())?;
+                world.retain_storage(storage_masks.keys().copied())?;
 
                 for (addr, mask) in storage_masks {
-                    state_trie.mask_storage(addr, mask)?
+                    world.mask_storage(addr, mask)?
                 }
                 before
             },
             after: TrieRoots {
-                state_root: state_trie.root(),
+                state_root: world.root(),
                 transactions_root: transaction_trie.root(),
                 receipts_root: receipt_trie.root(),
             },
@@ -601,7 +597,7 @@ where
         observer.collect_tries(
             block.block_number,
             batch_index,
-            &state_trie,
+            &world,
             &transaction_trie,
             &receipt_trie,
         )
@@ -611,15 +607,15 @@ where
 }
 
 /// Performs all the pre-txn execution rules of the targeted network.
-fn do_pre_execution<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
+fn do_pre_execution<WorldT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<StateTrieT::StateKey>>,
-    trim_state: &mut BTreeSet<StateTrieT::StateKey>,
-    state_trie: &mut StateTrieT,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<WorldT::Key>>,
+    trim_state: &mut BTreeSet<WorldT::Key>,
+    state_trie: &mut WorldT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::StateKey: Ord + Key,
+    WorldT::Key: Ord + Key,
 {
     // Ethereum mainnet: EIP-4788
     if cfg!(feature = "eth_mainnet") {
@@ -644,15 +640,15 @@ where
 ///
 /// This is Polygon-CDK-specific, and runs at the start of the block,
 /// before any transactions (as per the Etrog specification).
-fn do_scalable_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
+fn do_scalable_hook<WorldT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<StateTrieT::StateKey>>,
-    trim_state: &mut BTreeSet<StateTrieT::StateKey>,
-    state_trie: &mut StateTrieT,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<WorldT::Key>>,
+    trim_state: &mut BTreeSet<WorldT::Key>,
+    world: &mut WorldT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::StateKey: Ord + Key,
+    WorldT::Key: Ord + Key,
 {
     use evm_arithmetization::testing_utils::{
         ADDRESS_SCALABLE_L2, GLOBAL_EXIT_ROOT_ADDRESS, GLOBAL_EXIT_ROOT_STORAGE_POS,
@@ -666,7 +662,7 @@ where
 
     let scalable_trim = trim_storage.entry(ADDRESS_SCALABLE_L2).or_default();
 
-    let timestamp = state_trie
+    let timestamp = world
         .load_int(ADDRESS_SCALABLE_L2, U256::from(TIMESTAMP_STORAGE_POS.1))
         .unwrap_or_default();
     let timestamp = cmp::max(timestamp, block.block_timestamp);
@@ -676,8 +672,8 @@ where
         (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
     ] {
         ensure!(u != U256::zero());
-        state_trie.store_int(ADDRESS_SCALABLE_L2, ix, u)?;
-        scalable_trim.insert(StateTrieT::StateKey::from_slot_position(ix));
+        world.store_int(ADDRESS_SCALABLE_L2, ix, u)?;
+        scalable_trim.insert(WorldT::Key::from_slot_position(ix));
     }
 
     // Store previous block root hash
@@ -685,17 +681,17 @@ where
     let mut arr = [0; 64];
     (block.block_number - 1).to_big_endian(&mut arr[0..32]);
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-    let slot = StateTrieT::StateKey::from_hash(keccak_hash::keccak(arr));
+    let slot = WorldT::Key::from_hash(keccak_hash::keccak(arr));
 
-    let prev_block_root_hash = state_trie.root();
-    state_trie.store_hash(
+    let prev_block_root_hash = world.root();
+    world.store_hash(
         ADDRESS_SCALABLE_L2,
         keccak_hash::keccak(arr),
         prev_block_root_hash,
     )?;
     scalable_trim.insert(slot);
 
-    trim_state.insert(StateTrieT::StateKey::from_address(ADDRESS_SCALABLE_L2));
+    trim_state.insert(WorldT::Key::from_address(ADDRESS_SCALABLE_L2));
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
@@ -704,14 +700,14 @@ where
         let mut arr = [0; 64];
         arr[0..32].copy_from_slice(&root.0);
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-        let slot = StateTrieT::StateKey::from_hash(keccak_hash::keccak(arr));
-        state_trie.store_hash(
+        let slot = WorldT::Key::from_hash(keccak_hash::keccak(arr));
+        world.store_hash(
             GLOBAL_EXIT_ROOT_ADDRESS,
             keccak_hash::keccak(arr),
             l1blockhash,
         )?;
         ger_trim.insert(slot);
-        trim_state.insert(StateTrieT::StateKey::from_address(GLOBAL_EXIT_ROOT_ADDRESS));
+        trim_state.insert(WorldT::Key::from_address(GLOBAL_EXIT_ROOT_ADDRESS));
     }
 
     Ok(())
@@ -722,15 +718,15 @@ where
 ///
 /// This is Cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
-fn do_beacon_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
+fn do_beacon_hook<WorldT: World<AccountInfo = AccountRlp> + Clone>(
     block_timestamp: U256,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<StateTrieT::StateKey>>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<WorldT::Key>>,
     parent_beacon_block_root: H256,
-    trim_state: &mut BTreeSet<StateTrieT::StateKey>,
-    state_trie: &mut StateTrieT,
+    trim_state: &mut BTreeSet<WorldT::Key>,
+    world: &mut WorldT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::StateKey: Ord + Key,
+    WorldT::Key: Ord + Key,
 {
     use evm_arithmetization::testing_utils::{
         BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
@@ -749,20 +745,18 @@ where
             U256::from_big_endian(parent_beacon_block_root.as_bytes()),
         ),
     ] {
-        let slot = <StateTrieT::StateKey>::from_slot_position(ix);
+        let slot = <WorldT::Key>::from_slot_position(ix);
 
         match u.is_zero() {
             true => beacon_trim
-                .extend(state_trie.reporting_remove_storage(BEACON_ROOTS_CONTRACT_ADDRESS, ix)?),
+                .extend(world.reporting_remove_storage(BEACON_ROOTS_CONTRACT_ADDRESS, ix)?),
             false => {
-                state_trie.store_int(BEACON_ROOTS_CONTRACT_ADDRESS, ix, u)?;
+                world.store_int(BEACON_ROOTS_CONTRACT_ADDRESS, ix, u)?;
                 beacon_trim.insert(slot);
             }
         }
     }
-    trim_state.insert(StateTrieT::StateKey::from_address(
-        BEACON_ROOTS_CONTRACT_ADDRESS,
-    ));
+    trim_state.insert(WorldT::Key::from_address(BEACON_ROOTS_CONTRACT_ADDRESS));
     Ok(())
 }
 

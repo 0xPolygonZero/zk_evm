@@ -8,11 +8,10 @@ use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
 use keccak_hash::H256;
-use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::tries::{MptKey, StorageTrie, TypedMpt};
+use crate::tries::{Key as _, MptKey, StorageTrie, TypedMpt};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone, Default)]
@@ -133,7 +132,7 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
-                    Either::Left(Value { raw_value }) => mpt.insert(
+                    Either::Left(Value { raw_value }) => mpt.insert_value(
                         MptKey::new(path.iter().copied().chain(key))?,
                         rlp::encode(&raw_value.as_slice()).to_vec(),
                     )?,
@@ -160,7 +159,7 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
         Ok(())
     }
 
-    let mut mpt = StorageTrie::new(OnOrphanedHashNode::CollapseToExtension);
+    let mut mpt = StorageTrie::new();
     visit(&mut mpt, &stackstack::Stack::new(), node)?;
     Ok(mpt)
 }
