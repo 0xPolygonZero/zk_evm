@@ -1,11 +1,15 @@
 //! Principled trie types and abstractions used in this library.
 
 use core::fmt;
-use std::{cmp, collections::BTreeMap, marker::PhantomData};
+use std::{
+    cmp,
+    collections::{BTreeMap, HashSet},
+    marker::PhantomData,
+};
 
 use alloy_compat::Compat as _;
-use anyhow::{ensure, Context};
-use bitvec::{array::BitArray, slice::BitSlice};
+use anyhow::{ensure, Context as _};
+use bitvec::slice::BitSlice;
 use copyvec::CopyVec;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
@@ -16,7 +20,7 @@ use u4::{AsNibbles, U4};
 ///
 /// Portions of the trie may be _hashed out_: see [`Self::insert_hash`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TypedMpt<T> {
+pub struct TypedMpt<T> {
     inner: HashedPartialTrie,
     _ty: PhantomData<fn() -> T>,
 }
@@ -97,6 +101,12 @@ where
     }
 }
 
+impl<T> From<TypedMpt<T>> for HashedPartialTrie {
+    fn from(value: TypedMpt<T>) -> Self {
+        value.inner
+    }
+}
+
 /// Bounded sequence of [`U4`],
 /// used as a key for [`TypedMpt`].
 ///
@@ -172,12 +182,6 @@ impl MptKey {
     }
 }
 
-impl From<Address> for MptKey {
-    fn from(value: Address) -> Self {
-        Self::from_hash(keccak_hash::keccak(value))
-    }
-}
-
 #[test]
 fn mpt_key_into_hash() {
     assert_eq!(MptKey::new([]).unwrap().into_hash(), None);
@@ -250,13 +254,6 @@ impl SmtKey {
             bits.push_bit(*bit)
         }
         bits
-    }
-}
-
-impl From<Address> for SmtKey {
-    fn from(addr: Address) -> Self {
-        let H256(bytes) = keccak_hash::keccak(addr);
-        Self::new(BitArray::<_>::new(bytes)).expect("SmtKey has room for 256 bits")
     }
 }
 
@@ -367,6 +364,42 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
+pub trait Key {
+    fn from_address(address: Address) -> Self;
+    fn from_hash(hash: H256) -> Self;
+    fn from_slot_position(ix: U256) -> Self;
+}
+
+impl Key for SmtKey {
+    fn from_hash(hash: H256) -> Self {
+        let _ = hash;
+        todo!()
+    }
+    fn from_slot_position(ix: U256) -> Self {
+        let _ = ix;
+        todo!()
+    }
+
+    fn from_address(address: Address) -> Self {
+        let _ = address;
+        todo!()
+    }
+}
+
+impl Key for MptKey {
+    fn from_hash(hash: H256) -> Self {
+        Self::from_hash(hash)
+    }
+
+    fn from_slot_position(ix: U256) -> Self {
+        Self::from_slot_position(ix)
+    }
+
+    fn from_address(address: Address) -> Self {
+        Self::from_address(address)
+    }
+}
+
 /// The state and storage of all accounts.
 ///
 /// Some parts of the tries may be _hashed out_.
@@ -385,17 +418,31 @@ pub trait World {
         address: Address,
     ) -> anyhow::Result<Option<Self::StateKey>>;
     /// _Hash out_ parts of the (state) trie that aren't in `addresses`.
-    fn mask(&mut self, addresses: impl IntoIterator<Item = Self::StateKey>) -> anyhow::Result<()>;
+    fn mask_accounts(
+        &mut self,
+        addresses: impl IntoIterator<Item = Self::StateKey>,
+    ) -> anyhow::Result<()>;
     fn iter_account_info(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
     fn root(&self) -> H256;
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
     fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()>;
     fn load_int(&self, address: Address, slot: U256) -> anyhow::Result<U256>;
+    fn create_storage(&mut self, address: Address) -> anyhow::Result<()>;
     fn reporting_remove_storage(
         &mut self,
         address: Address,
         slot: U256,
-    ) -> anyhow::Result<Option<MptKey>>;
+    ) -> anyhow::Result<Option<Self::StateKey>>;
+    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()>;
+    fn retain_storage(
+        &mut self,
+        addresses: impl IntoIterator<Item = Address>,
+    ) -> anyhow::Result<()>;
+    fn mask_storage(
+        &mut self,
+        address: Address,
+        keys: impl IntoIterator<Item = Self::StateKey>,
+    ) -> anyhow::Result<()>;
 }
 
 /// Global, [`Address`] `->` [`AccountRlp`].
@@ -403,8 +450,8 @@ pub trait World {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
 pub struct Type1World {
-    state: TypedMpt<AccountRlp>,
-    storage: BTreeMap<H256, StorageTrie>,
+    pub state: TypedMpt<AccountRlp>,
+    pub storage: BTreeMap<H256, StorageTrie>,
 }
 
 impl Type1World {
@@ -461,7 +508,7 @@ impl World for Type1World {
             MptKey::from_address(address),
         )
     }
-    fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
+    fn mask_accounts(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
             self.state.as_hashed_partial_trie(),
             addresses.into_iter().map(MptKey::into_nibbles),
@@ -496,6 +543,13 @@ impl World for Type1World {
             storage.store_hash(MptKey::from_hash(position), value)
         })
     }
+    fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        let clobbered = self
+            .storage
+            .insert(keccak_hash::keccak(address), StorageTrie::default());
+        ensure!(clobbered.is_none());
+        Ok(())
+    }
     fn reporting_remove_storage(
         &mut self,
         address: Address,
@@ -510,6 +564,32 @@ impl World for Type1World {
         account.storage_root = storage.root();
         self.insert_account_info(address, account)?;
         Ok(report)
+    }
+    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        let removed = self.storage.remove(&keccak_hash::keccak(address));
+        ensure!(removed.is_some());
+        Ok(())
+    }
+    fn retain_storage(
+        &mut self,
+        addresses: impl IntoIterator<Item = Address>,
+    ) -> anyhow::Result<()> {
+        let haddrs = addresses
+            .into_iter()
+            .map(keccak_hash::keccak)
+            .collect::<HashSet<_>>();
+        self.storage.retain(|haddr, _| haddrs.contains(haddr));
+        Ok(())
+    }
+    fn mask_storage(
+        &mut self,
+        address: Address,
+        keys: impl IntoIterator<Item = Self::StateKey>,
+    ) -> anyhow::Result<()> {
+        if let Some(storage) = self.storage.get_mut(&keccak_hash::keccak(address)) {
+            storage.mask(keys)?;
+        }
+        Ok(())
     }
 }
 
@@ -565,7 +645,7 @@ impl World for Type2World {
         self.address2state.remove(&address);
         Ok(None)
     }
-    fn mask(&mut self, address: impl IntoIterator<Item = SmtKey>) -> anyhow::Result<()> {
+    fn mask_accounts(&mut self, address: impl IntoIterator<Item = SmtKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
     }
@@ -589,12 +669,36 @@ impl World for Type2World {
         let _ = (address, position, value);
         todo!()
     }
+    fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        let _ = address;
+        todo!()
+    }
     fn reporting_remove_storage(
         &mut self,
         address: Address,
         slot: U256,
-    ) -> anyhow::Result<Option<MptKey>> {
+    ) -> anyhow::Result<Option<SmtKey>> {
         let _ = (address, slot);
+        todo!()
+    }
+    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        let _ = address;
+        todo!()
+    }
+    fn retain_storage(
+        &mut self,
+        addresses: impl IntoIterator<Item = Address>,
+    ) -> anyhow::Result<()> {
+        let _ = addresses;
+        todo!()
+    }
+
+    fn mask_storage(
+        &mut self,
+        address: Address,
+        keys: impl IntoIterator<Item = Self::StateKey>,
+    ) -> anyhow::Result<()> {
+        let _ = (address, keys);
         todo!()
     }
 }

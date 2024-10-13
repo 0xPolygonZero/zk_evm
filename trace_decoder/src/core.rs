@@ -20,7 +20,7 @@ use zk_evm_common::gwei_to_wei;
 
 use crate::{
     observer::{DummyObserver, Observer},
-    tries::Type2World,
+    tries::{Key, Type2World},
 };
 use crate::{
     tries::{MptKey, ReceiptTrie, StorageTrie, TransactionTrie, Type1World, World},
@@ -128,41 +128,46 @@ pub fn entrypoint(
                  before:
                      IntraBlockTries {
                          state,
-                         storage,
                          transaction,
                          receipt,
                      },
                  after,
                  withdrawals,
-             }| GenerationInputs {
-                txn_number_before: first_txn_ix.into(),
-                gas_used_before: running_gas_used.into(),
-                gas_used_after: {
-                    running_gas_used += gas_used;
-                    running_gas_used.into()
-                },
-                signed_txns: byte_code.into_iter().map(Into::into).collect(),
-                withdrawals,
-                ger_data,
-                tries: TrieInputs {
-                    state_trie: match state {
-                        Either::Left(mpt) => mpt.into(),
-                        Either::Right(_) => todo!("evm_arithmetization accepts an SMT"),
+             }| {
+                let (state_trie, storage_tries) = match state {
+                    Either::Left(Type1World { state, storage }) => (state, storage),
+                    Either::Right(_) => todo!("evm_arithmetization accepts an SMT"),
+                };
+                GenerationInputs {
+                    txn_number_before: first_txn_ix.into(),
+                    gas_used_before: running_gas_used.into(),
+                    gas_used_after: {
+                        running_gas_used += gas_used;
+                        running_gas_used.into()
                     },
-                    transactions_trie: transaction.into(),
-                    receipts_trie: receipt.into(),
-                    storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
-                },
-                trie_roots_after: after,
-                checkpoint_state_trie_root,
-                checkpoint_consolidated_hash,
-                contract_code: contract_code
-                    .into_iter()
-                    .map(|it| (keccak_hash::keccak(&it), it))
-                    .collect(),
-                block_metadata: b_meta.clone(),
-                block_hashes: b_hashes.clone(),
-                burn_addr,
+                    signed_txns: byte_code.into_iter().map(Into::into).collect(),
+                    withdrawals,
+                    ger_data,
+                    tries: TrieInputs {
+                        state_trie: state_trie.into(),
+                        transactions_trie: transaction.into(),
+                        receipts_trie: receipt.into(),
+                        storage_tries: storage_tries
+                            .into_iter()
+                            .map(|(k, v)| (k, v.into()))
+                            .collect(),
+                    },
+                    trie_roots_after: after,
+                    checkpoint_state_trie_root,
+                    checkpoint_consolidated_hash,
+                    contract_code: contract_code
+                        .into_iter()
+                        .map(|it| (keccak_hash::keccak(&it), it))
+                        .collect(),
+                    block_metadata: b_meta.clone(),
+                    block_hashes: b_hashes.clone(),
+                    burn_addr,
+                }
             },
         )
         .collect())
@@ -344,7 +349,6 @@ impl<T> Batch<T> {
 #[derive(Debug)]
 pub struct IntraBlockTries<StateTrieT> {
     pub state: StateTrieT,
-    pub storage: BTreeMap<H256, StorageTrie>,
     pub transaction: TransactionTrie,
     pub receipt: ReceiptTrie,
 }
@@ -353,13 +357,11 @@ impl<T> IntraBlockTries<T> {
     fn map<U>(self, mut f: impl FnMut(T) -> U) -> IntraBlockTries<U> {
         let Self {
             state,
-            storage,
             transaction,
             receipt,
         } = self;
         IntraBlockTries {
             state: f(state),
-            storage,
             transaction,
             receipt,
         }
@@ -379,7 +381,7 @@ fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
     // storage at the beginning of the block
-    mut storage_tries: BTreeMap<H256, StorageTrie>,
+    mut __storage_tries: BTreeMap<H256, StorageTrie>,
     // None represents a dummy transaction that should not increment the transaction index
     // all batches SHOULD not be empty
     batches: Vec<Vec<Option<TxnInfo>>>,
@@ -393,11 +395,11 @@ fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     observer: &mut impl Observer<StateTrieT>,
 ) -> anyhow::Result<Vec<Batch<StateTrieT>>>
 where
-    StateTrieT::StateKey: Ord + From<Address>,
+    StateTrieT::StateKey: Ord + Key,
 {
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter_account_info() {
-        let storage = storage_tries.entry(haddr).or_insert({
+        let storage = __storage_tries.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
             it.insert_hash(MptKey::default(), acct.storage_root)
                 .expect("empty trie insert cannot fail");
@@ -428,13 +430,12 @@ where
             state: state_trie.clone(),
             transaction: transaction_trie.clone(),
             receipt: receipt_trie.clone(),
-            storage: storage_tries.clone(),
         };
 
         // We want to perform mask the TrieInputs above,
         // but won't know the bounds until after the loop below,
         // so store that information here.
-        let mut storage_masks = BTreeMap::<_, BTreeSet<MptKey>>::new();
+        let mut storage_masks = BTreeMap::<_, BTreeSet<StateTrieT::StateKey>>::new();
         let mut state_mask = BTreeSet::<StateTrieT::StateKey>::new();
 
         if txn_ix == 0 {
@@ -499,9 +500,7 @@ where
                     .unwrap_or((AccountRlp::default(), true));
 
                 if born {
-                    // Empty accounts cannot have non-empty storage,
-                    // so we can safely insert a default trie.
-                    storage_tries.insert(keccak_hash::keccak(addr), StorageTrie::default());
+                    state_trie.create_storage(addr)?;
                 }
 
                 if born || just_access {
@@ -530,7 +529,7 @@ where
                     storage_written
                         .keys()
                         .chain(&storage_read)
-                        .map(|it| MptKey::from_hash(keccak_hash::keccak(it))),
+                        .map(|it| StateTrieT::StateKey::from_hash(keccak_hash::keccak(it))),
                 );
 
                 if do_writes {
@@ -567,15 +566,6 @@ where
                         .unwrap_or(acct.code_hash);
 
                     if !storage_written.is_empty() {
-                        let storage = match born {
-                            true => storage_tries.entry(keccak_hash::keccak(addr)).or_default(),
-                            false => storage_tries.get_mut(&keccak_hash::keccak(addr)).context(
-                                format!(
-                                    "missing storage trie for address {addr:x} in txn {tx_hash:x}"
-                                ),
-                            )?,
-                        };
-
                         for (k, v) in storage_written {
                             match v.is_zero() {
                                 // this is actually a delete
@@ -585,18 +575,17 @@ where
                                 false => state_trie.store_int(addr, k.into_uint(), v)?,
                             }
                         }
-                        acct.storage_root = storage.root();
                     }
 
                     state_trie.insert_account_info(addr, acct)?;
-                    state_mask.insert(<StateTrieT::StateKey>::from(addr));
+                    state_mask.insert(StateTrieT::StateKey::from_address(addr));
                 } else {
                     // Simple state access
-                    state_mask.insert(<StateTrieT::StateKey>::from(addr));
+                    state_mask.insert(StateTrieT::StateKey::from_address(addr));
                 }
 
                 if self_destructed {
-                    storage_tries.remove(&keccak_hash::keccak(addr));
+                    state_trie.destroy_storage(addr)?;
                     state_mask.extend(state_trie.reporting_remove_account_info(addr)?)
                 }
             }
@@ -615,7 +604,7 @@ where
             withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
-                        state_mask.insert(<StateTrieT::StateKey>::from(*addr));
+                        state_mask.insert(StateTrieT::StateKey::from_address(*addr));
                         let mut acct = state_trie
                             .get_account_info(*addr)
                             .context(format!("missing address {addr:x} for withdrawal"))?;
@@ -631,20 +620,14 @@ where
                 false => vec![],
             },
             before: {
-                before.state.mask(state_mask)?;
+                before.state.mask_accounts(state_mask)?;
                 before.receipt.mask(batch_first_txn_ix..txn_ix)?;
                 before.transaction.mask(batch_first_txn_ix..txn_ix)?;
 
-                let keep = storage_masks
-                    .keys()
-                    .map(keccak_hash::keccak)
-                    .collect::<BTreeSet<_>>();
-                before.storage.retain(|haddr, _| keep.contains(haddr));
+                state_trie.retain_storage(storage_masks.keys().copied())?;
 
                 for (addr, mask) in storage_masks {
-                    if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.mask(mask)?
-                    } // else must have self-destructed
+                    state_trie.mask_storage(addr, mask)?
                 }
                 before
             },
@@ -659,7 +642,6 @@ where
             block.block_number,
             batch_index,
             &state_trie,
-            &storage_tries,
             &transaction_trie,
             &receipt_trie,
         )
@@ -672,12 +654,12 @@ where
 fn do_pre_execution<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<StateTrieT::StateKey>>,
     trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::StateKey: From<Address> + Ord,
+    StateTrieT::StateKey: Ord + Key,
 {
     // Ethereum mainnet: EIP-4788
     if cfg!(feature = "eth_mainnet") {
@@ -705,12 +687,12 @@ where
 fn do_scalable_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<StateTrieT::StateKey>>,
     trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::StateKey: From<Address> + Ord,
+    StateTrieT::StateKey: Ord + Key,
 {
     use evm_arithmetization::testing_utils::{
         ADDRESS_SCALABLE_L2, GLOBAL_EXIT_ROOT_ADDRESS, GLOBAL_EXIT_ROOT_STORAGE_POS,
@@ -735,7 +717,7 @@ where
     ] {
         ensure!(u != U256::zero());
         state_trie.store_int(ADDRESS_SCALABLE_L2, ix, u)?;
-        scalable_trim.insert(MptKey::from_slot_position(ix));
+        scalable_trim.insert(StateTrieT::StateKey::from_slot_position(ix));
     }
 
     // Store previous block root hash
@@ -743,7 +725,7 @@ where
     let mut arr = [0; 64];
     (block.block_number - 1).to_big_endian(&mut arr[0..32]);
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-    let slot = MptKey::from_hash(keccak_hash::keccak(arr));
+    let slot = StateTrieT::StateKey::from_hash(keccak_hash::keccak(arr));
 
     let prev_block_root_hash = state_trie.root();
     state_trie.store_hash(
@@ -753,7 +735,7 @@ where
     )?;
     scalable_trim.insert(slot);
 
-    trim_state.insert(<StateTrieT::StateKey>::from(ADDRESS_SCALABLE_L2));
+    trim_state.insert(StateTrieT::StateKey::from_address(ADDRESS_SCALABLE_L2));
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
@@ -762,14 +744,14 @@ where
         let mut arr = [0; 64];
         arr[0..32].copy_from_slice(&root.0);
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-        let slot = MptKey::from_hash(keccak_hash::keccak(arr));
+        let slot = StateTrieT::StateKey::from_hash(keccak_hash::keccak(arr));
         state_trie.store_hash(
             GLOBAL_EXIT_ROOT_ADDRESS,
             keccak_hash::keccak(arr),
             l1blockhash,
         )?;
         ger_trim.insert(slot);
-        trim_state.insert(<StateTrieT::StateKey>::from(GLOBAL_EXIT_ROOT_ADDRESS));
+        trim_state.insert(StateTrieT::StateKey::from_address(GLOBAL_EXIT_ROOT_ADDRESS));
     }
 
     Ok(())
@@ -782,13 +764,13 @@ where
 /// before any transactions (as per the EIP).
 fn do_beacon_hook<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     block_timestamp: U256,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<StateTrieT::StateKey>>,
     parent_beacon_block_root: H256,
     trim_state: &mut BTreeSet<StateTrieT::StateKey>,
     state_trie: &mut StateTrieT,
 ) -> anyhow::Result<()>
 where
-    StateTrieT::StateKey: From<Address> + Ord,
+    StateTrieT::StateKey: Ord + Key,
 {
     use evm_arithmetization::testing_utils::{
         BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
@@ -807,7 +789,7 @@ where
             U256::from_big_endian(parent_beacon_block_root.as_bytes()),
         ),
     ] {
-        let slot = MptKey::from_slot_position(ix);
+        let slot = <StateTrieT::StateKey>::from_slot_position(ix);
 
         match u.is_zero() {
             true => beacon_trim
@@ -818,7 +800,9 @@ where
             }
         }
     }
-    trim_state.insert(<StateTrieT::StateKey>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
+    trim_state.insert(StateTrieT::StateKey::from_address(
+        BEACON_ROOTS_CONTRACT_ADDRESS,
+    ));
     Ok(())
 }
 

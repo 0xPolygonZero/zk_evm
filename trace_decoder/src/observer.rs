@@ -1,10 +1,9 @@
-use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
-use ethereum_types::{H256, U256};
+use ethereum_types::U256;
 
 use crate::core::IntraBlockTries;
-use crate::tries::{ReceiptTrie, StorageTrie, TransactionTrie};
+use crate::tries::{ReceiptTrie, TransactionTrie};
 
 /// Observer API for the trace decoder.
 /// Observer is used to collect various debugging and metadata info
@@ -20,7 +19,6 @@ pub trait Observer<StateTrieT> {
         block: U256,
         batch: usize,
         state_trie: &StateTrieT,
-        storage: &BTreeMap<H256, StorageTrie>,
         transaction_trie: &TransactionTrie,
         receipt_trie: &ReceiptTrie,
     );
@@ -61,7 +59,6 @@ impl<StateTrieT: Clone> Observer<StateTrieT> for TriesObserver<StateTrieT> {
         block: U256,
         batch: usize,
         state_trie: &StateTrieT,
-        storage: &BTreeMap<H256, StorageTrie>,
         transaction_trie: &TransactionTrie,
         receipt_trie: &ReceiptTrie,
     ) {
@@ -70,7 +67,6 @@ impl<StateTrieT: Clone> Observer<StateTrieT> for TriesObserver<StateTrieT> {
             batch,
             tries: IntraBlockTries {
                 state: state_trie.clone(),
-                storage: storage.clone(),
                 transaction: transaction_trie.clone(),
                 receipt: receipt_trie.clone(),
             },
@@ -105,7 +101,6 @@ impl<StateTrieT> Observer<StateTrieT> for DummyObserver<StateTrieT> {
         _block: U256,
         _batch: usize,
         _state_trie: &StateTrieT,
-        _storage: &BTreeMap<H256, StorageTrie>,
         _transaction_trie: &TransactionTrie,
         _receipt_trie: &ReceiptTrie,
     ) {
