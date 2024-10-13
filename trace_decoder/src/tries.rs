@@ -601,7 +601,9 @@ impl World for Type1World {
         let clobbered = self
             .storage
             .insert(keccak_hash::keccak(address), StorageTrie::default());
-        ensure!(clobbered.is_none());
+        if clobbered.is_some() {
+            log::warn!("clobbered storage for {address:x}")
+        }
         Ok(())
     }
     fn reporting_remove_storage(
