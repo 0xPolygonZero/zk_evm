@@ -135,9 +135,9 @@ pub struct TxnTrace {
 
     /// <code>hash([Address])</code> of storages written by the transaction,
     /// with their new value.
+    // TODO(0xaatif): this should be a map from U256 -> U256
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub storage_written: BTreeMap<H256, U256>,
-
     /// Contract code that this account has accessed or created
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_usage: Option<ContractCodeUsage>,
