@@ -144,6 +144,7 @@ impl<T> TypedMpt<T> {
         self.inner.hash()
     }
     /// Note that this returns owned paths and items.
+    #[cfg(test)]
     pub fn iter(&self) -> impl Iterator<Item = (MptKey, T)> + '_
     where
         T: rlp::Decodable,
@@ -519,9 +520,9 @@ impl Type1World {
         let mut typed = TypedMpt::default();
         for (key, vorh) in state.items() {
             let key = MptKey::from_nibbles(key);
-            let haddr = key.into_hash().context("invalid key length")?;
             match vorh {
                 ValOrHash::Val(vec) => {
+                    let haddr = key.into_hash().context("invalid key length")?;
                     let acct = rlp::decode::<AccountRlp>(&vec)?;
                     let storage = storage.entry(haddr).or_insert_with(|| {
                         HashedPartialTrie::new_with_strategy(
