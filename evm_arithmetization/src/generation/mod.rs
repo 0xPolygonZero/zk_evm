@@ -19,7 +19,8 @@ use GlobalMetadata::{
     StateTrieRootDigestBefore, TransactionTrieRootDigestAfter, TransactionTrieRootDigestBefore,
 };
 
-use crate::all_stark::{AllStark, NUM_TABLES};
+use crate::all_stark::Table::MemAfter;
+use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -488,7 +489,7 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
 
 pub struct TablesWithPVs<F: RichField> {
     pub tables: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    pub use_keccak_tables: bool,
+    pub table_in_use: [bool; NUM_TABLES],
     pub public_values: PublicValues<F>,
 }
 
@@ -583,9 +584,23 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
-    let use_keccak_tables = !state.traces.keccak_inputs.is_empty();
+    let mut table_in_use = [true; NUM_TABLES];
+    if state.traces.keccak_inputs.is_empty() {
+        table_in_use[*Table::Keccak] = false;
+        table_in_use[*Table::KeccakSponge] = false;
+    }
+    if state.traces.logic_ops.is_empty() {
+        table_in_use[*Table::Logic] = false;
+    }
+    if state.traces.byte_packing_ops.is_empty() {
+        table_in_use[*Table::BytePacking] = false;
+    }
+    #[cfg(feature = "cdk_erigon")]
+    if state.traces.poseidon_ops.is_empty() {
+        table_in_use[*Table::Poseidon] = false;
+    }
 
-    let tables = timed!(
+    let (tables, final_len) = timed!(
         timing,
         "convert trace data to tables",
         state.traces.into_tables(
@@ -598,9 +613,13 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         )
     );
 
+    if final_len == 0 {
+        table_in_use[*MemAfter] = false;
+    }
+
     Ok(TablesWithPVs {
         tables,
-        use_keccak_tables,
+        table_in_use,
         public_values,
     })
 }

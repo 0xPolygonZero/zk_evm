@@ -911,8 +911,10 @@ where
 
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
-        let table_in_use = core::array::from_fn(|i| builder.add_virtual_bool_target_safe());
-        let table_not_in_use = core::array::from_fn(|i| builder.not(table_in_use[i]));
+        let table_in_use: [BoolTarget; NUM_TABLES] =
+            core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+        let table_not_in_use: [BoolTarget; NUM_TABLES] =
+            core::array::from_fn(|i| builder.not(table_in_use[i]));
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -2164,19 +2166,7 @@ where
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            if OPTIONAL_TABLE_INDICES.contains(&table) && !all_proof.use_keccak_tables {
-                let dummy_proof = self.table_dummy_proofs[table]
-                    .as_ref()
-                    .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(dummy_proof.init_degree),
-                );
-                root_inputs.set_proof_with_pis_target(
-                    &self.root.proof_with_pis[table],
-                    &dummy_proof.proof,
-                );
-            } else {
+            if all_proof.table_in_use[table] {
                 let (table_circuit, index_verifier_data) = &table_circuits[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get circuits"))?;
@@ -2191,6 +2181,19 @@ where
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            } else {
+                assert!(OPTIONAL_TABLE_INDICES.contains(&table));
+                let dummy_proof = self.table_dummy_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(dummy_proof.init_degree),
+                );
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof.proof,
+                );
             }
 
             check_abort_signal(abort_signal.clone())?;
@@ -2210,7 +2213,13 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
+        self.root
+            .table_in_use
+            .iter()
+            .zip(all_proof.table_in_use.iter())
+            .for_each(|(target, value)| {
+                root_inputs.set_bool_target(*target, *value);
+            });
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 

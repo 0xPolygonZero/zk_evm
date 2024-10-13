@@ -92,7 +92,7 @@ pub mod testing {
     use starky::stark::Stark;
     use starky::verifier::verify_stark_proof_with_challenges;
 
-    use crate::all_stark::Table;
+    use crate::all_stark::{Table, OPTIONAL_TABLE_INDICES};
     use crate::cpu::kernel::aggregator::KERNEL;
     use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
     use crate::get_challenges::testing::AllProofChallenges;
@@ -190,48 +190,48 @@ pub mod testing {
 
         macro_rules! verify_table {
             ($stark:ident, $table:expr) => {
-                let stark_proof = &stark_proofs[*$table]
-                    .as_ref()
-                    .expect("Missing stark_proof")
-                    .proof;
-                let ctl_vars = {
-                    let (total_num_helpers, _, num_helpers_by_ctl) =
-                        CrossTableLookup::num_ctl_helpers_zs_all(
-                            &all_stark.cross_table_lookups,
-                            *$table,
-                            config.num_challenges,
-                            $stark.constraint_degree(),
-                        );
-                    CtlCheckVars::from_proof(
-                        *$table,
-                        &stark_proof,
-                        &all_stark.cross_table_lookups,
-                        &ctl_challenges,
-                        num_lookup_columns[*$table],
-                        total_num_helpers,
-                        &num_helpers_by_ctl,
-                    )
-                };
-                verify_stark_proof_with_challenges(
-                    $stark,
-                    stark_proof,
-                    &stark_challenges[*$table]
+                if !OPTIONAL_TABLE_INDICES.contains(&*$table) || all_proof.table_in_use[*$table] {
+                    let stark_proof = &stark_proofs[*$table]
                         .as_ref()
-                        .expect("Missing challenges"),
-                    Some(&ctl_vars),
-                    &[],
-                    config,
-                )?;
+                        .expect("Missing stark_proof")
+                        .proof;
+                    let ctl_vars = {
+                        let (total_num_helpers, _, num_helpers_by_ctl) =
+                            CrossTableLookup::num_ctl_helpers_zs_all(
+                                &all_stark.cross_table_lookups,
+                                *$table,
+                                config.num_challenges,
+                                $stark.constraint_degree(),
+                            );
+                        CtlCheckVars::from_proof(
+                            *$table,
+                            &stark_proof,
+                            &all_stark.cross_table_lookups,
+                            &ctl_challenges,
+                            num_lookup_columns[*$table],
+                            total_num_helpers,
+                            &num_helpers_by_ctl,
+                        )
+                    };
+                    verify_stark_proof_with_challenges(
+                        $stark,
+                        stark_proof,
+                        &stark_challenges[*$table]
+                            .as_ref()
+                            .expect("Missing challenges"),
+                        Some(&ctl_vars),
+                        &[],
+                        config,
+                    )?;
+                }
             };
         }
 
         verify_table!(arithmetic_stark, Table::Arithmetic);
         verify_table!(byte_packing_stark, Table::BytePacking);
         verify_table!(cpu_stark, Table::Cpu);
-        if all_proof.use_keccak_tables {
-            verify_table!(keccak_stark, Table::Keccak);
-            verify_table!(keccak_sponge_stark, Table::KeccakSponge);
-        }
+        verify_table!(keccak_stark, Table::Keccak);
+        verify_table!(keccak_sponge_stark, Table::KeccakSponge);
         verify_table!(logic_stark, Table::Logic);
         verify_table!(memory_stark, Table::Memory);
         verify_table!(mem_before_stark, Table::MemBefore);

@@ -59,7 +59,7 @@ where
         all_stark,
         config,
         tables_with_pvs.tables,
-        tables_with_pvs.use_keccak_tables,
+        tables_with_pvs.table_in_use,
         &mut tables_with_pvs.public_values,
         timing,
         abort_signal,
@@ -73,7 +73,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    use_keccak_tables: bool,
+    table_in_use: [bool; NUM_TABLES],
     public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -117,7 +117,7 @@ where
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
     for (i, cap) in trace_caps.iter().enumerate() {
-        if OPTIONAL_TABLE_INDICES.contains(&i) && !use_keccak_tables {
+        if OPTIONAL_TABLE_INDICES.contains(&i) && !table_in_use[i] {
             // Observe zero merkle caps when skipping Keccak tables.
             let zero_merkle_cap = cap.flatten().iter().map(|_| F::ZERO).collect::<Vec<F>>();
             challenger.observe_elements(&zero_merkle_cap);
@@ -151,7 +151,7 @@ where
             config,
             &trace_poly_values,
             trace_commitments,
-            use_keccak_tables,
+            table_in_use,
             ctl_data_per_table,
             &mut challenger,
             &ctl_challenges,
@@ -215,7 +215,7 @@ where
             ctl_challenges,
         },
         public_values: public_values.clone(),
-        use_keccak_tables,
+        table_in_use,
     })
 }
 
@@ -239,7 +239,7 @@ fn prove_with_commitments<F, C, const D: usize>(
     config: &StarkConfig,
     trace_poly_values: &[Vec<PolynomialValues<F>>; NUM_TABLES],
     trace_commitments: Vec<PolynomialBatch<F, C, D>>,
-    use_keccak_tables: bool,
+    table_in_use: [bool; NUM_TABLES],
     ctl_data_per_table: [CtlData<F>; NUM_TABLES],
     challenger: &mut Challenger<F, C::Hasher>,
     ctl_challenges: &GrandProductChallengeSet<F>,
@@ -252,66 +252,62 @@ where
 {
     macro_rules! prove_table {
         ($stark:ident, $table:expr) => {
-            timed!(
-                timing,
-                &format!("prove {} STARK", stringify!($stark)),
-                prove_single_table(
-                    &all_stark.$stark,
-                    config,
-                    &trace_poly_values[*$table],
-                    &trace_commitments[*$table],
-                    &ctl_data_per_table[*$table],
-                    ctl_challenges,
-                    challenger,
+            if !OPTIONAL_TABLE_INDICES.contains(&$table) || table_in_use[*$table] {
+                Some(timed!(
                     timing,
-                    abort_signal.clone(),
-                )?
-            )
+                    &format!("prove {} STARK", stringify!($stark)),
+                    prove_single_table(
+                        &all_stark.$stark,
+                        config,
+                        &trace_poly_values[*$table],
+                        &trace_commitments[*$table],
+                        &ctl_data_per_table[*$table],
+                        ctl_challenges,
+                        challenger,
+                        timing,
+                        abort_signal.clone(),
+                    )?
+                ))
+            } else {
+                None
+            }
         };
     }
 
-    let (arithmetic_proof, _) = prove_table!(arithmetic_stark, Table::Arithmetic);
-    let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
-    let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
-    let keccak_proof = if use_keccak_tables {
-        Some(prove_table!(keccak_stark, Table::Keccak).0)
-    } else {
-        None
-    };
-    let keccak_sponge_proof = if use_keccak_tables {
-        Some(prove_table!(keccak_sponge_stark, Table::KeccakSponge).0)
-    } else {
-        None
-    };
-    let (logic_proof, _) = prove_table!(logic_stark, Table::Logic);
-    let (memory_proof, _) = prove_table!(memory_stark, Table::Memory);
-    let (mem_before_proof, mem_before_cap) = prove_table!(mem_before_stark, Table::MemBefore);
-    let (mem_after_proof, mem_after_cap) = prove_table!(mem_after_stark, Table::MemAfter);
+    let arithmetic_proof = prove_table!(arithmetic_stark, Table::Arithmetic);
+    let byte_packing_proof = prove_table!(byte_packing_stark, Table::BytePacking);
+    let cpu_proof = prove_table!(cpu_stark, Table::Cpu);
+    let keccak_proof = prove_table!(keccak_stark, Table::Keccak);
+    let keccak_sponge_proof = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
+    let logic_proof = prove_table!(logic_stark, Table::Logic);
+    let memory_proof = prove_table!(memory_stark, Table::Memory);
+    let mem_before_proof = prove_table!(mem_before_stark, Table::MemBefore);
+    let mem_after_proof = prove_table!(mem_after_stark, Table::MemAfter);
+
+    let mem_before_cap = trace_commitments[*Table::MemBefore].merkle_tree.cap.clone();
+    let mem_after_cap = trace_commitments[*Table::MemAfter].merkle_tree.cap.clone();
 
     #[cfg(feature = "cdk_erigon")]
     let (poseidon_proof, _) = prove_table!(poseidon_stark, Table::Poseidon);
 
     Ok((
         [
-            Some(arithmetic_proof),
-            Some(byte_packing_proof),
-            Some(cpu_proof),
+            arithmetic_proof,
+            byte_packing_proof,
+            cpu_proof,
             keccak_proof,
             keccak_sponge_proof,
-            Some(logic_proof),
-            Some(memory_proof),
-            Some(mem_before_proof),
-            Some(mem_after_proof),
+            logic_proof,
+            memory_proof,
+            mem_before_proof,
+            mem_after_proof,
             #[cfg(feature = "cdk_erigon")]
-            Some(poseidon_proof),
+            poseidon_proof,
         ],
         mem_before_cap,
         mem_after_cap,
     ))
 }
-
-type ProofSingleWithCap<F, C, H, const D: usize> =
-    (StarkProofWithMetadata<F, C, D>, MerkleCap<F, H>);
 
 /// Computes a proof for a single STARK table, including:
 /// - the initial state of the challenger,
@@ -329,7 +325,7 @@ pub(crate) fn prove_single_table<F, C, S, const D: usize>(
     challenger: &mut Challenger<F, C::Hasher>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<ProofSingleWithCap<F, C, C::Hasher, D>>
+) -> Result<StarkProofWithMetadata<F, C, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -356,7 +352,7 @@ where
         init_challenger_state,
     })?;
 
-    Ok((proof, trace_commitment.merkle_tree.cap.clone()))
+    Ok(proof)
 }
 
 /// Utility method that checks whether a kill signal has been emitted by one of

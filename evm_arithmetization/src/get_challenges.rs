@@ -282,7 +282,7 @@ pub mod testing {
                 if let Some(stark_proof) = stark_proof {
                     challenger.observe_cap(&stark_proof.proof.trace_cap);
                 } else {
-                    assert!(OPTIONAL_TABLE_INDICES.contains(&i) && !self.use_keccak_tables);
+                    assert!(OPTIONAL_TABLE_INDICES.contains(&i) && !self.table_in_use[i]);
                     let zero_cap =
                         vec![F::ZERO; config.fri_config.num_cap_elements() * NUM_HASH_OUT_ELTS];
                     challenger.observe_elements(&zero_cap);
