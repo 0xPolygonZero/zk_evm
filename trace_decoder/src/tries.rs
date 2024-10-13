@@ -19,6 +19,68 @@ use mpt_trie::{
 };
 use u4::{AsNibbles, U4};
 
+pub type Type1Account = AccountRlp;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct Type2Account {
+    pub balance: U256,
+    pub nonce: U256,
+    pub code: U256,
+    pub code_length: U256,
+    pub storage: BTreeMap<U256, U256>,
+}
+
+pub trait Account {
+    fn balance(&self) -> U256;
+    fn balance_mut(&mut self) -> &mut U256;
+    fn nonce(&self) -> U256;
+    fn nonce_mut(&mut self) -> &mut U256;
+    fn set_code(&mut self, hash: H256);
+    fn set_code_length(&mut self, length: Option<U256>);
+}
+
+impl Account for Type1Account {
+    fn balance(&self) -> U256 {
+        self.balance
+    }
+    fn balance_mut(&mut self) -> &mut U256 {
+        &mut self.balance
+    }
+    fn nonce(&self) -> U256 {
+        self.nonce
+    }
+    fn nonce_mut(&mut self) -> &mut U256 {
+        &mut self.nonce
+    }
+    fn set_code(&mut self, hash: H256) {
+        self.code_hash = hash
+    }
+    fn set_code_length(&mut self, length: Option<U256>) {
+        let _ = length;
+    }
+}
+impl Account for Type2Account {
+    fn balance(&self) -> U256 {
+        self.balance
+    }
+    fn balance_mut(&mut self) -> &mut U256 {
+        &mut self.balance
+    }
+    fn nonce(&self) -> U256 {
+        self.nonce
+    }
+    fn nonce_mut(&mut self) -> &mut U256 {
+        &mut self.nonce
+    }
+    fn set_code(&mut self, hash: H256) {
+        self.code = hash.into_uint()
+    }
+    fn set_code_length(&mut self, length: Option<U256>) {
+        if let Some(length) = length {
+            self.code_length = length
+        }
+    }
+}
 /// A Merkle PATRICIA Trie, where the values are always [RLP](rlp)-encoded `T`s.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
@@ -399,13 +461,13 @@ impl Key for MptKey {
 /// Some parts of the tries may be _hashed out_.
 pub trait World {
     type Key;
-    type AccountInfo;
+    type Account;
     fn insert_account_info(
         &mut self,
         address: Address,
-        account: Self::AccountInfo,
+        account: Self::Account,
     ) -> anyhow::Result<()>;
-    fn get_account_info(&self, address: Address) -> Option<Self::AccountInfo>;
+    fn get_account_info(&self, address: Address) -> Option<Self::Account>;
     /// Workaround MPT quirks.
     fn reporting_remove_account_info(
         &mut self,
@@ -483,7 +545,7 @@ impl Type1World {
 
 impl World for Type1World {
     type Key = MptKey;
-    type AccountInfo = AccountRlp;
+    type Account = AccountRlp;
     fn insert_account_info(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
         let key = keccak_hash::keccak(address);
         self.state
@@ -616,19 +678,23 @@ impl From<Type1World> for HashedPartialTrie {
 // - it documents a requirement that `set_hash` is called before `set`.
 #[derive(Clone, Debug)]
 pub struct Type2World {
-    address2state: BTreeMap<Address, AccountRlp>,
+    address2state: BTreeMap<Address, Type2Account>,
     hashed_out: BTreeMap<SmtKey, H256>,
 }
 
 impl World for Type2World {
     type Key = SmtKey;
-    type AccountInfo = AccountRlp;
-    fn insert_account_info(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
+    type Account = Type2Account;
+    fn insert_account_info(
+        &mut self,
+        address: Address,
+        account: Type2Account,
+    ) -> anyhow::Result<()> {
         self.address2state.insert(address, account);
         Ok(())
     }
-    fn get_account_info(&self, address: Address) -> Option<AccountRlp> {
-        self.address2state.get(&address).copied()
+    fn get_account_info(&self, address: Address) -> Option<Type2Account> {
+        self.address2state.get(&address).cloned()
     }
     fn reporting_remove_account_info(
         &mut self,
@@ -692,7 +758,7 @@ impl World for Type2World {
 
 impl Type2World {
     pub(crate) fn new_unchecked(
-        address2state: BTreeMap<Address, AccountRlp>,
+        address2state: BTreeMap<Address, Type2Account>,
         hashed_out: BTreeMap<SmtKey, H256>,
     ) -> Self {
         Self {
@@ -712,23 +778,22 @@ impl Type2World {
         }
         for (
             addr,
-            AccountRlp {
-                nonce,
+            Type2Account {
                 balance,
-                storage_root,
-                code_hash,
+                nonce,
+                code,
+                code_length,
+                storage,
             },
         ) in address2state
         {
             smt.set(smt_trie::keys::key_nonce(*addr), *nonce);
             smt.set(smt_trie::keys::key_balance(*addr), *balance);
-            smt.set(smt_trie::keys::key_code(*addr), code_hash.into_uint());
-            smt.set(
-                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-                //                combined abstraction for state and storage
-                smt_trie::keys::key_storage(*addr, U256::zero()),
-                storage_root.into_uint(),
-            );
+            smt.set(smt_trie::keys::key_code(*addr), *code);
+            smt.set(smt_trie::keys::key_code_length(*addr), *code_length);
+            for (slot, val) in storage {
+                smt.set(smt_trie::keys::key_storage(*addr, *slot), *val);
+            }
         }
         smt
     }

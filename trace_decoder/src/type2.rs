@@ -5,14 +5,13 @@ use std::collections::{BTreeMap, HashSet};
 
 use anyhow::{bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
 use itertools::EitherOrBoth;
 use keccak_hash::H256;
 use nunny::NonEmpty;
 use stackstack::Stack;
 
 use crate::{
-    tries::{SmtKey, Type2World},
+    tries::{SmtKey, Type2Account, Type2World},
     wire::{Instruction, SmtLeaf, SmtLeafType},
 };
 
@@ -27,7 +26,7 @@ pub struct CollatedLeaf {
 }
 
 pub struct Frontend {
-    pub trie: Type2World,
+    pub world: Type2World,
     pub code: HashSet<NonEmpty<Vec<u8>>>,
 }
 
@@ -37,7 +36,7 @@ pub struct Frontend {
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
     let (node, code) = fold(instructions).context("couldn't fold smt from instructions")?;
     let trie = node2trie(node).context("couldn't construct trie and collation from folded node")?;
-    Ok(Frontend { trie, code })
+    Ok(Frontend { world: trie, code })
 }
 
 /// Node in a binary (SMT) tree.
@@ -126,20 +125,19 @@ fn node2trie(node: Node) -> anyhow::Result<Type2World> {
                     CollatedLeaf {
                         balance,
                         nonce,
-                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-                        //                we shouldn't ignore these fields
-                        code: _,
-                        code_length: _,
-                        storage: _,
+                        code,
+                        code_length,
+                        storage,
                     },
                 )| {
                     (
                         addr,
-                        AccountRlp {
-                            nonce: nonce.unwrap_or_default(),
+                        Type2Account {
                             balance: balance.unwrap_or_default(),
-                            storage_root: H256::zero(),
-                            code_hash: H256::zero(),
+                            nonce: nonce.unwrap_or_default(),
+                            code: code.unwrap_or_default(),
+                            code_length: code_length.unwrap_or_default(),
+                            storage,
                         },
                     )
                 },

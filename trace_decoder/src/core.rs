@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use evm_arithmetization::{
-    generation::{mpt::AccountRlp, TrieInputs},
+    generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
     GenerationInputs,
 };
@@ -19,7 +19,7 @@ use zk_evm_common::gwei_to_wei;
 
 use crate::{
     observer::{DummyObserver, Observer},
-    tries::{Key, Type2World},
+    tries::{Account, Key, Type2World},
 };
 use crate::{
     tries::{ReceiptTrie, TransactionTrie, Type1World, World},
@@ -212,7 +212,7 @@ fn start(
                     )
                 }
                 WireDisposition::Type2 => {
-                    let crate::type2::Frontend { trie, code } =
+                    let crate::type2::Frontend { world: trie, code } =
                         crate::type2::frontend(instructions)?;
                     (
                         Either::Right(trie),
@@ -350,7 +350,7 @@ pub struct FatalMissingCode(pub bool);
 
 /// Does the main work mentioned in the [module documentation](super).
 #[allow(clippy::too_many_arguments)]
-fn middle<WorldT: World<AccountInfo = AccountRlp> + Clone>(
+fn middle<WorldT: World + Clone>(
     // state at the beginning of the block
     mut world: WorldT,
     // None represents a dummy transaction that should not increment the transaction index
@@ -367,6 +367,7 @@ fn middle<WorldT: World<AccountInfo = AccountRlp> + Clone>(
 ) -> anyhow::Result<Vec<Batch<WorldT>>>
 where
     WorldT::Key: Ord + Key,
+    WorldT::Account: Account + Default + Clone,
 {
     // These are the per-block tries.
     let mut transaction_trie = TransactionTrie::new();
@@ -454,7 +455,7 @@ where
                 let (mut acct, born) = world
                     .get_account_info(addr)
                     .map(|acct| (acct, false))
-                    .unwrap_or((AccountRlp::default(), true));
+                    .unwrap_or((WorldT::Account::default(), true));
 
                 if born {
                     world.create_storage(addr)?;
@@ -463,7 +464,7 @@ where
                 if born || just_access {
                     world
                         .clone()
-                        .insert_account_info(addr, acct)
+                        .insert_account_info(addr, acct.clone())
                         .context(format!(
                             "couldn't reach state of {} address {addr:x} in txn {tx_hash:x}",
                             match born {
@@ -490,37 +491,40 @@ where
                 );
 
                 if do_writes {
-                    acct.balance = balance.unwrap_or(acct.balance);
-                    acct.nonce = nonce.unwrap_or(acct.nonce);
-                    acct.code_hash = code_usage
-                        .map(|it| match it {
+                    *acct.balance_mut() = balance.unwrap_or(acct.balance());
+                    *acct.nonce_mut() = nonce.unwrap_or(acct.nonce());
+                    if let Some(usage) = code_usage {
+                        let (hash, len) = match usage {
+                            // TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+                            // This is a bug in the zero tracer, which shouldn't be giving us
+                            // this read at all. Workaround for now.
                             ContractCodeUsage::Read(hash) => {
-                                // TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
-                                // This is a bug in the zero tracer, which shouldn't be giving us
-                                // this read at all. Workaround for now.
                                 match (fatal_missing_code, code.get(hash)) {
                                     (FatalMissingCode(true), None) => {
                                         bail!("no code for hash {hash:x}")
                                     }
                                     (_, Some(byte_code)) => {
+                                        let len = U256::from(byte_code.len());
                                         batch_contract_code.insert(byte_code);
+                                        (hash, Some(len))
                                     }
                                     (_, None) => {
-                                        log::warn!("no code for {hash:x}")
+                                        log::warn!("no code for {hash:x}");
+                                        (hash, None)
                                     }
                                 }
-
-                                anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
                                 code.insert(bytes.clone());
                                 let hash = keccak_hash::keccak(&bytes);
+                                let len = U256::from(bytes.len());
                                 batch_contract_code.insert(bytes);
-                                Ok(hash)
+                                (hash, Some(len))
                             }
-                        })
-                        .transpose()?
-                        .unwrap_or(acct.code_hash);
+                        };
+                        acct.set_code(hash);
+                        acct.set_code_length(len);
+                    }
 
                     if !storage_written.is_empty() {
                         for (k, v) in storage_written {
@@ -564,7 +568,7 @@ where
                         let mut acct = world
                             .get_account_info(*addr)
                             .context(format!("missing address {addr:x} for withdrawal"))?;
-                        acct.balance += *amt;
+                        *acct.balance_mut() += *amt;
                         world
                             .insert_account_info(*addr, acct)
                             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -607,7 +611,7 @@ where
 }
 
 /// Performs all the pre-txn execution rules of the targeted network.
-fn do_pre_execution<WorldT: World<AccountInfo = AccountRlp> + Clone>(
+fn do_pre_execution<WorldT: World + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<WorldT::Key>>,
@@ -640,7 +644,7 @@ where
 ///
 /// This is Polygon-CDK-specific, and runs at the start of the block,
 /// before any transactions (as per the Etrog specification).
-fn do_scalable_hook<WorldT: World<AccountInfo = AccountRlp> + Clone>(
+fn do_scalable_hook<WorldT: World + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<WorldT::Key>>,
@@ -718,7 +722,7 @@ where
 ///
 /// This is Cancun-specific, and runs at the start of the block,
 /// before any transactions (as per the EIP).
-fn do_beacon_hook<WorldT: World<AccountInfo = AccountRlp> + Clone>(
+fn do_beacon_hook<WorldT: World + Clone>(
     block_timestamp: U256,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<WorldT::Key>>,
     parent_beacon_block_root: H256,
