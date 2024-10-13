@@ -12,26 +12,14 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::tries::{MptKey, StorageTrie, Type1World};
+use crate::tries::{MptKey, StorageTrie, TypedMpt};
 use crate::wire::{Instruction, SmtLeaf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Frontend {
-    pub state: Type1World,
+    pub state: TypedMpt<AccountRlp>,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     pub storage: BTreeMap<H256, StorageTrie>,
-}
-
-impl Default for Frontend {
-    // This frontend is intended to be used with our custom `zeroTracer`,
-    // which covers branch-to-extension collapse edge cases.
-    fn default() -> Self {
-        Self {
-            state: Type1World::new(OnOrphanedHashNode::CollapseToExtension),
-            code: BTreeSet::new(),
-            storage: BTreeMap::new(),
-        }
-    }
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -105,8 +93,9 @@ fn visit(
                             }
                         },
                     };
-                    #[expect(deprecated)] // this is MPT-specific code
-                    frontend.state.insert_by_hashed_address(path, account)?;
+                    frontend
+                        .state
+                        .insert_value_by_key(MptKey::from_hash(path), account)?;
                 }
             }
         }
@@ -379,7 +368,7 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 
 #[test]
 fn test_tries() {
-    use crate::tries::World as _;
+    use crate::tries::{Type1World, World as _};
 
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/zero_jerigon.json"))
@@ -392,9 +381,9 @@ fn test_tries() {
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, frontend.state.root());
 
-        for (haddr, acct) in frontend.state.iter() {
+        for (key, acct) in frontend.state.iter() {
             if acct.storage_root != Type1World::default().root() {
-                assert!(frontend.storage.contains_key(&haddr))
+                assert!(frontend.storage.contains_key(&key.into_hash().unwrap()))
             }
         }
     }

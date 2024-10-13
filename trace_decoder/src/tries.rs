@@ -13,7 +13,10 @@ use bitvec::slice::BitSlice;
 use copyvec::CopyVec;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
+use mpt_trie::{
+    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
+    trie_ops::ValOrHash,
+};
 use u4::{AsNibbles, U4};
 
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
@@ -30,20 +33,23 @@ impl<T> TypedMpt<T> {
     and only encoded `T`s are ever inserted";
     fn new() -> Self {
         Self {
-            inner: HashedPartialTrie::new(Node::Empty),
+            inner: HashedPartialTrie::new_with_strategy(
+                Node::Empty,
+                OnOrphanedHashNode::CollapseToExtension,
+            ),
             _ty: PhantomData,
         }
     }
     /// Insert a node which represents an out-of-band sub-trie.
     ///
     /// See [module documentation](super) for more.
-    fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
+    pub fn insert_hash_by_key(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.inner.insert(key.into_nibbles(), hash)?;
         Ok(())
     }
     /// Returns [`Err`] if the `key` crosses into a part of the trie that
     /// is hashed out.
-    fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
+    pub fn insert_value_by_key(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
@@ -69,11 +75,11 @@ impl<T> TypedMpt<T> {
     fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.inner
     }
-    fn root(&self) -> H256 {
+    pub fn root(&self) -> H256 {
         self.inner.hash()
     }
     /// Note that this returns owned paths and items.
-    fn iter(&self) -> impl Iterator<Item = (MptKey, T)> + '_
+    pub fn iter(&self) -> impl Iterator<Item = (MptKey, T)> + '_
     where
         T: rlp::Decodable,
     {
@@ -422,7 +428,6 @@ pub trait World {
         &mut self,
         addresses: impl IntoIterator<Item = Self::StateKey>,
     ) -> anyhow::Result<()>;
-    fn iter_account_info(&self) -> impl Iterator<Item = (H256, Self::AccountInfo)> + '_;
     fn root(&self) -> H256;
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
     fn store_hash(&mut self, address: Address, position: H256, value: H256) -> anyhow::Result<()>;
@@ -455,18 +460,42 @@ pub struct Type1World {
 }
 
 impl Type1World {
-    pub fn new(strategy: OnOrphanedHashNode) -> Self {
-        Self {
-            state: TypedMpt {
-                inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
-                _ty: PhantomData,
-            },
-            storage: BTreeMap::new(),
+    pub fn new(
+        state: HashedPartialTrie,
+        storage: impl IntoIterator<Item = (H256, HashedPartialTrie)>,
+    ) -> anyhow::Result<Self> {
+        let mut storage = storage
+            .into_iter()
+            .map(|(k, v)| (k, StorageTrie::from(v)))
+            .collect::<BTreeMap<_, _>>();
+        let mut typed = TypedMpt::default();
+        for (key, vorh) in state.items() {
+            let key = MptKey::from_nibbles(key);
+            let haddr = key.into_hash().context("invalid key length")?;
+            match vorh {
+                ValOrHash::Val(vec) => {
+                    let acct = rlp::decode::<AccountRlp>(&vec)?;
+                    let storage = storage.entry(haddr).or_insert_with(|| {
+                        HashedPartialTrie::new_with_strategy(
+                            Node::Hash(acct.storage_root),
+                            OnOrphanedHashNode::CollapseToExtension,
+                        )
+                        .into()
+                    });
+                    ensure!(storage.root() == acct.storage_root);
+                    typed.insert_value_by_key(key, acct)?
+                }
+                ValOrHash::Hash(h256) => typed.insert_hash_by_key(key, h256)?,
+            }
         }
+        Ok(Self {
+            state: typed,
+            storage,
+        })
     }
     /// Insert a _hashed out_ part of the trie
     pub fn insert_hash_by_key(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
-        self.state.insert_hash(key, hash)
+        self.state.insert_hash_by_key(key, hash)
     }
     #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
     pub fn insert_by_hashed_address(
@@ -474,7 +503,8 @@ impl Type1World {
         key: H256,
         account: AccountRlp,
     ) -> anyhow::Result<()> {
-        self.state.insert(MptKey::from_hash(key), account)
+        self.state
+            .insert_value_by_key(MptKey::from_hash(key), account)
     }
     pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.state
@@ -518,11 +548,6 @@ impl World for Type1World {
             _ty: PhantomData,
         };
         Ok(())
-    }
-    fn iter_account_info(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.state
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
     fn root(&self) -> H256 {
         self.state.root()
@@ -648,11 +673,6 @@ impl World for Type2World {
     fn mask_accounts(&mut self, address: impl IntoIterator<Item = SmtKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
-    }
-    fn iter_account_info(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.address2state
-            .iter()
-            .map(|(addr, acct)| (keccak_hash::keccak(addr), *acct))
     }
     fn root(&self) -> H256 {
         conv_hash::smt2eth(self.as_smt().root)

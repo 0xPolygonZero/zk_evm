@@ -14,7 +14,6 @@ use evm_arithmetization::{
 };
 use itertools::Itertools as _;
 use keccak_hash::H256;
-use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
@@ -23,7 +22,7 @@ use crate::{
     tries::{Key, Type2World},
 };
 use crate::{
-    tries::{MptKey, ReceiptTrie, StorageTrie, TransactionTrie, Type1World, World},
+    tries::{ReceiptTrie, TransactionTrie, Type1World, World},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,
@@ -60,7 +59,7 @@ pub fn entrypoint(
         BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
         BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
     };
-    let (state, storage, mut code) = start(trie_pre_images, wire_disposition)?;
+    let (state, mut code) = start(trie_pre_images, wire_disposition)?;
 
     code.extend(code_db);
 
@@ -85,7 +84,6 @@ pub fn entrypoint(
         Either::Left(mpt) => Either::Left(
             middle(
                 mpt,
-                storage,
                 batch(txn_info, batch_size_hint),
                 &mut code,
                 &b_meta,
@@ -101,7 +99,6 @@ pub fn entrypoint(
             Either::Right(
                 middle(
                     smt,
-                    storage,
                     batch(txn_info, batch_size_hint),
                     &mut code,
                     &b_meta,
@@ -182,11 +179,7 @@ pub fn entrypoint(
 fn start(
     pre_images: BlockTraceTriePreImages,
     wire_disposition: WireDisposition,
-) -> anyhow::Result<(
-    Either<Type1World, Type2World>,
-    BTreeMap<H256, StorageTrie>,
-    Hash2Code,
-)> {
+) -> anyhow::Result<(Either<Type1World, Type2World>, Hash2Code)> {
     Ok(match pre_images {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
         //                refactor our convoluted input types
@@ -194,46 +187,30 @@ fn start(
             state: SeparateTriePreImage::Direct(state),
             storage: SeparateStorageTriesPreImage::MultipleTries(storage),
         }) => {
-            let state = state.items().try_fold(
-                Type1World::default(),
-                |mut acc, (nibbles, hash_or_val)| {
-                    let path = MptKey::from_nibbles(nibbles);
-                    match hash_or_val {
-                        mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                            #[expect(deprecated)] // this is MPT specific
-                            acc.insert_by_hashed_address(
-                                path.into_hash()
-                                    .context("invalid path length in direct state trie")?,
-                                rlp::decode(&bytes)
-                                    .context("invalid AccountRlp in direct state trie")?,
-                            )?;
-                        }
-                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                            acc.insert_hash_by_key(path, h)?;
-                        }
-                    };
-                    anyhow::Ok(acc)
-                },
+            let world = Type1World::new(
+                state,
+                storage
+                    .into_iter()
+                    .map(|(k, SeparateTriePreImage::Direct(v))| (k, v)),
             )?;
-            let storage = storage
-                .into_iter()
-                .map(|(k, SeparateTriePreImage::Direct(v))| (k, StorageTrie::from(v)))
-                .collect();
-            (Either::Left(state), storage, Hash2Code::new())
+            (Either::Left(world), Hash2Code::new())
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
-            let (state, storage, code) = match wire_disposition {
+            let (state, code) = match wire_disposition {
                 WireDisposition::Type1 => {
                     let crate::type1::Frontend {
                         state,
                         storage,
                         code,
                     } = crate::type1::frontend(instructions)?;
+
                     (
-                        Either::Left(state),
-                        storage,
+                        Either::Left(Type1World::new(
+                            state.into(),
+                            storage.into_iter().map(|(k, v)| (k, v.into())),
+                        )?),
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
                     )
                 }
@@ -242,12 +219,11 @@ fn start(
                         crate::type2::frontend(instructions)?;
                     (
                         Either::Right(trie),
-                        BTreeMap::new(),
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
                     )
                 }
             };
-            (state, storage, code)
+            (state, code)
         }
     })
 }
@@ -380,8 +356,6 @@ pub struct FatalMissingCode(pub bool);
 fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
     // state at the beginning of the block
     mut state_trie: StateTrieT,
-    // storage at the beginning of the block
-    mut __storage_tries: BTreeMap<H256, StorageTrie>,
     // None represents a dummy transaction that should not increment the transaction index
     // all batches SHOULD not be empty
     batches: Vec<Vec<Option<TxnInfo>>>,
@@ -397,20 +371,6 @@ fn middle<StateTrieT: World<AccountInfo = AccountRlp> + Clone>(
 where
     StateTrieT::StateKey: Ord + Key,
 {
-    // Initialise the storage tries.
-    for (haddr, acct) in state_trie.iter_account_info() {
-        let storage = __storage_tries.entry(haddr).or_insert({
-            let mut it = StorageTrie::default();
-            it.insert_hash(MptKey::default(), acct.storage_root)
-                .expect("empty trie insert cannot fail");
-            it
-        });
-        ensure!(
-            storage.root() == acct.storage_root,
-            "inconsistent initial storage for hashed address {haddr:x}"
-        )
-    }
-
     // These are the per-block tries.
     let mut transaction_trie = TransactionTrie::new();
     let mut receipt_trie = ReceiptTrie::new();
