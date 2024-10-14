@@ -4,7 +4,7 @@ use std::fmt::Display;
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
-use log::error;
+use log::{error, info};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -20,7 +20,7 @@ use GlobalMetadata::{
 };
 
 use crate::all_stark::Table::MemAfter;
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, NUM_TABLES, OPTIONAL_TABLE_INDICES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -586,17 +586,28 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let mut table_in_use = [true; NUM_TABLES];
     if state.traces.keccak_inputs.is_empty() {
-        table_in_use[*Table::Keccak] = false;
-        table_in_use[*Table::KeccakSponge] = false;
+        if OPTIONAL_TABLE_INDICES.contains(&Table::Keccak) {
+            info!("Keccak table not in use");
+            table_in_use[*Table::Keccak] = false;
+        }
+        if OPTIONAL_TABLE_INDICES.contains(&Table::KeccakSponge) {
+            info!("KeccakSponge table not in use");
+            table_in_use[*Table::KeccakSponge] = false;
+        }
     }
-    if state.traces.logic_ops.is_empty() {
+    if state.traces.logic_ops.is_empty() && OPTIONAL_TABLE_INDICES.contains(&Table::Logic) {
+        info!("Logic table not in use");
         table_in_use[*Table::Logic] = false;
     }
-    if state.traces.byte_packing_ops.is_empty() {
+    if state.traces.byte_packing_ops.is_empty()
+        && OPTIONAL_TABLE_INDICES.contains(&Table::BytePacking)
+    {
+        info!("BytePacking table not in use");
         table_in_use[*Table::BytePacking] = false;
     }
     #[cfg(feature = "cdk_erigon")]
-    if state.traces.poseidon_ops.is_empty() {
+    if state.traces.poseidon_ops.is_empty() && OPTIONAL_TABLE_INDICES.contains(&Table::Poseidon) {
+        info!("Poseidon table not in use");
         table_in_use[*Table::Poseidon] = false;
     }
 
@@ -614,7 +625,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     );
 
     if final_len == 0 {
-        table_in_use[*MemAfter] = false;
+        if OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
+            info!("MemAfter table not in use");
+            table_in_use[*MemAfter] = false;
+        }
     }
 
     Ok(TablesWithPVs {

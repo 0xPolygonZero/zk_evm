@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
+use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
@@ -998,14 +999,14 @@ where
             for j in 0..state_len {
                 if OPTIONAL_TABLE_INDICES.contains(&i) {
                     // Ensure the challenger state:
-                    // 1) prev == current_before when using Keccak
+                    // 1) prev == current_before when using this table
                     builder.conditional_assert_eq(
                         table_in_use[i].target,
                         prev_state[j],
                         current_state_before[j],
                     );
-                    // 2) Update prev <- current_after when using Keccak
-                    // 3) Keep prev <- prev when skipping Keccak
+                    // 2) Update prev <- current_after when using this table
+                    // 3) Keep prev <- prev when skipping this table
                     prev_state[j] =
                         builder.select(table_in_use[i], current_state_after[j], prev_state[j]);
                 } else {
@@ -1031,8 +1032,7 @@ where
             })
             .collect_vec();
 
-        // Ensure that when Keccak tables are skipped, the Keccak tables' ctl_zs_first
-        // are all zeros.
+        // Ensure that when a table is skipped, the table's ctl_zs_first are all zeros.
         for &i in OPTIONAL_TABLE_INDICES.iter() {
             for &t in pis[i].ctl_zs_first.iter() {
                 let ctl_check = builder.mul(table_not_in_use[i].target, t);
@@ -2029,6 +2029,7 @@ where
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if OPTIONAL_TABLE_INDICES.contains(&table) && !all_proof.table_in_use[table] {
+                info!("Use dummpy proof for {}", table);
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
@@ -2091,10 +2092,12 @@ where
             .iter()
             .zip(all_proof.table_in_use.iter())
             .for_each(|(target, value)| {
+                info!("set table in use: {}", value);
                 root_inputs.set_bool_target(*target, *value);
             });
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
+        info!("root proving done");
 
         Ok(ProverOutputData {
             is_agg: false,
