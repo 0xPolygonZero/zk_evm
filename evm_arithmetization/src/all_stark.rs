@@ -108,21 +108,21 @@ pub const NUM_TABLES: usize = if cfg!(feature = "cdk_erigon") {
 
 /// Indices of optional Tables
 #[cfg(not(feature = "cdk_erigon"))]
-pub const OPTIONAL_TABLE_INDICES: [usize; 2] = [
-    // Table::BytePacking as usize,
+pub const OPTIONAL_TABLE_INDICES: [usize; 4] = [
+    Table::BytePacking as usize,
     Table::Keccak as usize,
     Table::KeccakSponge as usize,
     // Table::Logic as usize,
-    // Table::MemAfter as usize,
+    Table::MemAfter as usize,
 ];
 #[cfg(feature = "cdk_erigon")]
-pub const OPTIONAL_TABLE_INDICES: [usize; 2] = [
-    // Table::BytePacking as usize,
+pub const OPTIONAL_TABLE_INDICES: [usize; 5] = [
+    Table::BytePacking as usize,
     Table::Keccak as usize,
     Table::KeccakSponge as usize,
     // Table::Logic as usize,
-    // Table::MemAfter as usize,
-    // Table::Poseidon as usize,
+    Table::MemAfter as usize,
+    Table::Poseidon as usize,
 ];
 
 impl Table {
