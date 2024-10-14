@@ -248,8 +248,9 @@ impl<F: RichField> GenerationInputs<F> {
         }
         #[cfg(feature = "cdk_erigon")]
         {
+            let smt_data = self.tries.state_trie.to_vec();
             state_root =
-                H256::from_uint(&hash_serialize_u256(&self.tries.state_trie.to_vec()).into());
+                H256::from_uint(&hash_serialize_u256(&smt_data).into());
         }
 
         TrimmedGenerationInputs {

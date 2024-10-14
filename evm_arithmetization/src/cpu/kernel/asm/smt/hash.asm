@@ -28,6 +28,7 @@ smt_hash_unknown_node_type:
     PANIC
 
 smt_hash_hash:
+global debug_hash_hash:
     // stack: node, node_ptr, cur_len, retdest
     POP
     // stack: node_ptr, cur_len, retdest
@@ -40,6 +41,7 @@ smt_hash_hash:
     JUMP
 
 smt_hash_internal:
+global hash_internal:
     // stack: node, node_ptr, cur_len, retdest
     POP
     // stack: node_ptr, cur_len, retdest
@@ -51,6 +53,7 @@ smt_hash_internal:
     %stack (left_child_ptr, node_ptr_plus_1, cur_len, retdest) -> (left_child_ptr, cur_len, smt_hash_internal_after_left, node_ptr_plus_1, retdest)
     %jump(smt_hash)
 smt_hash_internal_after_left:
+global debug_hash_internal_after_left:
     %stack (left_hash, cur_len, node_ptr_plus_1, retdest) -> (node_ptr_plus_1, left_hash, cur_len, retdest)
     %increment
     // stack: node_ptr+2, left_hash, cur_len, retdest
@@ -58,12 +61,14 @@ smt_hash_internal_after_left:
     %stack (right_child_ptr, left_hash, cur_len, retdest) -> (right_child_ptr, cur_len, smt_hash_internal_after_right, left_hash, retdest)
     %jump(smt_hash)
 smt_hash_internal_after_right:
+global debug_hash_internal_after_right:
     %stack (right_hash, cur_len, left_hash) -> (left_hash, right_hash, 0, cur_len)
     POSEIDON
     %stack (hash, cur_len, retdest) -> (retdest, hash, cur_len)
     JUMP
 
 smt_hash_leaf:
+global debug_hash_leaf:
     // stack: node_ptr, cur_len, retdest
     SWAP1 %add_const(3) SWAP1
     // stack: node_ptr, cur_len, retdest

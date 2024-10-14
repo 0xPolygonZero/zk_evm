@@ -408,6 +408,7 @@ impl<D: Db> Smt<D> {
     /// Serialize and prune the SMT into a vector of U256.
     /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical
     /// empty node. Therefore the root of the SMT is at `ptr=2`.
+    /// TODO: this convention changes with "hashing in the end".
     /// `keys` is a list of keys whose prefixes will not be hashed-out in the
     /// serialization.
     /// Serialization rules:
@@ -419,8 +420,9 @@ impl<D: Db> Smt<D> {
     pub fn serialize_and_prune<K: Borrow<Key>, I: IntoIterator<Item = K>>(
         &self,
         keys: I,
-    ) -> Vec<U256> {
-        let mut v = vec![U256::zero(); 2]; // For empty hash node.
+        v: &mut Vec<U256>,
+        offset: usize,
+    ) {
         let key = Key(self.root.elements);
 
         let mut keys_to_include = HashSet::new();
@@ -435,11 +437,10 @@ impl<D: Db> Smt<D> {
             }
         }
 
-        serialize(self, key, &mut v, Bits::empty(), &keys_to_include);
+        serialize(self, key, v, Bits::empty(), &keys_to_include, offset);
         if v.len() == 2 {
             v.extend([U256::zero(); 2]);
         }
-        v
     }
 
     pub fn load_linked_list_data<const OFFSET: usize>(
@@ -481,7 +482,16 @@ impl<D: Db> Smt<D> {
 
     pub fn to_vec(&self) -> Vec<U256> {
         // Include all keys.
-        self.serialize_and_prune(self.kv_store.keys())
+        let mut v = vec![U256::zero(); 2]; // For empty hash node.
+        self.serialize_and_prune(self.kv_store.keys(), &mut v, 0);
+        v
+    }
+
+    pub fn to_vec_skip_empty_node_and_add_offset(&self, offset: usize) -> Vec<U256> {
+        // Include all keys.
+        let mut v = vec![]; // No empty hash node.
+        self.serialize_and_prune(self.kv_store.keys(), &mut v, offset);
+        v
     }
 }
 
@@ -500,6 +510,7 @@ fn serialize<D: Db>(
     v: &mut Vec<U256>,
     cur_bits: Bits,
     keys_to_include: &HashSet<Bits>,
+    offset: usize,
 ) -> usize {
     if key.0.iter().all(F::is_zero) {
         return 0; // `ptr=0` is an empty node.
@@ -509,7 +520,11 @@ fn serialize<D: Db>(
         let index = v.len();
         v.push(HASH_TYPE.into());
         v.push(key2u(key));
-        index
+        if index == 0 { // Empty hash node is at the beggining of the segment
+            index
+        } else {
+            index + offset
+        }
     } else if let Some(node) = smt.db.get_node(&key) {
         if node.0.iter().all(F::is_zero) {
             panic!("wtf?");
@@ -526,7 +541,7 @@ fn serialize<D: Db>(
             v.push(LEAF_TYPE.into());
             v.push(key2u(rem_key));
             v.push(val);
-            index
+            index + offset
         } else {
             let key_left = Key(node.0[0..4].try_into().unwrap());
             let key_right = Key(node.0[4..8].try_into().unwrap());
@@ -534,13 +549,27 @@ fn serialize<D: Db>(
             v.push(INTERNAL_TYPE.into());
             v.push(U256::zero());
             v.push(U256::zero());
-            let i_left =
-                serialize(smt, key_left, v, cur_bits.add_bit(false), keys_to_include).into();
+            let i_left = serialize(
+                smt,
+                key_left,
+                v,
+                cur_bits.add_bit(false),
+                keys_to_include,
+                offset,
+            )
+                .into();
             v[index + 1] = i_left;
-            let i_right =
-                serialize(smt, key_right, v, cur_bits.add_bit(true), keys_to_include).into();
+            let i_right = serialize(
+                smt,
+                key_right,
+                v,
+                cur_bits.add_bit(true),
+                keys_to_include,
+                offset,
+            )
+                .into();
             v[index + 2] = i_right;
-            index
+            index + offset
         }
     } else {
         unreachable!()

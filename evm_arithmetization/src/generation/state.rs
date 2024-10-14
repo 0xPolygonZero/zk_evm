@@ -15,7 +15,7 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
-use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
+use crate::generation::linked_list::{empty_list_mem, StateLinkedList, STATE_LINKED_LIST_NODE_SIZE};
 #[cfg(feature = "eth_mainnet")]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};
@@ -195,6 +195,12 @@ pub(crate) trait State<F: RichField> {
         let mut final_registers = RegistersState::default();
         let mut running = true;
         let mut final_clock = 0;
+
+        let mem = self
+                    .get_generation_state()
+                    .memory
+                    .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!("initial state linked list = {:?}", StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList));
 
         loop {
             let registers = self.get_registers();
@@ -481,6 +487,7 @@ impl<F: RichField> GenerationState<F> {
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
         let bignum_modmul_result_limbs = Vec::new();
+        log::debug!("smt trie = {:?}", inputs.tries.state_trie);
 
         #[cfg(feature = "eth_mainnet")]
         {

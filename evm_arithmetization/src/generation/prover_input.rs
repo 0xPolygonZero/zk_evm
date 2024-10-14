@@ -117,10 +117,16 @@ impl<F: RichField> GenerationState<F> {
                         #[cfg(feature = "cdk_erigon")]
                         {
                             n = Ok(new_content.len());
-                            let mut smt_data = self.inputs.trimmed_tries.state_trie.to_vec();
+                            let mut smt_data = self
+                                .inputs
+                                .trimmed_tries
+                                .state_trie
+                                .to_vec_skip_empty_node_and_add_offset(new_content.len());
+                            log::debug!("smt bef = {:?}", smt_data);
                             if smt_data.len() == 2 {
                                 smt_data.extend([U256::zero(); 2]);
                             }
+                            log::debug!("initial smt = {:?}", smt_data);
                             let smt_data = smt_data.into_iter().map(|x| Some(x));
                             new_content.extend(smt_data);
                             self.memory.insert_preinitialized_segment(

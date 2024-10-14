@@ -11,6 +11,7 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
+use crate::generation::linked_list::StateLinkedList;
 use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
@@ -307,7 +308,13 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
-
+    if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
+        let mem = state
+                    .get_generation_state()
+                    .memory
+                    .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!("state linked list = {:?}", StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList));
+    }
     // state.log(
     //     level,
     //     format!(

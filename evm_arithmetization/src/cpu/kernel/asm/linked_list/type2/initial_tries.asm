@@ -28,19 +28,26 @@ global insert_all_initial_nodes:
     // stack: key, root_ptr, node_ptr_ptr, retdest
     DUP3
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
+global debug_check_no_more_nodes:
     EQ
     %jumpi(no_more_nodes)
     // stack: key, root_ptr, node_ptr_ptr, retdest
     PUSH after_smt_read
     DUP2
-    PUSH 64
-    DUP5
-    // stack: root_ptr, nibbles, key, after_smt_read, key, root_ptr, node_ptr_ptr, retdest
+global before_split_key:
+    %split_key
+global after_split_key:
+    // stack: k0, k1, k2, k3, after_smt_read, key, root_ptr, node_ptr_ptr, retdest
+    PUSH 0
+    DUP8
+    // stack: root_ptr, level, k0, k1, k2, k3, after_smt_read, key, root_ptr, node_ptr_ptr, retdest
     %jump(smt_read)
 after_smt_read:
+global debug_after_smt_read:
     //stack: trie_value_ptr_ptr, key, root_ptr, node_ptr_ptr, retdest
     DUP4
     %add_const(2) // Get the initial value
+    MLOAD_GENERAL
     SWAP1
     %mstore_trie_data
     // stack: key, root_ptr, node_ptr_ptr, retdest

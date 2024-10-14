@@ -224,13 +224,21 @@ global check_state_trie:
     %set_initial_state_trie
     // stack: trie_data_len
 
-    PUSH @INITIAL_RLP_ADDR
-    // stack: rlp_start, trie_data_len
-    %mpt_hash_state_trie
+    #[cfg(feature = eth_mainnet)]
+    {
+        PUSH @INITIAL_RLP_ADDR
+        // stack: rlp_start, trie_data_len
+        %mpt_hash_state_trie
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %smt_hash_state
+    }
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+global debug_check_initial_trie:
     %assert_eq
     // Check that the stored trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
