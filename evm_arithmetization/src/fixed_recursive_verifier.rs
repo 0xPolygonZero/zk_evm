@@ -3179,7 +3179,7 @@ mod tests {
             "Create all recursive circuits",
             AllRecursiveCircuits::<F, C, D>::new(
                 &all_stark,
-                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 17..18, 17..18, 17..18],
+                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 16..17, 16..17, 16..17],
                 &config,
             )
         );

@@ -75,47 +75,39 @@ global precompile_blake2_f:
     SWAP1
     // stack: t0_addr = m0_addr + 8 * 16, t_0, t_1, flag, blake2_f_contd, kexit_info
 
+    %sub_const(8)
+    // stack: m0_addr + 8 * (16 - 1), t_0, t_1, flag, blake2_f_contd, kexit_info
+
+    PUSH @SEGMENT_CALLDATA
+    GET_CONTEXT
+    %build_address_no_offset
+
     %rep 16
-        // stack: m0_addr + 8 * (16 - i), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        %sub_const(8)
-        // stack: m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        DUP1
-        // stack: m0_addr + 8 * (16 - i - 1), m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        PUSH @SEGMENT_CALLDATA
-        // stack: @SEGMENT_CALLDATA, m0_addr + 8 * (16 - i - 1), m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        GET_CONTEXT
-        // stack: ctx, @SEGMENT_CALLDATA, m0_addr + 8 * (16 - i - 1), m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        %build_address
+        // stack: base_addr, m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        DUP2 DUP2
+        // stack: base_addr, m0_addr + 8 * (16 - i - 1), base_addr, m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        ADD // base_addr + offset
         %mload_packing_u64_LE
-        // stack: m_i, m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        SWAP1
-        // stack: m0_addr + 8 * (16 - i - 1), m_i, m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        // stack: m_i, base_addr, m0_addr + 8 * (16 - i - 1), m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        SWAP2 %sub_const(8) SWAP1
+        // stack: base_addr, m0_addr + 8 * (16 - i - 2), m_i, m_(i+1), ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     %endrep
-    // stack: m0_addr = h0_addr + 8 * 8, m_0, ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+    // stack: base_addr, m0_addr = h0_addr + 8 * 8, m_0, ..., m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
 
     %rep 8
-        // stack: h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        %sub_const(8)
-        // stack: h0_addr + 8 * (8 - i - 1), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        DUP1
-        // stack: h0_addr + 8 * (8 - i), h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        PUSH @SEGMENT_CALLDATA
-        // stack: @SEGMENT_CALLDATA, h0_addr + 8 * (8 - i), h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        GET_CONTEXT
-        // stack: ctx, @SEGMENT_CALLDATA, h0_addr + 8 * (8 - i), h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        %build_address
+        // stack: base_addr, h0_addr + 8 * (8 - i - 1), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        DUP2 DUP2
+        // stack: base_addr, h0_addr + 8 * (8 - i - 1), base_addr, h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        ADD // base_addr + offset
         %mload_packing_u64_LE
-        // stack: h_i, h0_addr + 8 * (8 - i), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-        SWAP1
-        // stack: h0_addr + 8 * (8 - i), h_i, h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        // stack: h_i, base_addr, h0_addr + 8 * (8 - i - 1), h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+        SWAP2 %sub_const(8) SWAP1
+        // stack: base_addr, h0_addr + 8 * (8 - i - 1), h_i, h_(i+1), ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     %endrep
-    // stack: h0_addr + 8 * 8 = 68, h_0, ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-    POP
-
-    %stack () -> (@SEGMENT_CALLDATA, 4)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 4, h_0..h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-    %build_address_no_offset
+    // stack: base_addr, garbage, h_0, ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
+    
+    PUSH 4 SWAP2 POP
+    // stack: base_addr, 4, h_0, ..., h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     MLOAD_32BYTES
 
     // stack: rounds, h_0..h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info

@@ -341,7 +341,28 @@ call_too_deep:
     // stack: new_ctx
 %endmacro
 
+%macro set_new_ctx_gas_limit_no_check
+    // stack: gas_limit, new_ctx
+    DUP2
+    %build_address_with_ctx_no_segment(@CTX_METADATA_GAS_LIMIT)
+    SWAP1
+    // stack: gas_limit, addr, new_ctx
+    MSTORE_GENERAL
+    // stack: new_ctx
+%endmacro
+
+/// Similar to `set_new_ctx_gas_limit_no_check`, but ensures that the parent
+/// context's gas limit is not smaller than the new context's.
 %macro set_new_ctx_gas_limit
+    // stack: gas_limit, new_ctx
+    GET_CONTEXT
+    %build_address_with_ctx_no_segment(@CTX_METADATA_GAS_LIMIT)
+    MLOAD_GENERAL
+    // stack: parent_gas_limit, gas_limit, new_ctx
+    DUP2
+    GT
+    %jumpi(fault_exception)
+
     // stack: gas_limit, new_ctx
     DUP2
     %build_address_with_ctx_no_segment(@CTX_METADATA_GAS_LIMIT)

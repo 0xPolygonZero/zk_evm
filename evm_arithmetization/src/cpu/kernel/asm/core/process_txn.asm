@@ -175,7 +175,7 @@ global process_contract_creation_txn_after_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_contract_creation_txn_after_constructor)
-    %non_intrinsic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, address, retdest
 
     %enter_new_ctx
@@ -188,11 +188,15 @@ global process_contract_creation_txn_after_constructor:
 
     ISZERO %jumpi(contract_creation_fault_3)
 
-    // EIP-3541: Reject new contract code starting with the 0xEF byte
+    // EIP-3541: Reject new contract code starting with the 0xEF byte, if code_size > 0
+    %returndatasize // size of the code 
+    DUP1 ISZERO
+    // stack: code_size == 0, code_size, leftover_gas, new_ctx, address, retdest, success
+    %jumpi(process_contract_creation_txn_after_ef_check)
+    // stack: code_size, leftover_gas, new_ctx, address, retdest, success
     PUSH 0 %mload_current(@SEGMENT_RETURNDATA) %eq_const(0xEF) %jumpi(contract_creation_fault_3_zero_leftover)
 
-    // stack: leftover_gas, new_ctx, address, retdest, success
-    %returndatasize // Size of the code.
+process_contract_creation_txn_after_ef_check:
     // stack: code_size, leftover_gas, new_ctx, address, retdest, success
     DUP1 %gt_const(@MAX_CODE_SIZE) %jumpi(contract_creation_fault_4)
     // stack: code_size, leftover_gas, new_ctx, address, retdest, success
@@ -290,7 +294,7 @@ global process_message_txn_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_message_txn_after_call)
-    %non_intrinsic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit_no_check
     // stack: new_ctx, retdest
 
     // Set calldatasize and copy txn data to calldata.
@@ -487,8 +491,8 @@ contract_creation_fault_3:
 
 contract_creation_fault_3_zero_leftover:
     %revert_checkpoint
-    // stack: leftover_gas, new_ctx, address, retdest, success
-    %pop3
+    // stack: code_size, leftover_gas, new_ctx, address, retdest, success
+    %pop4
     PUSH 0 // leftover gas
     // stack: leftover_gas, retdest, success
     %pay_coinbase_and_refund_sender
