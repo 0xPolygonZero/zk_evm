@@ -50,6 +50,11 @@ if [[ $INPUT_FILE == "" ]]; then
     exit 1
 fi
 
+if [[ ! -s $INPUT_FILE ]]; then
+    echo "Input file $INPUT_FILE does not exist or has length 0."
+    exit 1
+fi
+
 # Circuit sizes only matter in non test_only mode.
 if ! [[ $TEST_ONLY == "test_only" ]]; then
     if [[ $INPUT_FILE == *"witness_b19807080"* ]]; then
@@ -98,30 +103,35 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR --batch-size $BATCH_SIZE --save-inputs-on-error stdio < $INPUT_FILE |& tee &> $TEST_OUT_PATH
+    nice -19 cargo run --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR --batch-size $BATCH_SIZE --save-inputs-on-error stdio < $INPUT_FILE |& tee &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         #rm $TEST_OUT_PATH
         exit 0
+    elif grep -q 'Attempted to collapse an extension node' $TEST_OUT_PATH; then
+        echo "ERROR: Attempted to collapse an extension node. See $TEST_OUT_PATH for more details."
+        exit 4
+    elif grep -q 'SIMW == RPCW ? false' $TEST_OUT_PATH; then
+        echo "ERROR: SIMW == RPCW ? false. See $TEST_OUT_PATH for more details."
+        exit 5
     elif grep -q 'Proving task finished with error' $TEST_OUT_PATH; then
         # Some error occurred, display the logs and exit.
-        cat $OUT_LOG_PATH
-        echo "Failed to create proof witnesses. See $OUT_LOG_PATH for more details."
+        echo "ERROR: Proving task finished with error. See $TEST_OUT_PATH for more details."
         exit 1
     else
-        echo -e "\n\nUndecided.  Proving process has stopped but verdict is undecided. See \"zk_evm/test.out\" for more details."
+        echo -e "\n\nUndecided.  Proving process has stopped but verdict is undecided. See $TEST_OUT_PATH for more details."
         exit 2
     fi
 fi
 
 cargo build --release --jobs "$num_procs"
 
+
 start_time=$(date +%s%N)
-"${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
+nice -19 "${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
  --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE |& tee $OUTPUT_LOG
 end_time=$(date +%s%N)
 
-set +o pipefail
 cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
   # Some error occurred, display the logs and exit.
@@ -134,7 +144,7 @@ cat $PROOFS_FILE_LIST | while read proof_file;
 do
   echo "Verifying proof file $proof_file"
   verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee $verify_file
+  nice -19 "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee $verify_file
   if grep -q 'All proofs verified successfully!' $verify_file; then
       echo "Proof verification for file $proof_file successful";
       rm $verify_file # we keep the generated proof for potential reuse
