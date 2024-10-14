@@ -271,7 +271,7 @@ where
     }
 
     #[cfg(feature = "cdk_erigon")]
-    let (poseidon_proof, _) = prove_table!(poseidon_stark, Table::Poseidon);
+    let poseidon_proof = prove_table!(poseidon_stark, Table::Poseidon);
 
     Ok((
         [

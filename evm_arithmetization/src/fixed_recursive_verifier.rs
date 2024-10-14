@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
-use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
@@ -2029,7 +2028,6 @@ where
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if OPTIONAL_TABLE_INDICES.contains(&table) && !all_proof.table_in_use[table] {
-                info!("Use dummy proof for Table {}", table);
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
@@ -2096,7 +2094,6 @@ where
             });
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
-        info!("root proving done");
 
         Ok(ProverOutputData {
             is_agg: false,
@@ -3078,7 +3075,7 @@ where
             });
         }
 
-        info!(
+        log::debug!(
             "Table: {:?}, degree: {}, shrinking_wrappers_len: {}",
             table,
             degree_bits,
