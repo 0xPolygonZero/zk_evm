@@ -41,6 +41,9 @@ struct RpcToolConfig {
     /// The maximum number of retries.
     #[arg(long, default_value_t = 0)]
     max_retries: u32,
+    /// If true, get struct logs for debug purposes.
+    #[arg(long, default_value_t = false)]
+    get_struct_logs: bool,
 }
 
 #[derive(Subcommand)]
@@ -81,6 +84,7 @@ struct Cli {
 pub(crate) async fn fetch_block_prover_inputs<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     params: FetchParams,
+    get_struct_logs: bool,
 ) -> Result<Vec<BlockProverInput>, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -102,6 +106,7 @@ where
             block_id,
             checkpoint_block_number,
             params.rpc_type,
+            get_struct_logs,
         )
         .await?;
 
@@ -133,7 +138,8 @@ impl Cli {
                 };
 
                 let block_prover_inputs =
-                    fetch_block_prover_inputs(cached_provider, params).await?;
+                    fetch_block_prover_inputs(cached_provider, params, self.config.get_struct_logs)
+                        .await?;
                 serde_json::to_writer_pretty(std::io::stdout(), &block_prover_inputs)?;
             }
             Command::Extract { tx, batch_size } => {
@@ -158,8 +164,12 @@ impl Cli {
                             rpc_type: self.config.rpc_type,
                         };
 
-                        let block_prover_inputs =
-                            fetch_block_prover_inputs(cached_provider, params).await?;
+                        let block_prover_inputs = fetch_block_prover_inputs(
+                            cached_provider,
+                            params,
+                            self.config.get_struct_logs,
+                        )
+                        .await?;
 
                         let block_prover_input =
                             block_prover_inputs.into_iter().next().ok_or(anyhow!(
@@ -167,9 +177,10 @@ impl Cli {
                                 block_number
                             ))?;
 
-                        let generation_inputs = trace_decoder::entrypoint(
+                        let (generation_inputs, _struct_logs) = trace_decoder::entrypoint(
                             block_prover_input.block_trace,
                             block_prover_input.other_data,
+                            block_prover_input.struct_logs,
                             batch_size,
                             &mut DummyObserver::new(),
                         )?;

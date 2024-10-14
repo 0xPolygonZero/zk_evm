@@ -30,7 +30,7 @@ fn init_logger() {
 fn test_init_linked_lists() -> Result<()> {
     init_logger();
 
-    let interpreter = Interpreter::<F>::new(0, vec![], None);
+    let interpreter = Interpreter::<F>::new(0, vec![], None, &None);
 
     // Check the initial accounts linked list
     let acc_addr_list: Vec<U256> = (0..4)
@@ -78,7 +78,7 @@ fn test_init_linked_lists() -> Result<()> {
 fn test_list_iterator() -> Result<()> {
     init_logger();
 
-    let interpreter = Interpreter::<F>::new(0, vec![], None);
+    let interpreter = Interpreter::<F>::new(0, vec![], None, &None);
 
     // test the list iterator
     let accounts_mem = interpreter
@@ -133,7 +133,7 @@ fn test_list_iterator() -> Result<()> {
 fn test_insert_account() -> Result<()> {
     init_logger();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
 
     // Initialize the accounts linked list.
     let init_accounts_ll = vec![
@@ -215,7 +215,7 @@ fn test_insert_account() -> Result<()> {
 fn test_insert_storage() -> Result<()> {
     init_logger();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
 
     // Initialize the storage linked list.
     let init_storage_ll = vec![
@@ -306,7 +306,7 @@ fn test_insert_storage() -> Result<()> {
 fn test_insert_and_delete_accounts() -> Result<()> {
     init_logger();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
 
     // Initialize the accounts linked list.
     let init_accounts_ll = vec![
@@ -490,7 +490,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 fn test_insert_and_delete_storage() -> Result<()> {
     init_logger();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
 
     // Initialize the storage linked list.
     let init_storage_ll = vec![

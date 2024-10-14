@@ -58,7 +58,7 @@ fn test_tstore() -> Result<()> {
         kexit_info,
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack, None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack, None, &None);
     initialize_interpreter(&mut interpreter, 100.into());
 
     interpreter.run()?;
@@ -104,7 +104,7 @@ fn test_tstore_tload() -> Result<()> {
         kexit_info,
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack, None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack, None, &None);
     initialize_interpreter(&mut interpreter, 200.into());
 
     interpreter.run()?;
@@ -162,7 +162,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
         kexit_info,
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None, &None);
     initialize_interpreter(&mut interpreter, (10 * 200).into());
 
     for i in 0..10 {
@@ -235,7 +235,7 @@ fn test_revert() -> Result<()> {
     });
 
     let sys_tstore = TEST_KERNEL.global_labels["sys_tstore"];
-    let mut interpreter = Interpreter::<F>::new(sys_tstore, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(sys_tstore, vec![], None, &None);
     interpreter.generation_state =
         GenerationState::<F>::new(&GenerationInputs::default(), &TEST_KERNEL.code).unwrap();
     initialize_interpreter(&mut interpreter, (20 * 100).into());

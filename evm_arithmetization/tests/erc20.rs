@@ -205,6 +205,7 @@ fn test_erc20() -> anyhow::Result<()> {
         &config,
         inputs,
         max_cpu_len_log,
+        None,
         &mut timing,
         None,
     )?;

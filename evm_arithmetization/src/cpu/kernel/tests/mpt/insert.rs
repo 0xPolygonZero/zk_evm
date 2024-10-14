@@ -178,7 +178,7 @@ fn test_state_trie(
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None, &None);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);

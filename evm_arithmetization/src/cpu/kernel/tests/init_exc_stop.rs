@@ -104,8 +104,13 @@ fn test_init_exc_stop() {
     };
     let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["init"];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
+    let mut interpreter: Interpreter<F> = Interpreter::new_with_generation_inputs(
+        initial_offset,
+        initial_stack,
+        &inputs,
+        None,
+        &None,
+    );
     interpreter.halt_offsets = vec![KERNEL.global_labels["main"]];
     interpreter.set_is_kernel(true);
     interpreter.run().expect("Running dummy init failed.");

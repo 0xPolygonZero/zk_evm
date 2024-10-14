@@ -123,6 +123,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         &config,
         inputs,
         max_cpu_len_log,
+        None,
         &mut timing,
         None,
     )?;

@@ -24,9 +24,10 @@ fn main() -> anyhow::Result<()> {
         } in cases()?
         {
             trials.push(Trial::test(format!("{name}@{batch_size}"), move || {
-                let gen_inputs = trace_decoder::entrypoint(
+                let (gen_inputs, _) = trace_decoder::entrypoint(
                     trace,
                     other.clone(),
+                    None,
                     batch_size,
                     &mut DummyObserver::new(),
                 )

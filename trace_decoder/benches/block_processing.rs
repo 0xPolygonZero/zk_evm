@@ -37,6 +37,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                     trace_decoder::entrypoint(
                         block_trace,
                         other_data,
+                        None,
                         batch_size,
                         &mut DummyObserver::new(),
                     )

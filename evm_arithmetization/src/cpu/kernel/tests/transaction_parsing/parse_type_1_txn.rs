@@ -47,7 +47,7 @@ fn process_type_1_txn() -> Result<()> {
     // encode(signed_tx).hex()[4::] # We don't need the initial RLP prefix.
     let txn = hex!("01f867820539018203e882520894000000000000000000000000000000000000000201824242c080a0e0c03d1aae7278dffd6c864231a5bb571d7ee3ececd3718b26d3d8554b4987f5a02dfb1aeea35ba8c5191abb6efdae6f73c052209fc6a598025b7292db470d9450").to_vec();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
     prepare_interpreter_for_txn_parsing(
         &mut interpreter,
         KERNEL.global_labels["process_type_1_txn"],
@@ -95,7 +95,7 @@ fn process_type_1_txn_invalid_sig() -> Result<()> {
     // It should fail according to EIP-2 (`s` must be no greater than `N/2`).
     let txn = hex!("01f867820539018203e882520894000000000000000000000000000000000000000201824242c080a0e0c03d1aae7278dffd6c864231a5bb571d7ee3ececd3718b26d3d8554b4987f5a0d204e5115ca4573ae6e544910251908afa5cbc46e8a30839645fcbb18928acf1").to_vec();
 
-    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None, &None);
     prepare_interpreter_for_txn_parsing(
         &mut interpreter,
         KERNEL.global_labels["process_type_1_txn"],

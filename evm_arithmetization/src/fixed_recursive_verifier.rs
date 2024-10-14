@@ -56,6 +56,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
+use crate::structlog::TxZeroStructLogs;
 use crate::util::h256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
@@ -3068,13 +3069,17 @@ pub mod testing {
             config: &StarkConfig,
             generation_inputs: GenerationInputs<F>,
             max_cpu_len_log: usize,
+            struct_logs: Option<Vec<TxZeroStructLogs>>,
             timing: &mut TimingTree,
             abort_signal: Option<Arc<AtomicBool>>,
         ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
             features_check(&generation_inputs.clone().trim());
 
-            let segment_iterator =
-                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
+            let segment_iterator = SegmentDataIterator::<F>::new(
+                &generation_inputs,
+                Some(max_cpu_len_log),
+                &struct_logs,
+            );
 
             let mut proofs = vec![];
 
@@ -3157,7 +3162,7 @@ mod tests {
         // Generate a dummy payload for testing
         let payload = empty_payload()?;
         let max_cpu_len_log = Some(7);
-        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log);
+        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log, &None);
         let (_, mut segment_data) = segment_iterator.next().unwrap()?;
 
         let opcode_counts = &segment_data.opcode_counts;

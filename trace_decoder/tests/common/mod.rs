@@ -61,6 +61,7 @@ impl Case {
         let BlockProverInput {
             block_trace,
             other_data,
+            struct_logs: _,
         } = bpis.remove(0);
         anyhow::Ok(Case {
             name: base.file_name().context("inconsistent base name")?.into(),

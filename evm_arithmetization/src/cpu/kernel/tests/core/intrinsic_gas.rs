@@ -17,13 +17,14 @@ fn test_intrinsic_gas() -> Result<()> {
     // Contract creation transaction.
     let initial_stack = vec![0xdeadbeefu32.into()];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(intrinsic_gas, initial_stack.clone(), None);
+        Interpreter::new(intrinsic_gas, initial_stack.clone(), None, &None);
     interpreter.set_global_metadata_field(GlobalMetadata::ContractCreation, U256::one());
     interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![(GAS_TX + GAS_TXCREATE).into()]);
 
     // Message transaction.
-    let mut interpreter: Interpreter<F> = Interpreter::new(intrinsic_gas, initial_stack, None);
+    let mut interpreter: Interpreter<F> =
+        Interpreter::new(intrinsic_gas, initial_stack, None, &None);
     interpreter.set_txn_field(NormalizedTxnField::To, 123.into());
     interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![GAS_TX.into()]);
