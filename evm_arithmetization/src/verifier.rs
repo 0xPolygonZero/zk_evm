@@ -285,7 +285,41 @@ pub mod testing {
                         keccak_sponge_stark.constraint_degree(),
                     );
                     vec![F::ZERO; n]
+                } else if i == *Table::BytePacking {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::BytePacking,
+                        config.num_challenges,
+                        byte_packing_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else if i == *Table::Logic {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::Logic,
+                        config.num_challenges,
+                        logic_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else if i == *Table::MemAfter {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::MemAfter,
+                        config.num_challenges,
+                        mem_after_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
                 } else {
+                    #[cfg(feature = "cdk_erigon")]
+                    if i == *Table::Poseidon {
+                        let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                            all_ctls,
+                            *Table::Poseidon,
+                            config.num_challenges,
+                            poseidon_stark.constraint_degree(),
+                        );
+                        return vec![F::ZERO; n];
+                    }
                     panic!("Unable to find stark_proof");
                 }
             }),

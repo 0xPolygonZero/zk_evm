@@ -846,23 +846,22 @@ where
         let table_dummy_proofs = core::array::from_fn(|i| {
             if OPTIONAL_TABLE_INDICES.contains(&i) {
                 let init_degree = degree_bits_ranges[i].start;
-                let common_circuit_data = by_table[i]
+                let chain = by_table[i]
                     .by_stark_size
                     .get(&init_degree)
-                    .expect("Unable to get the shrinking circuits")
+                    .expect("Unable to get the shrinking circuits");
+                let common_circuit_data = chain
                     .shrinking_wrappers
                     .last()
-                    .expect("Unable to get the last shrinking circuit")
-                    .circuit
-                    .common
-                    .clone();
+                    .map(|wrapper| &wrapper.circuit.common)
+                    .unwrap_or(&chain.initial_wrapper.circuit.common);
                 let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(&common_circuit_data);
                 let dummy_pis = HashMap::new();
                 let proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");
                 Some(ShrunkProofData {
                     init_degree,
-                    common_circuit_data,
+                    common_circuit_data: common_circuit_data.clone(),
                     proof,
                 })
             } else {
