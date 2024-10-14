@@ -856,7 +856,7 @@ where
                     .last()
                     .map(|wrapper| &wrapper.circuit.common)
                     .unwrap_or(&chain.initial_wrapper.circuit.common);
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(&common_circuit_data);
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_circuit_data);
                 let dummy_pis = HashMap::new();
                 let proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");

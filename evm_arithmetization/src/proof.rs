@@ -4,6 +4,7 @@ use ethereum_types::{Address, H256, U256};
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
+use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
@@ -600,6 +601,22 @@ impl MemCap {
             })
             .collect();
 
+        Self { mem_cap }
+    }
+
+    pub fn from_merkle_cap<F: RichField, H: Hasher<F>>(merkle_cap: MerkleCap<F, H>) -> Self {
+        let mem_cap = merkle_cap
+            .0
+            .iter()
+            .map(|h| {
+                h.to_vec()
+                    .iter()
+                    .map(|hi| hi.to_canonical_u64().into())
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
         Self { mem_cap }
     }
 }

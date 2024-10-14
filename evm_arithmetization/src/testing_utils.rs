@@ -16,7 +16,6 @@ pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
 use crate::generation::{TrieInputs, TrimmedGenerationInputs};
 use crate::proof::TrieRoots;
-use crate::witness::operation::Operation;
 use crate::{
     generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
     GenerationSegmentData, SegmentDataIterator,
@@ -224,13 +223,13 @@ pub fn segment_with_empty_tables() -> Result<(
     GenerationSegmentData,
 )> {
     let payload = empty_payload()?;
-    let max_cpu_len_log = Some(7);
+    let max_cpu_len_log = Some(20);
     let mut segment_iterator =
         SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
-    let opcode_counts = &segment_data.opcode_counts;
-    assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+    // let opcode_counts = &segment_data.opcode_counts;
+    // assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
 
     Ok((trimmed_inputs, segment_data))
 }

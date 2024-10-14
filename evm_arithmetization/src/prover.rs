@@ -2,15 +2,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use ethereum_types::U256;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
-use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::Challenger;
-use plonky2::plonk::config::{GenericConfig, GenericHashOut};
+use plonky2::plonk::config::GenericConfig;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
@@ -159,34 +159,8 @@ where
             abort_signal,
         )?
     );
-    public_values.mem_before = MemCap {
-        mem_cap: mem_before_cap
-            .0
-            .iter()
-            .map(|h| {
-                h.to_vec()
-                    .iter()
-                    .map(|hi| hi.to_canonical_u64().into())
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>(),
-    };
-    public_values.mem_after = MemCap {
-        mem_cap: mem_after_cap
-            .0
-            .iter()
-            .map(|h| {
-                h.to_vec()
-                    .iter()
-                    .map(|hi| hi.to_canonical_u64().into())
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>(),
-    };
+    public_values.mem_before = mem_before_cap;
+    public_values.mem_after = mem_after_cap;
 
     // This is an expensive check, hence is only run when `debug_assertions` are
     // enabled.
@@ -219,10 +193,10 @@ where
     })
 }
 
-type ProofWithMemCaps<F, C, H, const D: usize> = (
+type ProofWithMemCaps<F, C, const D: usize> = (
     [Option<StarkProofWithMetadata<F, C, D>>; NUM_TABLES],
-    MerkleCap<F, H>,
-    MerkleCap<F, H>,
+    MemCap,
+    MemCap,
 );
 
 /// Generates a proof for each STARK.
@@ -245,7 +219,7 @@ fn prove_with_commitments<F, C, const D: usize>(
     ctl_challenges: &GrandProductChallengeSet<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<ProofWithMemCaps<F, C, C::Hasher, D>>
+) -> Result<ProofWithMemCaps<F, C, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -285,7 +259,16 @@ where
     let mem_after_proof = prove_table!(mem_after_stark, Table::MemAfter);
 
     let mem_before_cap = trace_commitments[*Table::MemBefore].merkle_tree.cap.clone();
+    let mem_before_cap = MemCap::from_merkle_cap(mem_before_cap);
     let mem_after_cap = trace_commitments[*Table::MemAfter].merkle_tree.cap.clone();
+    let mut mem_after_cap = MemCap::from_merkle_cap(mem_after_cap);
+    if !table_in_use[*Table::MemAfter] {
+        for hash in &mut mem_after_cap.mem_cap {
+            for element in hash.iter_mut() {
+                *element = U256::zero();
+            }
+        }
+    }
 
     #[cfg(feature = "cdk_erigon")]
     let (poseidon_proof, _) = prove_table!(poseidon_stark, Table::Poseidon);
