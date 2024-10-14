@@ -199,6 +199,8 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 };
 
                 let callee_address = stack_value_to_address(address);
+                let callee_address_old = stack_value_to_address_old(address);
+                assert_eq!(callee_address, callee_address_old);
 
                 if callee_addr_to_code_hash.contains_key(&callee_address) {
                     let next_code_hash = callee_addr_to_code_hash[&callee_address];
@@ -306,7 +308,17 @@ pub(crate) fn generate_jumpdest_table<'a>(
 fn stack_value_to_address(operand: &Uint<256, 4>) -> Address {
     let all_bytes: [u8; 32] = operand.compat().into();
     let mut lower_20_bytes = [0u8; 20];
-    lower_20_bytes[0..20].copy_from_slice(&all_bytes[..]);
+    // Based on `__compat_primitive_types::H160::from(H256::from(all_bytes)).
+    // into()`.
+    lower_20_bytes[0..20].copy_from_slice(&all_bytes[32 - 20..32]);
+    Address::from(lower_20_bytes)
+}
+
+// Review: to be removed
+fn stack_value_to_address_old(operand: &Uint<256, 4>) -> Address {
+    let all_bytes: [u8; 32] = operand.compat().into();
+    let aaa: H256 = all_bytes.into();
+    let lower_20_bytes: [u8; 20] = __compat_primitive_types::H160::from(aaa).into();
     Address::from(lower_20_bytes)
 }
 

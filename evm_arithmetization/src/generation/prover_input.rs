@@ -394,7 +394,7 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = (*jumpdest_table).get_mut(&context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
             Ok(next_jumpdest_proof.into())
