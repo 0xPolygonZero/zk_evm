@@ -184,7 +184,7 @@ pub fn entrypoint(
                 block_hashes: b_hashes.clone(),
                 burn_addr,
                 jumpdest_table: {
-                    // TODO See the issue Simulate to get jumpdests on a per-transaction basis #653.
+                    // TODO(einar-polygon): <https://github.com/0xPolygonZero/zk_evm/issues/653>
                     // Note that this causes any batch containing just a single `None` to collapse
                     // into a `None`, which causing failover to simulating jumpdest analysis for the
                     // whole batch. There is an optimization opportunity here.
