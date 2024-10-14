@@ -99,11 +99,11 @@ secp_add_valid_points_with_lambda:
     // stack: N, lambda, x0, y0, x1, y1, retdest
     DUP3
     // stack: x0, N, lambda, x0, y0, x1, y1, retdest
-    %secp_base
+    DUP2
     // stack: N, x0, N, lambda, x0, y0, x1, y1, retdest
     DUP7
     // stack: x1, N, x0, N, lambda, x0, y0, x1, y1, retdest
-    %secp_base
+    DUP2
     // stack: N, x1, N, x0, N, lambda, x0, y0, x1, y1, retdest
     DUP6
     // stack: lambda, N, x1, N, x0, N, lambda, x0, y0, x1, y1, retdest
@@ -117,7 +117,7 @@ secp_add_valid_points_with_lambda:
     // stack: x2, lambda, x0, y0, x1, y1, retdest
 
     // Compute y2 = lambda*(x1 - x2) - y1
-    %secp_base %secp_base %secp_base // Pre-load moduli for incoming SUBMODs
+    %secp_base DUP1 DUP1 // Pre-load moduli for incoming SUBMODs
     // stack: N, N, N, x2, lambda, x0, y0, x1, y1, retdest
     DUP4
     // stack: x2, N, N, N, x2, lambda, x0, y0, x1, y1, retdest
@@ -244,11 +244,11 @@ global secp_double:
     // stack: x, y, (y < N) & (x < N)
     %secp_base
     // stack: N, x, y, b
-    %secp_base
+    DUP1
     // stack: N, N, x, y, b
     DUP3
     // stack: x, N, N, x, y, b
-    %secp_base
+    DUP2
     // stack: N, x, N, N, x, y, b
     DUP2
     // stack: x, N, x, N, N, x, y, b
