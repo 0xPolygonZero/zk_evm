@@ -149,7 +149,7 @@ echo "Testing against mainnet, current revision: $GITHASH."
 
 #BLOCKS="$CANCUNBLOCKS $RANDOMBLOCKS $ROUND3"
 #BLOCKS="19511272"
-BLOCKS=$RANDOMBLOCKS
+BLOCKS=$ROUND5
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 echo "Testing blocks: $BLOCKS"
 
