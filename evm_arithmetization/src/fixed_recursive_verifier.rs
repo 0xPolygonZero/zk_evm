@@ -2029,7 +2029,7 @@ where
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if OPTIONAL_TABLE_INDICES.contains(&table) && !all_proof.table_in_use[table] {
-                info!("Use dummpy proof for {}", table);
+                info!("Use dummy proof for Table {}", table);
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
@@ -2092,7 +2092,6 @@ where
             .iter()
             .zip(all_proof.table_in_use.iter())
             .for_each(|(target, value)| {
-                info!("set table in use: {}", value);
                 root_inputs.set_bool_target(*target, *value);
             });
 
@@ -3079,6 +3078,12 @@ where
             });
         }
 
+        info!(
+            "Table: {:?}, degree: {}, shrinking_wrappers_len: {}",
+            table,
+            degree_bits,
+            shrinking_wrappers.len()
+        );
         Self {
             initial_wrapper,
             shrinking_wrappers,

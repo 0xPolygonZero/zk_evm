@@ -624,11 +624,9 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         )
     );
 
-    if final_len == 0 {
-        if OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
-            info!("MemAfter table not in use");
-            table_in_use[*MemAfter] = false;
-        }
+    if final_len == 0 && OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
+        info!("MemAfter table not in use");
+        table_in_use[*MemAfter] = false;
     }
 
     Ok(TablesWithPVs {
