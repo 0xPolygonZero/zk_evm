@@ -181,25 +181,21 @@ impl ProverStateManager {
         // tuple containing the loaded table at the specified size and
         // its offset relative to the configured range used to pre-process the
         // circuits.
-        let circuits = std::array::try_from_fn(
-            |i| -> anyhow::Result<Option<(RecursiveCircuitsForTableSize, u8)>> {
-                match degrees[i] {
-                    Some(size) => {
-                        let circuit_resource = RecursiveCircuitResource::get(&(i.into(), size))
-                            .map_err(|e| {
-                                anyhow::Error::from(e).context(format!(
-                                    "Attempting to load circuit: {i} at size: {size}"
-                                ))
-                            })?;
-                        Ok(Some((
-                            circuit_resource,
-                            (size - self.circuit_config[i].start) as u8,
-                        )))
-                    }
-                    None => Ok(None),
-                }
-            },
-        )?;
+        let circuits = core::array::from_fn(|i| match degrees[i] {
+            Some(size) => RecursiveCircuitResource::get(&(i.into(), size))
+                .map(|circuit_resource| {
+                    Some((
+                        circuit_resource,
+                        (size - self.circuit_config[i].start) as u8,
+                    ))
+                })
+                .map_err(|e| {
+                    anyhow::Error::from(e)
+                        .context(format!("Attempting to load circuit: {i} at size: {size}"))
+                })
+                .unwrap_or(None),
+            None => None,
+        });
 
         Ok(circuits)
     }
