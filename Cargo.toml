@@ -118,10 +118,10 @@ zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "8463effe0dd1472a52906cd12ffb047885db42ee" }
 plonky2_maybe_rayon = "0.2.0"
-plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
-starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "8463effe0dd1472a52906cd12ffb047885db42ee" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "8463effe0dd1472a52906cd12ffb047885db42ee" }
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"

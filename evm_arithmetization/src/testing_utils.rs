@@ -10,12 +10,17 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
+use plonky2::field::goldilocks_field::GoldilocksField;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::generation::TrieInputs;
+use crate::generation::{TrieInputs, TrimmedGenerationInputs};
 use crate::proof::TrieRoots;
-use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs};
+use crate::witness::operation::Operation;
+use crate::{
+    generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
+    GenerationSegmentData, SegmentDataIterator,
+};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -165,7 +170,7 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
     }
 }
 
-pub fn empty_payload() -> Result<GenerationInputs> {
+fn empty_payload() -> Result<GenerationInputs> {
     // Set up default block metadata
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::zero(),
@@ -212,4 +217,20 @@ pub fn empty_payload() -> Result<GenerationInputs> {
     };
 
     Ok(inputs)
+}
+
+pub fn segment_with_empty_tables() -> Result<(
+    TrimmedGenerationInputs<GoldilocksField>,
+    GenerationSegmentData,
+)> {
+    let payload = empty_payload()?;
+    let max_cpu_len_log = Some(7);
+    let mut segment_iterator =
+        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
+    let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
+
+    let opcode_counts = &segment_data.opcode_counts;
+    assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+
+    Ok((trimmed_inputs, segment_data))
 }
