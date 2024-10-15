@@ -2031,9 +2031,14 @@ where
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
+                let index_verifier_data = table_circuits
+                    .by_stark_size
+                    .keys()
+                    .position(|&size| size == dummy_proof_data.init_degree)
+                    .unwrap();
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
-                    F::from_canonical_usize(dummy_proof_data.init_degree),
+                    F::from_canonical_usize(index_verifier_data),
                 );
                 root_inputs.set_proof_with_pis_target(
                     &self.root.proof_with_pis[table],
