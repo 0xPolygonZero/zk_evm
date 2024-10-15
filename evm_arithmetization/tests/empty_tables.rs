@@ -54,7 +54,7 @@ fn empty_tables() -> anyhow::Result<()> {
         "Create all recursive circuits",
         AllRecursiveCircuits::<F, C, D>::new(
             &all_stark,
-            &[16..17, 8..9, 7..8, 4..5, 8..9, 4..5, 16..17, 16..17, 16..17],
+            &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
             &config,
         )
     );

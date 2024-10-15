@@ -580,7 +580,7 @@ where
 #[derive(Eq, PartialEq, Debug)]
 pub struct ShrunkProofData<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
 {
-    /// The Common Circuit Data from last shrinking circuit.
+    /// The [`CommonCircuitData`] of the last shrinking circuit.
     pub common_circuit_data: CommonCircuitData<F, D>,
 
     /// The proof after applying shrinking recursion.
