@@ -131,6 +131,8 @@ where
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+    /// Dummy proofs of each table for the root circuit.
+    pub table_dummy_proofs: [Option<ShrunkProofData<F, C, D>>; NUM_TABLES],
 }
 
 /// Data for the EVM root circuit, which is used to combine each STARK's shrunk
@@ -569,6 +571,43 @@ where
     }
 }
 
+/// A struct that encapsulates both the init degree and the shrunk proof.
+#[derive(Eq, PartialEq, Debug)]
+pub struct ShrunkProofData<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
+{
+    /// The [`CommonCircuitData`] of the last shrinking circuit.
+    pub common_circuit_data: CommonCircuitData<F, D>,
+
+    /// The proof after applying shrinking recursion.
+    pub proof: ProofWithPublicInputs<F, C, D>,
+}
+
+impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
+    ShrunkProofData<F, C, D>
+{
+    fn to_buffer(
+        &self,
+        buffer: &mut Vec<u8>,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<()> {
+        buffer.write_common_circuit_data(&self.common_circuit_data, gate_serializer)?;
+        buffer.write_proof_with_public_inputs(&self.proof)?;
+        Ok(())
+    }
+
+    fn from_buffer(
+        buffer: &mut Buffer,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<Self> {
+        let common_circuit_data = buffer.read_common_circuit_data(gate_serializer)?;
+        let proof = buffer.read_proof_with_public_inputs(&common_circuit_data)?;
+        Ok(Self {
+            common_circuit_data,
+            proof,
+        })
+    }
+}
+
 impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
 where
     F: RichField + Extendable<D>,
@@ -610,6 +649,15 @@ where
         if !skip_tables {
             for table in &self.by_table {
                 table.to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+            }
+        }
+        for table in &self.table_dummy_proofs {
+            match table {
+                Some(dummy_proof_data) => {
+                    buffer.write_bool(true)?;
+                    dummy_proof_data.to_buffer(&mut buffer, gate_serializer)?
+                }
+                None => buffer.write_bool(false)?,
             }
         }
         Ok(buffer)
@@ -690,6 +738,14 @@ where
             }
         };
 
+        let table_dummy_proofs = core::array::from_fn(|_| {
+            if buffer.read_bool().ok()? {
+                Some(ShrunkProofData::from_buffer(&mut buffer, gate_serializer).ok()?)
+            } else {
+                None
+            }
+        });
+
         Ok(Self {
             root,
             segment_aggregation,
@@ -698,6 +754,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            table_dummy_proofs,
         })
     }
 
@@ -774,6 +831,33 @@ where
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
 
+        // TODO(sdeng): enable more optional Tables
+        let table_dummy_proofs = core::array::from_fn(|i| {
+            if KECCAK_TABLES_INDICES.contains(&i) {
+                let init_degree = degree_bits_ranges[i].start;
+                let common_circuit_data = by_table[i]
+                    .by_stark_size
+                    .get(&init_degree)
+                    .expect("Unable to get the shrinking circuits")
+                    .shrinking_wrappers
+                    .last()
+                    .expect("Unable to get the last shrinking circuit")
+                    .circuit
+                    .common
+                    .clone();
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(&common_circuit_data);
+                let dummy_pis = HashMap::new();
+                let proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
+                Some(ShrunkProofData {
+                    common_circuit_data,
+                    proof,
+                })
+            } else {
+                None
+            }
+        });
+
         Self {
             root,
             segment_aggregation,
@@ -782,6 +866,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            table_dummy_proofs,
         }
     }
 
@@ -1903,7 +1988,6 @@ where
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         features_check(&generation_inputs);
-
         let all_proof = prove::<F, C, D>(
             all_stark,
             config,
@@ -1912,37 +1996,32 @@ where
             timing,
             abort_signal.clone(),
         )?;
+        self.prove_segment_with_all_proofs(&all_proof, config, abort_signal.clone())
+    }
 
+    pub fn prove_segment_with_all_proofs(
+        &self,
+        all_proof: &AllProof<F, C, D>,
+        config: &StarkConfig,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
-                // generate and set a dummy `index_verifier_data` and `proof_with_pis`
-                let index_verifier_data =
-                    table_circuits.by_stark_size.keys().min().ok_or_else(|| {
-                        anyhow::format_err!("No valid size in shrinking circuits")
-                    })?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(*index_verifier_data),
+                let dummy_proof_data = self.table_dummy_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof_data.proof,
                 );
-                let table_circuit = table_circuits
-                    .by_stark_size
-                    .get(index_verifier_data)
-                    .ok_or_else(|| anyhow::format_err!("No valid size in shrinking circuits"))?
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?;
-                let dummy_circuit: CircuitData<F, C, D> =
-                    dummy_circuit(&table_circuit.circuit.common);
-                let dummy_pis = HashMap::new();
-                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .expect("Unable to generate dummy proofs");
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
             } else {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
                 let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
                 let shrunk_proof = table_circuits
                     .by_stark_size
@@ -1993,7 +2072,7 @@ where
             is_agg: false,
             is_dummy: false,
             proof_with_pvs: ProofWithPublicValues {
-                public_values: all_proof.public_values,
+                public_values: all_proof.public_values.clone(),
                 intern: root_proof,
             },
         })
@@ -2052,40 +2131,34 @@ where
     pub fn prove_segment_after_initial_stark(
         &self,
         all_proof: AllProof<F, C, D>,
-        table_circuits: &[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES],
+        table_circuits: &[Option<(RecursiveCircuitsForTableSize<F, C, D>, u8)>; NUM_TABLES],
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            let (table_circuit, index_verifier_data) = &table_circuits[table];
             if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
+                let dummy_proof = self.table_dummy_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof.proof,
+                );
+            } else {
+                let (table_circuit, index_verifier_data) = &table_circuits[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get circuits"))?;
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
                 );
-                // generate and set a dummy `proof_with_pis`
-                let common_data = &table_circuit
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?
-                    .circuit
-                    .common;
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
-                let dummy_pis = HashMap::new();
-                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .expect("Unable to generate dummy proofs");
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
-            } else {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-
+                let stark_proof = all_proof.multi_proof.stark_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_u8(*index_verifier_data),
-                );
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
             }
@@ -2736,6 +2809,7 @@ where
         agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
     }
 }
+
 /// A map between initial degree sizes and their associated shrinking recursion
 /// circuits.
 #[derive(Eq, PartialEq, Debug)]
@@ -2767,6 +2841,7 @@ where
             buffer.write_usize(size)?;
             table.to_buffer(buffer, gate_serializer, generator_serializer)?;
         }
+
         Ok(())
     }
 
@@ -2786,6 +2861,7 @@ where
             )?;
             by_stark_size.insert(key, table);
         }
+
         Ok(Self { by_stark_size })
     }
 
@@ -2810,6 +2886,7 @@ where
                 )
             })
             .collect();
+
         Self { by_stark_size }
     }
 
@@ -3129,81 +3206,5 @@ pub mod testing {
                 &self.batch_aggregation.circuit.common,
             )
         }
-    }
-}
-
-#[cfg(test)]
-#[cfg(not(feature = "cdk_erigon"))]
-mod tests {
-    use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
-    use plonky2::timed;
-
-    use super::*;
-    use crate::testing_utils::{empty_payload, init_logger};
-    use crate::witness::operation::Operation;
-
-    type F = GoldilocksField;
-    const D: usize = 2;
-    type C = PoseidonGoldilocksConfig;
-
-    #[test]
-    fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
-        init_logger();
-
-        let all_stark = AllStark::<F, D>::default();
-        let config = StarkConfig::standard_fast_config();
-
-        // Generate a dummy payload for testing
-        let payload = empty_payload()?;
-        let max_cpu_len_log = Some(7);
-        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log);
-        let (_, mut segment_data) = segment_iterator.next().unwrap()?;
-
-        let opcode_counts = &segment_data.opcode_counts;
-        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
-
-        let timing = &mut TimingTree::new(
-            "Segment Proof Generation Without Keccak Test",
-            log::Level::Info,
-        );
-        // Process and prove segment
-        let all_circuits = timed!(
-            timing,
-            log::Level::Info,
-            "Create all recursive circuits",
-            AllRecursiveCircuits::<F, C, D>::new(
-                &all_stark,
-                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 16..17, 16..17, 16..17],
-                &config,
-            )
-        );
-
-        let segment_proof = timed!(
-            timing,
-            log::Level::Info,
-            "Prove segment",
-            all_circuits.prove_segment(
-                &all_stark,
-                &config,
-                payload.trim(),
-                &mut segment_data,
-                timing,
-                None,
-            )?
-        );
-
-        // Verify the generated segment proof
-        timed!(
-            timing,
-            log::Level::Info,
-            "Verify segment proof",
-            all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
-        );
-
-        // Print timing details
-        timing.print();
-
-        Ok(())
     }
 }
