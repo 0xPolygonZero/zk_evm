@@ -52,7 +52,7 @@ fi
 
 if [[ ! -s $INPUT_FILE ]]; then
     echo "Input file $INPUT_FILE does not exist or has length 0."
-    exit 1
+    exit 6
 fi
 
 # Circuit sizes only matter in non test_only mode.
