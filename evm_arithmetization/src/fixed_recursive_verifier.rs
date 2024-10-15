@@ -2020,16 +2020,7 @@ where
 
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
-            if OPTIONAL_TABLE_INDICES.contains(&table) && !all_proof.table_in_use[table] {
-                let dummy_proof_data = self.table_dummy_proofs[table]
-                    .as_ref()
-                    .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
-                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
-                root_inputs.set_proof_with_pis_target(
-                    &self.root.proof_with_pis[table],
-                    &dummy_proof_data.proof,
-                );
-            } else {
+            if all_proof.table_in_use[table] {
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
@@ -2056,6 +2047,16 @@ where
                 );
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+            } else {
+                assert!(OPTIONAL_TABLE_INDICES.contains(&table));
+                let dummy_proof_data = self.table_dummy_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof_data.proof,
+                )
             }
 
             check_abort_signal(abort_signal.clone())?;
