@@ -251,9 +251,21 @@ global debug_trie_data_length:
     PUSH 1
 global check_final_state_trie:
     %set_final_tries
-    PUSH @INITIAL_RLP_ADDR
-    // stack: rlp_start, dummy_trie_len
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
+
+    #[cfg(feature = eth_mainnet)]
+    {
+        PUSH @INITIAL_RLP_ADDR
+        // stack: rlp_start, dummy_trie_len
+        %mpt_hash_state_trie 
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %smt_hash_state
+    }
+    
+    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
+global debug_final_trie_hash:
+    %assert_eq
     // We don't need the trie data length here.
     POP
 

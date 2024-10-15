@@ -7,29 +7,29 @@ global insert_all_final_nodes:
     SWAP1 DUP2
     MLOAD_GENERAL
     // stack: key, root_ptr, node_ptr_ptr, retdest
-    DUP3
-    %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
-    EQ
+    DUP1
+    %eq_const(@U256_MAX)
     %jumpi(no_more_nodes)
     // stack: key, root_ptr, node_ptr_ptr, retdest
-    PUSH after_smt_read
-    DUP2
-    PUSH 64
-    DUP5
-    // stack: root_ptr, nibbles, key, after_smt_read, key, root_ptr, node_ptr_ptr, retdest
-    %jump(smt_read)
-after_smt_read:
-    //stack: trie_value_ptr_ptr, key, root_ptr, node_ptr_ptr, retdest
+    PUSH after_smt_insert
     DUP4
     %increment // Get the final value
-    SWAP1
-    %mstore_trie_data
-    // stack: key, root_ptr, node_ptr_ptr, retdest
-    POP
-    SWAP1
+    MLOAD_GENERAL
+    // stack: value, after_smt_insert, key, root_ptr, node_ptr_ptr, retdest
+    DUP3
+    %split_key
+    // stack: k0, k1, k2, k3, value, after_smt_insert, key, root_ptr, node_ptr_ptr, retdest
+    PUSH 0
+    DUP9
+    // stack: root_ptr, level, k0, k1, k2, k3, after_smt_insert, key, root_ptr, node_ptr_ptr, retdest
+    %jump(smt_insert)
+after_smt_insert:
+global debug_after_smt_insert:
+    //stack: root_ptr', key, root_ptr, node_ptr_ptr, retdest
+    %stack (new_root_ptr, key, root_ptr, next_node_ptr_ptr) -> (next_node_ptr_ptr, new_root_ptr)
     %next_node
-    // stack: node_ptr_ptr', root_ptr, retdest
-    %jump(insert_all_initial_nodes)
+    // stack: node_ptr_ptr', root_ptr', retdest
+    %jump(insert_all_final_nodes)
 
 no_more_nodes:
     // stack: key, root_ptr, node_ptr_ptr, retdest
@@ -65,6 +65,7 @@ delete_removed_nodes_end:
     JUMP
 
 delete_node:
+global debug_delete_node:
     // stack: node_ptr_ptr, root_ptr, retdest
     DUP1
     MLOAD_GENERAL
