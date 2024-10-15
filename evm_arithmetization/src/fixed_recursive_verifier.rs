@@ -580,9 +580,6 @@ where
 #[derive(Eq, PartialEq, Debug)]
 pub struct ShrunkProofData<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
 {
-    /// The initial degree for generating the proof.
-    pub init_degree: usize,
-
     /// The Common Circuit Data from last shrinking circuit.
     pub common_circuit_data: CommonCircuitData<F, D>,
 
@@ -598,7 +595,6 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
         buffer: &mut Vec<u8>,
         gate_serializer: &dyn GateSerializer<F, D>,
     ) -> IoResult<()> {
-        buffer.write_usize(self.init_degree)?;
         buffer.write_common_circuit_data(&self.common_circuit_data, gate_serializer)?;
         buffer.write_proof_with_public_inputs(&self.proof)?;
         Ok(())
@@ -608,11 +604,9 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
         buffer: &mut Buffer,
         gate_serializer: &dyn GateSerializer<F, D>,
     ) -> IoResult<Self> {
-        let init_degree = buffer.read_usize()?;
         let common_circuit_data = buffer.read_common_circuit_data(gate_serializer)?;
         let proof = buffer.read_proof_with_public_inputs(&common_circuit_data)?;
         Ok(Self {
-            init_degree,
             common_circuit_data,
             proof,
         })
@@ -860,7 +854,6 @@ where
                 let proof = dummy_proof(&dummy_circuit, dummy_pis)
                     .expect("Unable to generate dummy proofs");
                 Some(ShrunkProofData {
-                    init_degree,
                     common_circuit_data: common_circuit_data.clone(),
                     proof,
                 })
@@ -2031,15 +2024,7 @@ where
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
-                let index_verifier_data = table_circuits
-                    .by_stark_size
-                    .keys()
-                    .position(|&size| size == dummy_proof_data.init_degree)
-                    .unwrap();
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(index_verifier_data),
-                );
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
                 root_inputs.set_proof_with_pis_target(
                     &self.root.proof_with_pis[table],
                     &dummy_proof_data.proof,
@@ -2189,10 +2174,7 @@ where
                 let dummy_proof = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(dummy_proof.init_degree),
-                );
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO);
                 root_inputs.set_proof_with_pis_target(
                     &self.root.proof_with_pis[table],
                     &dummy_proof.proof,
