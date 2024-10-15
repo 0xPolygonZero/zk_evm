@@ -110,6 +110,7 @@ if [[ $TEST_ONLY == "test_only" ]]; then
         exit 0
     elif grep -q 'Attempted to collapse an extension node' $TEST_OUT_PATH; then
         echo "ERROR: Attempted to collapse an extension node. See $TEST_OUT_PATH for more details."
+        rm $TEST_OUT_PATH
         exit 4
     elif grep -q 'SIMW == RPCW ? false' $TEST_OUT_PATH; then
         echo "ERROR: SIMW == RPCW ? false. See $TEST_OUT_PATH for more details."

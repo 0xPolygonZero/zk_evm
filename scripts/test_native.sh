@@ -141,7 +141,7 @@ ROUND5="
 CANCUN=19426587
 TIP=`cast block-number --rpc-url $RPC`
 STATICTIP=20721266
-NUMRANDOMBLOCKS=100
+NUMRANDOMBLOCKS=1000
 RANDOMBLOCKS=`shuf --input-range=$CANCUN-$TIP -n $NUMRANDOMBLOCKS | sort`
 
 GITHASH=`git rev-parse --short HEAD`
@@ -149,7 +149,7 @@ echo "Testing against mainnet, current revision: $GITHASH."
 
 #BLOCKS="$CANCUNBLOCKS $RANDOMBLOCKS $ROUND3"
 #BLOCKS="19511272"
-BLOCKS=$ROUND5
+BLOCKS="$RANDOMBLOCKS"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 echo "Testing blocks: $BLOCKS"
 
