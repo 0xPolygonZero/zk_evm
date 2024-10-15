@@ -32,7 +32,9 @@ global debug_hash_hash:
     // stack: node, node_ptr, cur_len, retdest
     POP
     // stack: node_ptr, cur_len, retdest
+    DUP1 ISZERO %jumpi(empty_hash_node) // We don't count empty hash nodes
     SWAP1 %add_const(2) SWAP1
+empty_hash_node:
     // stack: node_ptr, cur_len, retdest
     %increment
     // stack: node_ptr+1, cur_len, retdest
@@ -41,7 +43,7 @@ global debug_hash_hash:
     JUMP
 
 smt_hash_internal:
-global hash_internal:
+global debug_hash_internal:
     // stack: node, node_ptr, cur_len, retdest
     POP
     // stack: node_ptr, cur_len, retdest

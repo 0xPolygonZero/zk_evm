@@ -218,6 +218,7 @@ global check_state_trie:
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
 
     PROVER_INPUT(trie_ptr::trie_data_size)
+global debug_storing_trie_data_size:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     // stack: trie_data_len
@@ -242,6 +243,7 @@ global debug_check_initial_trie:
     %assert_eq
     // Check that the stored trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+global debug_trie_data_length:
     %assert_eq
 
     // We set a dummy value as an initial trie data length,

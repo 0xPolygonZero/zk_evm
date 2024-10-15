@@ -127,6 +127,7 @@ impl<F: RichField> GenerationState<F> {
                                 smt_data.extend([U256::zero(); 2]);
                             }
                             log::debug!("initial smt = {:?}", smt_data);
+                            log::debug!("smt len = {:?}", smt_data.len());
                             let smt_data = smt_data.into_iter().map(|x| Some(x));
                             new_content.extend(smt_data);
                             self.memory.insert_preinitialized_segment(
