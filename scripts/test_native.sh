@@ -137,6 +137,71 @@ ROUND5="
 19511272
 "
 
+ROUND6="
+19426872
+19427018
+19427388
+19427472
+19429634
+19430273
+19430687
+19430855
+19431223
+19431344
+19432360
+19432641
+19435607
+19435804
+19436307
+19439155
+19439754
+19440665
+19441789
+19443628
+19443673
+19444327
+19444582
+19445175
+19445286
+19445799
+19446774
+19446911
+19447598
+19447814
+19448687
+19449229
+19449755
+19450491
+19451118
+19451955
+19452325
+19452532
+19452795
+19452869
+19454136
+19455621
+19456052
+19456615
+19460281
+19460945
+19462377
+19463186
+19464727
+19466034
+19466036
+19466108
+19466509
+"
+
+ROUND7="
+19430273
+19431344
+19451118
+19452869
+19460945
+19464727
+19466034
+"
 
 CANCUN=19426587
 TIP=`cast block-number --rpc-url $RPC`
@@ -149,34 +214,40 @@ echo "Testing against mainnet, current revision: $GITHASH."
 
 #BLOCKS="$CANCUNBLOCKS $RANDOMBLOCKS $ROUND3"
 #BLOCKS="19511272"
-BLOCKS="$RANDOMBLOCKS"
+BLOCKS="$ROUND7"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 echo "Testing blocks: $BLOCKS"
 
 echo "Testing:  $BLOCKS"
-printf "\n\ngithash       block verdict   r duration\n" | tee -a witnesses/native_results.txt
-echo       "----------------------------------------"   | tee -a witnesses/native_results.txt
+printf "\n\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a witnesses/native_results.txt
+echo       "---------------------------------------------------------------------------------------"   | tee -a witnesses/native_results.txt
 
 for BLOCK in $BLOCKS; do
+  TOTALTIME=0
   GITHASH=`git rev-parse --short HEAD`
   WITNESS="witnesses/$BLOCK.native.$GITHASH.witness.json"
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
+  SECONDS=0
   nice -19 cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native --jumpdest-src client-fetched-structlogs fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
-  rg "jump" $WITNESS
-  echo "Testing blocks: $BLOCKS."
+  TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
+  DURATION_RPC=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
+  TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
+  TXNONE=`grep '"jumpdest_table": null' $WITNESS | wc -l`
+  TXOK=`echo -n $(($TXALL - $TXNONE))`
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
   timeout 10m nice -19 ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
-  DURATION=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
-  echo $DURATION
+  TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
+  DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
+  TOTALTIME=`date -u -d @"$TOTALTIME" +'%-Hh%-Mm%-Ss'`
   if [ $EXITCODE -eq 0 ]
   then
     VERDICT="success"
   else
     VERDICT="failure"
   fi
-  printf "%s %10i %s %3i %s\n" $GITHASH $BLOCK $VERDICT $EXITCODE $DURATION | tee -a witnesses/native_results.txt
+  printf "%s %10i %s %3i  %8s   %8s   %8s    %3i     %3i      %3i \n" $GITHASH $BLOCK $VERDICT $EXITCODE $DURATION_RPC $DURATION_PRV $TOTALTIME $TXOK $TXNONE $TXALL | tee -a witnesses/native_results.txt
 done

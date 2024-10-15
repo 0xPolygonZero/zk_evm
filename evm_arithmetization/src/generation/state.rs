@@ -486,12 +486,12 @@ impl<F: RichField> GenerationState<F> {
             // We cannot observe anything as the stack is empty.
             return Ok(());
         }
-        if dst == KERNEL.global_labels["observe_new_address"] {
+        if dst == KERNEL.global_labels["observe_new_address"] && self.is_kernel() {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             let tip_h160 = H160::from(tip_h256);
             self.observe_address(tip_h160);
-        } else if dst == KERNEL.global_labels["observe_new_contract"] {
+        } else if dst == KERNEL.global_labels["observe_new_contract"] && self.is_kernel() {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             self.observe_contract(tip_h256)?;
