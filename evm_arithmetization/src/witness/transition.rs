@@ -1,3 +1,4 @@
+use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
@@ -6,6 +7,7 @@ use super::util::stack_pop_with_log_and_fill;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::opcodes::get_opcode;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
@@ -14,6 +16,8 @@ use crate::cpu::stack::{
 use crate::generation::linked_list::StateLinkedList;
 use crate::generation::state::State;
 use crate::memory::segments::Segment;
+// TO REMOVE!
+use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
 use crate::witness::memory::MemoryAddress;
@@ -310,10 +314,42 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
     );
     if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
         let mem = state
-                    .get_generation_state()
-                    .memory
-                    .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!("state linked list = {:?}", StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList));
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!(
+            "state linked list = {:?}",
+            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
+    }
+
+    if KERNEL.offset_name(pc) == "smt_hash_state" {
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!(
+            "state linked list = {:?}",
+            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
+        let root_ptr = u256_to_usize(
+            state
+                .get_generation_state()
+                .memory
+                .read_global_metadata(GlobalMetadata::StateTrieRoot),
+        )
+        .unwrap();
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::TrieData);
+        log::debug!(
+            "state smt data = {:?}",
+            mem[root_ptr..]
+                .iter()
+                .map(|x| x.unwrap_or_default())
+                .collect::<Vec<U256>>()
+        );
     }
     // state.log(
     //     level,

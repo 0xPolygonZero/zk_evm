@@ -156,7 +156,6 @@ store_initial_state_end:
 
 %macro insert_slot
     // stack: addr, slot, value
-    %addr_to_state_key
     %key_storage
     %insert_key
     // stack: (empty)

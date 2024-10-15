@@ -174,6 +174,9 @@ fn test_erc20() -> anyhow::Result<()> {
     }
     .into();
 
+    log::debug!("expected smt after = {}", expected_smt_after);
+    log::debug!("expected smt data after = {:?}", expected_smt_after.to_vec());
+
     let trie_roots_after = TrieRoots {
         state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
         transactions_root: transactions_trie.hash(),

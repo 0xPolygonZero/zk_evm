@@ -134,10 +134,11 @@ global start_txns:
     }
     #[cfg(feature = cdk_erigon)]
     {
+        // TODO: Uncomment
         // If txn_idx == 0, perform pre-state execution for CDK erigon.
-        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
-        ISZERO
-        %jumpi(pre_block_execution)
+        //%mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        //ISZERO
+        //%jumpi(pre_block_execution)
     }
 
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
