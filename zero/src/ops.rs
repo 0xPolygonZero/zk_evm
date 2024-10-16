@@ -12,7 +12,7 @@ use paladin::{
     registry, RemoteExecute,
 };
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{error, warn};
 use tracing::{event, info_span, Level};
 
 use crate::debug_utils::save_tries_to_disk;
@@ -254,10 +254,18 @@ impl Monoid for SegmentAggProof {
                 ) {
                     error!("Failed to save agg proof inputs to disk: {:?}", write_err);
                 }
+
+                if b.is_dummy() {
+                    warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
+                }
             }
 
             FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
         })?;
+
+        if b.is_dummy() {
+            warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
+        }
 
         Ok(SegmentAggregatableProof::Agg(proof))
     }

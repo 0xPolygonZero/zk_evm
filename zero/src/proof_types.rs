@@ -75,6 +75,13 @@ impl SegmentAggregatableProof {
             SegmentAggregatableProof::Agg(info) => info.is_agg,
         }
     }
+
+    pub(crate) const fn is_dummy(&self) -> bool {
+        match self {
+            SegmentAggregatableProof::Segment(info) => info.is_dummy,
+            SegmentAggregatableProof::Agg(info) => info.is_dummy,
+        }
+    }
 }
 
 impl BatchAggregatableProof {
