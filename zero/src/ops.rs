@@ -274,10 +274,6 @@ impl Monoid for SegmentAggProof {
             warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
         }
 
-        if b.is_dummy() {
-            warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
-        }
-
         let proof = generate_segment_agg_proof(p_state(), &a, &b)
             .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?;
 
