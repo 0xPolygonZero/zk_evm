@@ -359,10 +359,10 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Returns the next used jump address.
-    /// todo
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
+        // TODO(einar-polygon) <make issue>
         // get_code from self.memory
 
         if self.jumpdest_table.is_none() {
@@ -824,7 +824,7 @@ impl<F: RichField> GenerationState<F> {
             }
             info!("SIMW == RPCW ? {}", simw == &rpcw);
             info!("tx: {:?}", self.inputs.txn_hashes);
-            panic!();
+            // panic!();
             // info!("SIMP {:?}", &simp);
             // info!("RPCP {:?}", &rpcp);
             // info!("SIMP == RPCP ? {}", &simp == &rpcp);
