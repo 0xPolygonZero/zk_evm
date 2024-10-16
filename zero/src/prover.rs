@@ -9,9 +9,13 @@ use std::sync::Arc;
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use evm_arithmetization::Field;
-use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
+use evm_arithmetization::SegmentDataIterator;
+use futures::{
+    future, future::BoxFuture, stream::FuturesUnordered, FutureExt, TryFutureExt, TryStreamExt,
+};
 use hashbrown::HashMap;
 use num_traits::ToPrimitive as _;
+use paladin::directive::{Directive, IndexedStream};
 use paladin::runtime::Runtime;
 use plonky2::gates::noop::NoopGate;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -27,6 +31,18 @@ use tracing::{error, info};
 use crate::fs::generate_block_proof_file_name;
 use crate::ops;
 use crate::proof_types::GeneratedBlockProof;
+
+/// `ProofRuntime` represents the runtime environments used for generating
+/// different types of proofs. It contains separate runtimes for handling:
+///
+/// - `light_proof`: Typically for smaller, less resource-intensive tasks, such
+///   as aggregation.
+/// - `heavy_proof`: For larger, more computationally expensive tasks, such as
+///   STARK proof generation.
+pub struct ProofRuntime {
+    pub light_proof: Runtime,
+    pub heavy_proof: Runtime,
+}
 
 // All proving tasks are executed concurrently, which can cause issues for large
 // block intervals, where distant future blocks may be proven first.
@@ -65,14 +81,11 @@ impl BlockProverInput {
 
     pub async fn prove(
         self,
-        runtime: Arc<Runtime>,
+        proof_runtime: Arc<ProofRuntime>,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: Arc<ProverConfig>,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
-        use evm_arithmetization::SegmentDataIterator;
-        use futures::{stream::FuturesUnordered, FutureExt};
-        use paladin::directive::{Directive, IndexedStream};
 
         let ProverConfig {
             max_cpu_len_log,
@@ -116,7 +129,7 @@ impl BlockProverInput {
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
-                    .run(&runtime)
+                    .run(&proof_runtime.heavy_proof)
                     .map(move |e| {
                         e.map(|p| (idx, crate::proof_types::BatchAggregatableProof::from(p)))
                     })
@@ -126,7 +139,7 @@ impl BlockProverInput {
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
             Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
-                .run(&runtime)
+                .run(&proof_runtime.light_proof)
                 .await?;
 
         if let crate::proof_types::BatchAggregatableProof::BatchAgg(proof) = final_batch_proof {
@@ -143,7 +156,7 @@ impl BlockProverInput {
                     prev,
                     save_inputs_on_error,
                 })
-                .run(&runtime)
+                .run(&proof_runtime.light_proof)
                 .await?;
 
             info!("Successfully proved block {block_number}");
@@ -156,13 +169,12 @@ impl BlockProverInput {
 
     pub async fn prove_test(
         self,
-        runtime: Arc<Runtime>,
+        proof_runtime: Arc<ProofRuntime>,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: Arc<ProverConfig>,
     ) -> Result<GeneratedBlockProof> {
         use std::iter::repeat;
 
-        use futures::future;
         use paladin::directive::{Directive, IndexedStream};
 
         let ProverConfig {
@@ -202,7 +214,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(&runtime)
+            .run(&proof_runtime.light_proof)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;
@@ -236,17 +248,17 @@ impl BlockProverInput {
 
 async fn prove_block(
     block: BlockProverInput,
-    runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     previous_block_proof: Option<BoxFuture<'_, Result<GeneratedBlockProof>>>,
     prover_config: Arc<ProverConfig>,
 ) -> Result<GeneratedBlockProof> {
     if prover_config.test_only {
         block
-            .prove_test(runtime, previous_block_proof, prover_config)
+            .prove_test(proof_runtime, previous_block_proof, prover_config)
             .await
     } else {
         block
-            .prove(runtime, previous_block_proof, prover_config)
+            .prove(proof_runtime, previous_block_proof, prover_config)
             .await
     }
 }
@@ -257,7 +269,7 @@ async fn prove_block(
 /// block proofs as well.
 pub async fn prove(
     mut block_receiver: Receiver<(BlockProverInput, bool)>,
-    runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     checkpoint_proof: Option<GeneratedBlockProof>,
     prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
@@ -277,7 +289,7 @@ pub async fn prove(
         let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
         let prover_config = prover_config.clone();
         let previous_block_proof = prev_proof.take();
-        let runtime = runtime.clone();
+        let proof_runtime = proof_runtime.clone();
         let block_number = block_prover_input.get_block_number();
 
         let prove_permit = PARALLEL_BLOCK_PROVING_PERMIT_POOL.acquire().await?;
@@ -288,7 +300,7 @@ pub async fn prove(
             // Prove the block
             let block_proof = prove_block(
                 block_prover_input,
-                runtime,
+                proof_runtime,
                 previous_block_proof,
                 prover_config.clone(),
             )

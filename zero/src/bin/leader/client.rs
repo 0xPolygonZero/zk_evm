@@ -4,7 +4,6 @@ use std::time::Duration;
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::transports::http::reqwest::Url;
 use anyhow::{anyhow, Result};
-use paladin::runtime::Runtime;
 use tokio::sync::mpsc;
 use tracing::info;
 use zero::block_interval::{BlockInterval, BlockIntervalStream};
@@ -13,6 +12,8 @@ use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
 use zero::rpc::{self, JumpdestSrc};
 use zero::rpc::{retry::build_http_retry_provider, RpcType};
+
+use crate::ProofRuntime;
 
 #[derive(Debug)]
 pub struct RpcParams {
@@ -34,7 +35,7 @@ pub struct LeaderConfig {
 
 /// The main function for the client.
 pub(crate) async fn client_main(
-    runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     rpc_params: RpcParams,
     block_interval: BlockInterval,
     mut leader_config: LeaderConfig,
@@ -66,10 +67,10 @@ pub(crate) async fn client_main(
     let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
 
     // Run proving task
-    let runtime_ = runtime.clone();
+    let proof_runtime_ = proof_runtime.clone();
     let proving_task = tokio::spawn(prover::prove(
         block_rx,
-        runtime_,
+        proof_runtime_,
         leader_config.previous_proof.take(),
         Arc::new(leader_config.prover_config),
     ));
@@ -117,7 +118,8 @@ pub(crate) async fn client_main(
         }
     }
 
-    runtime.close().await?;
+    proof_runtime.light_proof.close().await?;
+    proof_runtime.heavy_proof.close().await?;
 
     if test_only {
         info!("All proof witnesses have been generated successfully.");
