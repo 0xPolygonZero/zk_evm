@@ -245,9 +245,26 @@ impl Monoid for SegmentAggProof {
         let proof = generate_segment_agg_proof(p_state(), &a, &b).map_err(|e| {
             if self.save_inputs_on_error {
                 let pv = vec![
-                    get_seg_agg_proof_public_values(a),
-                    get_seg_agg_proof_public_values(b),
+                    get_seg_agg_proof_public_values(a.clone()),
+                    get_seg_agg_proof_public_values(b.clone()),
                 ];
+                save_inputs_to_disk(
+                    format!(
+                        "b{}_seg_agg_{:?}_lhs_monoid.json",
+                        pv[0].block_metadata.block_number, pv[0].extra_block_data.gas_used_before
+                    ),
+                    a.as_prover_output_data(),
+                )
+                .unwrap();
+                save_inputs_to_disk(
+                    format!(
+                        "b{}_seg_agg_{:?}_rhs_monoid.json",
+                        pv[0].block_metadata.block_number, pv[1].extra_block_data.gas_used_before
+                    ),
+                    b.as_prover_output_data(),
+                )
+                .unwrap();
+
                 if let Err(write_err) = save_inputs_to_disk(
                     format!("b{}_seg_agg_inputs.json", pv[0].block_metadata.block_number),
                     pv,
@@ -293,7 +310,25 @@ impl Monoid for BatchAggProof {
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
         let lhs = match a {
-            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg({
+                save_inputs_to_disk(
+                    format!(
+                        "b{}_seg_agg_{:?}_lhs_dummy.json",
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .block_metadata
+                            .block_number,
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .extra_block_data
+                            .gas_used_before
+                    ),
+                    segment.clone(),
+                )
+                .unwrap();
+
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::Segment(segment.clone()),
@@ -302,13 +337,31 @@ impl Monoid for BatchAggProof {
                         ..segment
                     }),
                 )
-                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
-            ),
+                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
+            }),
             _ => a,
         };
 
         let rhs = match b {
-            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg({
+                save_inputs_to_disk(
+                    format!(
+                        "b{}_seg_agg_{:?}_rhs_dummy.json",
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .block_metadata
+                            .block_number,
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .extra_block_data
+                            .gas_used_before
+                    ),
+                    segment.clone(),
+                )
+                .unwrap();
+
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::Segment(segment.clone()),
@@ -317,8 +370,8 @@ impl Monoid for BatchAggProof {
                         ..segment
                     }),
                 )
-                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
-            ),
+                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
+            }),
             _ => b,
         };
 
