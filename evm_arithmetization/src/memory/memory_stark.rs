@@ -186,7 +186,7 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
         );
 
         row.preinitialized_segments_aux = (next_segment
-            - F::from_canonical_usize(Segment::StorageLinkedList.unscale()))
+            - F::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
             * (next_segment - F::from_canonical_usize(Segment::StorageLinkedList.unscale()));
 
         row.preinitialized_segments = (next_segment
