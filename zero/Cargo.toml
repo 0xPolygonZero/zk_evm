@@ -15,6 +15,7 @@ alloy-compat = "0.1.0"
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true
+cfg-if = "1.0.0"
 clap = { workspace = true, features = ["derive", "string"] }
 compat.workspace = true
 directories = "5.0.1"

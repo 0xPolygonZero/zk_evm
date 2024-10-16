@@ -26,6 +26,7 @@ use regex::Regex;
 use trace_decoder::observer::TriesObserver;
 use tracing::{error, info};
 use zero::ops::register;
+use zero::prover::WIRE_DISPOSITION;
 use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
 
 /// This binary is a debugging tool used to compare
@@ -97,6 +98,7 @@ async fn main() -> Result<()> {
             block_prover_input.other_data.clone(),
             prover_config.batch_size,
             &mut observer,
+            WIRE_DISPOSITION,
         )?;
         info!(
             "Number of collected batch tries for block {}: {}",
