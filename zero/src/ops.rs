@@ -339,6 +339,27 @@ impl Monoid for BatchAggProof {
                 )
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
             }),
+            BatchAggregatableProof::SegmentAgg(segment) => BatchAggregatableProof::SegmentAgg({
+                save_inputs_to_disk(
+                    format!(
+                        "b{}_seg_agg_{:?}_rhs_aggregated.json",
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .block_metadata
+                            .block_number,
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .extra_block_data
+                            .gas_used_before
+                    ),
+                    segment.clone(),
+                )
+                .unwrap();
+
+                segment
+            }),
             _ => a,
         };
 
@@ -371,6 +392,27 @@ impl Monoid for BatchAggProof {
                     }),
                 )
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
+            }),
+            BatchAggregatableProof::SegmentAgg(segment) => BatchAggregatableProof::SegmentAgg({
+                save_inputs_to_disk(
+                    format!(
+                        "b{}_seg_agg_{:?}_rhs_aggregated.json",
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .block_metadata
+                            .block_number,
+                        segment
+                            .proof_with_pvs
+                            .public_values
+                            .extra_block_data
+                            .gas_used_before
+                    ),
+                    segment.clone(),
+                )
+                .unwrap();
+
+                segment
             }),
             _ => b,
         };
