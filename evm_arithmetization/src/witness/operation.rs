@@ -242,10 +242,12 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
 
     let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: clock * NUM_CHANNELS + 1,
         input: input.clone(),
         len: input.len(),
     });
+
+    log::debug!("pushign poseding op = {:?}", poseidon_op);
 
     let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
 

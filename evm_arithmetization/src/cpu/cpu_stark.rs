@@ -498,7 +498,10 @@ pub(crate) fn ctl_poseidon_general_input<F: Field>() -> TableWithColumns<F> {
     let len = Column::single(COL_MAP.mem_channels[1].value[0]);
 
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
-    let timestamp = Column::linear_combination([(COL_MAP.clock, num_channels)]);
+    let timestamp = Column::linear_combination_with_constant(
+        [(COL_MAP.clock, num_channels)],
+        F::ONE - num_channels,
+    );
 
     TableWithColumns::new(
         *Table::Cpu,
@@ -539,7 +542,10 @@ pub(crate) fn ctl_poseidon_general_output<F: Field>() -> TableWithColumns<F> {
     let mut columns = Vec::new();
     columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
-    columns.push(Column::linear_combination([(COL_MAP.clock, num_channels)]));
+    columns.push(Column::linear_combination_with_constant(
+        [(COL_MAP.clock, num_channels)],
+        F::ONE - num_channels,
+    ));
     TableWithColumns::new(*Table::Cpu, columns, ctl_poseidon_general_filter())
 }
 
