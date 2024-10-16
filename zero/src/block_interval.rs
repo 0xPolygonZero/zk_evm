@@ -20,7 +20,7 @@ pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), any
 #[derive(Debug, PartialEq, Clone)]
 pub enum BlockInterval {
     // A single block id (could be number or hash)
-    SingleBlockId(BlockId),
+    SingleBlockId(u64),
     // A range of blocks.
     Range(Range<u64>),
     // Dynamic interval from the start block to the latest network block
@@ -51,9 +51,9 @@ impl BlockInterval {
         // Create the block interval.
         match end_block {
             // Start and end are the same.
-            Some(end_block) if end_block == start_block => Ok(BlockInterval::SingleBlockId(
-                BlockId::Number(start_block_num.into()),
-            )),
+            Some(end_block) if end_block == start_block => {
+                Ok(BlockInterval::SingleBlockId(start_block_num))
+            }
             // Bounded range provided.
             Some(end_block) => {
                 let end_block_num = Self::block_to_num(cached_provider.clone(), end_block).await?;
@@ -63,9 +63,9 @@ impl BlockInterval {
             None => {
                 let start_block_num =
                     Self::block_to_num(cached_provider.clone(), start_block).await?;
-                Ok(BlockInterval::SingleBlockId(BlockId::Number(
-                    start_block_num.into(),
-                )))
+                Ok(BlockInterval::FollowFrom {
+                    start_block: start_block_num,
+                })
             }
         }
     }
@@ -74,10 +74,7 @@ impl BlockInterval {
     /// second bool flag indicates if the element is last in the interval.
     pub fn into_bounded_stream(self) -> Result<BlockIntervalStream, anyhow::Error> {
         match self {
-            BlockInterval::SingleBlockId(BlockId::Number(num)) => {
-                let num = num
-                    .as_number()
-                    .ok_or(anyhow!("invalid block number '{num}'"))?;
+            BlockInterval::SingleBlockId(num) => {
                 let range = (num..num + 1).map(|it| Ok((it, true))).collect::<Vec<_>>();
 
                 Ok(Box::pin(futures::stream::iter(range)))
@@ -88,7 +85,7 @@ impl BlockInterval {
                 range.last_mut().map(|it| it.as_mut().map(|it| it.1 = true));
                 Ok(Box::pin(futures::stream::iter(range)))
             }
-            _ => Err(anyhow!(
+            BlockInterval::FollowFrom { .. } => Err(anyhow!(
                 "could not create bounded stream from unbounded follow-from interval",
             )),
         }
@@ -96,12 +93,7 @@ impl BlockInterval {
 
     pub fn get_start_block(&self) -> Result<u64> {
         match self {
-            BlockInterval::SingleBlockId(BlockId::Number(num)) => {
-                let num_value = num
-                    .as_number()
-                    .ok_or_else(|| anyhow!("invalid block number '{num}'"))?;
-                Ok(num_value) // Return the valid block number
-            }
+            BlockInterval::SingleBlockId(num) => Ok(*num),
             BlockInterval::Range(range) => Ok(range.start),
             BlockInterval::FollowFrom { start_block, .. } => Ok(*start_block),
             _ => Err(anyhow!("Unknown BlockInterval variant")), // Handle unknown variants
@@ -179,10 +171,7 @@ impl BlockInterval {
 impl std::fmt::Display for BlockInterval {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            BlockInterval::SingleBlockId(block_id) => match block_id {
-                BlockId::Number(it) => f.write_fmt(format_args!("{}", it)),
-                BlockId::Hash(it) => f.write_fmt(format_args!("0x{}", &hex::encode(it.block_hash))),
-            },
+            BlockInterval::SingleBlockId(num) => f.write_fmt(format_args!("{}", num)),
             BlockInterval::Range(range) => {
                 write!(f, "{}..{}", range.start, range.end)
             }
