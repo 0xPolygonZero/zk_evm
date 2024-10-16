@@ -35,7 +35,7 @@ pub(crate) struct Cli {
 ///
 /// - `Affinity`: Workers are assigned specific types of jobs based on their
 ///   capabilities, distinguishing between heavy and light jobs.
-/// - `Default`: No job distinction is made—any worker can handle any type of
+/// - `Default`: No job distinction is made — any worker can handle any type of
 ///   job, whether heavy or light.
 ///
 /// This enum allows for flexible worker configuration based on workload needs.
