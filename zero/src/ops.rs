@@ -3,9 +3,10 @@ zk_evm_common::check_chain_features!();
 use std::time::Instant;
 
 use anyhow::anyhow;
-use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
-use evm_arithmetization::{Field, ProofWithPublicValues, PublicValues, TrimmedGenerationInputs};
+use evm_arithmetization::{
+    Field, ProofWithPublicValues, ProverOutputData, PublicValues, TrimmedGenerationInputs,
+};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
@@ -214,8 +215,8 @@ pub struct SegmentAggProof {
 
 fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValues {
     match elem {
-        SegmentAggregatableProof::Segment(info) => info.public_values,
-        SegmentAggregatableProof::Agg(info) => info.public_values,
+        SegmentAggregatableProof::Segment(info) => info.proof_with_pvs.public_values,
+        SegmentAggregatableProof::Agg(info) => info.proof_with_pvs.public_values,
     }
 }
 
@@ -230,47 +231,25 @@ pub fn generate_segment_agg_proof(
     p_state: &ProverState,
     lhs_child: &SegmentAggregatableProof,
     rhs_child: &SegmentAggregatableProof,
-    has_dummy: bool,
-) -> anyhow::Result<ProofWithPublicValues> {
-    if has_dummy {
-        assert!(
-            !lhs_child.is_agg(),
-            "Cannot have a dummy segment with an aggregation."
-        );
-    }
-
-    let lhs_prover_output_data = ProverOutputData {
-        is_agg: lhs_child.is_agg(),
-        is_dummy: false,
-        proof_with_pvs: lhs_child.proof_with_pvs(),
-    };
-    let rhs_prover_output_data = ProverOutputData {
-        is_agg: rhs_child.is_agg(),
-        is_dummy: has_dummy,
-        proof_with_pvs: rhs_child.proof_with_pvs(),
-    };
-    let agg_output_data = p_state
-        .state
-        .prove_segment_aggregation(&lhs_prover_output_data, &rhs_prover_output_data)?;
-
-    Ok(agg_output_data.proof_with_pvs)
+) -> anyhow::Result<ProverOutputData> {
+    p_state.state.prove_segment_aggregation(
+        lhs_child.as_prover_output_data(),
+        rhs_child.as_prover_output_data(),
+    )
 }
 
 impl Monoid for SegmentAggProof {
     type Elem = SegmentAggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let proof = generate_segment_agg_proof(p_state(), &a, &b, false).map_err(|e| {
+        let proof = generate_segment_agg_proof(p_state(), &a, &b).map_err(|e| {
             if self.save_inputs_on_error {
                 let pv = vec![
                     get_seg_agg_proof_public_values(a),
                     get_seg_agg_proof_public_values(b),
                 ];
                 if let Err(write_err) = save_inputs_to_disk(
-                    format!(
-                        "b{}_agg_lhs_rhs_inputs.log",
-                        pv[0].block_metadata.block_number
-                    ),
+                    format!("b{}_seg_agg_inputs.json", pv[0].block_metadata.block_number),
                     pv,
                 ) {
                     error!("Failed to save agg proof inputs to disk: {:?}", write_err);
@@ -295,8 +274,8 @@ pub struct BatchAggProof {
 }
 fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
     match elem {
-        BatchAggregatableProof::Segment(info) => info.public_values,
-        BatchAggregatableProof::SegmentAgg(info) => info.public_values,
+        BatchAggregatableProof::Segment(info) => info.proof_with_pvs.public_values,
+        BatchAggregatableProof::SegmentAgg(info) => info.proof_with_pvs.public_values,
         BatchAggregatableProof::BatchAgg(info) => info.public_values,
     }
 }
@@ -310,8 +289,10 @@ impl Monoid for BatchAggProof {
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::Segment(segment.clone()),
-                    &SegmentAggregatableProof::Segment(segment),
-                    true,
+                    &SegmentAggregatableProof::Segment(ProverOutputData {
+                        is_dummy: true,
+                        ..segment
+                    }),
                 )
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
             ),
@@ -323,8 +304,10 @@ impl Monoid for BatchAggProof {
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::Segment(segment.clone()),
-                    &SegmentAggregatableProof::Segment(segment),
-                    true,
+                    &SegmentAggregatableProof::Segment(ProverOutputData {
+                        is_dummy: true,
+                        ..segment
+                    }),
                 )
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
             ),

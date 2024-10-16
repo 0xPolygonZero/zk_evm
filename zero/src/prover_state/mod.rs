@@ -16,11 +16,10 @@ use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
-    AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
-    TrimmedGenerationInputs,
+    prover::prove, AllProof, AllRecursiveCircuits, AllStark, GenerationSegmentData,
+    RecursiveCircuitsForTableSize, StarkConfig, TrimmedGenerationInputs,
 };
-use evm_arithmetization::{ProofWithPublicInputs, ProofWithPublicValues, VerifierData};
+use evm_arithmetization::{ProofWithPublicInputs, ProverOutputData, VerifierData};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::util::timing::TimingTree;
 use tracing::info;
@@ -207,7 +206,7 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
-    ) -> anyhow::Result<ProofWithPublicValues> {
+    ) -> anyhow::Result<ProverOutputData> {
         let config = StarkConfig::standard_fast_config();
         let all_stark = AllStark::default();
 
@@ -222,12 +221,9 @@ impl ProverStateManager {
 
         let table_circuits = self.load_table_circuits(&config, &all_proof)?;
 
-        let proof_with_pvs =
-            p_state()
-                .state
-                .prove_segment_after_initial_stark(all_proof, &table_circuits, None)?;
-
-        Ok(proof_with_pvs)
+        p_state()
+            .state
+            .prove_segment_after_initial_stark(all_proof, &table_circuits, None)
     }
 
     /// Generate a segment proof using the specified input on the monolithic
@@ -236,23 +232,15 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
-    ) -> anyhow::Result<ProofWithPublicValues> {
-        let p_out = p_state().state.prove_segment(
+    ) -> anyhow::Result<ProverOutputData> {
+        p_state().state.prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             input,
             segment_data,
             &mut TimingTree::default(),
             None,
-        )?;
-
-        let ProverOutputData {
-            is_agg: _,
-            is_dummy: _,
-            proof_with_pvs,
-        } = p_out;
-
-        Ok(proof_with_pvs)
+        )
     }
 
     /// Generate a segment proof using the specified input.
@@ -267,7 +255,7 @@ impl ProverStateManager {
     pub fn generate_segment_proof(
         &self,
         input: (TrimmedGenerationInputs, GenerationSegmentData),
-    ) -> anyhow::Result<ProofWithPublicValues> {
+    ) -> anyhow::Result<ProverOutputData> {
         let (generation_inputs, mut segment_data) = input;
 
         match self.persistence {

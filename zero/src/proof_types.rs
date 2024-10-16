@@ -3,7 +3,7 @@
 
 use evm_arithmetization::{
     fixed_recursive_verifier::{extract_block_final_public_values, extract_two_to_one_block_hash},
-    BlockHeight, Hash, Hasher, ProofWithPublicInputs, ProofWithPublicValues,
+    BlockHeight, Hash, Hasher, ProofWithPublicInputs, ProofWithPublicValues, ProverOutputData,
 };
 use plonky2::plonk::config::Hasher as _;
 use serde::{Deserialize, Serialize};
@@ -35,9 +35,9 @@ pub struct GeneratedAggBlockProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum SegmentAggregatableProof {
     /// The underlying proof is a segment proof.
-    Segment(ProofWithPublicValues),
+    Segment(ProverOutputData),
     /// The underlying proof is an aggregated segment proof.
-    Agg(ProofWithPublicValues),
+    Agg(ProverOutputData),
 }
 
 /// Sometimes we don't care about the underlying proof type and instead only if
@@ -47,25 +47,32 @@ pub enum SegmentAggregatableProof {
 pub enum BatchAggregatableProof {
     /// The underlying proof is a segment proof. It first needs to be aggregated
     /// with another segment proof, or a dummy one.
-    Segment(ProofWithPublicValues),
+    Segment(ProverOutputData),
     /// The underlying proof is an aggregated segment proof.
-    SegmentAgg(ProofWithPublicValues),
+    SegmentAgg(ProverOutputData),
     /// The underlying proof is an aggregated batch proof.
     BatchAgg(ProofWithPublicValues),
 }
 
 impl SegmentAggregatableProof {
+    pub(crate) fn as_prover_output_data(&self) -> &ProverOutputData {
+        match self {
+            SegmentAggregatableProof::Segment(info) => &info,
+            SegmentAggregatableProof::Agg(info) => &info,
+        }
+    }
+
     pub(crate) fn proof_with_pvs(&self) -> ProofWithPublicValues {
         match self {
-            SegmentAggregatableProof::Segment(info) => info.clone(),
-            SegmentAggregatableProof::Agg(info) => info.clone(),
+            SegmentAggregatableProof::Segment(info) => info.proof_with_pvs.clone(),
+            SegmentAggregatableProof::Agg(info) => info.proof_with_pvs.clone(),
         }
     }
 
     pub(crate) const fn is_agg(&self) -> bool {
         match self {
-            SegmentAggregatableProof::Segment(_) => false,
-            SegmentAggregatableProof::Agg(_) => true,
+            SegmentAggregatableProof::Segment(info) => info.is_agg,
+            SegmentAggregatableProof::Agg(info) => info.is_agg,
         }
     }
 }
@@ -73,16 +80,16 @@ impl SegmentAggregatableProof {
 impl BatchAggregatableProof {
     pub(crate) fn proof_with_pvs(&self) -> &ProofWithPublicValues {
         match self {
-            BatchAggregatableProof::Segment(info) => info,
-            BatchAggregatableProof::SegmentAgg(info) => info,
+            BatchAggregatableProof::Segment(info) => &info.proof_with_pvs,
+            BatchAggregatableProof::SegmentAgg(info) => &info.proof_with_pvs,
             BatchAggregatableProof::BatchAgg(info) => info,
         }
     }
 
     pub(crate) const fn is_agg(&self) -> bool {
         match self {
-            BatchAggregatableProof::Segment(_) => false,
-            BatchAggregatableProof::SegmentAgg(_) => false,
+            BatchAggregatableProof::Segment(info) => info.is_agg,
+            BatchAggregatableProof::SegmentAgg(info) => info.is_agg,
             BatchAggregatableProof::BatchAgg(_) => true,
         }
     }

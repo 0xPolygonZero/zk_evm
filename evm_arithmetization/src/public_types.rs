@@ -47,6 +47,11 @@ pub type ProofWithPublicValues = crate::fixed_recursive_verifier::ProofWithPubli
 /// proofs.
 pub type PublicValues = crate::proof::PublicValues<Field>;
 
+/// A type alias for prover output data containing proofs along with their
+/// public values and additional metadata.
+pub type ProverOutputData =
+    crate::fixed_recursive_verifier::ProverOutputData<Field, RecursionConfig, EXTENSION_DEGREE>;
+
 pub type AllData = Result<
     (TrimmedGenerationInputs, GenerationSegmentData),
     crate::generation::ErrorWithTries<SegmentError>,

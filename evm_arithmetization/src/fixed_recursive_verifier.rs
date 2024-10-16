@@ -79,7 +79,8 @@ where
     pub intern: ProofWithPublicInputs<F, C, D>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct ProverOutputData<F, C, const D: usize>
 where
     F: RichField + Extendable<D>,
@@ -2151,7 +2152,7 @@ where
         all_proof: AllProof<F, C, D>,
         table_circuits: &[Option<(RecursiveCircuitsForTableSize<F, C, D>, u8)>; NUM_TABLES],
         abort_signal: Option<Arc<AtomicBool>>,
-    ) -> anyhow::Result<ProofWithPublicValues<F, C, D>> {
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
@@ -2209,9 +2210,13 @@ where
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
-        Ok(ProofWithPublicValues {
-            public_values: all_proof.public_values,
-            intern: root_proof,
+        Ok(ProverOutputData {
+            is_agg: false,
+            is_dummy: false,
+            proof_with_pvs: ProofWithPublicValues {
+                public_values: all_proof.public_values.clone(),
+                intern: root_proof,
+            },
         })
     }
 
