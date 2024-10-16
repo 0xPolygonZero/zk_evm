@@ -731,20 +731,19 @@ where
                 }
                 unsafe {
                     mem::transmute::<
-                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
+                        [MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
                         [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
                     >(by_table)
                 }
             }
         };
 
-        let table_dummy_proofs = core::array::from_fn(|_| {
-            if buffer.read_bool().ok()? {
-                Some(ShrunkProofData::from_buffer(&mut buffer, gate_serializer).ok()?)
-            } else {
-                None
+        let mut table_dummy_proofs = core::array::from_fn(|_| None);
+        for proof in table_dummy_proofs.iter_mut() {
+            if buffer.read_bool()? {
+                *proof = Some(ShrunkProofData::from_buffer(&mut buffer, gate_serializer)?);
             }
-        });
+        }
 
         Ok(Self {
             root,
