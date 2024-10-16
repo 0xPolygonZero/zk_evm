@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::transports::http::reqwest::Url;
@@ -10,7 +11,7 @@ use zero::block_interval::{BlockInterval, BlockIntervalStream};
 use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
-use zero::rpc;
+use zero::rpc::{self, JumpdestSrc};
 use zero::rpc::{retry::build_http_retry_provider, RpcType};
 
 #[derive(Debug)]
@@ -20,6 +21,8 @@ pub struct RpcParams {
     pub backoff: u64,
     pub max_retries: u32,
     pub block_time: u64,
+    pub jumpdest_src: JumpdestSrc,
+    pub timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -92,6 +95,8 @@ pub(crate) async fn client_main(
             block_id,
             leader_config.checkpoint_block_number,
             rpc_params.rpc_type,
+            rpc_params.jumpdest_src,
+            rpc_params.timeout,
         )
         .await?;
         block_tx

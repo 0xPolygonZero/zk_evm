@@ -66,6 +66,7 @@ mod typed_mpt;
 mod wire;
 
 pub use core::entrypoint;
+pub use core::is_precompile;
 
 mod core;
 

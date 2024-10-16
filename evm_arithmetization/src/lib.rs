@@ -280,6 +280,9 @@ pub mod verifier;
 pub mod generation;
 pub mod witness;
 
+pub use generation::jumpdest;
+pub use generation::prover_input::CodeDb;
+
 // Utility modules
 pub mod curve_pairings;
 pub mod extension_tower;

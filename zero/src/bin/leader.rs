@@ -72,12 +72,14 @@ async fn main() -> Result<()> {
         Command::Rpc {
             rpc_url,
             rpc_type,
+            jumpdest_src,
             block_interval,
             checkpoint_block_number,
             previous_proof,
             block_time,
             backoff,
             max_retries,
+            timeout,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
             let block_interval = BlockInterval::new(&block_interval)?;
@@ -91,6 +93,8 @@ async fn main() -> Result<()> {
                     backoff,
                     max_retries,
                     block_time,
+                    jumpdest_src,
+                    timeout,
                 },
                 block_interval,
                 LeaderConfig {

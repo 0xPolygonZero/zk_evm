@@ -1,5 +1,11 @@
 //! Parsing utilities.
-use std::{fmt::Display, ops::Add, ops::Range, str::FromStr};
+use std::{
+    fmt::Display,
+    num::ParseIntError,
+    ops::{Add, Range},
+    str::FromStr,
+    time::Duration,
+};
 
 use thiserror::Error;
 
@@ -77,6 +83,11 @@ where
         // (None, _) is not possible, because split always returns at least one element.
         _ => unreachable!(),
     }
+}
+
+pub fn parse_duration(arg: &str) -> Result<Duration, ParseIntError> {
+    let seconds = arg.parse()?;
+    Ok(Duration::from_secs(seconds))
 }
 
 #[cfg(test)]
