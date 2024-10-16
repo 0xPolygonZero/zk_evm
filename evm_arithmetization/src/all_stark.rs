@@ -424,3 +424,17 @@ fn ctl_poseidon_general_output<F: Field>() -> CrossTableLookup<F> {
         poseidon_stark::ctl_looked_general_output(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+
+    use super::*;
+
+    type F = GoldilocksField;
+
+    #[test]
+    fn check_num_ctls() {
+        assert_eq!(all_cross_table_lookups::<F>().len(), NUM_CTLS);
+    }
+}
