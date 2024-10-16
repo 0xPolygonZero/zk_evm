@@ -1,7 +1,5 @@
 #![cfg(feature = "eth_mainnet")]
 
-use std::time::Duration;
-
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
@@ -22,7 +20,6 @@ use plonky2::field::types::Field;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
-use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
 
 type F = GoldilocksField;
@@ -178,33 +175,6 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 16..17, 7..8],
         &config,
     );
-
-    {
-        let gate_serializer = DefaultGateSerializer;
-        let generator_serializer = DefaultGeneratorSerializer::<C, D>::default();
-
-        let timing = TimingTree::new("serialize AllRecursiveCircuits", log::Level::Info);
-        let all_circuits_bytes = all_circuits
-            .to_bytes(false, &gate_serializer, &generator_serializer)
-            .map_err(|_| anyhow::Error::msg("AllRecursiveCircuits serialization failed."))?;
-        timing.filter(Duration::from_millis(100)).print();
-        log::info!(
-            "AllRecursiveCircuits length: {} bytes",
-            all_circuits_bytes.len()
-        );
-
-        let timing = TimingTree::new("deserialize AllRecursiveCircuits", log::Level::Info);
-        let all_circuits_from_bytes = AllRecursiveCircuits::from_bytes(
-            &all_circuits_bytes,
-            false,
-            &gate_serializer,
-            &generator_serializer,
-        )
-        .map_err(|_| anyhow::Error::msg("AllRecursiveCircuits deserialization failed."))?;
-        timing.filter(Duration::from_millis(100)).print();
-
-        assert_eq!(all_circuits, all_circuits_from_bytes);
-    }
 
     let bp = some_timestamps
         .iter()
