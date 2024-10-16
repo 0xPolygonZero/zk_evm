@@ -1152,6 +1152,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "build-array"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67ef4e2687af237b2646687e19a0643bc369878216122e46c3f1a01c56baa9d5"
+dependencies = [
+ "arrayvec",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5127,6 +5136,7 @@ dependencies = [
  "assert2",
  "bitflags 2.6.0",
  "bitvec",
+ "build-array",
  "bytes",
  "camino",
  "ciborium",
@@ -5816,6 +5826,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "axum",
+ "cfg-if",
  "clap",
  "compat",
  "directories",
