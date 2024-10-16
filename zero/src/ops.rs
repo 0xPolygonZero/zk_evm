@@ -242,47 +242,44 @@ impl Monoid for SegmentAggProof {
     type Elem = SegmentAggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let proof = generate_segment_agg_proof(p_state(), &a, &b).map_err(|e| {
-            if self.save_inputs_on_error {
-                let pv = vec![
-                    get_seg_agg_proof_public_values(a.clone()),
-                    get_seg_agg_proof_public_values(b.clone()),
-                ];
-                save_inputs_to_disk(
-                    format!(
-                        "b{}_seg_agg_{:?}_lhs_monoid.json",
-                        pv[0].block_metadata.block_number, pv[0].extra_block_data.gas_used_before
-                    ),
-                    a.as_prover_output_data(),
-                )
-                .unwrap();
-                save_inputs_to_disk(
-                    format!(
-                        "b{}_seg_agg_{:?}_rhs_monoid.json",
-                        pv[0].block_metadata.block_number, pv[1].extra_block_data.gas_used_before
-                    ),
-                    b.as_prover_output_data(),
-                )
-                .unwrap();
+        let pv = vec![
+            get_seg_agg_proof_public_values(a.clone()),
+            get_seg_agg_proof_public_values(b.clone()),
+        ];
+        save_inputs_to_disk(
+            format!(
+                "b{}_seg_agg_{:?}_lhs_monoid.json",
+                pv[0].block_metadata.block_number, pv[0].extra_block_data.gas_used_before
+            ),
+            a.as_prover_output_data(),
+        )
+        .unwrap();
+        save_inputs_to_disk(
+            format!(
+                "b{}_seg_agg_{:?}_rhs_monoid.json",
+                pv[0].block_metadata.block_number, pv[1].extra_block_data.gas_used_before
+            ),
+            b.as_prover_output_data(),
+        )
+        .unwrap();
 
-                if let Err(write_err) = save_inputs_to_disk(
-                    format!("b{}_seg_agg_inputs.json", pv[0].block_metadata.block_number),
-                    pv,
-                ) {
-                    error!("Failed to save agg proof inputs to disk: {:?}", write_err);
-                }
-
-                if b.is_dummy() {
-                    warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
-                }
-            }
-
-            FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
-        })?;
+        if let Err(write_err) = save_inputs_to_disk(
+            format!("b{}_seg_agg_inputs.json", pv[0].block_metadata.block_number),
+            pv,
+        ) {
+            error!("Failed to save agg proof inputs to disk: {:?}", write_err);
+        }
 
         if b.is_dummy() {
             warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
         }
+
+        if b.is_dummy() {
+            warn!("WE SHOULD NEVER HAVE DUMMY SEGMENTS HERE");
+        }
+
+        let proof = generate_segment_agg_proof(p_state(), &a, &b)
+            .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?;
 
         Ok(SegmentAggregatableProof::Agg(proof))
     }
