@@ -4,10 +4,11 @@ use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{init_logger, segment_with_empty_tables};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::AllStark;
+use evm_arithmetization::{AllStark, RecursionConfig};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::timed;
+use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 
@@ -58,6 +59,22 @@ fn empty_tables() -> anyhow::Result<()> {
             &config,
         )
     );
+
+    // Test serialize/deserialize all circuits
+    let gate_serializer = DefaultGateSerializer;
+    let witness_serializer: DefaultGeneratorSerializer<RecursionConfig, D> =
+        DefaultGeneratorSerializer::default();
+    let all_circuits_bytes = all_circuits
+        .to_bytes(false, &gate_serializer, &witness_serializer)
+        .unwrap();
+    let all_circuits: AllRecursiveCircuits<F, C, D> = AllRecursiveCircuits::from_bytes(
+        &all_circuits_bytes,
+        false,
+        &gate_serializer,
+        &witness_serializer,
+    )
+    .unwrap();
+
     let segment_proof = timed!(
         timing,
         log::Level::Info,
