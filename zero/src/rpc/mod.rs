@@ -45,13 +45,12 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_id: BlockId,
     checkpoint_block_number: u64,
-    rpc_type: RpcType,
 ) -> Result<BlockProverInput, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    match rpc_type {
+    match cached_provider.rpc_type {
         RpcType::Jerigon => {
             jerigon::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
         }

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Args:
-# 1 --> Start block idx
-# 2 --> End block index (inclusive)
+# 1 --> Start block (number or hash)
+# 2 --> End block (number or hash, inclusive)
 # 3 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
 # 4 --> Rpc type (eg. jerigon / native)
-# 5 --> Ignore previous proofs (boolean)
+# 5 --> Checkpoint block (number or hash, optional)
 # 6 --> Backoff in milliseconds (optional [default: 0])
 # 7 --> Number of retries (optional [default: 0])
 # 8 --> Test run only flag `test_only` (optional)
@@ -44,7 +44,7 @@ START_BLOCK=$1
 END_BLOCK=$2
 NODE_RPC_URL=$3
 NODE_RPC_TYPE=$4
-IGNORE_PREVIOUS_PROOFS=$5
+CHECKPOINT_BLOCK=$5
 BACKOFF=${6:-0}
 RETRIES=${7:-0}
 
@@ -58,23 +58,15 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
-if $IGNORE_PREVIOUS_PROOFS ; then
+if $CHECKPOINT_BLOCK ; then
     # Set checkpoint height to previous block number for the first block in range
-    prev_proof_num=$(($1-1))
-    PREV_PROOF_EXTRA_ARG="--checkpoint-block-number ${prev_proof_num}"
+    PREV_PROOF_EXTRA_ARG="--checkpoint-block $CHECKPOINT_BLOCK"
 else
+    # TODO(serge in current PR): This is impossible if blocks are specified by hash
     if [[ $1 -gt 1 ]]; then
         prev_proof_num=$(($1-1))
         PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
     fi
-fi
-
-# Convert hex to decimal parameters
-if [[ $START_BLOCK == 0x* ]]; then
-    START_BLOCK=$((16#${START_BLOCK#"0x"}))
-fi
-if [[ $END_BLOCK == 0x* ]]; then
-    END_BLOCK=$((16#${END_BLOCK#"0x"}))
 fi
 
 # Define block interval

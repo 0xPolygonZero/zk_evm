@@ -5,12 +5,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
-use client::RpcParams;
 use paladin::config::Config;
 use paladin::runtime::Runtime;
 use tracing::info;
 use zero::env::load_dotenvy_vars_if_present;
 use zero::prover::{ProofRuntime, ProverConfig};
+use zero::rpc::retry::build_http_retry_provider;
 use zero::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
@@ -103,26 +103,36 @@ async fn main() -> Result<()> {
         Command::Rpc {
             rpc_url,
             rpc_type,
-            block_interval,
-            checkpoint_block_number,
+            checkpoint_block,
             previous_proof,
             block_time,
+            end_block,
+            start_block,
             backoff,
             max_retries,
         } => {
+            // Construct the provider.
             let previous_proof = get_previous_proof(previous_proof)?;
-            let block_interval = BlockInterval::new(&block_interval)?;
+            let retry_provider = build_http_retry_provider(rpc_url.clone(), backoff, max_retries)?;
+            let cached_provider = Arc::new(zero::provider::CachedProvider::new(
+                retry_provider,
+                rpc_type,
+            ));
 
+            // Construct the block interval.
+            let block_interval =
+                BlockInterval::new(cached_provider.clone(), start_block, end_block).await?;
+
+            // Convert the checkpoint block to a block number.
+            let checkpoint_block_number =
+                BlockInterval::block_to_num(cached_provider.clone(), checkpoint_block).await?;
+
+            // Prove the block interval.
             info!("Proving interval {block_interval}");
             client_main(
                 proof_runtime,
-                RpcParams {
-                    rpc_url,
-                    rpc_type,
-                    backoff,
-                    max_retries,
-                    block_time,
-                },
+                cached_provider,
+                block_time,
                 block_interval,
                 LeaderConfig {
                     checkpoint_block_number,
