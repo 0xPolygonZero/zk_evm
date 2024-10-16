@@ -38,7 +38,6 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
 OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b$1_$2.log"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.
-TOT_BLOCKS=$(($2-$1+1))
 
 START_BLOCK=$1
 END_BLOCK=$2
@@ -58,27 +57,18 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
-if $CHECKPOINT_BLOCK ; then
+if [ -n "$CHECKPOINT_BLOCK" ] ; then
     # Set checkpoint height to previous block number for the first block in range
     PREV_PROOF_EXTRA_ARG="--checkpoint-block $CHECKPOINT_BLOCK"
 else
-    # TODO(serge in current PR): This is impossible if blocks are specified by hash
+    if [[ $START_BLOCK == 0x* ]]; then
+        echo "Checkpoint block is required when specifying blocks by hash"
+        exit 1
+    fi
     if [[ $1 -gt 1 ]]; then
         prev_proof_num=$(($1-1))
         PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
     fi
-fi
-
-# Define block interval
-if [ $END_BLOCK == '-' ]; then
-  # Follow from the start block to the end of the chain
-  BLOCK_INTERVAL=$START_BLOCK..
-elif [ $START_BLOCK == $END_BLOCK ]; then
-  # Single block
-  BLOCK_INTERVAL=$START_BLOCK
-else
-  # Block range
-  BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
 
 # Print out a warning if the we're using `native` and our file descriptor limit is too low. Don't bother if we can't find `ulimit`.
@@ -100,10 +90,24 @@ fi
 # other non-proving code.
 if [[ $8 == "test_only" ]]; then
     # test only run
-    echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL  $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    echo "Proving blocks from ($START_BLOCK) to ($END_BLOCK)"
+    command="cargo r --release --package zero --bin leader -- \
+--test-only \
+--runtime in-memory \
+--load-strategy on-demand \
+--proof-output-dir $PROOF_OUTPUT_DIR \
+--block-batch-size $BLOCK_BATCH_SIZE \
+rpc \
+--rpc-type $NODE_RPC_TYPE \
+--rpc-url $NODE_RPC_URL \
+--start-block $START_BLOCK \
+--end-block $END_BLOCK \
+$PREV_PROOF_EXTRA_ARG \
+--backoff $BACKOFF \
+--max-retries $RETRIES"
+
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
-        eval $command
+        eval "$command"
         retVal=$?
         echo -e "Proof witness generation finished with result: $retVal"
         exit $retVal
@@ -142,7 +146,7 @@ else
                 rm $OUT_LOG_PATH
             fi
         fi
-        echo "Successfully generated ${TOT_BLOCKS} proofs!"
+        echo "Successfully generated proofs!"
     fi
 fi
 
