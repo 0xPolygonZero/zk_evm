@@ -12,7 +12,7 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
+use crate::tries::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone)]
@@ -66,10 +66,10 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_key(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
+                .insert_hash_by_key(MptKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
-            let path = TrieKey::new(path.iter().copied().chain(key))?
+            let path = MptKey::new(path.iter().copied().chain(key))?
                 .into_hash()
                 .context("invalid depth for leaf of state trie")?;
             match value {
@@ -106,8 +106,7 @@ fn visit(
                         },
                     };
                     #[expect(deprecated)] // this is MPT-specific code
-                    let clobbered = frontend.state.insert_by_hashed_address(path, account)?;
-                    ensure!(clobbered.is_none(), "duplicate account");
+                    frontend.state.insert_by_hashed_address(path, account)?;
                 }
             }
         }
@@ -141,12 +140,12 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
     ) -> anyhow::Result<()> {
         match node {
             Node::Hash(Hash { raw_hash }) => {
-                mpt.insert_hash(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
+                mpt.insert_hash(MptKey::new(path.iter().copied())?, raw_hash.into())?;
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
-                        TrieKey::new(path.iter().copied().chain(key))?,
+                        MptKey::new(path.iter().copied().chain(key))?,
                         rlp::encode(&raw_value.as_slice()).to_vec(),
                     )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),
@@ -380,6 +379,8 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 
 #[test]
 fn test_tries() {
+    use crate::tries::StateTrie as _;
+
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/zero_jerigon.json"))
             .unwrap()

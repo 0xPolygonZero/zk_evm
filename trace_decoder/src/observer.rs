@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use ethereum_types::{H256, U256};
 
 use crate::core::IntraBlockTries;
-use crate::typed_mpt::{ReceiptTrie, StorageTrie, TransactionTrie};
+use crate::tries::{ReceiptTrie, StorageTrie, TransactionTrie};
 
 /// Observer API for the trace decoder.
 /// Observer is used to collect various debugging and metadata info
