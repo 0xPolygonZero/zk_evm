@@ -11,6 +11,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 #[cfg(feature = "eth_mainnet")]
 use evm_arithmetization::testing_utils::beacon_roots_contract_from_storage;
+use evm_arithmetization::testing_utils::ADDRESS_SCALABLE_L2;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, create_account_storage, init_logger,
     preinitialized_state_and_storage_tries, sd2u, update_beacon_roots_account_storage,
@@ -138,6 +139,13 @@ fn test_erc20() -> anyhow::Result<()> {
             &token_storage_after(),
         );
 
+        set_account(
+            &mut smt,
+            ADDRESS_SCALABLE_L2,
+            &scalable_account(),
+            &HashMap::new(),
+        );
+
         smt
     };
 
@@ -175,7 +183,10 @@ fn test_erc20() -> anyhow::Result<()> {
     .into();
 
     log::debug!("expected smt after = {}", expected_smt_after);
-    log::debug!("expected smt data after = {:?}", expected_smt_after.to_vec());
+    log::debug!(
+        "expected smt data after = {:?}",
+        expected_smt_after.to_vec()
+    );
 
     let trie_roots_after = TrieRoots {
         state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
@@ -259,6 +270,14 @@ fn token_storage_after() -> HashMap<U256, U256> {
     storage
 }
 
+fn scalable_storage_aftert() -> HashMap<U256, U256> {
+    let mut storage = HashMap::new();
+    storage.insert(
+        U256::from(LAST_BLOCK_STORAGE_POS),
+        
+;    )
+}
+
 fn giver_account() -> AccountRlp {
     let code = giver_bytecode();
     let len = code.len();
@@ -285,6 +304,14 @@ fn sender_account() -> AccountRlp {
     AccountRlp {
         nonce: 0.into(),
         balance: sd2u("10000000000000000000000"),
+        ..Default::default()
+    }
+}
+
+fn scalable_account() -> AccountRlp {
+    AccountRlp {
+        nonce: 0.into(),
+        balance: 0.into(),
         ..Default::default()
     }
 }

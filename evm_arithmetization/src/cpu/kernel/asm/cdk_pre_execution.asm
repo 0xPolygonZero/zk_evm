@@ -15,6 +15,7 @@ global pre_block_execution:
 global update_scalable_block_number:
     // stack: retdest
     %blocknumber
+global debug_blocknumber:
     PUSH @LAST_BLOCK_STORAGE_POS
     // stack: last_block_slot, block_number, retdest
     %write_scalable_storage
@@ -90,6 +91,7 @@ skip_and_exit:
 global update_scalable_timestamp:
     // stack: retdest
     %timestamp
+global debug_le_timestamp:
     PUSH @TIMESTAMP_STORAGE_POS
     // stack: timestamp_slot, timestamp, retdest
     %write_scalable_storage
