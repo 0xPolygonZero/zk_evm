@@ -6,10 +6,7 @@ use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
 
-use crate::{
-    tries::{MptKey, SmtKey, StateMpt, StorageTrie},
-    type2,
-};
+use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
 
 /// The [core](crate::core) of this crate is agnostic over state and storage
 /// representations.
@@ -260,22 +257,22 @@ impl World for Type2World {
         f: impl FnOnce(&mut U256),
     ) -> anyhow::Result<()> {
         let acct = self.accounts.entry(address).or_default();
-        f(&mut acct.balance);
+        f(acct.balance.get_or_insert(Default::default()));
         Ok(())
     }
     fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
         let acct = self.accounts.entry(address).or_default();
-        f(&mut acct.nonce);
+        f(acct.nonce.get_or_insert(Default::default()));
         Ok(())
     }
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
         let acct = self.accounts.entry(address).or_default();
         match code {
             Either::Left(bytes) => {
-                acct.code = keccak_hash::keccak(bytes).into_uint();
-                acct.code_length = U256::from(bytes.len())
+                acct.code = Some(keccak_hash::keccak(bytes).into_uint());
+                acct.code_length = Some(U256::from(bytes.len()))
             }
-            Either::Right(hash) => acct.code = hash.into_uint(),
+            Either::Right(hash) => acct.code = Some(hash.into_uint()),
         };
         Ok(())
     }
@@ -346,10 +343,10 @@ impl World for Type2World {
 
 #[derive(Default)]
 pub struct Type2Entry {
-    pub balance: U256,
-    pub nonce: U256,
-    pub code: U256,
-    pub code_length: U256,
+    pub balance: Option<U256>,
+    pub nonce: Option<U256>,
+    pub code: Option<U256>,
+    pub code_length: Option<U256>,
     pub storage: BTreeMap<U256, U256>,
 }
 
@@ -392,7 +389,9 @@ impl Type2World {
                 (code, key_code),
                 (code_length, key_code_length),
             ] {
-                smt.set(key_fn(*addr), *value);
+                if let Some(value) = value {
+                    smt.set(key_fn(*addr), *value);
+                }
             }
             for (slot, value) in storage {
                 smt.set(key_storage(*addr, *slot), *value);

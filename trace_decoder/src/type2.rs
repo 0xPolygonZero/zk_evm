@@ -16,16 +16,6 @@ use crate::{
     world::{Type2Entry, Type2World},
 };
 
-/// Combination of all the [`SmtLeaf::node_type`]s
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct CollatedLeaf {
-    pub balance: Option<ethereum_types::U256>,
-    pub nonce: Option<ethereum_types::U256>,
-    pub code: Option<ethereum_types::U256>,
-    pub code_length: Option<ethereum_types::U256>,
-    pub storage: BTreeMap<U256, U256>,
-}
-
 pub struct Frontend {
     pub world: Type2World,
     pub code: HashSet<NonEmpty<Vec<u8>>>,
@@ -118,36 +108,12 @@ fn node2world(node: Node) -> anyhow::Result<Type2World> {
     let mut hashes = BTreeMap::new();
     let mut leaves = BTreeMap::new();
     visit(&mut hashes, &mut leaves, Stack::new(), node)?;
-    Ok(Type2World::new_unchecked(
-        leaves
-            .into_iter()
-            .map(|(k, v)| {
-                let CollatedLeaf {
-                    balance,
-                    nonce,
-                    code,
-                    code_length,
-                    storage,
-                } = v;
-                (
-                    k,
-                    Type2Entry {
-                        balance: balance.unwrap_or_default(),
-                        nonce: nonce.unwrap_or_default(),
-                        code: code.unwrap_or_default(),
-                        code_length: code_length.unwrap_or_default(),
-                        storage,
-                    },
-                )
-            })
-            .collect(),
-        hashes,
-    ))
+    Ok(Type2World::new_unchecked(leaves, hashes))
 }
 
 fn visit(
     hashes: &mut BTreeMap<SmtKey, H256>,
-    leaves: &mut BTreeMap<Address, CollatedLeaf>,
+    leaves: &mut BTreeMap<Address, Type2Entry>,
     path: Stack<bool>,
     node: Node,
 ) -> anyhow::Result<()> {
