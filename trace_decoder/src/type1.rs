@@ -15,23 +15,11 @@ use u4::U4;
 use crate::tries::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Frontend {
     pub state: StateMpt,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     pub storage: BTreeMap<H256, StorageTrie>,
-}
-
-impl Default for Frontend {
-    // This frontend is intended to be used with our custom `zeroTracer`,
-    // which covers branch-to-extension collapse edge cases.
-    fn default() -> Self {
-        Self {
-            state: StateMpt::new(OnOrphanedHashNode::CollapseToExtension),
-            code: BTreeSet::new(),
-            storage: BTreeMap::new(),
-        }
-    }
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -66,7 +54,7 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_key(MptKey::new(path.iter().copied())?, raw_hash.into())?;
+                .insert_hash(MptKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
             let path = MptKey::new(path.iter().copied().chain(key))?
@@ -105,8 +93,7 @@ fn visit(
                             }
                         },
                     };
-                    #[expect(deprecated)] // this is MPT-specific code
-                    frontend.state.insert_by_hashed_address(path, account)?;
+                    frontend.state.insert(path, account)?;
                 }
             }
         }
@@ -379,8 +366,6 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 
 #[test]
 fn test_tries() {
-    use crate::tries::StateTrie as _;
-
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/zero_jerigon.json"))
             .unwrap()
@@ -393,7 +378,7 @@ fn test_tries() {
         assert_eq!(case.expected_state_root, frontend.state.root());
 
         for (haddr, acct) in frontend.state.iter() {
-            if acct.storage_root != StateMpt::default().root() {
+            if acct.storage_root != StorageTrie::default().root() {
                 assert!(frontend.storage.contains_key(&haddr))
             }
         }
