@@ -93,7 +93,7 @@ pub mod testing {
     use starky::stark::Stark;
     use starky::verifier::verify_stark_proof_with_challenges;
 
-    use crate::all_stark::{Table, MEMORY_CTL_IDX};
+    use crate::all_stark::{Table, MEMORY_CTL_IDX, NUM_CTLS};
     use crate::cpu::kernel::aggregator::KERNEL;
     use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
     use crate::get_challenges::testing::AllProofChallenges;
@@ -250,7 +250,8 @@ pub mod testing {
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums = HashMap::new();
+        let mut extra_looking_sums =
+            HashMap::from_iter((0..NUM_CTLS).map(|i| (i, vec![F::ZERO; config.num_challenges])));
 
         // Memory
         extra_looking_sums.insert(
