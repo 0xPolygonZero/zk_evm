@@ -94,7 +94,7 @@ store_origin:
     // stack: address, blob_gas_fee, address, retdest
     %deduct_eth
     // stack: deduct_eth_status, address, retdest
-    %jumpi(transfer_eth_failure)
+    %jumpi(panic)
 
     // stack: address, retdest
     %mstore_txn_field(@TXN_FIELD_ORIGIN)

@@ -1,18 +1,26 @@
 //! A set of utility functions and constants to be used by `evm_arithmetization`
 //! unit and integration tests.
 
+use anyhow::Result;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
+use plonky2::field::goldilocks_field::GoldilocksField;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u};
+use crate::generation::{TrieInputs, TrimmedGenerationInputs};
+use crate::proof::TrieRoots;
+use crate::witness::operation::Operation;
+use crate::{
+    generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
+    GenerationSegmentData, SegmentDataIterator,
+};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -160,4 +168,69 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
         storage_root: storage_trie.hash(),
         ..Default::default()
     }
+}
+
+fn empty_payload() -> Result<GenerationInputs> {
+    // Set up default block metadata
+    let block_metadata = BlockMetadata {
+        block_beneficiary: Address::zero(),
+        block_timestamp: U256::zero(),
+        block_number: U256::one(),
+        block_difficulty: U256::zero(),
+        block_random: H256::zero(),
+        block_gaslimit: U256::zero(),
+        block_chain_id: U256::one(),
+        block_base_fee: U256::zero(),
+        ..Default::default()
+    };
+
+    // Initialize an empty state trie and storage tries
+    let state_trie_before = HashedPartialTrie::from(crate::Node::Empty);
+    let storage_tries = Vec::new();
+    let checkpoint_state_trie_root = state_trie_before.hash();
+
+    // Prepare the tries without any transactions or receipts
+    let tries_before = TrieInputs {
+        state_trie: state_trie_before.clone(),
+        storage_tries: storage_tries.clone(),
+        transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
+        receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
+    };
+
+    // The expected state trie after execution remains the same as before
+    let expected_state_trie_after = state_trie_before;
+
+    // Compute the trie roots after execution
+    let trie_roots_after = TrieRoots {
+        state_root: expected_state_trie_after.hash(),
+        transactions_root: tries_before.transactions_trie.hash(),
+        receipts_root: tries_before.receipts_trie.hash(),
+    };
+
+    // Construct the GenerationInputs without any transactions or state changes
+    let inputs = GenerationInputs {
+        tries: tries_before,
+        trie_roots_after,
+        checkpoint_state_trie_root,
+        block_metadata,
+        ..Default::default()
+    };
+
+    Ok(inputs)
+}
+
+pub fn segment_with_empty_tables() -> Result<(
+    TrimmedGenerationInputs<GoldilocksField>,
+    GenerationSegmentData,
+)> {
+    let payload = empty_payload()?;
+    let max_cpu_len_log = Some(7);
+    let mut segment_iterator =
+        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
+    let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
+
+    let opcode_counts = &segment_data.opcode_counts;
+    assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+
+    Ok((trimmed_inputs, segment_data))
 }

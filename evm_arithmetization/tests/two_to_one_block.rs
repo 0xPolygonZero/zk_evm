@@ -115,43 +115,41 @@ fn get_test_block_proof(
     let dummy1_proof =
         all_circuits.prove_all_segments(all_stark, config, dummy1, 20, timing, None)?;
 
-    let inputs0_proof = all_circuits.prove_segment_aggregation(
-        false,
-        &dummy0_proof0[0],
-        false,
-        &dummy0_proof0[1],
-    )?;
+    let inputs0_proof =
+        all_circuits.prove_segment_aggregation(&dummy0_proof0[0], &dummy0_proof0[1])?;
     let dummy0_proof =
-        all_circuits.prove_segment_aggregation(false, &dummy1_proof[0], false, &dummy1_proof[1])?;
+        all_circuits.prove_segment_aggregation(&dummy1_proof[0], &dummy1_proof[1])?;
 
-    let (agg_proof, pv) = all_circuits.prove_batch_aggregation(
+    let batch_proof = all_circuits.prove_batch_aggregation(
         false,
-        &inputs0_proof.proof_with_pis,
-        inputs0_proof.public_values,
+        &inputs0_proof.proof_with_pvs,
         false,
-        &dummy0_proof.proof_with_pis,
-        dummy0_proof.public_values,
+        &dummy0_proof.proof_with_pvs,
     )?;
 
-    all_circuits.verify_txn_aggregation(&agg_proof)?;
+    all_circuits.verify_batch_aggregation(&batch_proof.intern)?;
 
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&agg_proof.public_inputs);
-    assert_eq!(retrieved_public_values, pv);
+    let retrieved_public_values =
+        PublicValues::from_public_inputs(&batch_proof.intern.public_inputs);
+    assert_eq!(retrieved_public_values, batch_proof.public_values);
     assert_eq!(
-        pv.trie_roots_before.state_root,
-        pv.extra_block_data.checkpoint_state_trie_root
+        batch_proof.public_values.trie_roots_before.state_root,
+        batch_proof
+            .public_values
+            .extra_block_data
+            .checkpoint_state_trie_root
     );
 
-    let (block_proof, block_public_values) = all_circuits.prove_block(
+    let block_proof = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
-        &agg_proof, pv,
+        &batch_proof,
     )?;
 
-    all_circuits.verify_block(&block_proof)?;
+    all_circuits.verify_block(&block_proof.intern)?;
 
     let (wrapped_block_proof, block_final_public_values) =
-        all_circuits.prove_block_wrapper(&block_proof, block_public_values)?;
+        all_circuits.prove_block_wrapper(&block_proof)?;
 
     // Test retrieved final public values from the proof public inputs.
     let retrieved_final_public_values =
@@ -174,7 +172,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
-        &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 17..18, 7..8],
+        &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 16..17, 7..8],
         &config,
     );
 

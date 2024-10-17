@@ -13,11 +13,11 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  BINSTALL_NO_CONFIRM: true
 
 jobs:
   clippy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
@@ -25,28 +25,44 @@ jobs:
       - run: cargo clippy --all-targets --no-default-features --features cdk_erigon -- -D warnings
   udeps:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo binstall cargo-udeps
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-udeps
       - run: cargo udeps --quiet
       - run: cargo udeps --quiet --tests --benches --examples
   rustdoc:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo doc --all
+      - run: RUSTDOCFLAGS='-D warnings -A rustdoc::private_intra_doc_links' cargo doc --all --no-deps
+      # TODO(zero): https://github.com/0xPolygonZero/zk_evm/issues/718
+      - run: >
+          RUSTDOCFLAGS='-D warnings -A rustdoc::private_intra_doc_links' cargo doc --no-deps --document-private-items
+          --package trace_decoder
+          --package compat
+          --package smt_trie
+          --package zk_evm_proc_macro
+          --package zk_evm_common
   cargo-fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
       - run: cargo fmt --check
   taplo-fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo binstall taplo-cli
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: taplo-cli
       - run: taplo fmt --check

@@ -4,10 +4,8 @@ use std::iter;
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use starky::config::StarkConfig;
 use starky::cross_table_lookup::{CrossTableLookup, TableIdx, TableWithColumns};
 use starky::evaluation_frame::StarkFrame;
-use starky::stark::Stark;
 
 use crate::arithmetic::arithmetic_stark;
 use crate::arithmetic::arithmetic_stark::ArithmeticStark;
@@ -69,24 +67,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> AllStark<F, D> {
-    pub(crate) fn num_lookups_helper_columns(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
-        [
-            self.arithmetic_stark.num_lookup_helper_columns(config),
-            self.byte_packing_stark.num_lookup_helper_columns(config),
-            self.cpu_stark.num_lookup_helper_columns(config),
-            self.keccak_stark.num_lookup_helper_columns(config),
-            self.keccak_sponge_stark.num_lookup_helper_columns(config),
-            self.logic_stark.num_lookup_helper_columns(config),
-            self.memory_stark.num_lookup_helper_columns(config),
-            self.mem_before_stark.num_lookup_helper_columns(config),
-            self.mem_after_stark.num_lookup_helper_columns(config),
-            #[cfg(feature = "cdk_erigon")]
-            self.poseidon_stark.num_lookup_helper_columns(config),
-        ]
-    }
-}
-
 pub type EvmStarkFrame<T, U, const N: usize> = StarkFrame<T, U, N, 0>;
 
 /// Associates STARK tables with a unique index.
@@ -126,6 +106,10 @@ pub const NUM_TABLES: usize = if cfg!(feature = "cdk_erigon") {
     Table::MemAfter as usize + 1
 };
 
+/// Indices of Keccak Tables
+pub const KECCAK_TABLES_INDICES: [usize; 2] =
+    [Table::Keccak as usize, Table::KeccakSponge as usize];
+
 impl Table {
     /// Returns all STARK table indices.
     pub(crate) const fn all() -> [Self; NUM_TABLES] {
@@ -144,6 +128,11 @@ impl Table {
         ]
     }
 }
+
+/// The total number of CTLs used by the zkEVM.
+pub(crate) const NUM_CTLS: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 10 };
+/// The position of the Memory CTL within all CTLs of the zkEVM.
+pub(crate) const MEMORY_CTL_IDX: usize = 6;
 
 /// Returns all the `CrossTableLookups` used for proving the EVM.
 pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
@@ -434,4 +423,18 @@ fn ctl_poseidon_general_output<F: Field>() -> CrossTableLookup<F> {
         vec![cpu_stark::ctl_poseidon_general_output()],
         poseidon_stark::ctl_looked_general_output(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+
+    use super::*;
+
+    type F = GoldilocksField;
+
+    #[test]
+    fn check_num_ctls() {
+        assert_eq!(all_cross_table_lookups::<F>().len(), NUM_CTLS);
+    }
 }

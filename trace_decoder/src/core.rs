@@ -4,10 +4,10 @@ use std::{
     mem,
 };
 
-use alloy::primitives::address;
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
-use ethereum_types::{Address, H160, U256};
+use either::Either;
+use ethereum_types::{Address, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -19,20 +19,35 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
-use crate::observer::Observer;
 use crate::{
-    typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+    observer::{DummyObserver, Observer},
+    tries::StateSmt,
+};
+use crate::{
+    tries::{MptKey, ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,
 };
 
-/// TODO(0xaatif): document this after https://github.com/0xPolygonZero/zk_evm/issues/275
+/// Expected trie type when parsing from binary in a [`BlockTrace`].
+///
+/// See [`crate::wire`] and [`CombinedPreImages`] for more.
+#[derive(Debug)]
+pub enum WireDisposition {
+    /// MPT
+    Type1,
+    /// SMT
+    Type2,
+}
+
+/// TODO(0xaatif): document this after <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size_hint: usize,
     observer: &mut impl Observer<StateMpt>,
+    wire_disposition: WireDisposition,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     ensure!(batch_size_hint != 0);
 
@@ -41,7 +56,13 @@ pub fn entrypoint(
         code_db,
         txn_info,
     } = trace;
-    let (state, storage, mut code) = start(trie_pre_images)?;
+
+    let fatal_missing_code = match trie_pre_images {
+        BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
+        BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
+    };
+    let (state, storage, mut code) = start(trie_pre_images, wire_disposition)?;
+
     code.extend(code_db);
 
     let OtherBlockData {
@@ -61,16 +82,40 @@ pub fn entrypoint(
         *amt = gwei_to_wei(*amt)
     }
 
-    let batches = middle(
-        state,
-        storage,
-        batch(txn_info, batch_size_hint),
-        &mut code,
-        &b_meta,
-        ger_data,
-        withdrawals,
-        observer,
-    )?;
+    let batches = match state {
+        Either::Left(mpt) => Either::Left(
+            middle(
+                mpt,
+                storage,
+                batch(txn_info, batch_size_hint),
+                &mut code,
+                &b_meta,
+                ger_data,
+                withdrawals,
+                fatal_missing_code,
+                observer,
+            )?
+            .into_iter()
+            .map(|it| it.map(Either::Left)),
+        ),
+        Either::Right(smt) => {
+            Either::Right(
+                middle(
+                    smt,
+                    storage,
+                    batch(txn_info, batch_size_hint),
+                    &mut code,
+                    &b_meta,
+                    ger_data,
+                    withdrawals,
+                    fatal_missing_code,
+                    &mut DummyObserver::new(), // TODO(0xaatif)
+                )?
+                .into_iter()
+                .map(|it| it.map(Either::Right)),
+            )
+        }
+    };
 
     let mut running_gas_used = 0;
     Ok(batches
@@ -101,7 +146,10 @@ pub fn entrypoint(
                 withdrawals,
                 ger_data,
                 tries: TrieInputs {
-                    state_trie: state.into(),
+                    state_trie: match state {
+                        Either::Left(mpt) => mpt.into(),
+                        Either::Right(_) => todo!("evm_arithmetization accepts an SMT"),
+                    },
                     transactions_trie: transaction.into(),
                     receipts_trie: receipt.into(),
                     storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
@@ -125,11 +173,16 @@ pub fn entrypoint(
 /// [`HashedPartialTrie`](mpt_trie::partial_trie::HashedPartialTrie),
 /// or a [`wire`](crate::wire)-encoded representation of one.
 ///
-/// Turn either of those into our [`typed_mpt`](crate::typed_mpt)
-/// representations.
+/// Turn either of those into our [internal representations](crate::tries).
+#[allow(clippy::type_complexity)]
 fn start(
     pre_images: BlockTraceTriePreImages,
-) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
+    wire_disposition: WireDisposition,
+) -> anyhow::Result<(
+    Either<StateMpt, StateSmt>,
+    BTreeMap<H256, StorageTrie>,
+    Hash2Code,
+)> {
     Ok(match pre_images {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
         //                refactor our convoluted input types
@@ -140,7 +193,7 @@ fn start(
             let state = state.items().try_fold(
                 StateMpt::default(),
                 |mut acc, (nibbles, hash_or_val)| {
-                    let path = TrieKey::from_nibbles(nibbles);
+                    let path = MptKey::from_nibbles(nibbles);
                     match hash_or_val {
                         mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
                             #[expect(deprecated)] // this is MPT specific
@@ -163,7 +216,7 @@ fn start(
                 .map(|(k, SeparateTriePreImage::Direct(v))| {
                     v.items()
                         .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                            let path = TrieKey::from_nibbles(nibbles);
+                            let path = MptKey::from_nibbles(nibbles);
                             match hash_or_val {
                                 mpt_trie::trie_ops::ValOrHash::Val(value) => {
                                     acc.insert(path, value)?;
@@ -177,17 +230,35 @@ fn start(
                         .map(|v| (k, v))
                 })
                 .collect::<Result<_, _>>()?;
-            (state, storage, Hash2Code::new())
+            (Either::Left(state), storage, Hash2Code::new())
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
-            let crate::type1::Frontend {
-                state,
-                storage,
-                code,
-            } = crate::type1::frontend(instructions)?;
-            (state, storage, code.into_iter().map(Into::into).collect())
+            let (state, storage, code) = match wire_disposition {
+                WireDisposition::Type1 => {
+                    let crate::type1::Frontend {
+                        state,
+                        storage,
+                        code,
+                    } = crate::type1::frontend(instructions)?;
+                    (
+                        Either::Left(state),
+                        storage,
+                        Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
+                    )
+                }
+                WireDisposition::Type2 => {
+                    let crate::type2::Frontend { trie, code } =
+                        crate::type2::frontend(instructions)?;
+                    (
+                        Either::Right(trie),
+                        BTreeMap::new(),
+                        Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
+                    )
+                }
+            };
+            (state, storage, code)
         }
     })
 }
@@ -261,6 +332,29 @@ struct Batch<StateTrieT> {
     pub withdrawals: Vec<(Address, U256)>,
 }
 
+impl<T> Batch<T> {
+    fn map<U>(self, f: impl FnMut(T) -> U) -> Batch<U> {
+        let Self {
+            first_txn_ix,
+            gas_used,
+            contract_code,
+            byte_code,
+            before,
+            after,
+            withdrawals,
+        } = self;
+        Batch {
+            first_txn_ix,
+            gas_used,
+            contract_code,
+            byte_code,
+            before: before.map(f),
+            after,
+            withdrawals,
+        }
+    }
+}
+
 /// [`evm_arithmetization::generation::TrieInputs`],
 /// generic over state trie representation.
 #[derive(Debug)]
@@ -270,6 +364,30 @@ pub struct IntraBlockTries<StateTrieT> {
     pub transaction: TransactionTrie,
     pub receipt: ReceiptTrie,
 }
+
+impl<T> IntraBlockTries<T> {
+    fn map<U>(self, mut f: impl FnMut(T) -> U) -> IntraBlockTries<U> {
+        let Self {
+            state,
+            storage,
+            transaction,
+            receipt,
+        } = self;
+        IntraBlockTries {
+            state: f(state),
+            storage,
+            transaction,
+            receipt,
+        }
+    }
+}
+/// Hacky handling of possibly missing contract bytecode in `Hash2Code` inner
+/// map.
+/// Allows incomplete payloads fetched with the zero tracer to skip these
+/// silently.
+// TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+#[derive(Copy, Clone)]
+pub struct FatalMissingCode(pub bool);
 
 /// Does the main work mentioned in the [module documentation](super).
 #[allow(clippy::too_many_arguments)]
@@ -286,14 +404,18 @@ fn middle<StateTrieT: StateTrie + Clone>(
     ger_data: Option<(H256, H256)>,
     // added to final batch
     mut withdrawals: Vec<(Address, U256)>,
+    fatal_missing_code: FatalMissingCode,
     // called with the untrimmed tries after each batch
     observer: &mut impl Observer<StateTrieT>,
-) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
+) -> anyhow::Result<Vec<Batch<StateTrieT>>>
+where
+    StateTrieT::Key: Ord + From<Address>,
+{
     // Initialise the storage tries.
     for (haddr, acct) in state_trie.iter() {
         let storage = storage_tries.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
-            it.insert_hash(TrieKey::default(), acct.storage_root)
+            it.insert_hash(MptKey::default(), acct.storage_root)
                 .expect("empty trie insert cannot fail");
             it
         });
@@ -328,8 +450,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
         // We want to perform mask the TrieInputs above,
         // but won't know the bounds until after the loop below,
         // so store that information here.
-        let mut storage_masks = BTreeMap::<_, BTreeSet<TrieKey>>::new();
-        let mut state_mask = BTreeSet::new();
+        let mut storage_masks = BTreeMap::<_, BTreeSet<MptKey>>::new();
+        let mut state_mask = BTreeSet::<StateTrieT::Key>::new();
 
         if txn_ix == 0 {
             do_pre_execution(
@@ -353,6 +475,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         gas_used: txn_gas_used,
                     },
             } = txn.unwrap_or_default();
+
+            let tx_hash = keccak_hash::keccak(&byte_code);
 
             if let Ok(nonempty) = nunny::Vec::new(byte_code) {
                 batch_byte_code.push(nonempty.clone());
@@ -384,19 +508,25 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                 )
                 .map_err(|e| anyhow!("{e:?}"))
-                .context("couldn't decode receipt")?;
+                .context(format!("couldn't decode receipt in txn {tx_hash:x}"))?;
 
                 let (mut acct, born) = state_trie
                     .get_by_address(addr)
                     .map(|acct| (acct, false))
                     .unwrap_or((AccountRlp::default(), true));
 
+                if born {
+                    // Empty accounts cannot have non-empty storage,
+                    // so we can safely insert a default trie.
+                    storage_tries.insert(keccak_hash::keccak(addr), StorageTrie::default());
+                }
+
                 if born || just_access {
                     state_trie
                         .clone()
                         .insert_by_address(addr, acct)
                         .context(format!(
-                            "couldn't reach state of {} address {addr:x}",
+                            "couldn't reach state of {} address {addr:x} in txn {tx_hash:x}",
                             match born {
                                 true => "created",
                                 false => "accessed",
@@ -417,7 +547,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     storage_written
                         .keys()
                         .chain(&storage_read)
-                        .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
+                        .map(|it| MptKey::from_hash(keccak_hash::keccak(it))),
                 );
 
                 if do_writes {
@@ -426,7 +556,21 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     acct.code_hash = code_usage
                         .map(|it| match it {
                             ContractCodeUsage::Read(hash) => {
-                                batch_contract_code.insert(code.get(hash)?);
+                                // TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
+                                // This is a bug in the zero tracer, which shouldn't be giving us
+                                // this read at all. Workaround for now.
+                                match (fatal_missing_code, code.get(hash)) {
+                                    (FatalMissingCode(true), None) => {
+                                        bail!("no code for hash {hash:x}")
+                                    }
+                                    (_, Some(byte_code)) => {
+                                        batch_contract_code.insert(byte_code);
+                                    }
+                                    (_, None) => {
+                                        log::warn!("no code for {hash:x}")
+                                    }
+                                }
+
                                 anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
@@ -442,13 +586,15 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     if !storage_written.is_empty() {
                         let storage = match born {
                             true => storage_tries.entry(keccak_hash::keccak(addr)).or_default(),
-                            false => storage_tries
-                                .get_mut(&keccak_hash::keccak(addr))
-                                .context(format!("missing storage trie for address {addr:x}"))?,
+                            false => storage_tries.get_mut(&keccak_hash::keccak(addr)).context(
+                                format!(
+                                    "missing storage trie for address {addr:x} in txn {tx_hash:x}"
+                                ),
+                            )?,
                         };
 
                         for (k, v) in storage_written {
-                            let slot = TrieKey::from_hash(keccak_hash::keccak(k));
+                            let slot = MptKey::from_hash(keccak_hash::keccak(k));
                             match v.is_zero() {
                                 // this is actually a delete
                                 true => storage_mask.extend(storage.reporting_remove(slot)?),
@@ -461,33 +607,10 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     }
 
                     state_trie.insert_by_address(addr, acct)?;
-                    state_mask.insert(TrieKey::from_address(addr));
+                    state_mask.insert(<StateTrieT::Key>::from(addr));
                 } else {
                     // Simple state access
-
-                    fn is_precompile(addr: H160) -> bool {
-                        let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
-                            address!("0000000000000000000000000000000000000001")
-                                ..address!("000000000000000000000000000000000000000a")
-                        } else {
-                            // Remove KZG Peval for non-Eth mainnet networks
-                            address!("0000000000000000000000000000000000000001")
-                                ..address!("0000000000000000000000000000000000000009")
-                        };
-
-                        precompiled_addresses.contains(&addr.compat())
-                            || (cfg!(feature = "polygon_pos")
-                            // Include P256Verify for Polygon PoS
-                            && addr.compat()
-                                == address!("0000000000000000000000000000000000000100"))
-                    }
-
-                    if receipt.status || !is_precompile(addr) {
-                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/pull/613
-                        //                masking like this SHOULD be a space-saving optimization,
-                        //                BUT if it's omitted, we actually get state root mismatches
-                        state_mask.insert(TrieKey::from_address(addr));
-                    }
+                    state_mask.insert(<StateTrieT::Key>::from(addr));
                 }
 
                 if self_destructed {
@@ -510,10 +633,10 @@ fn middle<StateTrieT: StateTrie + Clone>(
             withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
-                        state_mask.insert(TrieKey::from_address(*addr));
+                        state_mask.insert(<StateTrieT::Key>::from(*addr));
                         let mut acct = state_trie
                             .get_by_address(*addr)
-                            .context("missing address for withdrawal")?;
+                            .context(format!("missing address {addr:x} for withdrawal"))?;
                         acct.balance += *amt;
                         state_trie
                             .insert_by_address(*addr, acct)
@@ -568,10 +691,13 @@ fn do_pre_execution<StateTrieT: StateTrie + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
-    trim_state: &mut BTreeSet<TrieKey>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
+    trim_state: &mut BTreeSet<StateTrieT::Key>,
     state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    StateTrieT::Key: From<Address> + Ord,
+{
     // Ethereum mainnet: EIP-4788
     if cfg!(feature = "eth_mainnet") {
         return do_beacon_hook(
@@ -607,10 +733,13 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     storage: &mut BTreeMap<H256, StorageTrie>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
-    trim_state: &mut BTreeSet<TrieKey>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
+    trim_state: &mut BTreeSet<StateTrieT::Key>,
     state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    StateTrieT::Key: From<Address> + Ord,
+{
     use evm_arithmetization::testing_utils::{
         ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
         GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS, LAST_BLOCK_STORAGE_POS,
@@ -625,7 +754,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         .context("missing scalable contract storage trie")?;
     let scalable_trim = trim_storage.entry(ADDRESS_SCALABLE_L2).or_default();
 
-    let timestamp_slot_key = TrieKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
+    let timestamp_slot_key = MptKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
 
     let timestamp = scalable_storage
         .get(&timestamp_slot_key)
@@ -639,7 +768,7 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         (U256::from(LAST_BLOCK_STORAGE_POS.1), block.block_number),
         (U256::from(TIMESTAMP_STORAGE_POS.1), timestamp),
     ] {
-        let slot = TrieKey::from_slot_position(ix);
+        let slot = MptKey::from_slot_position(ix);
 
         // These values are never 0.
         scalable_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
@@ -652,12 +781,12 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
     let mut arr = [0; 64];
     (block.block_number - 1).to_big_endian(&mut arr[0..32]);
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-    let slot = TrieKey::from_hash(keccak_hash::keccak(arr));
+    let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
     scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
     scalable_trim.insert(slot);
 
-    trim_state.insert(TrieKey::from_address(ADDRESS_SCALABLE_L2));
+    trim_state.insert(<StateTrieT::Key>::from(ADDRESS_SCALABLE_L2));
     let mut scalable_acct = state_trie
         .get_by_address(ADDRESS_SCALABLE_L2)
         .context("missing scalable contract address")?;
@@ -678,12 +807,12 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
         let mut arr = [0; 64];
         arr[0..32].copy_from_slice(&root.0);
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
-        let slot = TrieKey::from_hash(keccak_hash::keccak(arr));
+        let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
         ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
         ger_trim.insert(slot);
 
-        trim_state.insert(TrieKey::from_address(GLOBAL_EXIT_ROOT_ADDRESS));
+        trim_state.insert(<StateTrieT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
         let mut ger_acct = state_trie
             .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
             .context("missing GER contract address")?;
@@ -706,11 +835,14 @@ fn do_scalable_hook<StateTrieT: StateTrie + Clone>(
 fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
     block_timestamp: U256,
     storage: &mut BTreeMap<H256, StorageTrie>,
-    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
+    trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     parent_beacon_block_root: H256,
-    trim_state: &mut BTreeSet<TrieKey>,
+    trim_state: &mut BTreeSet<StateTrieT::Key>,
     state_trie: &mut StateTrieT,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    StateTrieT::Key: From<Address> + Ord,
+{
     use evm_arithmetization::testing_utils::{
         BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
     };
@@ -731,7 +863,7 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
             U256::from_big_endian(parent_beacon_block_root.as_bytes()),
         ),
     ] {
-        let slot = TrieKey::from_slot_position(ix);
+        let slot = MptKey::from_slot_position(ix);
         beacon_trim.insert(slot);
 
         match u.is_zero() {
@@ -742,7 +874,7 @@ fn do_beacon_hook<StateTrieT: StateTrie + Clone>(
             }
         }
     }
-    trim_state.insert(TrieKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS));
+    trim_state.insert(<StateTrieT::Key>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
     let mut beacon_acct = state_trie
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context("missing beacon contract address")?;
@@ -769,7 +901,7 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
 struct Hash2Code {
-    /// Key must always be [`hash`] of value.
+    /// Key must always be [`hash`](keccak_hash) of value.
     inner: HashMap<H256, Vec<u8>>,
 }
 
@@ -781,11 +913,8 @@ impl Hash2Code {
         this.insert(vec![]);
         this
     }
-    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
-        match self.inner.get(&hash) {
-            Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {}", hash),
-        }
+    pub fn get(&mut self, hash: H256) -> Option<Vec<u8>> {
+        self.inner.get(&hash).cloned()
     }
     pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(keccak_hash::keccak(&code), code);

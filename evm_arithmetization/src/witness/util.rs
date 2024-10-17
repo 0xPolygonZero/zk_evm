@@ -16,12 +16,14 @@ use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
 
+#[inline(always)]
 fn to_byte_checked(n: U256) -> u8 {
     let res = n.byte(0);
     assert_eq!(n, res.into());
     res
 }
 
+#[inline(always)]
 fn to_bits_le<F: RichField>(n: u8) -> [F; 8] {
     let mut res = [F::ZERO; 8];
     for (i, bit) in res.iter_mut().enumerate() {
@@ -76,7 +78,8 @@ pub(crate) fn fill_channel_with_value<F: RichField>(
 
 /// Pushes without writing in memory. This happens in opcodes where a push
 /// immediately follows a pop.
-pub(crate) fn push_no_write<F: RichField>(state: &mut GenerationState<F>, val: U256) {
+#[inline(always)]
+pub(crate) const fn push_no_write<F: RichField>(state: &mut GenerationState<F>, val: U256) {
     state.registers.stack_top = val;
     state.registers.stack_len += 1;
 }
@@ -135,6 +138,7 @@ pub(crate) fn mem_read_with_log<F: RichField>(
     (val, op)
 }
 
+#[inline(always)]
 pub(crate) fn mem_write_log<F: RichField>(
     channel: MemoryChannel,
     address: MemoryAddress,

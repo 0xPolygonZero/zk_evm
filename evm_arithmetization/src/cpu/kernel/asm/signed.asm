@@ -131,11 +131,12 @@ global _sys_sar:
     // Now assume shift < 256.
     // Stack: shift, value, return_info
     PUSH 0x8000000000000000000000000000000000000000000000000000000000000000
-    DUP2
+    DUP1
+    DUP3
     SHR
-    // Stack: 2^255 >> shift, shift, value, return_info
-    SWAP2
-    %add_const(0x8000000000000000000000000000000000000000000000000000000000000000)
+    // Stack: 2^255 >> shift, 0x8000000000000000000000000000000000000000000000000000000000000000, shift, value, return_info
+    SWAP3
+    ADD
     // Stack: 2^255 + value, shift, 2^255 >> shift, return_info
     SWAP1
     SHR

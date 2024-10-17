@@ -2,15 +2,16 @@ use std::io::Read;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use paladin::runtime::Runtime;
 use tokio::sync::mpsc;
 use tracing::info;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
 
+use crate::ProofRuntime;
+
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
-    runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     previous: Option<GeneratedBlockProof>,
     prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
@@ -24,9 +25,14 @@ pub(crate) async fn stdio_main(
 
     let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
 
-    let runtime_ = runtime.clone();
+    let proof_runtime_ = proof_runtime.clone();
     let prover_config_ = prover_config.clone();
-    let proving_task = tokio::spawn(prover::prove(block_rx, runtime_, previous, prover_config_));
+    let proving_task = tokio::spawn(prover::prove(
+        block_rx,
+        proof_runtime_,
+        previous,
+        prover_config_,
+    ));
 
     let interval_len = block_prover_inputs.len();
     for (index, block_prover_input) in block_prover_inputs.into_iter().enumerate() {
@@ -48,7 +54,8 @@ pub(crate) async fn stdio_main(
         }
     }
 
-    runtime.close().await?;
+    proof_runtime.light_proof.close().await?;
+    proof_runtime.heavy_proof.close().await?;
 
     if prover_config.test_only {
         info!("All proof witnesses have been generated successfully.");

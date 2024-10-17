@@ -77,6 +77,9 @@ pub(crate) trait State<F: RichField> {
     /// Returns a `State`'s stack.
     fn get_stack(&self) -> Vec<U256>;
 
+    /// Indicates whether we are in kernel mode.
+    fn is_kernel(&self) -> bool;
+
     /// Returns the current context.
     fn get_context(&self) -> usize;
 
@@ -184,6 +187,15 @@ pub(crate) trait State<F: RichField> {
         Self: Transition<F>,
     {
         let halt_offsets = self.get_halt_offsets();
+
+        if let Some(max_len_log) = max_cpu_len_log {
+            assert!(
+                (1 << max_len_log) >= NUM_EXTRA_CYCLES_AFTER,
+                "Target length (2^{}) is less than NUM_EXTRA_CYCLES_AFTER ({})",
+                max_len_log,
+                NUM_EXTRA_CYCLES_AFTER
+            );
+        }
 
         let cycle_limit =
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
@@ -641,6 +653,10 @@ impl<F: RichField> State<F> for GenerationState<F> {
 
     fn get_stack(&self) -> Vec<U256> {
         self.stack()
+    }
+
+    fn is_kernel(&self) -> bool {
+        self.registers.is_kernel
     }
 
     fn get_context(&self) -> usize {

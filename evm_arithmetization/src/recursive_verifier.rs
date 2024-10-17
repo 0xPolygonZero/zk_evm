@@ -4,6 +4,7 @@ use core::fmt::Debug;
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, U256};
 use plonky2::field::extension::Extendable;
+use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::exponentiation::ExponentiationGate;
 use plonky2::gates::gate::GateRef;
 use plonky2::gates::noop::NoopGate;
@@ -155,7 +156,7 @@ where
             &self.stark_proof_target,
             &proof_with_metadata.proof,
             self.zero_target,
-        );
+        )?;
 
         for (challenge_target, challenge) in self
             .ctl_challenges_target
@@ -163,14 +164,14 @@ where
             .iter()
             .zip(&ctl_challenges.challenges)
         {
-            inputs.set_target(challenge_target.beta, challenge.beta);
-            inputs.set_target(challenge_target.gamma, challenge.gamma);
+            inputs.set_target(challenge_target.beta, challenge.beta)?;
+            inputs.set_target(challenge_target.gamma, challenge.gamma)?;
         }
 
         inputs.set_target_arr(
             self.init_challenger_state_target.as_ref(),
             proof_with_metadata.init_challenger_state.as_ref(),
-        );
+        )?;
 
         self.circuit.prove(inputs)
     }
@@ -198,7 +199,7 @@ where
         proof: &ProofWithPublicInputs<F, C, D>,
     ) -> Result<ProofWithPublicInputs<F, C, D>> {
         let mut inputs = PartialWitness::new();
-        inputs.set_proof_with_pis_target(&self.proof_with_pis_target, proof);
+        inputs.set_proof_with_pis_target(&self.proof_with_pis_target, proof)?;
         self.circuit.prove(inputs)
     }
 }
@@ -325,6 +326,9 @@ pub(crate) fn add_common_recursion_gates<F: RichField + Extendable<D>, const D: 
 ) {
     builder.add_gate_to_gate_set(GateRef::new(ExponentiationGate::new_from_config(
         &builder.config,
+    )));
+    builder.add_gate_to_gate_set(GateRef::new(ConstantGate::new(
+        builder.config.num_constants,
     )));
 }
 
@@ -838,12 +842,12 @@ where
         witness,
         &public_values_target.trie_roots_before,
         &public_values.trie_roots_before,
-    );
+    )?;
     set_trie_roots_target(
         witness,
         &public_values_target.trie_roots_after,
         &public_values.trie_roots_after,
-    );
+    )?;
     set_block_metadata_target(
         witness,
         &public_values_target.block_metadata,
@@ -853,7 +857,7 @@ where
         witness,
         &public_values_target.block_hashes,
         &public_values.block_hashes,
-    );
+    )?;
     set_extra_public_values_target(
         witness,
         &public_values_target.extra_block_data,
@@ -902,10 +906,12 @@ where
     H: Hasher<F>,
     W: Witness<F>,
 {
-    witness.set_target(
-        public_values_target.chain_id,
-        F::from_canonical_u64(public_values.chain_id.low_u64()),
-    );
+    witness
+        .set_target(
+            public_values_target.chain_id,
+            F::from_canonical_u64(public_values.chain_id.low_u64()),
+        )
+        .map_err(ProgramError::from)?;
 
     for (i, limb) in public_values
         .checkpoint_state_trie_root
@@ -914,14 +920,18 @@ where
         .into_iter()
         .enumerate()
     {
-        witness.set_target(
-            public_values_target.checkpoint_state_trie_root[2 * i],
-            F::from_canonical_u32(limb as u32),
-        );
-        witness.set_target(
-            public_values_target.checkpoint_state_trie_root[2 * i + 1],
-            F::from_canonical_u32((limb >> 32) as u32),
-        );
+        witness
+            .set_target(
+                public_values_target.checkpoint_state_trie_root[2 * i],
+                F::from_canonical_u32(limb as u32),
+            )
+            .map_err(ProgramError::from)?;
+        witness
+            .set_target(
+                public_values_target.checkpoint_state_trie_root[2 * i + 1],
+                F::from_canonical_u32((limb >> 32) as u32),
+            )
+            .map_err(ProgramError::from)?;
     }
 
     for (i, limb) in public_values
@@ -931,18 +941,24 @@ where
         .into_iter()
         .enumerate()
     {
-        witness.set_target(
-            public_values_target.new_state_trie_root[2 * i],
-            F::from_canonical_u32(limb as u32),
-        );
-        witness.set_target(
-            public_values_target.new_state_trie_root[2 * i + 1],
-            F::from_canonical_u32((limb >> 32) as u32),
-        );
+        witness
+            .set_target(
+                public_values_target.new_state_trie_root[2 * i],
+                F::from_canonical_u32(limb as u32),
+            )
+            .map_err(ProgramError::from)?;
+        witness
+            .set_target(
+                public_values_target.new_state_trie_root[2 * i + 1],
+                F::from_canonical_u32((limb >> 32) as u32),
+            )
+            .map_err(ProgramError::from)?;
     }
 
     for (i, limb) in public_values.new_consolidated_hash.iter().enumerate() {
-        witness.set_target(public_values_target.new_consolidated_hash[i], *limb);
+        witness
+            .set_target(public_values_target.new_consolidated_hash[i], *limb)
+            .map_err(ProgramError::from)?;
     }
 
     Ok(())
@@ -952,7 +968,8 @@ pub(crate) fn set_trie_roots_target<F, W, const D: usize>(
     witness: &mut W,
     trie_roots_target: &TrieRootsTarget,
     trie_roots: &TrieRoots,
-) where
+) -> Result<()>
+where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
@@ -960,11 +977,11 @@ pub(crate) fn set_trie_roots_target<F, W, const D: usize>(
         witness.set_target(
             trie_roots_target.state_root[2 * i],
             F::from_canonical_u32(limb as u32),
-        );
+        )?;
         witness.set_target(
             trie_roots_target.state_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
-        );
+        )?;
     }
 
     for (i, limb) in trie_roots
@@ -977,11 +994,11 @@ pub(crate) fn set_trie_roots_target<F, W, const D: usize>(
         witness.set_target(
             trie_roots_target.transactions_root[2 * i],
             F::from_canonical_u32(limb as u32),
-        );
+        )?;
         witness.set_target(
             trie_roots_target.transactions_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
-        );
+        )?;
     }
 
     for (i, limb) in trie_roots
@@ -994,12 +1011,14 @@ pub(crate) fn set_trie_roots_target<F, W, const D: usize>(
         witness.set_target(
             trie_roots_target.receipts_root[2 * i],
             F::from_canonical_u32(limb as u32),
-        );
+        )?;
         witness.set_target(
             trie_roots_target.receipts_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
-        );
+        )?;
     }
+
+    Ok(())
 }
 
 #[cfg(feature = "cdk_erigon")]
@@ -1015,7 +1034,9 @@ where
     match burn_addr_target {
         BurnAddrTarget::BurnAddr(addr_target) => {
             let burn_addr_limbs: [F; 8] = u256_limbs::<F>(burn_addr);
-            witness.set_target_arr(addr_target, &burn_addr_limbs);
+            witness
+                .set_target_arr(addr_target, &burn_addr_limbs)
+                .map_err(ProgramError::from)?;
         }
         BurnAddrTarget::Burnt() => panic!("There should be an address target set in cdk_erigon."),
     }
@@ -1036,73 +1057,105 @@ where
         u256_limbs::<F>(U256::from_big_endian(&block_metadata.block_beneficiary.0))[..5]
             .try_into()
             .unwrap();
-    witness.set_target_arr(&block_metadata_target.block_beneficiary, &beneficiary_limbs);
-    witness.set_target(
-        block_metadata_target.block_timestamp,
-        u256_to_u32(block_metadata.block_timestamp)?,
-    );
-    witness.set_target(
-        block_metadata_target.block_number,
-        u256_to_u32(block_metadata.block_number)?,
-    );
-    witness.set_target(
-        block_metadata_target.block_difficulty,
-        u256_to_u32(block_metadata.block_difficulty)?,
-    );
-    witness.set_target_arr(
-        &block_metadata_target.block_random,
-        &h256_limbs(block_metadata.block_random),
-    );
-    witness.set_target(
-        block_metadata_target.block_gaslimit,
-        u256_to_u32(block_metadata.block_gaslimit)?,
-    );
-    witness.set_target(
-        block_metadata_target.block_chain_id,
-        u256_to_u32(block_metadata.block_chain_id)?,
-    );
+    witness
+        .set_target_arr(&block_metadata_target.block_beneficiary, &beneficiary_limbs)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            block_metadata_target.block_timestamp,
+            u256_to_u32(block_metadata.block_timestamp)?,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            block_metadata_target.block_number,
+            u256_to_u32(block_metadata.block_number)?,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            block_metadata_target.block_difficulty,
+            u256_to_u32(block_metadata.block_difficulty)?,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target_arr(
+            &block_metadata_target.block_random,
+            &h256_limbs(block_metadata.block_random),
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            block_metadata_target.block_gaslimit,
+            u256_to_u32(block_metadata.block_gaslimit)?,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            block_metadata_target.block_chain_id,
+            u256_to_u32(block_metadata.block_chain_id)?,
+        )
+        .map_err(ProgramError::from)?;
     // Basefee fits in 2 limbs
     let basefee = u256_to_u64(block_metadata.block_base_fee)?;
-    witness.set_target(block_metadata_target.block_base_fee[0], basefee.0);
-    witness.set_target(block_metadata_target.block_base_fee[1], basefee.1);
-    witness.set_target(
-        block_metadata_target.block_gas_used,
-        u256_to_u32(block_metadata.block_gas_used)?,
-    );
+    witness
+        .set_target(block_metadata_target.block_base_fee[0], basefee.0)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(block_metadata_target.block_base_fee[1], basefee.1)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            block_metadata_target.block_gas_used,
+            u256_to_u32(block_metadata.block_gas_used)?,
+        )
+        .map_err(ProgramError::from)?;
     #[cfg(feature = "eth_mainnet")]
     {
         // BlobGasUsed fits in 2 limbs
         let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;
-        witness.set_target(
-            block_metadata_target.block_blob_gas_used[0],
-            blob_gas_used.0,
-        );
-        witness.set_target(
-            block_metadata_target.block_blob_gas_used[1],
-            blob_gas_used.1,
-        );
+        witness
+            .set_target(
+                block_metadata_target.block_blob_gas_used[0],
+                blob_gas_used.0,
+            )
+            .map_err(ProgramError::from)?;
+        witness
+            .set_target(
+                block_metadata_target.block_blob_gas_used[1],
+                blob_gas_used.1,
+            )
+            .map_err(ProgramError::from)?;
         // ExcessBlobGas fits in 2 limbs
         let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
-        witness.set_target(
-            block_metadata_target.block_excess_blob_gas[0],
-            excess_blob_gas.0,
-        );
-        witness.set_target(
-            block_metadata_target.block_excess_blob_gas[1],
-            excess_blob_gas.1,
-        );
+        witness
+            .set_target(
+                block_metadata_target.block_excess_blob_gas[0],
+                excess_blob_gas.0,
+            )
+            .map_err(ProgramError::from)?;
+        witness
+            .set_target(
+                block_metadata_target.block_excess_blob_gas[1],
+                excess_blob_gas.1,
+            )
+            .map_err(ProgramError::from)?;
 
-        witness.set_target_arr(
-            &block_metadata_target.parent_beacon_block_root,
-            &h256_limbs(block_metadata.parent_beacon_block_root),
-        );
+        witness
+            .set_target_arr(
+                &block_metadata_target.parent_beacon_block_root,
+                &h256_limbs(block_metadata.parent_beacon_block_root),
+            )
+            .map_err(ProgramError::from)?;
     }
 
     let mut block_bloom_limbs = [F::ZERO; 64];
     for (i, limbs) in block_bloom_limbs.chunks_exact_mut(8).enumerate() {
         limbs.copy_from_slice(&u256_limbs(block_metadata.block_bloom[i]));
     }
-    witness.set_target_arr(&block_metadata_target.block_bloom, &block_bloom_limbs);
+    witness
+        .set_target_arr(&block_metadata_target.block_bloom, &block_bloom_limbs)
+        .map_err(ProgramError::from)?;
 
     Ok(())
 }
@@ -1111,7 +1164,8 @@ pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
     witness: &mut W,
     block_hashes_target: &BlockHashesTarget,
     block_hashes: &BlockHashes,
-) where
+) -> Result<()>
+where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
@@ -1120,10 +1174,10 @@ pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
         witness.set_target_arr(
             &block_hashes_target.prev_hashes[8 * i..8 * (i + 1)],
             &block_hash_limbs,
-        );
+        )?;
     }
     let cur_block_hash_limbs: [F; 8] = h256_limbs::<F>(block_hashes.cur_hash);
-    witness.set_target_arr(&block_hashes_target.cur_hash, &cur_block_hash_limbs);
+    witness.set_target_arr(&block_hashes_target.cur_hash, &cur_block_hash_limbs)
 }
 
 pub(crate) fn set_extra_public_values_target<F, W, const D: usize>(
@@ -1135,24 +1189,36 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
-    witness.set_target_arr(
-        &ed_target.checkpoint_state_trie_root,
-        &h256_limbs::<F>(ed.checkpoint_state_trie_root),
-    );
-    witness.set_target_arr(
-        &ed_target.checkpoint_consolidated_hash,
-        &ed.checkpoint_consolidated_hash,
-    );
-    witness.set_target(
-        ed_target.txn_number_before,
-        u256_to_u32(ed.txn_number_before)?,
-    );
-    witness.set_target(
-        ed_target.txn_number_after,
-        u256_to_u32(ed.txn_number_after)?,
-    );
-    witness.set_target(ed_target.gas_used_before, u256_to_u32(ed.gas_used_before)?);
-    witness.set_target(ed_target.gas_used_after, u256_to_u32(ed.gas_used_after)?);
+    witness
+        .set_target_arr(
+            &ed_target.checkpoint_state_trie_root,
+            &h256_limbs::<F>(ed.checkpoint_state_trie_root),
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target_arr(
+            &ed_target.checkpoint_consolidated_hash,
+            &ed.checkpoint_consolidated_hash,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            ed_target.txn_number_before,
+            u256_to_u32(ed.txn_number_before)?,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(
+            ed_target.txn_number_after,
+            u256_to_u32(ed.txn_number_after)?,
+        )
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(ed_target.gas_used_before, u256_to_u32(ed.gas_used_before)?)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(ed_target.gas_used_after, u256_to_u32(ed.gas_used_after)?)
+        .map_err(ProgramError::from)?;
 
     Ok(())
 }
@@ -1166,12 +1232,24 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
-    witness.set_target(rd_target.program_counter, u256_to_u32(rd.program_counter)?);
-    witness.set_target(rd_target.is_kernel, u256_to_u32(rd.is_kernel)?);
-    witness.set_target(rd_target.stack_len, u256_to_u32(rd.stack_len)?);
-    witness.set_target_arr(&rd_target.stack_top, &u256_limbs(rd.stack_top));
-    witness.set_target(rd_target.context, u256_to_u32(rd.context)?);
-    witness.set_target(rd_target.gas_used, u256_to_u32(rd.gas_used)?);
+    witness
+        .set_target(rd_target.program_counter, u256_to_u32(rd.program_counter)?)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(rd_target.is_kernel, u256_to_u32(rd.is_kernel)?)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(rd_target.stack_len, u256_to_u32(rd.stack_len)?)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target_arr(&rd_target.stack_top, &u256_limbs(rd.stack_top))
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(rd_target.context, u256_to_u32(rd.context)?)
+        .map_err(ProgramError::from)?;
+    witness
+        .set_target(rd_target.gas_used, u256_to_u32(rd.gas_used)?)
+        .map_err(ProgramError::from)?;
 
     Ok(())
 }
@@ -1186,12 +1264,14 @@ where
     W: Witness<F>,
 {
     for i in 0..mc.mem_cap.len() {
-        witness.set_hash_target(
-            mc_target.mem_cap.0[i],
-            HashOut {
-                elements: mc.mem_cap[i].map(|elt| F::from_canonical_u64(elt.as_u64())),
-            },
-        );
+        witness
+            .set_hash_target(
+                mc_target.mem_cap.0[i],
+                HashOut {
+                    elements: mc.mem_cap[i].map(|elt| F::from_canonical_u64(elt.as_u64())),
+                },
+            )
+            .map_err(ProgramError::from)?;
     }
     Ok(())
 }

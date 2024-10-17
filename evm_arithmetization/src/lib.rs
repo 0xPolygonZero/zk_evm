@@ -38,74 +38,123 @@
 //!
 //! Transactions need to be processed into an Intermediary Representation (IR)
 //! format for the prover to be able to generate proofs of valid state
-//! transition. This involves passing the encoded transaction, the header of the
-//! block in which it was included, some information on the state prior
-//! execution of this transaction, etc.
-//! This intermediary representation is called [`GenerationInputs`].
+//! transition. This involves passing the encoded transactions, the header of
+//! the block in which they were included, some information on the state prior
+//! execution of these transactions, etc.
+//! This intermediary representation is called [`GenerationInputs`], although
+//! the prover may sometimes rely on a trimmed version,
+//! [`TrimmedGenerationInputs`], if some initial data processing already
+//! happened.
 //!
 //!
 //! # Generating succinct proofs
 //!
-//! ## Transaction proofs
+//! ## Segment proofs
 //!
-//! To generate a proof for a transaction, given its [`GenerationInputs`] and an
-//! [`AllRecursiveCircuits`] prover state, one can simply call the
-//! [prove_root](AllRecursiveCircuits::prove_root) method.
+//! To generate a proof for a batch of transactions,
+//! given their [`GenerationInputs`] and an [`AllRecursiveCircuits`] prover
+//! state, we first break the execution down into consecutive segments, each
+//! representing a partial run of the zkCPU over these inputs. For this step,
+//! one must first generate the data needed for each of these segments by
+//! initializing a [`SegmentDataIterator`] from the inputs and an optional
+//! maximum segment length, and running it until exhaustion. One can then call
+//! the [prove_segment](AllRecursiveCircuits::prove_segment) method over each of
+//! these obtained segment data independently to generate individual segment
+//! proofs:
 //!
 //! ```ignore
+//! type F = GoldilocksField;
+//!
 //! let mut timing = TimingTree::new("prove", log::Level::Debug);
 //! let kill_signal = None; // Useful only with distributed proving to kill hanging jobs.
-//! let (proof, public_values) =
-//!     prover_state.prove_root(all_stark, config, inputs, &mut timing, kill_signal);
+//!
+//! // Collect the segment data needed to prove this batch.
+//! let data_iterator =
+//!     SegmentDataIterator::<Field>::new(inputs, Some(max_segment_log_length));
+//!
+//! // Prove all segments associated to this batch
+//! let mut segment_proof_data = vec![];
+//! for segment_run in data_iterator {
+//!     let (_, mut segment_data) = segment_run?;
+//!     segment_proof_data.push(
+//!         prover_state.prove_segment(
+//!             all_stark,
+//!             config,
+//!             inputs,
+//!             segment_data,
+//!             &mut timing,
+//!             kill_signal
+//!         )?
+//!     );
+//! }
 //! ```
 //!
-//! This outputs a transaction proof and its associated public values. These are
-//! necessary during the aggregation levels (see below). If one were to miss the
-//! public values, they are also retrievable directly from the proof's encoded
-//! public inputs, as such:
+//! The [prove_segment](AllRecursiveCircuits::prove_segment) method outputs a
+//! segment proof and its associated public values. Public values are also
+//! directly retrievable from the proof's encoded public inputs, as such:
 //!
 //! ```ignore
 //! let public_values = PublicValues::from_public_inputs(&proof.public_inputs);
 //! ```
 //!
-//! ## Aggregation proofs
+//! ## Segment aggregation proofs
 //!
-//! Because the plonky2 zkEVM generates proofs on a transaction basis, we then
-//! need to aggregate them for succinct verification. This is done in a binary
-//! tree fashion, where each inner node proof verifies two children proofs,
-//! through the [prove_aggregation](AllRecursiveCircuits::prove_aggregation)
+//! To improve parallelism and overall proving costs, segments of
+//! execution can be proven independently once their associated data have been
+//! generated, and are then aggregated together in a binary tree fashion,
+//! where each inner node proof verifies two children proofs, through the
+//! [prove_segment_aggregation](AllRecursiveCircuits::prove_segment_aggregation)
 //! method. Note that the tree does *not* need to be complete, as this
-//! aggregation process can take as inputs both regular transaction proofs and
-//! aggregation proofs. We only need to specify for each child if it is an
-//! aggregation proof or a regular one.
+//! aggregation process can take as inputs both simple segment proofs and
+//! aggregated segment proofs. We only need to specify for each child which
+//! type of proof it corresponds to.
 //!
 //! ```ignore
 //! let (proof_1, pv_1) =
-//!     prover_state.prove_root(all_stark, config, inputs_1, &mut timing, None);
+//!     prover_state.prove_segment(all_stark, config, inputs_1, &mut timing, None);
 //! let (proof_2, pv_2) =
-//!     prover_state.prove_root(all_stark, config, inputs_2, &mut timing, None);
+//!     prover_state.prove_segment(all_stark, config, inputs_2, &mut timing, None);
 //! let (proof_3, pv_3) =
-//!     prover_state.prove_root(all_stark, config, inputs_3, &mut timing, None);
+//!     prover_state.prove_segment(all_stark, config, inputs_3, &mut timing, None);
 //!
-//! // Now aggregate proofs for txn 1 and 2.
-//! let (agg_proof_1_2, pv_1_2) =
-//!     prover_state.prove_aggregation(false, proof_1, pv_1, false, proof_2, pv_2);
+//! // Now aggregate proofs for segments 1 and 2.
+//! let agg_proof_1_2 =
+//!     prover_state.prove_segment_aggregation(proof_1, proof_2);
 //!
-//! // Now aggregate the newly generated aggregation proof with the last regular txn proof.
-//! let (agg_proof_1_3, pv_1_3) =
-//!     prover_state.prove_aggregation(true, agg_proof_1_2, pv_1_2, false, proof_3, pv_3);
+//! // Now aggregate the newly generated aggregation proof with the last regular segment proof.
+//! let agg_proof_1_3 =
+//!     prover_state.prove_segment_aggregation(agg_proof_1_2, proof_3);
 //! ```
 //!
 //! **Note**: The proofs provided to the
-//! [prove_aggregation](AllRecursiveCircuits::prove_aggregation) method *MUST*
-//! have contiguous states. Trying to combine `proof_1` and `proof_3` from the
-//! example above would fail.
+//! [prove_segment_aggregation](AllRecursiveCircuits::prove_segment_aggregation)
+//! method *MUST* have contiguous states. Trying to combine `proof_1` and
+//! `proof_3` from the example above, or reverting the order of `agg_proof_1_2`
+//! and `proof_3`, would fail.
+//!
+//! ## Batch aggregation proofs
+//!
+//! In a similar manner to the previous stage, once an entire batch of
+//! transaction has been proven and reduced to a single segment aggregation
+//! proof, it can then be combined with other batch proofs or aggregated batch
+//! proofs, through the
+//! [prove_batch_aggregation](AllRecursiveCircuits::prove_batch_aggregation)
+//! method.
+//!
+//! ```ignore
+//! let batch_agg_proof =
+//!     prover_state.prove_batch_aggregation(false, batch_proof_1, false, batch_proof_2);
+//!
+//! // Now aggregate the newly generated batch aggregation proof with the last regular batch proof.
+//! let batch_agg_proof =
+//!     prover_state.prove_batch_aggregation(batch_agg_proof, batch_proof_3);
+//! ```
 //!
 //! ## Block proofs
 //!
 //! Once all transactions of a block have been proven and we are left with a
-//! single aggregation proof and its public values, we can then wrap it into a
-//! final block proof, attesting validity of the entire block.
+//! single aggregated batch proof and its public values, we can then wrap it
+//! into a final block proof, attesting validity of the entire block.
 //! This [prove_block](AllRecursiveCircuits::prove_block) method accepts an
 //! optional previous block proof as argument, which will then try combining the
 //! previously proven block with the current one, generating a validity proof
@@ -114,8 +163,8 @@
 //!
 //! ```ignore
 //! let previous_block_proof = { ... };
-//! let (block_proof, block_public_values) =
-//!     prover_state.prove_block(Some(&previous_block_proof), &agg_proof, agg_pv)?;
+//! let block_proof =
+//!     prover_state.prove_block(Some(&previous_block_proof), &agg_proof)?;
 //! ```
 //!
 //! ### Checkpoint heights
@@ -135,9 +184,30 @@
 //!
 //!
 //! ```ignore
-//! let (block_proof, block_public_values) =
-//!     prover_state.prove_block(None, &agg_proof, agg_pv)?;
+//! let block_proof =
+//!     prover_state.prove_block(None, &agg_proof)?;
 //! ```
+//!
+//! ## Wrapped block proofs
+//!
+//! Public values expose data useful for aggregating intermediate proofs
+//! together, but may not be disclosed to verifiers outside of the chain in
+//! their entirety. For this purpose, once a chain has aggregated sufficiently
+//! many blocks together and wants to ship the final generated proof, it may
+//! call the [prove_block_wrapper](AllRecursiveCircuits::prove_block_wrapper)
+//! method to obfuscate any non-required chain data. The remaining
+//! [FinalPublicValues](proof::FinalPublicValues) contain all the data
+//! needed to identify the chain and its claimed state transition between two
+//! checkpoint heights.
+//!
+//! ```ignore
+//! let (wrapped_block_proof, final_public_values) =
+//!     prover_state.prove_block_wrapper(&block_proof, public_values)?;
+//! ```
+//!
+//! **Note**: Despite its name, the method produces a [`plonky2`] proof, which
+//! may not be suitable for direct on-chain verification in a smart-contract,
+//! unlike pairing-based SNARK proofs.
 //!
 //! # Prover state serialization
 //!

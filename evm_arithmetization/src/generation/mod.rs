@@ -486,7 +486,11 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues<F>);
+pub struct TablesWithPVs<F: RichField> {
+    pub tables: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    pub use_keccak_tables: bool,
+    pub public_values: PublicValues<F>,
+}
 
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -494,7 +498,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
-) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
+) -> anyhow::Result<TablesWithPVs<F>> {
     let mut state = GenerationState::<F>::new_with_segment_data(inputs, segment_data)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
@@ -520,13 +524,11 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let registers_after: RegistersData = RegistersData::from(*registers_after);
     apply_metadata_and_tries_memops(&mut state, inputs, &registers_before, &registers_after);
 
-    let cpu_res = timed!(
+    timed!(
         timing,
         "simulate CPU",
         simulate_cpu(&mut state, *max_cpu_len_log)
-    );
-
-    cpu_res?;
+    )?;
 
     let trace_lengths = state.traces.get_lengths();
 
@@ -581,6 +583,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
+    let use_keccak_tables = !state.traces.keccak_inputs.is_empty();
+
     let tables = timed!(
         timing,
         "convert trace data to tables",
@@ -593,7 +597,12 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
             timing
         )
     );
-    Ok((tables, public_values))
+
+    Ok(TablesWithPVs {
+        tables,
+        use_keccak_tables,
+        public_values,
+    })
 }
 
 fn simulate_cpu<F: RichField>(

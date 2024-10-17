@@ -16,16 +16,16 @@ use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{MultiProof, StarkProofWithMetadata};
+use starky::proof::StarkProofWithMetadata;
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::segments::GenerationSegmentData;
 use crate::generation::{generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
-use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
+use crate::proof::{AllProof, MemCap, MultiProof, PublicValues, DEFAULT_CAP_LEN};
+use crate::GenerationSegmentData;
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
@@ -47,7 +47,7 @@ where
 
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
 
-    let (traces, mut public_values) = timed!(
+    let mut tables_with_pvs = timed!(
         timing,
         "generate all traces",
         generate_traces(all_stark, &inputs, config, segment_data, timing)?
@@ -58,8 +58,9 @@ where
     let proof = prove_with_traces(
         all_stark,
         config,
-        traces,
-        &mut public_values,
+        tables_with_pvs.tables,
+        tables_with_pvs.use_keccak_tables,
+        &mut tables_with_pvs.public_values,
         timing,
         abort_signal,
     )?;
@@ -72,6 +73,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    use_keccak_tables: bool,
     public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -114,8 +116,14 @@ where
         .map(|c| c.merkle_tree.cap.clone())
         .collect::<Vec<_>>();
     let mut challenger = Challenger::<F, C::Hasher>::new();
-    for cap in &trace_caps {
-        challenger.observe_cap(cap);
+    for (i, cap) in trace_caps.iter().enumerate() {
+        if KECCAK_TABLES_INDICES.contains(&i) && !use_keccak_tables {
+            // Observe zero merkle caps when skipping Keccak tables.
+            let zero_merkle_cap = cap.flatten().iter().map(|_| F::ZERO).collect::<Vec<F>>();
+            challenger.observe_elements(&zero_merkle_cap);
+        } else {
+            challenger.observe_cap(cap);
+        }
     }
 
     observe_public_values::<F, C, D>(&mut challenger, public_values)
@@ -143,6 +151,7 @@ where
             config,
             &trace_poly_values,
             trace_commitments,
+            use_keccak_tables,
             ctl_data_per_table,
             &mut challenger,
             &ctl_challenges,
@@ -206,11 +215,12 @@ where
             ctl_challenges,
         },
         public_values: public_values.clone(),
+        use_keccak_tables,
     })
 }
 
 type ProofWithMemCaps<F, C, H, const D: usize> = (
-    [StarkProofWithMetadata<F, C, D>; NUM_TABLES],
+    [Option<StarkProofWithMetadata<F, C, D>>; NUM_TABLES],
     MerkleCap<F, H>,
     MerkleCap<F, H>,
 );
@@ -229,6 +239,7 @@ fn prove_with_commitments<F, C, const D: usize>(
     config: &StarkConfig,
     trace_poly_values: &[Vec<PolynomialValues<F>>; NUM_TABLES],
     trace_commitments: Vec<PolynomialBatch<F, C, D>>,
+    use_keccak_tables: bool,
     ctl_data_per_table: [CtlData<F>; NUM_TABLES],
     challenger: &mut Challenger<F, C::Hasher>,
     ctl_challenges: &GrandProductChallengeSet<F>,
@@ -262,8 +273,16 @@ where
     let (arithmetic_proof, _) = prove_table!(arithmetic_stark, Table::Arithmetic);
     let (byte_packing_proof, _) = prove_table!(byte_packing_stark, Table::BytePacking);
     let (cpu_proof, _) = prove_table!(cpu_stark, Table::Cpu);
-    let (keccak_proof, _) = prove_table!(keccak_stark, Table::Keccak);
-    let (keccak_sponge_proof, _) = prove_table!(keccak_sponge_stark, Table::KeccakSponge);
+    let keccak_proof = if use_keccak_tables {
+        Some(prove_table!(keccak_stark, Table::Keccak).0)
+    } else {
+        None
+    };
+    let keccak_sponge_proof = if use_keccak_tables {
+        Some(prove_table!(keccak_sponge_stark, Table::KeccakSponge).0)
+    } else {
+        None
+    };
     let (logic_proof, _) = prove_table!(logic_stark, Table::Logic);
     let (memory_proof, _) = prove_table!(memory_stark, Table::Memory);
     let (mem_before_proof, mem_before_cap) = prove_table!(mem_before_stark, Table::MemBefore);
@@ -274,17 +293,17 @@ where
 
     Ok((
         [
-            arithmetic_proof,
-            byte_packing_proof,
-            cpu_proof,
+            Some(arithmetic_proof),
+            Some(byte_packing_proof),
+            Some(cpu_proof),
             keccak_proof,
             keccak_sponge_proof,
-            logic_proof,
-            memory_proof,
-            mem_before_proof,
-            mem_after_proof,
+            Some(logic_proof),
+            Some(memory_proof),
+            Some(mem_before_proof),
+            Some(mem_after_proof),
             #[cfg(feature = "cdk_erigon")]
-            poseidon_proof,
+            Some(poseidon_proof),
         ],
         mem_before_cap,
         mem_after_cap,

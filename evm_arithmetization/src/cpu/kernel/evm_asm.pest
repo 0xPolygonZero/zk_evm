@@ -2,7 +2,9 @@
 // Loosely based on https://gist.github.com/axic/17ddbbce4738ccf4040d30cbb5de484e
 
 WHITESPACE = _{ " " | "\t" | NEWLINE }
-COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+// - not `_` silent so we can do syntax highlighting
+// - `@` atomic so WHITESPACE doesn't eat the NEWLINEs within `~` concats
+COMMENT = @{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 
 identifier_first_char = _{ ASCII_ALPHA | "_" }
 identifier_char = _{ ASCII_ALPHANUMERIC | "_" }

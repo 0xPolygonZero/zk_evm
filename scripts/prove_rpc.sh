@@ -140,7 +140,8 @@ else
         eval $command > $OUT_LOG_PATH 2>&1
         retVal=$?
         if [ $retVal -ne 0 ]; then
-            # Some error occurred.
+            # Some error occurred, display the logs and exit.
+            cat $OUT_LOG_PATH
             echo "Block ${i} errored. See ${OUT_LOG_PATH} for more details."
             exit $retVal
         else
@@ -166,7 +167,9 @@ if [ "$RUN_VERIFICATION" = true ]; then
       echo "$proof_file_name verified successfully!";
       rm  $PROOF_OUTPUT_DIR/verify.out
   else
-      echo "there was an issue with proof verification";
+      # Some error occurred with verification, display the logs and exit.
+      cat $PROOF_OUTPUT_DIR/verify.out
+      echo "There was an issue with proof verification. See $PROOF_OUTPUT_DIR/verify.out for more details.";
       exit 1
   fi
 else
