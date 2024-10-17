@@ -11,6 +11,7 @@ use alloy_compat::Compat;
 use anyhow::{ensure, Context};
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
+use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
@@ -476,8 +477,16 @@ impl From<ReceiptTrie> for HashedPartialTrie {
 /// TODO(0xaatif): document this after refactoring is done <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub trait StateTrie {
     type Key;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()>;
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
+    fn contains(&mut self, address: Address) -> anyhow::Result<bool>;
+    /// Creates a new account at `address` if it does not exist.
+    fn update_balance(&mut self, address: Address, f: impl FnOnce(&mut U256))
+        -> anyhow::Result<()>;
+    /// Creates a new account at `address` if it does not exist.
+    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()>;
+    /// Creates a new account at `address` if it does not exist.
+    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
+    /// Creates a new account at `address` if it does not exist.
+    fn set_storage(&mut self, address: Address, root: H256) -> anyhow::Result<()>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
     /// _Hash out_ parts of the trie that aren't in `addresses`.
     fn mask(&mut self, address: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
@@ -525,14 +534,7 @@ impl StateMpt {
 
 impl StateTrie for StateMpt {
     type Key = MptKey;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
-        #[expect(deprecated)]
-        self.insert_by_hashed_address(keccak_hash::keccak(address), account)
-    }
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.typed
-            .get(MptKey::from_hash(keccak_hash::keccak(address)))
-    }
+
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
@@ -555,6 +557,40 @@ impl StateTrie for StateMpt {
     fn root(&self) -> H256 {
         self.typed.root()
     }
+
+    fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
+        Ok(self.typed.get(MptKey::from_address(address)).is_some())
+    }
+    fn update_balance(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut U256),
+    ) -> anyhow::Result<()> {
+        let key = MptKey::from_address(address);
+        let mut acct = self.typed.get(key).unwrap_or_default();
+        f(&mut acct.balance);
+        self.typed.insert(key, acct)
+    }
+    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
+        let key = MptKey::from_address(address);
+        let mut acct = self.typed.get(key).unwrap_or_default();
+        f(&mut acct.nonce);
+        self.typed.insert(key, acct)
+    }
+
+    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
+        let key = MptKey::from_address(address);
+        let mut acct = self.typed.get(key).unwrap_or_default();
+        acct.code_hash = code.right_or_else(keccak_hash::keccak);
+        self.typed.insert(key, acct)
+    }
+
+    fn set_storage(&mut self, address: Address, root: H256) -> anyhow::Result<()> {
+        let key = MptKey::from_address(address);
+        let mut acct = self.typed.get(key).unwrap_or_default();
+        acct.storage_root = root;
+        self.typed.insert(key, acct)
+    }
 }
 
 impl From<StateMpt> for HashedPartialTrie {
@@ -576,15 +612,9 @@ pub struct StateSmt {
     hashed_out: BTreeMap<SmtKey, H256>,
 }
 
+#[allow(unused)]
 impl StateTrie for StateSmt {
     type Key = SmtKey;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
-        self.address2state.insert(address, account);
-        Ok(())
-    }
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.address2state.get(&address).copied()
-    }
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<SmtKey>> {
         self.address2state.remove(&address);
         Ok(None)
@@ -595,6 +625,30 @@ impl StateTrie for StateSmt {
     }
     fn root(&self) -> H256 {
         conv_hash::smt2eth(self.as_smt().root)
+    }
+
+    fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
+        todo!()
+    }
+
+    fn update_balance(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut U256),
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    fn set_storage(&mut self, address: Address, root: H256) -> anyhow::Result<()> {
+        todo!()
     }
 }
 

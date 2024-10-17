@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use evm_arithmetization::{
-    generation::{mpt::AccountRlp, TrieInputs},
+    generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
     GenerationInputs,
 };
@@ -490,30 +490,12 @@ where
                 .map_err(|e| anyhow!("{e:?}"))
                 .context(format!("couldn't decode receipt in txn {tx_hash:x}"))?;
 
-                let (mut acct, born) = world
-                    .state
-                    .get_by_address(addr)
-                    .map(|acct| (acct, false))
-                    .unwrap_or((AccountRlp::default(), true));
+                let born = !world.state.contains(addr)?;
 
                 if born {
                     // Empty accounts cannot have non-empty storage,
                     // so we can safely insert a default trie.
                     world.create_storage(addr)?
-                }
-
-                if born || just_access {
-                    world
-                        .state
-                        .clone()
-                        .insert_by_address(addr, acct)
-                        .context(format!(
-                            "couldn't reach state of {} address {addr:x} in txn {tx_hash:x}",
-                            match born {
-                                true => "created",
-                                false => "accessed",
-                            }
-                        ))?;
                 }
 
                 let do_writes = !just_access
@@ -533,37 +515,39 @@ where
                 );
 
                 if do_writes {
-                    acct.balance = balance.unwrap_or(acct.balance);
-                    acct.nonce = nonce.unwrap_or(acct.nonce);
-                    acct.code_hash = code_usage
-                        .map(|it| match it {
+                    if let Some(new) = balance {
+                        world.state.update_balance(addr, |it| *it = new)?
+                    }
+                    if let Some(new) = nonce {
+                        world.state.update_nonce(addr, |it| *it = new)?
+                    }
+                    if let Some(usage) = code_usage {
+                        match usage {
                             ContractCodeUsage::Read(hash) => {
                                 // TODO(Nashtare): https://github.com/0xPolygonZero/zk_evm/issues/700
-                                // This is a bug in the zero tracer, which shouldn't be giving us
-                                // this read at all. Workaround for now.
+                                //                 This is a bug in the zero tracer,
+                                //                 which shouldn't be giving us this read at all.
+                                //                 Workaround for now.
+                                //                 The fix should involve removing the `Either`
+                                //                 below.
                                 match (fatal_missing_code, code.get(hash)) {
                                     (FatalMissingCode(true), None) => {
                                         bail!("no code for hash {hash:x}")
                                     }
                                     (_, Some(byte_code)) => {
+                                        world.state.set_code(addr, Either::Left(&byte_code))?;
                                         batch_contract_code.insert(byte_code);
                                     }
-                                    (_, None) => {
-                                        log::warn!("no code for {hash:x}")
-                                    }
+                                    (_, None) => world.state.set_code(addr, Either::Right(hash))?,
                                 }
-
-                                anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
                                 code.insert(bytes.clone());
-                                let hash = keccak_hash::keccak(&bytes);
+                                world.state.set_code(addr, Either::Left(&bytes))?;
                                 batch_contract_code.insert(bytes);
-                                Ok(hash)
                             }
-                        })
-                        .transpose()?
-                        .unwrap_or(acct.code_hash);
+                        };
+                    }
 
                     if !storage_written.is_empty() {
                         for (k, v) in storage_written {
@@ -575,10 +559,10 @@ where
                                 false => world.store_int(addr, k.into_uint(), v)?,
                             }
                         }
-                        acct.storage_root = world.storage_root(addr)?
+                        let storage_root = world.storage_root(addr)?;
+                        world.state.set_storage(addr, storage_root)?;
                     }
 
-                    world.state.insert_by_address(addr, acct)?;
                     state_mask.insert(<StateTrieT::Key>::from(addr));
                 } else {
                     // Simple state access
@@ -606,17 +590,7 @@ where
                 true => {
                     for (addr, amt) in &withdrawals {
                         state_mask.insert(<StateTrieT::Key>::from(*addr));
-                        let mut acct = world
-                            .state
-                            .get_by_address(*addr)
-                            .context(format!("missing address {addr:x} for withdrawal"))?;
-                        acct.balance += *amt;
-                        world
-                            .state
-                            .insert_by_address(*addr, acct)
-                            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-                            //                Add an entry API
-                            .expect("insert must succeed with the same key as a successful `get`");
+                        world.state.update_balance(*addr, |it| *it += *amt)?;
                     }
                     mem::take(&mut withdrawals)
                 }
@@ -738,17 +712,10 @@ where
     scalable_trim.insert(slot);
 
     trim_state.insert(<StateTrieT::Key>::from(ADDRESS_SCALABLE_L2));
-    let mut scalable_acct = world
-        .state
-        .get_by_address(ADDRESS_SCALABLE_L2)
-        .context("missing scalable contract address")?;
-    scalable_acct.storage_root = world.storage_root(ADDRESS_SCALABLE_L2)?;
+    let scalable_storage_root = world.storage_root(ADDRESS_SCALABLE_L2)?;
     world
         .state
-        .insert_by_address(ADDRESS_SCALABLE_L2, scalable_acct)
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-        //                Add an entry API
-        .expect("insert must succeed with the same key as a successful `get`");
+        .set_storage(ADDRESS_SCALABLE_L2, scalable_storage_root)?;
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
@@ -767,17 +734,10 @@ where
         ger_trim.insert(slot);
 
         trim_state.insert(<StateTrieT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
-        let mut ger_acct = world
-            .state
-            .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
-            .context("missing GER contract address")?;
-        ger_acct.storage_root = world.storage_root(GLOBAL_EXIT_ROOT_ADDRESS)?;
+        let ger_storage_root = world.storage_root(GLOBAL_EXIT_ROOT_ADDRESS)?;
         world
             .state
-            .insert_by_address(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
-            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-            //                Add an entry API
-            .expect("insert must succeed with the same key as a successful `get`");
+            .set_storage(GLOBAL_EXIT_ROOT_ADDRESS, ger_storage_root)?;
     }
 
     Ok(())
@@ -827,17 +787,10 @@ where
         }
     }
     trim_state.insert(<StateTrieT::Key>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
-    let mut beacon_acct = world
-        .state
-        .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
-        .context("missing beacon contract address")?;
-    beacon_acct.storage_root = world.storage_root(BEACON_ROOTS_CONTRACT_ADDRESS)?;
+    let beacon_storage_root = world.storage_root(BEACON_ROOTS_CONTRACT_ADDRESS)?;
     world
         .state
-        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-        //                Add an entry API
-        .expect("insert must succeed with the same key as a successful `get`");
+        .set_storage(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_storage_root)?;
     Ok(())
 }
 
