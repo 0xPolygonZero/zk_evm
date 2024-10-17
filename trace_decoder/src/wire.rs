@@ -80,8 +80,6 @@ pub enum Instruction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/705
-//                `address` and `value` should be fixed length fields
 pub struct SmtLeaf {
     pub node_type: SmtLeafType,
     pub address: NonEmpty<Vec<u8>>,
@@ -89,8 +87,6 @@ pub struct SmtLeaf {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/705
-//                `Storage` should contain a fixed length field
 pub enum SmtLeafType {
     Balance,
     Nonce,
