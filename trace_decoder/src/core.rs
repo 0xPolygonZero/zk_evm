@@ -4,10 +4,9 @@ use std::{
     mem,
 };
 
-use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, BigEndianHash as _, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockMetadata, TrieRoots},
@@ -85,10 +84,7 @@ pub fn entrypoint(
     let batches = match state {
         Either::Left(mpt) => Either::Left(
             middle(
-                World {
-                    state: mpt,
-                    storage,
-                },
+                World::new_mpt(mpt, storage)?,
                 batch(txn_info, batch_size_hint),
                 &mut code,
                 &b_meta,
@@ -100,13 +96,12 @@ pub fn entrypoint(
             .into_iter()
             .map(|it| it.map(Either::Left)),
         ),
+        #[expect(clippy::diverging_sub_expression, unused)]
         Either::Right(smt) => {
+            let world: World<StateSmt> = todo!();
             Either::Right(
                 middle(
-                    World {
-                        state: smt,
-                        storage,
-                    },
+                    world,
                     batch(txn_info, batch_size_hint),
                     &mut code,
                     &b_meta,
@@ -139,7 +134,7 @@ pub fn entrypoint(
                  after,
                  withdrawals,
              }| {
-                let World { state, storage } = world;
+                let (state, storage) = world.into_state_and_storage();
                 GenerationInputs {
                     txn_number_before: first_txn_ix.into(),
                     gas_used_before: running_gas_used.into(),
@@ -412,20 +407,6 @@ fn middle<StateTrieT: StateTrie + Clone>(
 where
     StateTrieT::Key: Ord + From<Address>,
 {
-    // Initialise the storage tries.
-    for (haddr, acct) in world.state.iter() {
-        let storage = world.storage.entry(haddr).or_insert_with(|| {
-            let mut it = StorageTrie::default();
-            it.insert_hash(MptKey::default(), acct.storage_root)
-                .expect("empty trie insert cannot fail");
-            it
-        });
-        ensure!(
-            storage.root() == acct.storage_root,
-            "inconsistent initial storage for hashed address {haddr:x}"
-        )
-    }
-
     // These are the per-block tries.
     let mut transaction_trie = TransactionTrie::new();
     let mut receipt_trie = ReceiptTrie::new();
@@ -518,9 +499,7 @@ where
                 if born {
                     // Empty accounts cannot have non-empty storage,
                     // so we can safely insert a default trie.
-                    world
-                        .storage
-                        .insert(keccak_hash::keccak(addr), StorageTrie::default());
+                    world.create_storage(addr)?
                 }
 
                 if born || just_access {
@@ -587,26 +566,16 @@ where
                         .unwrap_or(acct.code_hash);
 
                     if !storage_written.is_empty() {
-                        let storage = match born {
-                            true => world.storage.entry(keccak_hash::keccak(addr)).or_default(),
-                            false => world.storage.get_mut(&keccak_hash::keccak(addr)).context(
-                                format!(
-                                    "missing storage trie for address {addr:x} in txn {tx_hash:x}"
-                                ),
-                            )?,
-                        };
-
                         for (k, v) in storage_written {
-                            let slot = MptKey::from_hash(keccak_hash::keccak(k));
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => storage_mask.extend(storage.reporting_remove(slot)?),
-                                false => {
-                                    storage.insert(slot, rlp::encode(&v).to_vec())?;
+                                true => {
+                                    storage_mask.extend(world.delete_slot(addr, k.into_uint())?)
                                 }
+                                false => world.store_int(addr, k.into_uint(), v)?,
                             }
                         }
-                        acct.storage_root = storage.root();
+                        acct.storage_root = world.storage_root(addr)?
                     }
 
                     world.state.insert_by_address(addr, acct)?;
@@ -617,7 +586,7 @@ where
                 }
 
                 if self_destructed {
-                    world.storage.remove(&keccak_hash::keccak(addr));
+                    world.destroy_storage(addr)?;
                     state_mask.extend(world.state.reporting_remove(addr)?)
                 }
             }
@@ -657,18 +626,7 @@ where
                 before.world.state.mask(state_mask)?;
                 before.receipt.mask(batch_first_txn_ix..txn_ix)?;
                 before.transaction.mask(batch_first_txn_ix..txn_ix)?;
-
-                let keep = storage_masks
-                    .keys()
-                    .map(keccak_hash::keccak)
-                    .collect::<BTreeSet<_>>();
-                before.world.storage.retain(|haddr, _| keep.contains(haddr));
-
-                for (addr, mask) in storage_masks {
-                    if let Some(it) = before.world.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.mask(mask)?
-                    } // else must have self-destructed
-                }
+                before.world.mask_storage(storage_masks)?;
                 before
             },
             after: TrieRoots {
@@ -735,26 +693,19 @@ where
     StateTrieT::Key: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
-        ADDRESS_SCALABLE_L2, ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ADDRESS,
-        GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS, LAST_BLOCK_STORAGE_POS,
-        STATE_ROOT_STORAGE_POS, TIMESTAMP_STORAGE_POS,
+        ADDRESS_SCALABLE_L2, GLOBAL_EXIT_ROOT_ADDRESS, GLOBAL_EXIT_ROOT_STORAGE_POS,
+        LAST_BLOCK_STORAGE_POS, STATE_ROOT_STORAGE_POS, TIMESTAMP_STORAGE_POS,
     };
 
     if block.block_number.is_zero() {
         return Err(anyhow!("Attempted to prove the Genesis block!"));
     }
-    let scalable_storage = world
-        .storage
-        .get_mut(&ADDRESS_SCALABLE_L2_ADDRESS_HASHED)
-        .context("missing scalable contract storage trie")?;
     let scalable_trim = trim_storage.entry(ADDRESS_SCALABLE_L2).or_default();
 
-    let timestamp_slot_key = MptKey::from_slot_position(U256::from(TIMESTAMP_STORAGE_POS.1));
+    let timestamp = world
+        .load_int(ADDRESS_SCALABLE_L2, U256::from(TIMESTAMP_STORAGE_POS.1))
+        .unwrap_or_default();
 
-    let timestamp = scalable_storage
-        .get(&timestamp_slot_key)
-        .map(rlp::decode::<U256>)
-        .unwrap_or(Ok(0.into()))?;
     let timestamp = core::cmp::max(timestamp, block.block_timestamp);
 
     // Store block number and largest timestamp
@@ -765,8 +716,8 @@ where
     ] {
         let slot = MptKey::from_slot_position(ix);
 
-        // These values are never 0.
-        scalable_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+        ensure!(!u.is_zero());
+        world.store_int(ADDRESS_SCALABLE_L2, ix, u)?;
         scalable_trim.insert(slot);
     }
 
@@ -778,7 +729,12 @@ where
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
-    scalable_storage.insert(slot, alloy::rlp::encode(prev_block_root_hash.compat()))?;
+    world.store_hash(
+        ADDRESS_SCALABLE_L2,
+        keccak_hash::keccak(arr),
+        prev_block_root_hash,
+    )?;
+
     scalable_trim.insert(slot);
 
     trim_state.insert(<StateTrieT::Key>::from(ADDRESS_SCALABLE_L2));
@@ -786,7 +742,7 @@ where
         .state
         .get_by_address(ADDRESS_SCALABLE_L2)
         .context("missing scalable contract address")?;
-    scalable_acct.storage_root = scalable_storage.root();
+    scalable_acct.storage_root = world.storage_root(ADDRESS_SCALABLE_L2)?;
     world
         .state
         .insert_by_address(ADDRESS_SCALABLE_L2, scalable_acct)
@@ -796,10 +752,6 @@ where
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
-        let ger_storage = world
-            .storage
-            .get_mut(&GLOBAL_EXIT_ROOT_ADDRESS_HASHED)
-            .context("missing GER contract storage trie")?;
         let ger_trim = trim_storage.entry(GLOBAL_EXIT_ROOT_ADDRESS).or_default();
 
         let mut arr = [0; 64];
@@ -807,7 +759,11 @@ where
         U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
         let slot = MptKey::from_hash(keccak_hash::keccak(arr));
 
-        ger_storage.insert(slot, alloy::rlp::encode(l1blockhash.compat()))?;
+        world.store_hash(
+            GLOBAL_EXIT_ROOT_ADDRESS,
+            keccak_hash::keccak(arr),
+            l1blockhash,
+        )?;
         ger_trim.insert(slot);
 
         trim_state.insert(<StateTrieT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
@@ -815,7 +771,7 @@ where
             .state
             .get_by_address(GLOBAL_EXIT_ROOT_ADDRESS)
             .context("missing GER contract address")?;
-        ger_acct.storage_root = ger_storage.root();
+        ger_acct.storage_root = world.storage_root(GLOBAL_EXIT_ROOT_ADDRESS)?;
         world
             .state
             .insert_by_address(GLOBAL_EXIT_ROOT_ADDRESS, ger_acct)
@@ -843,15 +799,11 @@ where
     StateTrieT::Key: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
-        BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
+        BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
     };
 
     let timestamp_idx = block_timestamp % HISTORY_BUFFER_LENGTH.value;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
-    let beacon_storage = world
-        .storage
-        .get_mut(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
-        .context("missing beacon contract storage trie")?;
     let beacon_trim = trim_storage
         .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
         .or_default();
@@ -867,9 +819,9 @@ where
         beacon_trim.insert(slot);
 
         match u.is_zero() {
-            true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
+            true => beacon_trim.extend(world.delete_slot(BEACON_ROOTS_CONTRACT_ADDRESS, ix)?),
             false => {
-                beacon_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+                world.store_int(BEACON_ROOTS_CONTRACT_ADDRESS, ix, u)?;
                 beacon_trim.insert(slot);
             }
         }
@@ -879,7 +831,7 @@ where
         .state
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context("missing beacon contract address")?;
-    beacon_acct.storage_root = beacon_storage.root();
+    beacon_acct.storage_root = world.storage_root(BEACON_ROOTS_CONTRACT_ADDRESS)?;
     world
         .state
         .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)

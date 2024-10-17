@@ -1,9 +1,14 @@
 //! Principled trie types and abstractions used in this library.
 
 use core::fmt;
-use std::{cmp, collections::BTreeMap, marker::PhantomData};
+use std::{
+    cmp,
+    collections::{BTreeMap, BTreeSet},
+    marker::PhantomData,
+};
 
-use anyhow::ensure;
+use alloy_compat::Compat;
+use anyhow::{ensure, Context};
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
@@ -14,15 +19,102 @@ use u4::{AsNibbles, U4};
 #[derive(Clone, Debug)]
 pub struct World<StateTrieT> {
     pub state: StateTrieT,
-    pub storage: BTreeMap<H256, StorageTrie>,
+    storage: BTreeMap<H256, StorageTrie>,
 }
+
+impl World<StateMpt> {
+    pub fn new_mpt(
+        state: StateMpt,
+        mut storage: BTreeMap<H256, StorageTrie>,
+    ) -> anyhow::Result<Self> {
+        // Initialise the storage tries.
+        for (haddr, acct) in state.iter() {
+            let storage = storage.entry(haddr).or_insert_with(|| {
+                let mut it = StorageTrie::default();
+                it.insert_hash(MptKey::default(), acct.storage_root)
+                    .expect("empty trie insert cannot fail");
+                it
+            });
+            ensure!(
+                storage.root() == acct.storage_root,
+                "inconsistent initial storage for hashed address {haddr:x}"
+            )
+        }
+        Ok(Self { state, storage })
+    }
+}
+
 impl<T> World<T> {
+    pub fn into_state_and_storage(self) -> (T, BTreeMap<H256, StorageTrie>) {
+        let Self { state, storage } = self;
+        (state, storage)
+    }
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> World<U> {
         let Self { state, storage } = self;
         World {
             state: f(state),
             storage,
         }
+    }
+    #[expect(unused)]
+    pub fn create_storage(&mut self, addr: Address) -> anyhow::Result<()> {
+        let clobbered = self
+            .storage
+            .insert(keccak_hash::keccak(addr), StorageTrie::default());
+        // ensure!(clobbered.is_none()); // this assertion fails in our tests
+        Ok(())
+    }
+    pub fn destroy_storage(&mut self, addr: Address) -> anyhow::Result<()> {
+        let removed = self.storage.remove(&keccak_hash::keccak(addr));
+        ensure!(removed.is_some());
+        Ok(())
+    }
+    pub fn store_int(&mut self, addr: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        self.get_storage_mut(addr)?.insert(
+            MptKey::from_slot_position(slot),
+            alloy::rlp::encode(value.compat()),
+        )?;
+        Ok(())
+    }
+    pub fn store_hash(&mut self, addr: Address, hash: H256, value: H256) -> anyhow::Result<()> {
+        self.get_storage_mut(addr)?
+            .insert(MptKey::from_hash(hash), alloy::rlp::encode(value.compat()))?;
+        Ok(())
+    }
+    pub fn load_int(&mut self, addr: Address, slot: U256) -> anyhow::Result<U256> {
+        let bytes = self
+            .get_storage_mut(addr)?
+            .get(&MptKey::from_slot_position(slot))
+            .context(format!("no storage at slot {slot} for address {addr:x}"))?;
+        Ok(rlp::decode(bytes)?)
+    }
+    pub fn delete_slot(&mut self, addr: Address, slot: U256) -> anyhow::Result<Option<MptKey>> {
+        self.get_storage_mut(addr)?
+            .reporting_remove(MptKey::from_slot_position(slot))
+    }
+    pub fn storage_root(&mut self, addr: Address) -> anyhow::Result<H256> {
+        Ok(self.get_storage_mut(addr)?.root())
+    }
+    fn get_storage_mut(&mut self, addr: Address) -> anyhow::Result<&mut StorageTrie> {
+        self.storage
+            .get_mut(&keccak_hash::keccak(addr))
+            .context(format!("no storage trie for address {addr:x}"))
+    }
+    pub fn mask_storage(
+        &mut self,
+        masks: BTreeMap<Address, BTreeSet<MptKey>>,
+    ) -> anyhow::Result<()> {
+        let keep = masks
+            .keys()
+            .map(keccak_hash::keccak)
+            .collect::<BTreeSet<_>>();
+        self.storage.retain(|haddr, _| keep.contains(haddr));
+        for (addr, mask) in masks {
+            if let Some(it) = self.storage.get_mut(&keccak_hash::keccak(addr)) {
+                it.mask(mask)?
+            }
+        }
+        Ok(())
     }
 }
 
@@ -389,7 +481,6 @@ pub trait StateTrie {
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
     /// _Hash out_ parts of the trie that aren't in `addresses`.
     fn mask(&mut self, address: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> H256;
 }
 
@@ -461,11 +552,6 @@ impl StateTrie for StateMpt {
         };
         Ok(())
     }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
-    }
     fn root(&self) -> H256 {
         self.typed.root()
     }
@@ -506,11 +592,6 @@ impl StateTrie for StateSmt {
     fn mask(&mut self, address: impl IntoIterator<Item = SmtKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
-    }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.address2state
-            .iter()
-            .map(|(addr, acct)| (keccak_hash::keccak(addr), *acct))
     }
     fn root(&self) -> H256 {
         conv_hash::smt2eth(self.as_smt().root)
