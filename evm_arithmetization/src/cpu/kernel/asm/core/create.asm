@@ -269,14 +269,22 @@ global set_codehash:
     {
         // stack: addr, codehash, retdest
         DUP1 %insert_touched_addresses
-        DUP1 %read_code %mload_trie_data
+        DUP1 
+    global debug_reading_code:
+        %read_code
         // stack: prev_codehash, addr, codehash, retdest
-        DUP2 %read_code_length %mload_trie_data
+        DUP2
+    global debug_reading_code_length:
+        %read_code_length
         %stack (prev_code_length, prev_codehash, addr) -> (addr, prev_codehash, prev_code_length, addr)
         %journal_add_code_change // Add the code change to the journal.
         // stack: addr, codehash, retdest
-        DUP2 DUP2 %set_code
-        %returndatasize DUP2 %set_code_length
+        DUP2 DUP2
+    global debug_setting_code:
+        %set_code
+        %returndatasize DUP2
+    global debug_setting_code_lenght:
+        %set_code_length
         // stack: addr, codehash, retdest
         %pop2 JUMP
     }

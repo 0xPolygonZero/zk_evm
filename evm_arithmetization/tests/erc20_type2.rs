@@ -12,6 +12,9 @@ use evm_arithmetization::prover::testing::prove_all_segments;
 #[cfg(feature = "eth_mainnet")]
 use evm_arithmetization::testing_utils::beacon_roots_contract_from_storage;
 use evm_arithmetization::testing_utils::ADDRESS_SCALABLE_L2;
+use evm_arithmetization::testing_utils::LAST_BLOCK_STORAGE_POS;
+use evm_arithmetization::testing_utils::STATE_ROOT_STORAGE_POS;
+use evm_arithmetization::testing_utils::TIMESTAMP_STORAGE_POS;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, create_account_storage, init_logger,
     preinitialized_state_and_storage_tries, sd2u, update_beacon_roots_account_storage,
@@ -25,6 +28,8 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
+use plonky2::field::types::PrimeField64;
+use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 use smt_trie::code::hash_bytecode_u256;
@@ -89,6 +94,8 @@ fn test_erc20() -> anyhow::Result<()> {
         &token_storage(),
     );
 
+    let state_smt_before_root = state_smt_before.root;
+
     let tries_before = TrieInputs {
         state_trie: state_smt_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
@@ -143,7 +150,7 @@ fn test_erc20() -> anyhow::Result<()> {
             &mut smt,
             ADDRESS_SCALABLE_L2,
             &scalable_account(),
-            &HashMap::new(),
+            &scalable_storage_after(&block_metadata, hashout2u(state_smt_before_root)),
         );
 
         smt
@@ -182,6 +189,11 @@ fn test_erc20() -> anyhow::Result<()> {
     }
     .into();
 
+    let kb = key_code_length(ADDRESS_SCALABLE_L2);
+    log::debug!(
+        "scalable code length key = {:?}",
+        U256(std::array::from_fn(|i| kb.0[i].to_canonical_u64()))
+    );
     log::debug!("expected smt after = {}", expected_smt_after);
     log::debug!(
         "expected smt data after = {:?}",
@@ -270,12 +282,17 @@ fn token_storage_after() -> HashMap<U256, U256> {
     storage
 }
 
-fn scalable_storage_aftert() -> HashMap<U256, U256> {
+fn scalable_storage_after(block: &BlockMetadata, state_root_before: U256) -> HashMap<U256, U256> {
     let mut storage = HashMap::new();
-    storage.insert(
-        U256::from(LAST_BLOCK_STORAGE_POS),
-        
-;    )
+    storage.insert(U256::from(LAST_BLOCK_STORAGE_POS.1), block.block_number);
+    storage.insert(U256::from(TIMESTAMP_STORAGE_POS.1), block.block_timestamp);
+
+    let mut arr = [0; 64];
+    (block.block_number - U256::one()).to_big_endian(&mut arr[0..32]);
+    U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
+    let slot = keccak(arr);
+    storage.insert(slot.into_uint(), state_root_before);
+    storage
 }
 
 fn giver_account() -> AccountRlp {
@@ -338,9 +355,22 @@ fn set_account<D: Db>(
     account: &AccountRlp,
     storage: &HashMap<U256, U256>,
 ) {
+    let key = key_balance(addr);
+    log::debug!(
+        "setting {:?} balance to {:?}, the key is {:?}",
+        addr,
+        account.balance,
+        U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+    );
     smt.set(key_balance(addr), account.balance);
     smt.set(key_nonce(addr), account.nonce);
     smt.set(key_code(addr), h2u(account.code_hash));
+    let key = key_code_length(addr);
+    log::debug!(
+        "setting {:?} code length, the key is {:?}",
+        addr,
+        U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+    );
     smt.set(key_code_length(addr), account.code_length);
     for (&k, &v) in storage {
         smt.set(key_storage(addr, k), v);
