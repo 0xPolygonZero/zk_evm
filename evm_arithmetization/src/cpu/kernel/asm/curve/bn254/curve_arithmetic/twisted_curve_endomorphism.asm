@@ -1,6 +1,6 @@
 // Implementation of the BN254 twist endomorphism.
 
-/// Frobenius map over BN254 quadratic extension.
+// Frobenius map over BN254 quadratic extension.
 %macro frob_fp254_2
     // stack: X = (x, x_)
     %conj_fp254_2

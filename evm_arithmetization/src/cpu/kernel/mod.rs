@@ -1,6 +1,7 @@
 pub mod aggregator;
 pub mod assembler;
 mod ast;
+pub mod ast2;
 pub(crate) mod constants;
 mod cost_estimator;
 pub(crate) mod keccak_util;

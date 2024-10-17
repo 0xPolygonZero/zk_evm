@@ -62,7 +62,7 @@
     // stack:   x0, x1
 %endmacro 
 
-/// complex conjugate
+// complex conjugate
 %macro conj_fp254_2
     // stack: a,  b
     SWAP1 
@@ -125,9 +125,9 @@
     // stack:        z, z_
 %endmacro
 
-/// Given z = x + iy: Fp254_2, return complex conjugate z': Fp254_2
-/// where input is represented z.re, z.im and output as z'.im, z'.re
-/// cost: 9; note this returns y, x for the output x + yi
+// Given z = x + iy: Fp254_2, return complex conjugate z': Fp254_2
+// where input is represented z.re, z.im and output as z'.im, z'.re
+// cost: 9; note this returns y, x for the output x + yi
 %macro i9
     // stack:          a , b
     DUP2
@@ -540,8 +540,8 @@
     // stack: f: 6, X: 8, f: 6
 %endmacro
 
-/// multiply (a + bt + ct^2) by t:
-///     t(a + bt + ct^2) = at + bt^2 + ct^3 = (9+i)c + at + bt^2
+// multiply (a + bt + ct^2) by t:
+//     t(a + bt + ct^2) = at + bt^2 + ct^3 = (9+i)c + at + bt^2
 %macro sh_fp254_6
     // stack:      a, b, c
     %stack (a: 2, b: 2, c: 2) -> (c, a, b)
@@ -669,14 +669,14 @@
     // stack: c * f0, c * f1, c * f2, c * f3, c * f4, c * f5
 %endmacro
 
-/// cost: 
-///
-/// G0 + G1t + G2t^2 = (a+bi) * (F0 + F1t + F2t^2) 
-///                  = (a+bi)F0 + (a+bi)F1t + (a+bi)F2t^2
-///
-/// G0 = (a+bi)(f0+f0_i) = (af0 - bf0_) + (bf0 + af0_)i
-/// G1 = (a+bi)(f1+f1_i) = (af1 - bf1_) + (bf1 + af1_)i
-/// G2 = (a+bi)(f2+f2_i) = (af2 - bf2_) + (bf2 + af2_)i
+// cost: 
+//
+// G0 + G1t + G2t^2 = (a+bi) * (F0 + F1t + F2t^2) 
+//                  = (a+bi)F0 + (a+bi)F1t + (a+bi)F2t^2
+//
+// G0 = (a+bi)(f0+f0_i) = (af0 - bf0_) + (bf0 + af0_)i
+// G1 = (a+bi)(f1+f1_i) = (af1 - bf1_) + (bf1 + af1_)i
+// G2 = (a+bi)(f2+f2_i) = (af2 - bf2_) + (bf2 + af2_)i
 
 %macro scale_fp254_6
     // stack:             a, b, f0, f0_, f1, f1_, f2, f2_
@@ -759,15 +759,15 @@
     // stack:                   g0, g0_, g1, g1_, g2, g2_
 %endmacro 
 
-/// cost: 1 i9 (9) + 16 dups + 15 swaps + 12 muls + 6 adds/subs = 58
-///
-/// G0 + G1t + G2t^2 = (a+bi)t * (F0 + F1t + F2t^2) 
-///                  = (c+di)F2 + (a+bi)F0t + (a+bi)F1t^2
-/// where c+di = (a+bi)(9+i) = (9a-b) + (a+9b)i 
-///
-/// G0 = (c+di)(f2+f2_i) = (cf2 - df2_) + (df2 + cf2_)i
-/// G1 = (a+bi)(f0+f0_i) = (af0 - bf0_) + (bf0 + af0_)i
-/// G2 = (a+bi)(f1+f1_i) = (af1 - bf1_) + (bf1 + af1_)i
+// cost: 1 i9 (9) + 16 dups + 15 swaps + 12 muls + 6 adds/subs = 58
+//
+// G0 + G1t + G2t^2 = (a+bi)t * (F0 + F1t + F2t^2) 
+//                  = (c+di)F2 + (a+bi)F0t + (a+bi)F1t^2
+// where c+di = (a+bi)(9+i) = (9a-b) + (a+9b)i 
+//
+// G0 = (c+di)(f2+f2_i) = (cf2 - df2_) + (df2 + cf2_)i
+// G1 = (a+bi)(f0+f0_i) = (af0 - bf0_) + (bf0 + af0_)i
+// G2 = (a+bi)(f1+f1_i) = (af1 - bf1_) + (bf1 + af1_)i
 
 %macro scale_fp254_6_sh
     // stack:             a, b, f0, f0_, f1, f1_, f2, f2_
@@ -853,15 +853,15 @@
     // stack:                   g0, g0_, g1, g1_, g2, g2_
 %endmacro
 
-/// cost: 1 i9 (9) + 16 dups + 17 swaps + 12 muls + 6 adds/subs = 60
-///
-/// G0 + G1t + G2t^2 = (a+bi)t^2 * (F0 + F1t + F2t^2) 
-///                  = (c+di)F1 + (c+di)F2t + (a+bi)F0t^2
-/// where c+di = (a+bi)(9+i) = (9a-b) + (a+9b)i 
-///
-/// G0 = (c+di)(f1+f1_i) = (cf1 - df1_) + (df1 + cf1_)i
-/// G1 = (a+bi)(f2+f2_i) = (cf2 - df2_) + (df2 + cf2_)i
-/// G2 = (a+bi)(f0+f0_i) = (af0 - bf0_) + (bf0 + af0_)i
+// cost: 1 i9 (9) + 16 dups + 17 swaps + 12 muls + 6 adds/subs = 60
+//
+// G0 + G1t + G2t^2 = (a+bi)t^2 * (F0 + F1t + F2t^2) 
+//                  = (c+di)F1 + (c+di)F2t + (a+bi)F0t^2
+// where c+di = (a+bi)(9+i) = (9a-b) + (a+9b)i 
+//
+// G0 = (c+di)(f1+f1_i) = (cf1 - df1_) + (df1 + cf1_)i
+// G1 = (a+bi)(f2+f2_i) = (cf2 - df2_) + (df2 + cf2_)i
+// G2 = (a+bi)(f0+f0_i) = (af0 - bf0_) + (bf0 + af0_)i
 
 %macro scale_fp254_6_sh2
     // stack:             a, b, f0, f0_, f1, f1_, f2, f2_
@@ -1076,8 +1076,8 @@
     // stack:                                                            
 %endmacro
 
-/// moves fp254_12 from src..src+12 to dest..dest+12
-/// these should not overlap. leaves scaled DEST on stack
+// moves fp254_12 from src..src+12 to dest..dest+12
+// these should not overlap. leaves scaled DEST on stack
 %macro move_fp254_12
     // stack:              src, dest
     PUSH @SEGMENT_BN_PAIRING

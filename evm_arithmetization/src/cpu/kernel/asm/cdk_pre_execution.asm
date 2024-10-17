@@ -1,9 +1,9 @@
-/// CDK-Erigon pre-block execution logic.
-/// Reference implementation: `cdk-erigon/core/state/intra_block_state_zkevm.go`.
-/// This currently supports the Etrog upgrade.
+// CDK-Erigon pre-block execution logic.
+// Reference implementation: `cdk-erigon/core/state/intra_block_state_zkevm.go`.
+// This currently supports the Etrog upgrade.
 
-/// Pre-stack: (empty)
-/// Post-stack: (empty)
+// Pre-stack: (empty)
+// Post-stack: (empty)
 global pre_block_execution:
     // stack: (empty)
     PUSH txn_loop
