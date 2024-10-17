@@ -62,6 +62,25 @@ fn empty_tables() -> anyhow::Result<()> {
         )
     );
 
+    let segment_proof = timed!(
+        timing,
+        log::Level::Info,
+        "Prove segment",
+        all_circuits.prove_segment_with_all_proofs(&proofs[0], &config, None)?
+    );
+
+    // Verify the generated segment proof
+    timed!(
+        timing,
+        log::Level::Info,
+        "Verify segment proof",
+        all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
+    );
+
+    // Print timing details
+    timing.print();
+
+    // Test serialization of preprocessed circuits
     {
         let gate_serializer = DefaultGateSerializer;
         let generator_serializer = DefaultGeneratorSerializer::<C, D>::default();
@@ -88,24 +107,6 @@ fn empty_tables() -> anyhow::Result<()> {
 
         assert_eq!(all_circuits, all_circuits_from_bytes);
     }
-
-    let segment_proof = timed!(
-        timing,
-        log::Level::Info,
-        "Prove segment",
-        all_circuits.prove_segment_with_all_proofs(&proofs[0], &config, None)?
-    );
-
-    // Verify the generated segment proof
-    timed!(
-        timing,
-        log::Level::Info,
-        "Verify segment proof",
-        all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
-    );
-
-    // Print timing details
-    timing.print();
 
     Ok(())
 }

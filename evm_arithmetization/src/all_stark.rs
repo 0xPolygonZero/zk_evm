@@ -129,8 +129,6 @@ impl Table {
     }
 }
 
-/// The total number of CTLs used by the zkEVM.
-pub(crate) const NUM_CTLS: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 10 };
 /// The position of the Memory CTL within all CTLs of the zkEVM.
 pub(crate) const MEMORY_CTL_IDX: usize = 6;
 
@@ -423,18 +421,4 @@ fn ctl_poseidon_general_output<F: Field>() -> CrossTableLookup<F> {
         vec![cpu_stark::ctl_poseidon_general_output()],
         poseidon_stark::ctl_looked_general_output(),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use plonky2::field::goldilocks_field::GoldilocksField;
-
-    use super::*;
-
-    type F = GoldilocksField;
-
-    #[test]
-    fn check_num_ctls() {
-        assert_eq!(all_cross_table_lookups::<F>().len(), NUM_CTLS);
-    }
 }
