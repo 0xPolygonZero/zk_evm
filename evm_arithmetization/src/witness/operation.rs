@@ -562,6 +562,7 @@ pub(crate) fn generate_dup<F: RichField, T: Transition<F>>(
     } else {
         mem_read_gp_with_log_and_fill(2, other_addr, generation_state, &mut row)
     };
+
     push_no_write(generation_state, val);
     state.push_memory(log_push);
     state.push_memory(log_read);
@@ -611,44 +612,20 @@ pub(crate) fn generate_incr<F: RichField, T: Transition<F>>(
         .ok_or(ProgramError::StackUnderflow)?;
     let addr = MemoryAddress::new(generation_state.registers.context, Segment::Stack, offset);
 
-    let (in0, log_in0) = if n == 0 {
-        let val = generation_state.registers.stack_top;
-        let op = MemoryOp::new(
-            MemoryChannel::GeneralPurpose(1),
-            generation_state.traces.clock(),
-            addr,
-            MemoryOpKind::Read,
-            val,
-        );
-
-        let channel = &mut row.mem_channels[1];
-        assert_eq!(channel.used, F::ZERO);
-        channel.used = F::ONE;
-        channel.is_read = F::ONE;
-        channel.addr_context = F::from_canonical_usize(addr.context);
-        channel.addr_segment = F::from_canonical_usize(addr.segment);
-        channel.addr_virtual = F::from_canonical_usize(addr.virt);
-        for (i, limb) in val.0.into_iter().enumerate() {
-            channel.value[2 * i] = F::from_canonical_u32(limb as u32);
-            channel.value[2 * i + 1] = F::from_canonical_u32((limb >> 32) as u32);
-        }
-
-        (val, op)
-    } else {
-        mem_read_gp_with_log_and_fill(1, addr, &generation_state, &mut row)
-    };
+    let (val, log_in0) = mem_read_gp_with_log_and_fill(1, addr, &generation_state, &mut row);
+    let new_val = val.overflowing_add(1.into()).0;
 
     // Write the read value, incremented by 1.
-    let log_out0 = mem_write_gp_log_and_fill(2, addr, generation_state, &mut row, in0 + 1);
+    let log_out0 = mem_write_gp_log_and_fill(2, addr, generation_state, &mut row, new_val);
 
     // Manually increment the top of the stack if calling INCR1.
     if n == 0 {
-        generation_state.registers.stack_top += 1.into();
+        generation_state.registers.stack_top += U256::one();
     }
-    state.push_memory(log_out0);
     state.push_memory(log_in0);
+    state.push_memory(log_out0);
 
-    let operation = arithmetic::Operation::binary(BinaryOperator::Add, in0, U256::one());
+    let operation = arithmetic::Operation::binary(BinaryOperator::Add, val, U256::one());
     state.push_arithmetic(operation);
     state.push_cpu(row);
 
