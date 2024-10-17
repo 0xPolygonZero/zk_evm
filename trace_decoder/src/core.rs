@@ -189,27 +189,26 @@ fn start(
             state: SeparateTriePreImage::Direct(state),
             storage: SeparateStorageTriesPreImage::MultipleTries(storage),
         }) => {
-            let state = state.items().try_fold(
-                StateMpt::default(),
-                |mut acc, (nibbles, hash_or_val)| {
-                    let path = MptKey::from_nibbles(nibbles);
-                    match hash_or_val {
-                        mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                            #[expect(deprecated)] // this is MPT specific
-                            acc.insert_by_hashed_address(
-                                path.into_hash()
-                                    .context("invalid path length in direct state trie")?,
-                                rlp::decode(&bytes)
-                                    .context("invalid AccountRlp in direct state trie")?,
-                            )?;
-                        }
-                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                            acc.insert_hash_by_key(path, h)?;
-                        }
-                    };
-                    anyhow::Ok(acc)
-                },
-            )?;
+            let state =
+                state
+                    .items()
+                    .try_fold(StateMpt::new(), |mut acc, (nibbles, hash_or_val)| {
+                        let path = MptKey::from_nibbles(nibbles);
+                        match hash_or_val {
+                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                acc.insert(
+                                    path.into_hash()
+                                        .context("invalid path length in direct state trie")?,
+                                    rlp::decode(&bytes)
+                                        .context("invalid AccountRlp in direct state trie")?,
+                                )?;
+                            }
+                            mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                acc.insert_hash(path, h)?;
+                            }
+                        };
+                        anyhow::Ok(acc)
+                    })?;
             let storage = storage
                 .into_iter()
                 .map(|(k, SeparateTriePreImage::Direct(v))| {
