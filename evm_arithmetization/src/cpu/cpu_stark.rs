@@ -16,6 +16,7 @@ use starky::stark::Stark;
 
 use super::columns::CpuColumnsView;
 use super::kernel::constants::context_metadata::ContextMetadata;
+use super::kernel::opcodes::get_opcode;
 use super::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::cpu::columns::{COL_MAP, NUM_CPU_COLUMNS};
@@ -127,6 +128,39 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
                 COL_MAP.op.exception,
             ])],
         ),
+    )
+}
+
+/// Returns the `TableWithColumns` for the CPU rows calling arithmetic
+/// `ADD` operations through the `INCR` privileged instructions.
+pub(crate) fn ctl_arithmetic_incr_op<F: Field>() -> TableWithColumns<F> {
+    // Instead of taking single columns, we reconstruct the entire opcode value
+    // directly.
+    let mut columns = vec![Column::constant(F::from_canonical_u8(get_opcode("ADD")))];
+
+    // Read value
+    columns.extend(Column::singles(COL_MAP.mem_channels[1].value));
+
+    // Fixed second operand (`U256::one()`)
+    {
+        columns.push(Column::constant(F::ONE));
+        for _ in 1..VALUE_LIMBS {
+            columns.push(Column::constant(F::ZERO));
+        }
+    }
+
+    // Ignored third operand, `ADD` is a binary operation
+    for _ in 0..VALUE_LIMBS {
+        columns.push(Column::constant(F::ZERO));
+    }
+
+    // Returned value
+    columns.extend(Column::singles(COL_MAP.mem_channels[2].value));
+
+    TableWithColumns::new(
+        *Table::Cpu,
+        columns,
+        Filter::new_simple(Column::single(COL_MAP.op.incr)),
     )
 }
 
