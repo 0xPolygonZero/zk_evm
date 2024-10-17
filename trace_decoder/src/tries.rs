@@ -11,6 +11,21 @@ use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
+#[derive(Clone, Debug)]
+pub struct World<StateTrieT> {
+    pub state: StateTrieT,
+    pub storage: BTreeMap<H256, StorageTrie>,
+}
+impl<T> World<T> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> World<U> {
+        let Self { state, storage } = self;
+        World {
+            state: f(state),
+            storage,
+        }
+    }
+}
+
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
 ///
 /// Portions of the trie may be _hashed out_: see [`Self::insert_hash`].
