@@ -363,7 +363,7 @@ pub struct Type2World {
 
 impl Type2World {
     /// # Panics
-    /// - On untrusted inputs: https://github.com/0xPolygonZero/zk_evm/issues/348
+    /// - On untrusted inputs: <https://github.com/0xPolygonZero/zk_evm/issues/348>.
     pub fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
         let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
 

@@ -33,7 +33,7 @@ pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::
 
 /// Node in a binary (SMT) tree.
 ///
-/// This is an intermediary type on the way to [`StateSmt`].
+/// This is an intermediary type on the way to [`Type2World`].
 enum Node {
     Branch(EitherOrBoth<Box<Self>>),
     Hash([u8; 32]),

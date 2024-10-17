@@ -12,7 +12,7 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, Partia
 use u4::{AsNibbles, U4};
 
 /// Bounded sequence of [`U4`],
-/// used as a key for [`TypedMpt`].
+/// used as a key for [MPT](HashedPartialTrie) types in this module.
 ///
 /// Semantically equivalent to [`mpt_trie::nibbles::Nibbles`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -93,7 +93,7 @@ fn mpt_key_into_hash() {
 }
 
 /// Bounded sequence of bits,
-/// used as a key for [`StateSmt`].
+/// used as a key for SMT tries.
 ///
 /// Semantically equivalent to [`smt_trie::bits::Bits`].
 #[derive(Clone, Copy)]
