@@ -31,7 +31,7 @@ pub enum BlockInterval {
 }
 
 impl BlockInterval {
-    /// Create a new block interval.
+    /// Creates a new block interval.
     ///
     /// If end_block is None, the interval is unbounded and will follow from
     /// start_block. If start_block == end_block, the interval is a single

@@ -5,7 +5,7 @@
 # 2 --> End block (number or hash, inclusive)
 # 3 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
 # 4 --> Rpc type (eg. jerigon / native)
-# 5 --> Checkpoint block (number or hash, optional when specifying start block by number)
+# 5 --> Checkpoint block (number or hash to ignore previous proofs. empty [""] when specifying start block by number to rely on previous proofs)
 # 6 --> Backoff in milliseconds (optional [default: 0])
 # 7 --> Number of retries (optional [default: 0])
 # 8 --> Test run only flag `test_only` (optional)
@@ -58,13 +58,16 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 mkdir -p "$PROOF_OUTPUT_DIR"
 
 if [ -n "$CHECKPOINT_BLOCK" ] ; then
-    # Set checkpoint height to previous block number for the first block in range
+    # Checkpoint block provided, pass it to the prover as a flag
     PREV_PROOF_EXTRA_ARG="--checkpoint-block $CHECKPOINT_BLOCK"
 else
+    # Checkpoint block not provided, but is required hash-based start block
     if [[ $START_BLOCK == 0x* ]]; then
         echo "Checkpoint block is required when specifying blocks by hash"
         exit 1
     fi
+
+    # Checkpoint block not provided, deduce proof starting point from the start block
     if [[ $1 -gt 1 ]]; then
         prev_proof_num=$(($1-1))
         PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
@@ -102,9 +105,9 @@ rpc \
 --rpc-url $NODE_RPC_URL \
 --start-block $START_BLOCK \
 --end-block $END_BLOCK \
-$PREV_PROOF_EXTRA_ARG \
 --backoff $BACKOFF \
---max-retries $RETRIES"
+--max-retries $RETRIES \
+$PREV_PROOF_EXTRA_ARG"
 
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval "$command"
@@ -136,10 +139,12 @@ else
 rpc \
 --rpc-type $NODE_RPC_TYPE \
 --rpc-url $3 \
---block-interval $BLOCK_INTERVAL \
-$PREV_PROOF_EXTRA_ARG \
+--start-block $START_BLOCK \
+--end-block $END_BLOCK \
 --backoff $BACKOFF \
---max-retries $RETRIES"
+--max-retries $RETRIES \
+$PREV_PROOF_EXTRA_ARG "
+
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval "$command"
         echo -e "Proof generation finished with result: $?"

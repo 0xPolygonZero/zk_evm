@@ -71,7 +71,7 @@ pub(crate) enum Command {
         #[arg(long, short = 'e')]
         end_block: Option<BlockId>,
         /// The checkpoint block number.
-        #[arg(short, long, default_value_t = BlockId::from(0))]
+        #[arg(short, long, default_value = "0")]
         checkpoint_block: BlockId,
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
