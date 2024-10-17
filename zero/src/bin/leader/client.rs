@@ -11,7 +11,6 @@ use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
 use zero::rpc;
-use zero::rpc::{retry::build_http_retry_provider, RpcType};
 
 use crate::ProofRuntime;
 

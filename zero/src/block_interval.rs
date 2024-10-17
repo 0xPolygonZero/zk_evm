@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use alloy::rpc::types::eth::BlockId;
 use alloy::rpc::types::BlockTransactionsKind;
-use alloy::{hex, providers::Provider, transports::Transport};
+use alloy::{providers::Provider, transports::Transport};
 use anyhow::{anyhow, Result};
 use async_stream::try_stream;
 use futures::Stream;
@@ -36,6 +36,9 @@ impl BlockInterval {
     /// If end_block is None, the interval is unbounded and will follow from
     /// start_block. If start_block == end_block, the interval is a single
     /// block. Otherwise the interval is a range from start_block to end_block.
+    ///
+    /// end_block is treated as inclusive because it may have been specified
+    /// as a block hash.
     pub async fn new<ProviderT, TransportT>(
         cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
         start_block: BlockId,
@@ -91,12 +94,12 @@ impl BlockInterval {
         }
     }
 
+    /// Returns the start block number of the interval.
     pub fn get_start_block(&self) -> Result<u64> {
         match self {
             BlockInterval::SingleBlockId(num) => Ok(*num),
             BlockInterval::Range(range) => Ok(range.start),
             BlockInterval::FollowFrom { start_block, .. } => Ok(*start_block),
-            _ => Err(anyhow!("Unknown BlockInterval variant")), // Handle unknown variants
         }
     }
 
@@ -137,6 +140,7 @@ impl BlockInterval {
         }
     }
 
+    /// Converts a [`BlockId`] into a block number by querying the provider.
     pub async fn block_to_num<ProviderT, TransportT>(
         cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
         block: BlockId,
@@ -146,9 +150,12 @@ impl BlockInterval {
         TransportT: Transport + Clone,
     {
         let block_num = match block {
+            // Number already provided
             BlockId::Number(num) => num
                 .as_number()
                 .ok_or_else(|| anyhow!("invalid block number '{num}'"))?,
+
+            // Hash provided, query the provider for the block number.
             BlockId::Hash(hash) => {
                 let block = cached_provider
                     .get_provider()
