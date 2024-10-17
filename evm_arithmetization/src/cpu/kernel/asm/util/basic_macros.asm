@@ -348,7 +348,7 @@
 %endmacro
 
 %macro increment_twice
-    INCR1 INCR1
+    %add_const(2)
 %endmacro
 
 %macro decrement
