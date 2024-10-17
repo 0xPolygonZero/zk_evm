@@ -1,4 +1,4 @@
-//! Principled trie types and abstractions used in this library.
+//! Principled trie types used in this library.
 
 use core::fmt;
 use std::{cmp, collections::BTreeMap};
@@ -30,17 +30,6 @@ impl fmt::Display for MptKey {
 impl MptKey {
     pub fn new(components: impl IntoIterator<Item = U4>) -> anyhow::Result<Self> {
         Ok(MptKey(CopyVec::try_from_iter(components)?))
-    }
-    pub fn into_hash_left_padded(mut self) -> H256 {
-        for _ in 0..self.0.spare_capacity_mut().len() {
-            self.0.insert(0, U4::Dec00)
-        }
-        let mut packed = [0u8; 32];
-        AsNibbles(&mut packed).pack_from_slice(&self.0);
-        H256::from_slice(&packed)
-    }
-    pub fn from_address(address: Address) -> Self {
-        Self::from_hash(keccak_hash::keccak(address))
     }
     pub fn from_slot_position(pos: U256) -> Self {
         let mut bytes = [0; 32];
@@ -313,6 +302,9 @@ impl StateMpt {
             ),
         }
     }
+    pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
+        &self.inner
+    }
     /// Insert a _hashed out_ part of the trie
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         Ok(self.inner.insert(key.into_nibbles(), hash)?)
@@ -334,7 +326,7 @@ impl StateMpt {
     pub fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(
             &mut self.inner,
-            MptKey::from_address(address),
+            MptKey::from_hash(keccak_hash::keccak(address)),
         )
     }
     pub fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
@@ -367,7 +359,7 @@ impl From<StateMpt> for HashedPartialTrie {
 // - insertion operations aren't fallible, they just panic.
 // - it documents a requirement that `set_hash` is called before `set`.
 #[derive(Clone, Debug)]
-pub struct StateSmt {
+pub(crate) struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
     hashed_out: BTreeMap<SmtKey, H256>,
 }

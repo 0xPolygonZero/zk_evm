@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
                         state_trie: observer.data[prover_tries.batch_index]
                             .tries
                             .world
-                            .as_hashed_partial_trie()
+                            .state_trie()
                             .clone(),
                         transaction_trie: observer.data[prover_tries.batch_index]
                             .tries

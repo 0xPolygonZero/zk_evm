@@ -402,7 +402,7 @@ fn middle<WorldT: World + Clone>(
     observer: &mut impl Observer<WorldT>,
 ) -> anyhow::Result<Vec<Batch<WorldT>>>
 where
-    WorldT::Key: Ord + From<Address>,
+    WorldT::SubtriePath: Ord + From<Address>,
 {
     // These are the per-block tries.
     let mut transaction_trie = TransactionTrie::new();
@@ -429,7 +429,7 @@ where
         // but won't know the bounds until after the loop below,
         // so store that information here.
         let mut storage_masks = BTreeMap::<_, BTreeSet<MptKey>>::new();
-        let mut state_mask = BTreeSet::<WorldT::Key>::new();
+        let mut state_mask = BTreeSet::<WorldT::SubtriePath>::new();
 
         if txn_ix == 0 {
             do_pre_execution(
@@ -550,23 +550,22 @@ where
                         for (k, v) in storage_written {
                             match v.is_zero() {
                                 // this is actually a delete
-                                true => {
-                                    storage_mask.extend(world.delete_slot(addr, k.into_uint())?)
-                                }
+                                true => storage_mask
+                                    .extend(world.reporting_destroy_slot(addr, k.into_uint())?),
                                 false => world.store_int(addr, k.into_uint(), v)?,
                             }
                         }
                     }
 
-                    state_mask.insert(<WorldT::Key>::from(addr));
+                    state_mask.insert(<WorldT::SubtriePath>::from(addr));
                 } else {
                     // Simple state access
-                    state_mask.insert(<WorldT::Key>::from(addr));
+                    state_mask.insert(<WorldT::SubtriePath>::from(addr));
                 }
 
                 if self_destructed {
                     world.destroy_storage(addr)?;
-                    state_mask.extend(world.reporting_remove(addr)?)
+                    state_mask.extend(world.reporting_destroy(addr)?)
                 }
             }
 
@@ -584,7 +583,7 @@ where
             withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
-                        state_mask.insert(<WorldT::Key>::from(*addr));
+                        state_mask.insert(<WorldT::SubtriePath>::from(*addr));
                         world.update_balance(*addr, |it| *it += *amt)?;
                     }
                     mem::take(&mut withdrawals)
@@ -622,11 +621,11 @@ fn do_pre_execution<WorldT: World + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
-    trim_state: &mut BTreeSet<WorldT::Key>,
+    trim_state: &mut BTreeSet<WorldT::SubtriePath>,
     world: &mut WorldT,
 ) -> anyhow::Result<()>
 where
-    WorldT::Key: From<Address> + Ord,
+    WorldT::SubtriePath: From<Address> + Ord,
 {
     // Ethereum mainnet: EIP-4788
     if cfg!(feature = "eth_mainnet") {
@@ -655,11 +654,11 @@ fn do_scalable_hook<WorldT: World + Clone>(
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
-    trim_state: &mut BTreeSet<WorldT::Key>,
+    trim_state: &mut BTreeSet<WorldT::SubtriePath>,
     world: &mut WorldT,
 ) -> anyhow::Result<()>
 where
-    WorldT::Key: From<Address> + Ord,
+    WorldT::SubtriePath: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
         ADDRESS_SCALABLE_L2, GLOBAL_EXIT_ROOT_ADDRESS, GLOBAL_EXIT_ROOT_STORAGE_POS,
@@ -706,7 +705,7 @@ where
 
     scalable_trim.insert(slot);
 
-    trim_state.insert(<WorldT::Key>::from(ADDRESS_SCALABLE_L2));
+    trim_state.insert(<WorldT::SubtriePath>::from(ADDRESS_SCALABLE_L2));
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
@@ -724,7 +723,7 @@ where
         )?;
         ger_trim.insert(slot);
 
-        trim_state.insert(<WorldT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
+        trim_state.insert(<WorldT::SubtriePath>::from(GLOBAL_EXIT_ROOT_ADDRESS));
     }
 
     Ok(())
@@ -739,11 +738,11 @@ fn do_beacon_hook<WorldT: World + Clone>(
     block_timestamp: U256,
     trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<MptKey>>,
     parent_beacon_block_root: H256,
-    trim_state: &mut BTreeSet<WorldT::Key>,
+    trim_state: &mut BTreeSet<WorldT::SubtriePath>,
     world: &mut WorldT,
 ) -> anyhow::Result<()>
 where
-    WorldT::Key: From<Address> + Ord,
+    WorldT::SubtriePath: From<Address> + Ord,
 {
     use evm_arithmetization::testing_utils::{
         BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH,
@@ -766,14 +765,16 @@ where
         beacon_trim.insert(slot);
 
         match u.is_zero() {
-            true => beacon_trim.extend(world.delete_slot(BEACON_ROOTS_CONTRACT_ADDRESS, ix)?),
+            true => {
+                beacon_trim.extend(world.reporting_destroy_slot(BEACON_ROOTS_CONTRACT_ADDRESS, ix)?)
+            }
             false => {
                 world.store_int(BEACON_ROOTS_CONTRACT_ADDRESS, ix, u)?;
                 beacon_trim.insert(slot);
             }
         }
     }
-    trim_state.insert(<WorldT::Key>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
+    trim_state.insert(<WorldT::SubtriePath>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
     Ok(())
 }
 

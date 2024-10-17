@@ -8,31 +8,88 @@ use keccak_hash::H256;
 
 use crate::tries::{MptKey, StateMpt, StorageTrie};
 
+/// The [core](crate::core) of this crate is agnostic over state and storage
+/// representations.
+///
+/// This is the common interface to those data structures.
+/// See also [crate::_DEVELOPER_DOCS].
 pub(crate) trait World {
-    type Key;
+    /// (State) subtries may be _hashed out.
+    /// This type is a key which may identify a subtrie.
+    type SubtriePath;
+
+    //////////////////////
+    /// Account operations
+    //////////////////////
+
+    /// Whether the state contains an account at the given address.
+    ///
+    /// `false` is not necessarily definitive - the address may belong to a
+    /// _hashed out_ subtrie.
     fn contains(&mut self, address: Address) -> anyhow::Result<bool>;
+
+    /// Update the balance for the account at the given address.
+    ///
     /// Creates a new account at `address` if it does not exist.
     fn update_balance(&mut self, address: Address, f: impl FnOnce(&mut U256))
         -> anyhow::Result<()>;
+
+    /// Update the nonce for the account at the given address.
+    ///
     /// Creates a new account at `address` if it does not exist.
     fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()>;
+
+    /// Update the code for the account at the given address.
+    ///
     /// Creates a new account at `address` if it does not exist.
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
-    /// _Hash out_ parts of the trie that aren't in `addresses`.
-    fn mask(&mut self, addresses: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
-    fn root(&mut self) -> H256;
+
+    /// The [core](crate::core) of this crate tracks required subtries for
+    /// proving.
+    ///
+    /// In case of a state delete, it may be that certain parts of the subtrie
+    /// must be retained. If so, it will be returned as [`Some`].
+    fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>>;
+
+    //////////////////////
+    /// Storage operations
+    //////////////////////
 
     /// Create an account at the given address.
     ///
     /// It may not be an error if the address already exists.
     fn create_storage(&mut self, address: Address) -> anyhow::Result<()>;
+
+    /// Destroy storage for the given address' account.
     fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()>;
+
+    /// Store an integer for the given account at the given `slot`.
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()>;
     fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()>;
+
+    /// Load an integer from the given account at the given `slot`.
     fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256>;
-    fn delete_slot(&mut self, address: Address, slot: U256) -> anyhow::Result<Option<MptKey>>;
+
+    /// Delete the given slot from the given account's storage.
+    ///
+    /// In case of a delete, it may be that certain parts of the subtrie
+    /// must be retained. If so, it will be returned as [`Some`].
+    fn reporting_destroy_slot(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>>;
     fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()>;
+
+    ////////////////////
+    /// Other operations
+    ////////////////////
+
+    /// _Hash out_ parts of the (state) trie that aren't in `paths`.
+    fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) -> anyhow::Result<()>;
+
+    /// Return an identifier for the world.
+    fn root(&mut self) -> H256;
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +116,9 @@ impl Type1World {
             )
         }
         Ok(Self { state, storage })
+    }
+    pub fn state_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
+        self.state.as_hashed_partial_trie()
     }
     pub fn into_state_and_storage(self) -> (StateMpt, BTreeMap<H256, StorageTrie>) {
         let Self { state, storage } = self;
@@ -87,7 +147,7 @@ impl Type1World {
 }
 
 impl World for Type1World {
-    type Key = MptKey;
+    type SubtriePath = MptKey;
     fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
         Ok(self.state.get(keccak_hash::keccak(address)).is_some())
     }
@@ -113,10 +173,13 @@ impl World for Type1World {
         acct.code_hash = code.right_or_else(keccak_hash::keccak);
         self.state.insert(key, acct)
     }
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>> {
+    fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
         self.state.reporting_remove(address)
     }
-    fn mask(&mut self, addresses: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()> {
+    fn mask(
+        &mut self,
+        addresses: impl IntoIterator<Item = Self::SubtriePath>,
+    ) -> anyhow::Result<()> {
         self.state.mask(addresses)
     }
     fn root(&mut self) -> H256 {
@@ -158,7 +221,11 @@ impl World for Type1World {
         Ok(rlp::decode(bytes)?)
     }
 
-    fn delete_slot(&mut self, address: Address, slot: U256) -> anyhow::Result<Option<MptKey>> {
+    fn reporting_destroy_slot(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>> {
         self.on_storage(address, |it| {
             it.reporting_remove(MptKey::from_slot_position(slot))
         })

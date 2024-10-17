@@ -1,8 +1,10 @@
 //! An _Ethereum Node_ executes _transactions_ in _blocks_.
 //!
 //! Execution mutates two key data structures:
-//! - [The state trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie).
-//! - [The storage tries](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie).
+//! - [The state](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie),
+//!   which tracks, e.g the account balance.
+//! - [The storage](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie),
+//!   which is a huge array of integers, per-account.
 //!
 //! Ethereum nodes expose information about the transactions over RPC, e.g:
 //! - [The specific changes to the storage tries](TxnTrace::storage_written).
@@ -13,7 +15,8 @@
 //!
 //! **Prover perfomance is a high priority.**
 //!
-//! The aformentioned trie structures may have subtries _hashed out_.
+//! The aformentioned data structures are represented as tries,
+//! which may have subtries _hashed out_.
 //! That is, any node (and its children!) may be replaced by its hash,
 //! while maintaining provability of its contents:
 //!
@@ -44,12 +47,16 @@
 /// Over RPC, ethereum nodes expose their tries as a series of binary
 /// [`wire::Instruction`]s in a node-dependant format.
 ///
-/// These are parsed into the relevant trie depending on the node:
+/// These are parsed into the relevant state and storage data structures,
+/// depending on the node:
 ///    - [`type2`], which contains an [`smt_trie`].
 ///    - [`type1`], which contains an [`mpt_trie`].
 ///
 /// After getting the tries,
 /// we can continue to do the main work of "executing" the transactions.
+///
+/// The core of this library is agnostic over the (combined)
+/// state and storage representation - see [`world::World`] for more.
 const _DEVELOPER_DOCS: () = ();
 
 mod interface;
