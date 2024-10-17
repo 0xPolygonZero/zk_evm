@@ -153,7 +153,7 @@ impl BlockInterval {
                 let block = cached_provider
                     .get_provider()
                     .await?
-                    .get_block(BlockId::Hash(hash.into()), BlockTransactionsKind::Hashes)
+                    .get_block(BlockId::Hash(hash), BlockTransactionsKind::Hashes)
                     .await
                     .map_err(|e| {
                         anyhow!("could not retrieve block number by hash from the provider: {e}")

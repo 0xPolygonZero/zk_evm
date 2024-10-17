@@ -5,7 +5,7 @@
 # 2 --> End block (number or hash, inclusive)
 # 3 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
 # 4 --> Rpc type (eg. jerigon / native)
-# 5 --> Checkpoint block (number or hash, optional)
+# 5 --> Checkpoint block (number or hash, optional when specifying start block by number)
 # 6 --> Backoff in milliseconds (optional [default: 0])
 # 7 --> Number of retries (optional [default: 0])
 # 8 --> Test run only flag `test_only` (optional)
@@ -55,7 +55,7 @@ RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 # Recommended soft file handle limit. Will warn if it is set lower.
 RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
-mkdir -p $PROOF_OUTPUT_DIR
+mkdir -p "$PROOF_OUTPUT_DIR"
 
 if [ -n "$CHECKPOINT_BLOCK" ] ; then
     # Set checkpoint height to previous block number for the first block in range
@@ -72,7 +72,7 @@ else
 fi
 
 # Print out a warning if the we're using `native` and our file descriptor limit is too low. Don't bother if we can't find `ulimit`.
-if [ $(command -v ulimit) ] && [ $NODE_RPC_TYPE == "native" ]
+if [ "$(command -v ulimit)" ] && [ "$NODE_RPC_TYPE" == "native" ]
 then
     file_desc_limit=$(ulimit -n)
 
@@ -112,38 +112,49 @@ $PREV_PROOF_EXTRA_ARG \
         echo -e "Proof witness generation finished with result: $retVal"
         exit $retVal
     else
-        eval $command > $OUT_LOG_PATH 2>&1
-        if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
+        eval "$command" > "$OUT_LOG_PATH" 2>&1
+        if grep -q 'All proof witnesses have been generated successfully.' "$OUT_LOG_PATH"; then
             echo -e "Success - Note this was just a test, not a proof"
             # Remove the log on success if we don't want to keep it.
             if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
-                rm $OUT_LOG_PATH
+                rm "$OUT_LOG_PATH"
             fi
             exit
         else
-            echo "Failed to create proof witnesses. See ${OUT_LOG_PATH} for more details."
+            echo "Failed to create proof witnesses. See $OUT_LOG_PATH for more details."
             exit 1
         fi
     fi
 else
     # normal run
-    echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --package zero --bin leader -- --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    echo "Proving blocks from ($START_BLOCK) to ($END_BLOCK)"
+    command="cargo r --release --package zero --bin leader -- \
+--runtime in-memory \
+--load-strategy on-demand \
+--proof-output-dir $PROOF_OUTPUT_DIR \
+--block-batch-size $BLOCK_BATCH_SIZE \
+rpc \
+--rpc-type $NODE_RPC_TYPE \
+--rpc-url $3 \
+--block-interval $BLOCK_INTERVAL \
+$PREV_PROOF_EXTRA_ARG \
+--backoff $BACKOFF \
+--max-retries $RETRIES"
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
-        eval $command
+        eval "$command"
         echo -e "Proof generation finished with result: $?"
     else
-        eval $command > $OUT_LOG_PATH 2>&1
+        eval "$command" > "$OUT_LOG_PATH" 2>&1
         retVal=$?
         if [ $retVal -ne 0 ]; then
             # Some error occurred, display the logs and exit.
-            cat $OUT_LOG_PATH
-            echo "Block ${i} errored. See ${OUT_LOG_PATH} for more details."
+            cat "$OUT_LOG_PATH"
+            echo "Error occurred. See $OUT_LOG_PATH for more details."
             exit $retVal
         else
             # Remove the log on success if we don't want to keep it.
             if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
-                rm $OUT_LOG_PATH
+                rm "$OUT_LOG_PATH"
             fi
         fi
         echo "Successfully generated proofs!"
@@ -156,15 +167,15 @@ if [ "$RUN_VERIFICATION" = true ]; then
   echo "Running the verification for the last proof..."
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
-  echo "Verifying the proof of the latest block in the interval:" $proof_file_name
-  cargo r --release --package zero --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
+  echo "Verifying the proof of the latest block in the interval:" "$proof_file_name"
+  cargo r --release --package zero --bin verifier -- -f "$proof_file_name" > "$PROOF_OUTPUT_DIR/verify.out" 2>&1
 
-  if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
+  if grep -q 'All proofs verified successfully!' "$PROOF_OUTPUT_DIR/verify.out"; then
       echo "$proof_file_name verified successfully!";
-      rm  $PROOF_OUTPUT_DIR/verify.out
+      rm  "$PROOF_OUTPUT_DIR/verify.out"
   else
       # Some error occurred with verification, display the logs and exit.
-      cat $PROOF_OUTPUT_DIR/verify.out
+      cat "$PROOF_OUTPUT_DIR/verify.out"
       echo "There was an issue with proof verification. See $PROOF_OUTPUT_DIR/verify.out for more details.";
       exit 1
   fi
