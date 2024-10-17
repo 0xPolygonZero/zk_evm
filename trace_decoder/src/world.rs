@@ -18,12 +18,10 @@ pub(crate) trait World {
     fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()>;
     /// Creates a new account at `address` if it does not exist.
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
-    /// Creates a new account at `address` if it does not exist.
-    fn set_storage(&mut self, address: Address, root: H256) -> anyhow::Result<()>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
     /// _Hash out_ parts of the trie that aren't in `addresses`.
     fn mask(&mut self, addresses: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
-    fn root(&self) -> H256;
+    fn root(&mut self) -> H256;
 
     /// Create an account at the given address.
     ///
@@ -34,14 +32,15 @@ pub(crate) trait World {
     fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()>;
     fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256>;
     fn delete_slot(&mut self, address: Address, slot: U256) -> anyhow::Result<Option<MptKey>>;
-    fn storage_root(&mut self, address: Address) -> anyhow::Result<H256>;
     fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()>;
 }
 
 #[derive(Clone, Debug)]
 pub struct Type1World {
-    pub state: StateMpt,
-    pub storage: BTreeMap<H256, StorageTrie>,
+    state: StateMpt,
+    /// Writes to storage should be reconciled with
+    /// [`storage_root`](evm_arithmetization::generation::mpt::AccountRlp)s.
+    storage: BTreeMap<H256, StorageTrie>,
 }
 
 impl Type1World {
@@ -61,10 +60,29 @@ impl Type1World {
         }
         Ok(Self { state, storage })
     }
+    pub fn into_state_and_storage(self) -> (StateMpt, BTreeMap<H256, StorageTrie>) {
+        let Self { state, storage } = self;
+        (state, storage)
+    }
     fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
         self.storage
             .get_mut(&keccak_hash::keccak(address))
             .context("no such storage")
+    }
+    fn on_storage<T>(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut StorageTrie) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        let mut acct = self
+            .state
+            .get(keccak_hash::keccak(address))
+            .context("no such account")?;
+        let storage = self.get_storage_mut(address)?;
+        let ret = f(storage)?;
+        acct.storage_root = storage.root();
+        self.state.insert(keccak_hash::keccak(address), acct)?;
+        Ok(ret)
     }
 }
 
@@ -95,19 +113,13 @@ impl World for Type1World {
         acct.code_hash = code.right_or_else(keccak_hash::keccak);
         self.state.insert(key, acct)
     }
-    fn set_storage(&mut self, address: Address, root: H256) -> anyhow::Result<()> {
-        let key = keccak_hash::keccak(address);
-        let mut acct = self.state.get(key).unwrap_or_default();
-        acct.storage_root = root;
-        self.state.insert(key, acct)
-    }
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>> {
         self.state.reporting_remove(address)
     }
     fn mask(&mut self, addresses: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()> {
         self.state.mask(addresses)
     }
-    fn root(&self) -> H256 {
+    fn root(&mut self) -> H256 {
         self.state.root()
     }
     fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
@@ -124,17 +136,18 @@ impl World for Type1World {
     }
 
     fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
-        self.get_storage_mut(address)?.insert(
-            MptKey::from_slot_position(slot),
-            alloy::rlp::encode(value.compat()),
-        )?;
-        Ok(())
+        self.on_storage(address, |it| {
+            it.insert(
+                MptKey::from_slot_position(slot),
+                alloy::rlp::encode(value.compat()),
+            )
+        })
     }
 
     fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()> {
-        self.get_storage_mut(address)?
-            .insert(MptKey::from_hash(hash), alloy::rlp::encode(value.compat()))?;
-        Ok(())
+        self.on_storage(address, |it| {
+            it.insert(MptKey::from_hash(hash), alloy::rlp::encode(value.compat()))
+        })
     }
 
     fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256> {
@@ -146,12 +159,9 @@ impl World for Type1World {
     }
 
     fn delete_slot(&mut self, address: Address, slot: U256) -> anyhow::Result<Option<MptKey>> {
-        self.get_storage_mut(address)?
-            .reporting_remove(MptKey::from_slot_position(slot))
-    }
-
-    fn storage_root(&mut self, address: Address) -> anyhow::Result<H256> {
-        Ok(self.get_storage_mut(address)?.root())
+        self.on_storage(address, |it| {
+            it.reporting_remove(MptKey::from_slot_position(slot))
+        })
     }
 
     fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()> {

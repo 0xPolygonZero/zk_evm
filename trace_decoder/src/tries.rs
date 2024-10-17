@@ -492,10 +492,9 @@ impl StorageTrie {
     pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
         self.untyped.get(key.into_nibbles())
     }
-    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
-        let prev = self.get(&key).map(Vec::from);
+    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), value)?;
-        Ok(prev)
+        Ok(())
     }
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), hash)?;

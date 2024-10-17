@@ -135,7 +135,7 @@ pub fn entrypoint(
                  after,
                  withdrawals,
              }| {
-                let Type1World { state, storage } = world.either_into();
+                let (state, storage) = world.either_into::<Type1World>().into_state_and_storage();
                 GenerationInputs {
                     txn_number_before: first_txn_ix.into(),
                     gas_used_before: running_gas_used.into(),
@@ -556,8 +556,6 @@ where
                                 false => world.store_int(addr, k.into_uint(), v)?,
                             }
                         }
-                        let storage_root = world.storage_root(addr)?;
-                        world.set_storage(addr, storage_root)?;
                     }
 
                     state_mask.insert(<WorldT::Key>::from(addr));
@@ -709,8 +707,6 @@ where
     scalable_trim.insert(slot);
 
     trim_state.insert(<WorldT::Key>::from(ADDRESS_SCALABLE_L2));
-    let scalable_storage_root = world.storage_root(ADDRESS_SCALABLE_L2)?;
-    world.set_storage(ADDRESS_SCALABLE_L2, scalable_storage_root)?;
 
     // Update GER contract's storage if necessary
     if let Some((root, l1blockhash)) = ger_data {
@@ -729,8 +725,6 @@ where
         ger_trim.insert(slot);
 
         trim_state.insert(<WorldT::Key>::from(GLOBAL_EXIT_ROOT_ADDRESS));
-        let ger_storage_root = world.storage_root(GLOBAL_EXIT_ROOT_ADDRESS)?;
-        world.set_storage(GLOBAL_EXIT_ROOT_ADDRESS, ger_storage_root)?;
     }
 
     Ok(())
@@ -780,8 +774,6 @@ where
         }
     }
     trim_state.insert(<WorldT::Key>::from(BEACON_ROOTS_CONTRACT_ADDRESS));
-    let beacon_storage_root = world.storage_root(BEACON_ROOTS_CONTRACT_ADDRESS)?;
-    world.set_storage(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_storage_root)?;
     Ok(())
 }
 
