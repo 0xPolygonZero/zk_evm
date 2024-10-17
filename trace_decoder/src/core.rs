@@ -61,7 +61,7 @@ pub fn entrypoint(
         BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
         BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
     };
-    let (state, storage, mut code) = start(trie_pre_images, wire_disposition)?;
+    let (world, mut code) = start(trie_pre_images, wire_disposition)?;
 
     code.extend(code_db);
 
@@ -82,10 +82,10 @@ pub fn entrypoint(
         *amt = gwei_to_wei(*amt)
     }
 
-    let batches = match state {
-        Either::Left(mpt) => Either::Left(
+    let batches = match world {
+        Either::Left(type1world) => Either::Left(
             middle(
-                Type1World::new(mpt, storage)?,
+                type1world,
                 batch(txn_info, batch_size_hint),
                 &mut code,
                 &b_meta,
@@ -97,12 +97,10 @@ pub fn entrypoint(
             .into_iter()
             .map(|it| it.map(Either::Left)),
         ),
-        #[expect(clippy::diverging_sub_expression, unused)]
-        Either::Right(smt) => {
-            let world: Type1World = todo!();
+        Either::Right(type2world) => {
             Either::Right(
                 middle(
-                    world,
+                    type2world,
                     batch(txn_info, batch_size_hint),
                     &mut code,
                     &b_meta,
@@ -135,7 +133,9 @@ pub fn entrypoint(
                  after,
                  withdrawals,
              }| {
-                let (state, storage) = world.either_into::<Type1World>().into_state_and_storage();
+                let (state, storage) = world
+                    .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
+                    .into_state_and_storage();
                 GenerationInputs {
                     txn_number_before: first_txn_ix.into(),
                     gas_used_before: running_gas_used.into(),
@@ -177,11 +177,7 @@ pub fn entrypoint(
 fn start(
     pre_images: BlockTraceTriePreImages,
     wire_disposition: WireDisposition,
-) -> anyhow::Result<(
-    Either<StateMpt, Type2World>,
-    BTreeMap<H256, StorageTrie>,
-    Hash2Code,
-)> {
+) -> anyhow::Result<(Either<Type1World, Type2World>, Hash2Code)> {
     Ok(match pre_images {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
         //                refactor our convoluted input types
@@ -228,12 +224,15 @@ fn start(
                         .map(|v| (k, v))
                 })
                 .collect::<Result<_, _>>()?;
-            (Either::Left(state), storage, Hash2Code::new())
+            (
+                Either::Left(Type1World::new(state, storage)?),
+                Hash2Code::new(),
+            )
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
-            let (state, storage, code) = match wire_disposition {
+            match wire_disposition {
                 WireDisposition::Type1 => {
                     let crate::type1::Frontend {
                         state,
@@ -241,8 +240,7 @@ fn start(
                         code,
                     } = crate::type1::frontend(instructions)?;
                     (
-                        Either::Left(state),
-                        storage,
+                        Either::Left(Type1World::new(state, storage)?),
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
                     )
                 }
@@ -251,12 +249,10 @@ fn start(
                         crate::type2::frontend(instructions)?;
                     (
                         Either::Right(trie),
-                        BTreeMap::new(),
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
                     )
                 }
-            };
-            (state, storage, code)
+            }
         }
     })
 }

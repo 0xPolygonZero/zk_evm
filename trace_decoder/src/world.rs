@@ -341,7 +341,11 @@ impl World for Type2World {
     }
 }
 
-#[derive(Default)]
+// Having optional fields here is an odd decision,
+// but without the distinction,
+// the wire tests fail.
+// This may be a bug in the SMT library.
+#[derive(Default, Clone, Debug)]
 pub struct Type2Entry {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
@@ -350,12 +354,16 @@ pub struct Type2Entry {
     pub storage: BTreeMap<U256, U256>,
 }
 
+// This is a buffered version
+#[derive(Clone, Debug)]
 pub struct Type2World {
     accounts: BTreeMap<Address, Type2Entry>,
     hashed_out: BTreeMap<SmtKey, H256>,
 }
 
 impl Type2World {
+    /// # Panics
+    /// - On untrusted inputs: https://github.com/0xPolygonZero/zk_evm/issues/348
     pub fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
         let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
 
