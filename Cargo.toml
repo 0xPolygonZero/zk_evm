@@ -111,11 +111,10 @@ zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
-# TODO(Robin): Change to main branch revision before merge
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "07c20447bfcdada6bd479bd8a13af26082923520" }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdacd49ede15737bc1172546d82e9521b79b" }
 plonky2_maybe_rayon = "0.2.0"
-plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "07c20447bfcdada6bd479bd8a13af26082923520" }
-starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "07c20447bfcdada6bd479bd8a13af26082923520" }
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdacd49ede15737bc1172546d82e9521b79b" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdacd49ede15737bc1172546d82e9521b79b" }
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"
