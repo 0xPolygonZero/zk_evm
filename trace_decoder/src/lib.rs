@@ -60,6 +60,7 @@ mod tries;
 mod type1;
 mod type2;
 mod wire;
+mod world;
 
 pub use core::{entrypoint, WireDisposition};
 

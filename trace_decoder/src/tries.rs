@@ -123,7 +123,7 @@ impl<T> World<T> {
 ///
 /// Portions of the trie may be _hashed out_: see [`Self::insert_hash`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TypedMpt<T> {
+pub(crate) struct TypedMpt<T> {
     inner: HashedPartialTrie,
     _ty: PhantomData<fn() -> T>,
 }
@@ -131,7 +131,7 @@ struct TypedMpt<T> {
 impl<T> TypedMpt<T> {
     const PANIC_MSG: &str = "T encoding/decoding should round-trip,\
     and only encoded `T`s are ever inserted";
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             inner: HashedPartialTrie::new(Node::Empty),
             _ty: PhantomData,
@@ -140,13 +140,13 @@ impl<T> TypedMpt<T> {
     /// Insert a node which represents an out-of-band sub-trie.
     ///
     /// See [module documentation](super) for more.
-    fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
+    pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.inner.insert(key.into_nibbles(), hash)?;
         Ok(())
     }
     /// Returns [`Err`] if the `key` crosses into a part of the trie that
     /// is hashed out.
-    fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
+    pub fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
@@ -159,7 +159,7 @@ impl<T> TypedMpt<T> {
     ///
     /// # Panics
     /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
-    fn get(&self, key: MptKey) -> Option<T>
+    pub fn get(&self, key: MptKey) -> Option<T>
     where
         T: rlp::Decodable,
     {
@@ -172,8 +172,25 @@ impl<T> TypedMpt<T> {
     fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.inner
     }
-    fn root(&self) -> H256 {
+    pub fn root(&self) -> H256 {
         self.inner.hash()
+    }
+    pub fn reporting_remove(&mut self, key: MptKey) -> anyhow::Result<Option<MptKey>> {
+        delete_node_and_report_remaining_key_if_branch_collapsed(
+            self.as_mut_hashed_partial_trie_unchecked(),
+            key,
+        )
+    }
+    pub fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
+        let inner = mpt_trie::trie_subsets::create_trie_subset(
+            self.as_hashed_partial_trie(),
+            addresses.into_iter().map(MptKey::into_nibbles),
+        )?;
+        *self = TypedMpt {
+            inner,
+            _ty: PhantomData,
+        };
+        Ok(())
     }
     /// Note that this returns owned paths and items.
     fn iter(&self) -> impl Iterator<Item = (MptKey, T)> + '_
@@ -538,21 +555,10 @@ impl StateTrie for StateMpt {
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
-        delete_node_and_report_remaining_key_if_branch_collapsed(
-            self.typed.as_mut_hashed_partial_trie_unchecked(),
-            MptKey::from_address(address),
-        )
+        self.typed.reporting_remove(MptKey::from_address(address))
     }
     fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
-        let inner = mpt_trie::trie_subsets::create_trie_subset(
-            self.typed.as_hashed_partial_trie(),
-            addresses.into_iter().map(MptKey::into_nibbles),
-        )?;
-        self.typed = TypedMpt {
-            inner,
-            _ty: PhantomData,
-        };
-        Ok(())
+        self.typed.mask(addresses)
     }
     fn root(&self) -> H256 {
         self.typed.root()
