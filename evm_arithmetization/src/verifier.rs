@@ -80,6 +80,7 @@ pub(crate) fn initial_memory_merkle_cap<
 pub mod testing {
     use anyhow::{ensure, Result};
     use ethereum_types::{BigEndianHash, U256};
+    use hashbrown::HashMap;
     use itertools::Itertools;
     use plonky2::field::extension::Extendable;
     use plonky2::hash::hash_types::RichField;
@@ -92,7 +93,7 @@ pub mod testing {
     use starky::stark::Stark;
     use starky::verifier::verify_stark_proof_with_challenges;
 
-    use crate::all_stark::Table;
+    use crate::all_stark::{Table, MEMORY_CTL_IDX, NUM_CTLS};
     use crate::cpu::kernel::aggregator::KERNEL;
     use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
     use crate::get_challenges::testing::AllProofChallenges;
@@ -249,12 +250,16 @@ pub mod testing {
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
+        let mut extra_looking_sums =
+            HashMap::from_iter((0..NUM_CTLS).map(|i| (i, vec![F::ZERO; config.num_challenges])));
 
         // Memory
-        extra_looking_sums[*Table::Memory] = (0..config.num_challenges)
-            .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
-            .collect_vec();
+        extra_looking_sums.insert(
+            MEMORY_CTL_IDX,
+            (0..config.num_challenges)
+                .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
+                .collect_vec(),
+        );
 
         let all_ctls = &all_stark.cross_table_lookups;
 
@@ -289,7 +294,7 @@ pub mod testing {
                     panic!("Unable to find stark_proof");
                 }
             }),
-            Some(&extra_looking_sums),
+            &extra_looking_sums,
             config,
         )
     }
