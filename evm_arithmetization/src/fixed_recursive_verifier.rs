@@ -23,7 +23,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
+use plonky2::recursion::dummy_circuit::{dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -427,6 +427,7 @@ where
     agg_root_proof: ProofWithPublicInputsTarget<D>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
+    dummy_circuit: CircuitData<F, C, D>,
 }
 
 impl<F, C, const D: usize> BlockCircuitData<F, C, D>
@@ -446,7 +447,7 @@ where
         buffer.write_target_proof_with_public_inputs(&self.agg_root_proof)?;
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
-        Ok(())
+        buffer.write_circuit_data(&self.dummy_circuit, gate_serializer, generator_serializer)
     }
 
     fn from_buffer(
@@ -460,6 +461,8 @@ where
         let agg_root_proof = buffer.read_target_proof_with_public_inputs()?;
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
+        let dummy_circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
+
         Ok(Self {
             circuit,
             has_parent_block,
@@ -467,6 +470,7 @@ where
             agg_root_proof,
             public_values,
             cyclic_vk,
+            dummy_circuit,
         })
     }
 }
@@ -1553,6 +1557,10 @@ where
         builder.verify_proof::<C>(&agg_root_proof, &agg_verifier_data, &agg.circuit.common);
 
         let circuit = builder.build::<C>();
+
+        // Dummy circuit necessary to generate dummy proofs at checkpoint heights.
+        let dummy_circuit = dummy_circuit::<F, C, D>(&circuit.common);
+
         BlockCircuitData {
             circuit,
             has_parent_block,
@@ -1560,6 +1568,7 @@ where
             agg_root_proof,
             public_values,
             cyclic_vk,
+            dummy_circuit,
         }
     }
 
@@ -2577,14 +2586,34 @@ where
                 ),
             );
 
-            block_inputs.set_proof_with_pis_target(
-                &self.block.parent_block_proof,
-                &cyclic_base_proof(
-                    &self.block.circuit.common,
-                    &self.block.circuit.verifier_only,
-                    nonzero_pis,
-                ),
-            );
+            let dummy_proof = {
+                let pis_len = self.block.circuit.common.num_public_inputs;
+                let cap_elements = self
+                    .block
+                    .circuit
+                    .common
+                    .config
+                    .fri_config
+                    .num_cap_elements();
+                let start_vk_pis = pis_len - 4 /* circuit_digest */ - 4 * cap_elements /* sigmas_cap */;
+
+                // Add the cyclic verifier data public inputs.
+                nonzero_pis.extend(
+                    (start_vk_pis..).zip(self.block.circuit.verifier_only.circuit_digest.elements),
+                );
+                for i in 0..cap_elements {
+                    let start = start_vk_pis + 4 + 4 * i;
+                    nonzero_pis.extend(
+                        (start..).zip(
+                            self.block.circuit.verifier_only.constants_sigmas_cap.0[i].elements,
+                        ),
+                    );
+                }
+
+                dummy_proof::<F, C, D>(&self.block.dummy_circuit, nonzero_pis)?
+            };
+
+            block_inputs.set_proof_with_pis_target(&self.block.parent_block_proof, &dummy_proof);
         }
 
         block_inputs.set_proof_with_pis_target(&self.block.agg_root_proof, &agg_root_proof.intern);
