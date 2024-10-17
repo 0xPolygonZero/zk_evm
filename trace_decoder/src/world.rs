@@ -7,7 +7,7 @@ use ethereum_types::{Address, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use keccak_hash::H256;
 
-use crate::tries::{MptKey, StorageTrie, TypedMpt};
+use crate::tries::{MptKey, StateMpt, StorageTrie, TypedMpt};
 
 pub(crate) trait World {
     type Key;
@@ -39,11 +39,32 @@ pub(crate) trait World {
     fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()>;
 }
 
-pub(crate) struct Type1World {
+#[derive(Clone)]
+pub struct Type1World {
     pub state: TypedMpt<AccountRlp>,
     pub storage: BTreeMap<H256, StorageTrie>,
 }
+
 impl Type1World {
+    pub fn new(state: StateMpt, mut storage: BTreeMap<H256, StorageTrie>) -> anyhow::Result<Self> {
+        // Initialise the storage tries.
+        for (haddr, acct) in state.iter() {
+            let storage = storage.entry(haddr).or_insert_with(|| {
+                let mut it = StorageTrie::default();
+                it.insert_hash(MptKey::default(), acct.storage_root)
+                    .expect("empty trie insert cannot fail");
+                it
+            });
+            ensure!(
+                storage.root() == acct.storage_root,
+                "inconsistent initial storage for hashed address {haddr:x}"
+            )
+        }
+        Ok(Self {
+            state: state.typed,
+            storage,
+        })
+    }
     fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
         self.storage
             .get_mut(&keccak_hash::keccak(address))

@@ -221,6 +221,12 @@ where
     }
 }
 
+impl<T> From<TypedMpt<T>> for HashedPartialTrie {
+    fn from(value: TypedMpt<T>) -> Self {
+        value.inner
+    }
+}
+
 /// Bounded sequence of [`U4`],
 /// used as a key for [`TypedMpt`].
 ///
@@ -515,7 +521,7 @@ pub trait StateTrie {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
 pub struct StateMpt {
-    typed: TypedMpt<AccountRlp>,
+    pub typed: TypedMpt<AccountRlp>,
 }
 
 impl StateMpt {

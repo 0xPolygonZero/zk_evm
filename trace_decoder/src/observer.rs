@@ -3,12 +3,12 @@ use std::marker::PhantomData;
 use ethereum_types::U256;
 
 use crate::core::IntraBlockTries;
-use crate::tries::{ReceiptTrie, TransactionTrie, World};
+use crate::tries::{ReceiptTrie, TransactionTrie};
 
 /// Observer API for the trace decoder.
 /// Observer is used to collect various debugging and metadata info
 /// from the trace decoder run.
-pub trait Observer<StateTrieT> {
+pub trait Observer<WorldT> {
     /// Collect tries after the transaction/batch execution.
     ///
     /// Passing the arguments one by one through reference, because
@@ -18,7 +18,7 @@ pub trait Observer<StateTrieT> {
         &mut self,
         block: U256,
         batch: usize,
-        state_trie: &World<StateTrieT>,
+        state_trie: &WorldT,
         transaction_trie: &TransactionTrie,
         receipt_trie: &ReceiptTrie,
     );
@@ -53,12 +53,12 @@ impl<StateTrieT> TriesObserver<StateTrieT> {
     }
 }
 
-impl<StateTrieT: Clone> Observer<StateTrieT> for TriesObserver<StateTrieT> {
+impl<WorldT: Clone> Observer<WorldT> for TriesObserver<WorldT> {
     fn collect_tries(
         &mut self,
         block: U256,
         batch: usize,
-        state_trie: &World<StateTrieT>,
+        state_trie: &WorldT,
         transaction_trie: &TransactionTrie,
         receipt_trie: &ReceiptTrie,
     ) {
@@ -95,12 +95,12 @@ impl<StateTrieT> DummyObserver<StateTrieT> {
     }
 }
 
-impl<StateTrieT> Observer<StateTrieT> for DummyObserver<StateTrieT> {
+impl<WorldT> Observer<WorldT> for DummyObserver<WorldT> {
     fn collect_tries(
         &mut self,
         _block: U256,
         _batch: usize,
-        _state_trie: &World<StateTrieT>,
+        _state_trie: &WorldT,
         _transaction_trie: &TransactionTrie,
         _receipt_trie: &ReceiptTrie,
     ) {
