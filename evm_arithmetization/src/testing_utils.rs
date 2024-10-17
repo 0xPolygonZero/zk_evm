@@ -2,7 +2,6 @@
 //! unit and integration tests.
 
 use anyhow::Result;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -16,6 +15,7 @@ pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
 use crate::generation::{TrieInputs, TrimmedGenerationInputs};
 use crate::proof::TrieRoots;
+use crate::tracing;
 use crate::witness::operation::Operation;
 use crate::{
     generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
@@ -26,8 +26,9 @@ pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 ));
 
+// REVIEW: Are we happy to eliminate this and use crate::tracing::init()?
 pub fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
+    tracing::init();
 }
 
 /// Converts a decimal string to a `U256`.

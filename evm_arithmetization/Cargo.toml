@@ -17,7 +17,7 @@ keywords.workspace = true
 [dependencies]
 anyhow.workspace = true
 bytes.workspace = true
-env_logger.workspace = true
+#env_logger.workspace = true
 ethereum-types.workspace = true
 hashbrown.workspace = true
 hex = { workspace = true, optional = true }
@@ -51,6 +51,7 @@ tiny-keccak.workspace = true
 tokio.workspace = true
 tower-lsp = "0.20.0"
 tracing.workspace = true
+tracing-subscriber.workspace = true
 url.workspace = true
 zk_evm_common.workspace = true
 zk_evm_proc_macro.workspace = true

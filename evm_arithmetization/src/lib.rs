@@ -290,6 +290,7 @@ pub mod util;
 mod public_types;
 pub use public_types::*;
 pub use starky::config::StarkConfig;
+pub mod tracing;
 
 pub use crate::all_stark::{AllStark, NUM_TABLES};
 pub use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};

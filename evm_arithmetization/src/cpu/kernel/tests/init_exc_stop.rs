@@ -34,8 +34,8 @@ enum RegistersIdx {
 const REGISTERS_LEN: usize = 6;
 
 // Test to check NUM_EXTRA_CYCLES_BEFORE and NUM_EXTRA_CYCLES_AFTER
-#[test]
-fn test_init_exc_stop() {
+#[tokio::test]
+async fn test_init_exc_stop() {
     init_logger();
 
     let block_metadata = BlockMetadata {

@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use env_logger::try_init_from_env;
-use env_logger::Env;
-use env_logger::DEFAULT_FILTER_ENV;
 use ethereum_types::{Address, H160, U256};
 use itertools::Itertools;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
@@ -16,15 +13,12 @@ use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::linked_list::ACCOUNTS_LINKED_LIST_NODE_SIZE;
 use crate::generation::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use crate::memory::segments::Segment;
+use crate::testing_utils::init_logger;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::memory::MemorySegmentState;
 
 pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
 pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
-}
 
 #[test]
 fn test_init_linked_lists() -> Result<()> {
@@ -74,8 +68,8 @@ fn test_init_linked_lists() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_list_iterator() -> Result<()> {
+#[tokio::test]
+async fn test_list_iterator() -> Result<()> {
     init_logger();
 
     let interpreter = Interpreter::<F>::new(0, vec![], None);
@@ -302,8 +296,8 @@ fn test_insert_storage() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_insert_and_delete_accounts() -> Result<()> {
+#[tokio::test]
+async fn test_insert_and_delete_accounts() -> Result<()> {
     init_logger();
 
     let mut interpreter = Interpreter::<F>::new(0, vec![], None);
@@ -486,8 +480,8 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_insert_and_delete_storage() -> Result<()> {
+#[tokio::test]
+async fn test_insert_and_delete_storage() -> Result<()> {
     init_logger();
 
     let mut interpreter = Interpreter::<F>::new(0, vec![], None);

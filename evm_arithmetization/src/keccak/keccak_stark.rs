@@ -614,7 +614,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakStark<F
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
     use plonky2::field::types::PrimeField64;
     use plonky2::fri::oracle::PolynomialBatch;
     use plonky2::iop::challenger::Challenger;
@@ -627,6 +626,7 @@ mod tests {
 
     use super::*;
     use crate::prover::prove_single_table;
+    use crate::testing_utils::init_logger;
 
     #[test]
     fn test_stark_degree() -> Result<()> {
@@ -688,8 +688,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn keccak_benchmark() -> Result<()> {
+    #[tokio::test]
+    async fn keccak_benchmark() -> Result<()> {
         const NUM_PERMS: usize = 85;
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
@@ -757,9 +757,5 @@ mod tests {
 
         timing.print();
         Ok(())
-    }
-
-    fn init_logger() {
-        let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
     }
 }

@@ -41,8 +41,8 @@ fn test_mcopy(
     Ok(())
 }
 
-#[test]
-fn test_mcopy_0_32_32() {
+#[tokio::test]
+async fn test_mcopy_0_32_32() {
     let dest_offset = 0;
     let offset = 32;
     let size = 32;
@@ -52,8 +52,8 @@ fn test_mcopy_0_32_32() {
     assert!(test_mcopy(dest_offset, offset, size, &pre_memory, &post_memory).is_ok())
 }
 
-#[test]
-fn test_mcopy_0_0_32() {
+#[tokio::test]
+async fn test_mcopy_0_0_32() {
     let dest_offset = 0;
     let offset = 0;
     let size = 32;
@@ -63,8 +63,8 @@ fn test_mcopy_0_0_32() {
     assert!(test_mcopy(dest_offset, offset, size, &pre_memory, &post_memory).is_ok())
 }
 
-#[test]
-fn test_mcopy_0_1_8() {
+#[tokio::test]
+async fn test_mcopy_0_1_8() {
     let dest_offset = 0;
     let offset = 1;
     let size = 8;
@@ -74,8 +74,8 @@ fn test_mcopy_0_1_8() {
     assert!(test_mcopy(dest_offset, offset, size, &pre_memory, &post_memory).is_ok())
 }
 
-#[test]
-fn test_mcopy_1_0_8() {
+#[tokio::test]
+async fn test_mcopy_1_0_8() {
     let dest_offset = 1;
     let offset = 0;
     let size = 8;

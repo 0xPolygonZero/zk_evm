@@ -346,10 +346,9 @@ impl StackOp {
 
 #[cfg(test)]
 mod tests {
-    use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-
     use crate::cpu::kernel::stack::stack_manipulation::StackItem::NamedItem;
     use crate::cpu::kernel::stack::stack_manipulation::{shortest_path, StackItem};
+    use crate::testing_utils::init_logger;
 
     #[test]
     fn test_shortest_path() {
@@ -361,8 +360,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_shortest_path_permutation() {
+    #[tokio::test]
+    async fn test_shortest_path_permutation() {
         init_logger();
         shortest_path(
             vec![named("a"), named("b"), named("c")],
@@ -373,9 +372,5 @@ mod tests {
 
     fn named(name: &str) -> StackItem {
         NamedItem(name.into())
-    }
-
-    fn init_logger() {
-        let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
     }
 }

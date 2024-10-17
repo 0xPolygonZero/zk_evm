@@ -1,5 +1,4 @@
 use anyhow::Result;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::U256;
 use hex_literal::hex;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
@@ -14,6 +13,7 @@ use crate::curve_pairings::{
 };
 use crate::extension_tower::{FieldExt, Fp12, Fp2, Fp6, Stack, BN254};
 use crate::memory::segments::Segment::{self, BnPairing};
+use crate::testing_utils::init_logger;
 
 fn run_bn_mul_fp6(f: Fp6<BN254>, g: Fp6<BN254>, label: &str) -> Fp6<BN254> {
     let mut stack = f.to_stack();
@@ -316,8 +316,8 @@ const ECPAIRING_PRECOMPILE_INVALID_INPUTS: [[u8; 192]; 4] = [
     hex!("111f95e1632a3624dd29bbc012e6462b7836eb9c80e281b9381e103aebe632372b38b76d492b3af692eb99d03cd8dcfd8a8c3a6e4a161037c42f542af5564c41198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21a76dae6d3272396d0cbe61fced2bc532edac647851e3ac53ce1cc9c7e645a8305b993046905746641a19b500ebbbd30cf0068a845bfbee9de55b8fe57d1dee8243ef33537f73ef4ace4279d86344d93a5dc8c20c69045865c0fa3b924933879"),
 ];
 
-#[test]
-fn test_ecpairing_precompile_invalid_input() -> Result<()> {
+#[tokio::test]
+async fn test_ecpairing_precompile_invalid_input() -> Result<()> {
     init_logger();
 
     let pairing_label = KERNEL.global_labels["bn254_pairing"];
@@ -344,8 +344,4 @@ fn test_ecpairing_precompile_invalid_input() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
 }

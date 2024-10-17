@@ -212,14 +212,14 @@ pub(crate) fn combined_kernel() -> Kernel {
 
 #[cfg(test)]
 mod tests {
-    use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-    use log::debug;
+    use ::tracing::debug;
 
     use crate::cpu::kernel::aggregator::combined_kernel;
+    use crate::tracing;
 
-    #[test]
-    fn make_kernel() {
-        let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
+    #[tokio::test]
+    async fn make_kernel() {
+        let _ = tracing::init();
 
         // Make sure we can parse and assemble the entire kernel.
         let kernel = combined_kernel();
