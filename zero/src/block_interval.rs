@@ -60,16 +60,17 @@ impl BlockInterval {
             // Bounded range provided.
             Some(end_block) => {
                 let end_block_num = Self::block_to_num(cached_provider.clone(), end_block).await?;
+                if end_block_num <= start_block_num {
+                    return Err(anyhow!(
+                        "invalid block interval range ({start_block_num}..{end_block_num})"
+                    ));
+                }
                 Ok(BlockInterval::Range(start_block_num..end_block_num + 1))
             }
             // Unbounded range provided.
-            None => {
-                let start_block_num =
-                    Self::block_to_num(cached_provider.clone(), start_block).await?;
-                Ok(BlockInterval::FollowFrom {
-                    start_block: start_block_num,
-                })
-            }
+            None => Ok(BlockInterval::FollowFrom {
+                start_block: start_block_num,
+            }),
         }
     }
 
