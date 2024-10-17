@@ -20,7 +20,7 @@ use zk_evm_common::gwei_to_wei;
 
 use crate::{
     observer::{DummyObserver, Observer},
-    tries::StateSmt,
+    world::Type2World,
 };
 use crate::{
     tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
@@ -178,7 +178,7 @@ fn start(
     pre_images: BlockTraceTriePreImages,
     wire_disposition: WireDisposition,
 ) -> anyhow::Result<(
-    Either<StateMpt, StateSmt>,
+    Either<StateMpt, Type2World>,
     BTreeMap<H256, StorageTrie>,
     Hash2Code,
 )> {
@@ -247,7 +247,7 @@ fn start(
                     )
                 }
                 WireDisposition::Type2 => {
-                    let crate::type2::Frontend { trie, code } =
+                    let crate::type2::Frontend { world: trie, code } =
                         crate::type2::frontend(instructions)?;
                     (
                         Either::Right(trie),

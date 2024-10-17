@@ -5,15 +5,15 @@ use std::collections::{BTreeMap, HashSet};
 
 use anyhow::{bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
 use itertools::EitherOrBoth;
 use keccak_hash::H256;
 use nunny::NonEmpty;
 use stackstack::Stack;
 
 use crate::{
-    tries::{SmtKey, StateSmt},
+    tries::SmtKey,
     wire::{Instruction, SmtLeaf, SmtLeafType},
+    world::{Type2Entry, Type2World},
 };
 
 /// Combination of all the [`SmtLeaf::node_type`]s
@@ -27,7 +27,7 @@ pub struct CollatedLeaf {
 }
 
 pub struct Frontend {
-    pub trie: StateSmt,
+    pub world: Type2World,
     pub code: HashSet<NonEmpty<Vec<u8>>>,
 }
 
@@ -36,8 +36,9 @@ pub struct Frontend {
 ///   NOT call this function on untrusted inputs.
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
     let (node, code) = fold(instructions).context("couldn't fold smt from instructions")?;
-    let trie = node2trie(node).context("couldn't construct trie and collation from folded node")?;
-    Ok(Frontend { trie, code })
+    let world =
+        node2world(node).context("couldn't construct trie and collation from folded node")?;
+    Ok(Frontend { world, code })
 }
 
 /// Node in a binary (SMT) tree.
@@ -113,37 +114,32 @@ fn fold1(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<
     }
 }
 
-fn node2trie(node: Node) -> anyhow::Result<StateSmt> {
+fn node2world(node: Node) -> anyhow::Result<Type2World> {
     let mut hashes = BTreeMap::new();
     let mut leaves = BTreeMap::new();
     visit(&mut hashes, &mut leaves, Stack::new(), node)?;
-    Ok(StateSmt::new_unchecked(
+    Ok(Type2World::new_unchecked(
         leaves
             .into_iter()
-            .map(
-                |(
-                    addr,
-                    CollatedLeaf {
-                        balance,
-                        nonce,
-                        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-                        //                we shouldn't ignore these fields
-                        code: _,
-                        code_length: _,
-                        storage: _,
+            .map(|(k, v)| {
+                let CollatedLeaf {
+                    balance,
+                    nonce,
+                    code,
+                    code_length,
+                    storage,
+                } = v;
+                (
+                    k,
+                    Type2Entry {
+                        balance: balance.unwrap_or_default(),
+                        nonce: nonce.unwrap_or_default(),
+                        code: code.unwrap_or_default(),
+                        code_length: code_length.unwrap_or_default(),
+                        storage,
                     },
-                )| {
-                    (
-                        addr,
-                        AccountRlp {
-                            nonce: nonce.unwrap_or_default(),
-                            balance: balance.unwrap_or_default(),
-                            storage_root: H256::zero(),
-                            code_hash: H256::zero(),
-                        },
-                    )
-                },
-            )
+                )
+            })
             .collect(),
         hashes,
     ))
@@ -210,65 +206,7 @@ fn visit(
 
 #[test]
 fn test_tries() {
-    type Smt = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
-    use ethereum_types::BigEndianHash as _;
-    use plonky2::field::types::{Field, Field64 as _};
-
-    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-    //                this logic should live in StateSmt, but we need to
-    //                - abstract over state and storage tries
-    //                - parameterize the account types
-    //                we preserve this code as a tested record of how it _should_
-    //                be done.
-    fn node2trie(node: Node) -> anyhow::Result<Smt> {
-        let mut trie = Smt::default();
-        let mut hashes = BTreeMap::new();
-        let mut leaves = BTreeMap::new();
-        visit(&mut hashes, &mut leaves, Stack::new(), node)?;
-        for (key, hash) in hashes {
-            trie.set_hash(
-                key.into_smt_bits(),
-                smt_trie::smt::HashOut {
-                    elements: {
-                        let ethereum_types::U256(arr) = hash.into_uint();
-                        for u in arr {
-                            ensure!(u < smt_trie::smt::F::ORDER);
-                        }
-                        arr.map(smt_trie::smt::F::from_canonical_u64)
-                    },
-                },
-            );
-        }
-        for (
-            addr,
-            CollatedLeaf {
-                balance,
-                nonce,
-                code,
-                code_length,
-                storage,
-            },
-        ) in leaves
-        {
-            use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-
-            for (value, key_fn) in [
-                (balance, key_balance as fn(_) -> _),
-                (nonce, key_nonce),
-                (code, key_code),
-                (code_length, key_code_length),
-            ] {
-                if let Some(value) = value {
-                    trie.set(key_fn(addr), value);
-                }
-            }
-            for (slot, value) in storage {
-                trie.set(key_storage(addr, slot), value);
-            }
-        }
-        Ok(trie)
-    }
-
+    use crate::world::World as _;
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/hermez_cdk_erigon.json"))
             .unwrap()
@@ -276,13 +214,7 @@ fn test_tries() {
             .enumerate()
     {
         println!("case {}", ix);
-        let instructions = crate::wire::parse(&case.bytes).unwrap();
-        let (node, _code) = fold(instructions).unwrap();
-        let trie = node2trie(node).unwrap();
-        assert_eq!(case.expected_state_root, {
-            let mut it = [0; 32];
-            smt_trie::utils::hashout2u(trie.root).to_big_endian(&mut it);
-            ethereum_types::H256(it)
-        });
+        let mut frontend = frontend(crate::wire::parse(&case.bytes).unwrap()).unwrap();
+        assert_eq!(case.expected_state_root, frontend.world.root());
     }
 }

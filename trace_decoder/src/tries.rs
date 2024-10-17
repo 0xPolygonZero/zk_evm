@@ -1,12 +1,12 @@
 //! Principled trie types used in this library.
 
 use core::fmt;
-use std::{cmp, collections::BTreeMap};
+use std::cmp;
 
 use anyhow::ensure;
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
-use ethereum_types::{Address, BigEndianHash as _, H256, U256};
+use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
@@ -351,120 +351,6 @@ impl StateMpt {
 impl From<StateMpt> for HashedPartialTrie {
     fn from(StateMpt { inner }: StateMpt) -> Self {
         inner
-    }
-}
-
-// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/706
-// We're covering for [`smt_trie`] in a couple of ways:
-// - insertion operations aren't fallible, they just panic.
-// - it documents a requirement that `set_hash` is called before `set`.
-#[derive(Clone, Debug)]
-pub(crate) struct StateSmt {
-    address2state: BTreeMap<Address, AccountRlp>,
-    hashed_out: BTreeMap<SmtKey, H256>,
-}
-
-impl StateSmt {
-    pub(crate) fn new_unchecked(
-        address2state: BTreeMap<Address, AccountRlp>,
-        hashed_out: BTreeMap<SmtKey, H256>,
-    ) -> Self {
-        Self {
-            address2state,
-            hashed_out,
-        }
-    }
-
-    fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
-        let Self {
-            address2state,
-            hashed_out,
-        } = self;
-        let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
-        for (k, v) in hashed_out {
-            smt.set_hash(k.into_smt_bits(), conv_hash::eth2smt(*v));
-        }
-        for (
-            addr,
-            AccountRlp {
-                nonce,
-                balance,
-                storage_root,
-                code_hash,
-            },
-        ) in address2state
-        {
-            smt.set(smt_trie::keys::key_nonce(*addr), *nonce);
-            smt.set(smt_trie::keys::key_balance(*addr), *balance);
-            smt.set(smt_trie::keys::key_code(*addr), code_hash.into_uint());
-            smt.set(
-                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-                //                combined abstraction for state and storage
-                smt_trie::keys::key_storage(*addr, U256::zero()),
-                storage_root.into_uint(),
-            );
-        }
-        smt
-    }
-}
-
-mod conv_hash {
-    //! We [`u64::to_le_bytes`] because:
-    //! - Reference go code just puns the bytes: <https://github.com/gateway-fm/vectorized-poseidon-gold/blob/7640564fa7d5ed93c829b156a83cb11cef744586/src/vectorizedposeidongold/vectorizedposeidongold_fallback.go#L39-L45>
-    //! - It's better to fix the endianness for correctness.
-    //! - Most (consumer) CPUs are little-endian.
-
-    use std::array;
-
-    use ethereum_types::H256;
-    use itertools::Itertools as _;
-    use plonky2::{
-        field::{
-            goldilocks_field::GoldilocksField,
-            types::{Field as _, PrimeField64},
-        },
-        hash::hash_types::HashOut,
-    };
-
-    /// # Panics
-    /// - On certain inputs if `debug_assertions` are enabled. See
-    ///   [`GoldilocksField::from_canonical_u64`] for more.
-    pub fn eth2smt(H256(bytes): H256) -> smt_trie::smt::HashOut {
-        let mut bytes = bytes.into_iter();
-        // (no unsafe, no unstable)
-        let ret = HashOut {
-            elements: array::from_fn(|_ix| {
-                let (a, b, c, d, e, f, g, h) = bytes.next_tuple().unwrap();
-                GoldilocksField::from_canonical_u64(u64::from_le_bytes([a, b, c, d, e, f, g, h]))
-            }),
-        };
-        assert_eq!(bytes.len(), 0);
-        ret
-    }
-    pub fn smt2eth(HashOut { elements }: smt_trie::smt::HashOut) -> H256 {
-        H256(
-            build_array::ArrayBuilder::from_iter(
-                elements
-                    .iter()
-                    .map(GoldilocksField::to_canonical_u64)
-                    .flat_map(u64::to_le_bytes),
-            )
-            .build_exact()
-            .unwrap(),
-        )
-    }
-
-    #[test]
-    fn test() {
-        use plonky2::field::types::Field64 as _;
-        let mut max = std::iter::repeat(GoldilocksField::ORDER - 1).flat_map(u64::to_le_bytes);
-        for h in [
-            H256::zero(),
-            H256(array::from_fn(|ix| ix as u8)),
-            H256(array::from_fn(|_| max.next().unwrap())),
-        ] {
-            assert_eq!(smt2eth(eth2smt(h)), h);
-        }
     }
 }
 

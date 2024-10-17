@@ -3,10 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use alloy_compat::Compat as _;
 use anyhow::{ensure, Context as _};
 use either::Either;
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
 
-use crate::tries::{MptKey, StateMpt, StorageTrie};
+use crate::{
+    tries::{MptKey, SmtKey, StateMpt, StorageTrie},
+    type2,
+};
 
 /// The [core](crate::core) of this crate is agnostic over state and storage
 /// representations.
@@ -243,5 +246,168 @@ impl World for Type1World {
             }
         }
         Ok(())
+    }
+}
+
+impl World for Type2World {
+    type SubtriePath = SmtKey;
+    fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
+        Ok(self.accounts.contains_key(&address))
+    }
+    fn update_balance(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut U256),
+    ) -> anyhow::Result<()> {
+        let acct = self.accounts.entry(address).or_default();
+        f(&mut acct.balance);
+        Ok(())
+    }
+    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
+        let acct = self.accounts.entry(address).or_default();
+        f(&mut acct.nonce);
+        Ok(())
+    }
+    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
+        let acct = self.accounts.entry(address).or_default();
+        match code {
+            Either::Left(bytes) => {
+                acct.code = keccak_hash::keccak(bytes).into_uint();
+                acct.code_length = U256::from(bytes.len())
+            }
+            Either::Right(hash) => acct.code = hash.into_uint(),
+        };
+        Ok(())
+    }
+    fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
+        self.accounts.remove(&address);
+        Ok(None)
+    }
+    fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        let _ = address;
+        Ok(())
+    }
+    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        self.accounts
+            .entry(address)
+            .and_modify(|it| it.storage.clear());
+        Ok(())
+    }
+    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        self.accounts
+            .entry(address)
+            .or_default()
+            .storage
+            .insert(slot, value);
+        Ok(())
+    }
+    fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()> {
+        self.accounts
+            .entry(address)
+            .or_default()
+            .storage
+            .insert(hash.into_uint(), value.into_uint());
+        Ok(())
+    }
+    fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256> {
+        Ok(self
+            .accounts
+            .get(&address)
+            .context("no account")?
+            .storage
+            .get(&slot)
+            .copied()
+            .unwrap_or_default())
+    }
+    fn reporting_destroy_slot(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>> {
+        self.accounts.entry(address).and_modify(|it| {
+            it.storage.remove(&slot);
+        });
+        Ok(None)
+    }
+    fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()> {
+        let _ = masks;
+        Ok(())
+    }
+    fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) -> anyhow::Result<()> {
+        let _ = paths;
+        Ok(())
+    }
+    fn root(&mut self) -> H256 {
+        let mut it = [0; 32];
+        smt_trie::utils::hashout2u(self.as_smt().root).to_big_endian(&mut it);
+        H256(it)
+    }
+}
+
+#[derive(Default)]
+pub struct Type2Entry {
+    pub balance: U256,
+    pub nonce: U256,
+    pub code: U256,
+    pub code_length: U256,
+    pub storage: BTreeMap<U256, U256>,
+}
+
+pub struct Type2World {
+    accounts: BTreeMap<Address, Type2Entry>,
+    hashed_out: BTreeMap<SmtKey, H256>,
+}
+
+impl Type2World {
+    pub fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
+        let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
+
+        for (key, hash) in &self.hashed_out {
+            smt.set_hash(
+                key.into_smt_bits(),
+                smt_trie::smt::HashOut {
+                    elements: {
+                        let ethereum_types::U256(arr) = hash.into_uint();
+                        arr.map(plonky2::field::goldilocks_field::GoldilocksField)
+                    },
+                },
+            );
+        }
+        for (
+            addr,
+            Type2Entry {
+                balance,
+                nonce,
+                code,
+                code_length,
+                storage,
+            },
+        ) in self.accounts.iter()
+        {
+            use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
+
+            for (value, key_fn) in [
+                (balance, key_balance as fn(_) -> _),
+                (nonce, key_nonce),
+                (code, key_code),
+                (code_length, key_code_length),
+            ] {
+                smt.set(key_fn(*addr), *value);
+            }
+            for (slot, value) in storage {
+                smt.set(key_storage(*addr, *slot), *value);
+            }
+        }
+        smt
+    }
+
+    pub fn new_unchecked(
+        accounts: BTreeMap<Address, Type2Entry>,
+        hashed_out: BTreeMap<SmtKey, H256>,
+    ) -> Self {
+        Self {
+            accounts,
+            hashed_out,
+        }
     }
 }
