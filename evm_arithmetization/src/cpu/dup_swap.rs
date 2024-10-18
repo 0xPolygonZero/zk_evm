@@ -41,7 +41,7 @@ fn channels_equal_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 ///
 /// `offset` is the stack index before this instruction is executed, e.g. `0`
 /// for the top of the stack.
-fn constrain_channel_packed<P: PackedField>(
+pub(crate) fn constrain_channel_packed<P: PackedField>(
     is_read: bool,
     filter: P,
     offset: P,
@@ -64,7 +64,7 @@ fn constrain_channel_packed<P: PackedField>(
 ///
 /// `offset` is the stack index before this instruction is executed, e.g. `0`
 /// for the top of the stack.
-fn constrain_channel_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn constrain_channel_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     is_read: bool,
     filter: ExtensionTarget<D>,
