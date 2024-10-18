@@ -612,7 +612,7 @@ pub(crate) fn generate_incr<F: RichField, T: Transition<F>>(
         .ok_or(ProgramError::StackUnderflow)?;
     let addr = MemoryAddress::new(generation_state.registers.context, Segment::Stack, offset);
 
-    let (val, log_in0) = mem_read_gp_with_log_and_fill(1, addr, &generation_state, &mut row);
+    let (val, log_in0) = mem_read_gp_with_log_and_fill(1, addr, generation_state, &mut row);
     let new_val = val.overflowing_add(1.into()).0;
 
     // Write the read value, incremented by 1.

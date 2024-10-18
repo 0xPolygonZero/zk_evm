@@ -50,17 +50,22 @@ ecPairing precompiles.
     resetting memory sections (by calling MSTORE_32BYTES_32 with the
     value 0).
 
-7.  `PROVER_INPUT`. Pushes a single prover input onto the stack.
+7. `INCR`. Reads the `N`th element of the stack, and increments it in-place
+    by one without pushing or popping. There are 4 INCR operations, namely
+    INCR1, INCR2, INCR3, INCR4 to increment respectively the 1st, 2nd, 3rd
+    and 4th stack elements.
 
-8.  `GET_CONTEXT`. Pushes the current context onto the stack. The kernel
+8.  `PROVER_INPUT`. Pushes a single prover input onto the stack.
+
+9.  `GET_CONTEXT`. Pushes the current context onto the stack. The kernel
     always has context 0.
 
-9.  `SET_CONTEXT`. Pops the top element of the stack and updates the
+10.  `SET_CONTEXT`. Pops the top element of the stack and updates the
     current context to this value. It is usually used when calling
     another contract or precompile, to distinguish the caller from the
     callee.
 
-10. `MLOAD_32BYTES`. Pops 2 elements from the stack (a Memory address,
+11. `MLOAD_32BYTES`. Pops 2 elements from the stack (a Memory address,
     and then a length $\ell$), and pushes a value onto the stack. The
     pushed value corresponds to the U256 integer read from the
     big-endian sequence of length $\ell$ from the memory address being
@@ -68,19 +73,19 @@ ecPairing precompiles.
     greater than 32 (as a U256 consists in at most 32 bytes). Missing
     these conditions will result in an unverifiable proof.
 
-11. `EXIT_KERNEL`. Pops 1 element from the stack. This instruction is
+12. `EXIT_KERNEL`. Pops 1 element from the stack. This instruction is
     used at the end of a syscall, before proceeding to the rest of the
     execution logic. The popped element, *kexit_info*, contains several
     pieces of information like the current program counter, the current
     amount of gas used, and whether we are in kernel (i.e. privileged)
     mode or not.
 
-12. `MLOAD_GENERAL`. Pops 1 elements (a Memory address), and pushes the
+13. `MLOAD_GENERAL`. Pops 1 elements (a Memory address), and pushes the
     value stored at this memory address onto the stack. It can read any
     memory location, general (similarly to MLOAD (0x51) instruction) or
     privileged.
 
-13. `MSTORE_GENERAL`. Pops 2 elements (a value and a Memory address),
+14. `MSTORE_GENERAL`. Pops 2 elements (a value and a Memory address),
     and writes the popped value from the stack at the fetched address.
     It can write to any memory location, general (similarly to MSTORE
     (0x52) / MSTORE8 (0x53) instructions) or privileged.
