@@ -254,7 +254,7 @@ pub mod testing {
     use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet};
     use starky::proof::StarkProofChallenges;
 
-    use crate::all_stark::KECCAK_TABLES_INDICES;
+    use crate::all_stark::OPTIONAL_TABLE_INDICES;
     use crate::get_challenges::observe_public_values;
     use crate::proof::*;
     use crate::witness::errors::ProgramError;
@@ -282,7 +282,7 @@ pub mod testing {
                 if let Some(stark_proof) = stark_proof {
                     challenger.observe_cap(&stark_proof.proof.trace_cap);
                 } else {
-                    assert!(KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables);
+                    assert!(OPTIONAL_TABLE_INDICES.contains(&i) && !self.table_in_use[i]);
                     let zero_cap =
                         vec![F::ZERO; config.fri_config.num_cap_elements() * NUM_HASH_OUT_ELTS];
                     challenger.observe_elements(&zero_cap);

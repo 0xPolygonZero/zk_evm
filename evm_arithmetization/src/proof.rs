@@ -4,6 +4,7 @@ use ethereum_types::{Address, H256, U256};
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
+use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
@@ -47,10 +48,9 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues<F>,
-    /// A flag indicating whether the Keccak and KeccakSponge tables contain
-    /// only padding values (i.e., no meaningful data). This is set to false
-    /// when no actual Keccak operations were performed.
-    pub use_keccak_tables: bool,
+    /// A flag indicating whether the table only contains padding values (i.e.,
+    /// no meaningful data).
+    pub table_in_use: [bool; NUM_TABLES],
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
@@ -601,6 +601,22 @@ impl MemCap {
             })
             .collect();
 
+        Self { mem_cap }
+    }
+
+    pub fn from_merkle_cap<F: RichField, H: Hasher<F>>(merkle_cap: MerkleCap<F, H>) -> Self {
+        let mem_cap = merkle_cap
+            .0
+            .iter()
+            .map(|h| {
+                h.to_vec()
+                    .iter()
+                    .map(|hi| hi.to_canonical_u64().into())
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
         Self { mem_cap }
     }
 }
