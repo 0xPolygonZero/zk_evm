@@ -7,6 +7,8 @@ use alloy::{providers::Provider, transports::Transport};
 use anyhow::Context;
 use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
+use crate::rpc::RpcType;
+
 const CACHE_SIZE: usize = 1024;
 const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
 
@@ -22,6 +24,8 @@ pub struct CachedProvider<ProviderT, TransportT> {
     blocks_by_number: Arc<Mutex<lru::LruCache<u64, Block>>>,
     blocks_by_hash: Arc<Mutex<lru::LruCache<BlockHash, u64>>>,
     _phantom: std::marker::PhantomData<TransportT>,
+
+    pub rpc_type: RpcType,
 }
 
 pub struct ProviderGuard<'a, ProviderT> {
@@ -48,7 +52,7 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    pub fn new(provider: ProviderT) -> Self {
+    pub fn new(provider: ProviderT, rpc_type: RpcType) -> Self {
         Self {
             provider: provider.into(),
             semaphore: Arc::new(Semaphore::new(MAX_NUMBER_OF_PARALLEL_REQUESTS)),
@@ -58,6 +62,7 @@ where
             blocks_by_hash: Arc::new(Mutex::new(lru::LruCache::new(
                 std::num::NonZero::new(CACHE_SIZE).unwrap(),
             ))),
+            rpc_type,
             _phantom: std::marker::PhantomData,
         }
     }
