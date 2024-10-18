@@ -11,7 +11,7 @@ use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{MultiProof, StarkProofChallenges};
+use starky::proof::StarkProofWithMetadata;
 
 use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
@@ -22,6 +22,22 @@ pub(crate) const DEFAULT_CAP_HEIGHT: usize = 4;
 /// Number of elements contained in a Merkle cap with default height.
 pub(crate) const DEFAULT_CAP_LEN: usize = 1 << DEFAULT_CAP_HEIGHT;
 
+/// A combination of STARK proofs for independent statements operating on
+/// possibly shared variables, along with Cross-Table Lookup (CTL) challenges to
+/// assert consistency of common variables across tables.
+#[derive(Debug, Clone)]
+pub struct MultiProof<
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    const D: usize,
+    const N: usize,
+> {
+    /// Proofs for all the different STARK modules.
+    pub stark_proofs: [Option<StarkProofWithMetadata<F, C, D>>; N],
+    /// Cross-table lookup challenges.
+    pub ctl_challenges: GrandProductChallengeSet<F>,
+}
+
 /// A STARK proof for each table, plus some metadata used to create recursive
 /// wrapper proofs.
 #[derive(Debug, Clone)]
@@ -31,21 +47,21 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues<F>,
+    /// A flag indicating whether the Keccak and KeccakSponge tables contain
+    /// only padding values (i.e., no meaningful data). This is set to false
+    /// when no actual Keccak operations were performed.
+    pub use_keccak_tables: bool,
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
     /// Returns the degree (i.e. the trace length) of each STARK.
-    pub fn degree_bits(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
-        self.multi_proof.recover_degree_bits(config)
+    pub fn degree_bits(&self, config: &StarkConfig) -> [Option<usize>; NUM_TABLES] {
+        core::array::from_fn(|i| {
+            self.multi_proof.stark_proofs[i]
+                .as_ref()
+                .map(|proof| proof.proof.recover_degree_bits(config))
+        })
     }
-}
-
-/// Randomness for all STARKs.
-pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
-    /// Randomness used in each STARK proof.
-    pub stark_challenges: [StarkProofChallenges<F, D>; NUM_TABLES],
-    /// Randomness used for cross-table lookups. It is shared by all STARKs.
-    pub ctl_challenges: GrandProductChallengeSet<F>,
 }
 
 /// Memory values which are public.

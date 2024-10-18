@@ -41,7 +41,6 @@ axum = "0.7.5"
 bitflags = "2.5.0"
 bitvec = "1.0.1"
 bytes = "1.6.0"
-cargo_metadata = "0.18.1"
 ciborium = "0.2.2"
 ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
@@ -70,12 +69,13 @@ num-bigint = "0.4.5"
 num-traits = "0.2.19"
 nunny = "0.2.1"
 once_cell = "1.19.0"
-paladin-core = "0.4.2"
+paladin-core = "0.4.3"
 parking_lot = "0.12.3"
-paste = "1.0.15"
 pest = "2.7.10"
 pest_derive = "2.7.10"
 pretty_env_logger = "0.5.0"
+proc-macro2 = "1.0"
+quote = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 ripemd = "0.1.3"
@@ -83,18 +83,19 @@ rlp = "0.5.2"
 rlp-derive = "0.1.0"
 ruint = "1.12.3"
 serde = "1.0.203"
-serde-big-array = "0.5.1"
 serde_json = "1.0.118"
 serde_path_to_error = "0.1.16"
+serde-big-array = "0.5.1"
 sha2 = "0.10.8"
 static_assertions = "1.1.0"
+syn = "2.0"
 thiserror = "1.0.61"
 tiny-keccak = "2.0.2"
 tokio = { version = "1.38.0", features = ["full"] }
-toml = "0.8.14"
 tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+trybuild = "1.0"
 u4 = "0.1.0"
 uint = "0.9.5"
 url = "2.5.2"
@@ -110,16 +111,10 @@ zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "8463effe0dd1472a52906cd12ffb047885db42ee" }
 plonky2_maybe_rayon = "0.2.0"
-plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
-starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
-
-# proc macro related dependencies
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = "2.0"
-trybuild = "1.0"
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "8463effe0dd1472a52906cd12ffb047885db42ee" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "8463effe0dd1472a52906cd12ffb047885db42ee" }
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"

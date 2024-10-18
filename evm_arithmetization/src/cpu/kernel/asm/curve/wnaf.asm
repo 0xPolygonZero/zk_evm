@@ -26,7 +26,7 @@ wnaf_loop_contd:
     %stack (n, i, o, segment, retdest) -> (o, i, n, segment, retdest)
     ADD
     %stack (o, n, segment, retdest) -> (n, segment, o, retdest)
-    DUP1 %and_const(31) SWAP1
+    PUSH 32 DUP2 MOD SWAP1
     PUSH 16 DUP3 GT
     // stack: m>16, n, m, segment, o, retdest
     %mul_const(32) ADD
@@ -62,7 +62,7 @@ trailing_zeros:
     PUSH 0
 trailing_zeros_loop:
     // stack: count, x, retdest
-    PUSH 1 DUP3 AND
+    PUSH 2 DUP3 MOD
     // stack: x&1, count, x, retdest
     %jumpi(trailing_zeros_end)
     // stack: count, x, retdest

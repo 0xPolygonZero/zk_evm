@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
@@ -7,7 +7,10 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::code::hash_bytecode_u256;
 
+use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -15,7 +18,9 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
-use crate::generation::linked_list::{empty_list_mem, StateLinkedList, STATE_LINKED_LIST_NODE_SIZE};
+use crate::generation::linked_list::{
+    empty_list_mem, StateLinkedList, STATE_LINKED_LIST_NODE_SIZE,
+};
 #[cfg(feature = "eth_mainnet")]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};
@@ -27,8 +32,6 @@ use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
 #[cfg(feature = "cdk_erigon")]
 use crate::poseidon::poseidon_stark::PoseidonOp;
-#[cfg(feature = "cdk_erigon")]
-use smt_trie::code::hash_bytecode_u256;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -80,6 +83,9 @@ pub(crate) trait State<F: RichField> {
 
     /// Returns a `State`'s stack.
     fn get_stack(&self) -> Vec<U256>;
+
+    /// Indicates whether we are in kernel mode.
+    fn is_kernel(&self) -> bool;
 
     /// Returns the current context.
     fn get_context(&self) -> usize;
@@ -197,10 +203,13 @@ pub(crate) trait State<F: RichField> {
         let mut final_clock = 0;
 
         let mem = self
-                    .get_generation_state()
-                    .memory
-                    .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!("initial state linked list = {:?}", StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList));
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!(
+            "initial state linked list = {:?}",
+            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
 
         loop {
             let registers = self.get_registers();
@@ -386,20 +395,13 @@ pub struct GenerationState<F: RichField> {
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
-    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
-    /// of an account in the accounts linked list, and ptr is the respective
-    /// node address in memory.
-    #[cfg(feature = "eth_mainnet")]
-    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
+    /// Provides quick access to pointers that reference the location
+    /// of either and account or a slot in the respective access list.
+    pub(crate) access_lists_ptrs: LinkedListsPtrs,
 
-    /// Each entry contains the pair ((account_key, slot_key), ptr) where
-    /// account_key is the (hashed) key of an account, slot_key is the slot
-    /// key, and ptr is the respective node address in memory.
-    #[cfg(feature = "eth_mainnet")]
-    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
-
-    #[cfg(feature = "cdk_erigon")]
-    pub(crate) state_pointers: BTreeMap<U256, usize>,
+    /// Provides quick access to pointers that reference the memory location of
+    /// either and account or a slot in the respective access list.
+    pub(crate) state_ptrs: LinkedListsPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -508,8 +510,8 @@ impl<F: RichField> GenerationState<F> {
                     receipt_root_ptr: 0,
                 },
                 jumpdest_table: None,
-                accounts_pointers: BTreeMap::new(),
-                storage_pointers: BTreeMap::new(),
+                access_lists_ptrs: LinkedListsPtrs::default(),
+                state_ptrs: LinkedListsPtrs::default(),
                 ger_prover_inputs,
             };
             let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
@@ -536,7 +538,8 @@ impl<F: RichField> GenerationState<F> {
                     receipt_root_ptr: 0,
                 },
                 jumpdest_table: None,
-                state_pointers: BTreeMap::new(),
+                access_lists_ptrs: LinkedListsPtrs::default(),
+                state_ptrs: LinkedListsPtrs::default(),
                 ger_prover_inputs,
             };
             let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
@@ -552,6 +555,8 @@ impl<F: RichField> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: trimmed_inputs.clone(),
+            state_ptrs: segment_data.extra_data.state_ptrs.clone(),
+            access_lists_ptrs: segment_data.extra_data.access_lists_ptrs.clone(),
             ..Default::default()
         };
 
@@ -679,8 +684,8 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            accounts_pointers: self.accounts_pointers.clone(),
-            storage_pointers: self.storage_pointers.clone(),
+            access_lists_ptrs: self.access_lists_ptrs.clone(),
+            state_ptrs: self.state_ptrs.clone(),
         }
     }
 
@@ -723,10 +728,10 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.accounts_pointers
-            .clone_from(&segment_data.extra_data.accounts);
-        self.storage_pointers
-            .clone_from(&segment_data.extra_data.storage);
+        self.state_ptrs
+            .clone_from(&segment_data.extra_data.state_ptrs);
+        self.access_lists_ptrs
+            .clone_from(&segment_data.extra_data.access_lists_ptrs);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,
@@ -811,6 +816,10 @@ impl<F: RichField> State<F> for GenerationState<F> {
 
     fn get_stack(&self) -> Vec<U256> {
         self.stack()
+    }
+
+    fn is_kernel(&self) -> bool {
+        self.registers.is_kernel
     }
 
     fn get_context(&self) -> usize {

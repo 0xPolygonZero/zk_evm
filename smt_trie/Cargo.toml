@@ -11,15 +11,15 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-ethereum-types = { workspace = true }
-hex-literal = { workspace = true }
-plonky2 = { workspace = true }
-rand = { workspace = true }
+ethereum-types.workspace = true
+plonky2.workspace = true
+rand.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
 log = { workspace = true }
+
+[dev-dependencies]
+hex-literal.workspace = true
 
 [lints]
 workspace = true

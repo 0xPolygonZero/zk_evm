@@ -56,19 +56,17 @@ mod interface;
 
 pub use interface::*;
 
+mod tries;
 mod type1;
-// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-//                add backend/prod support for type 2
-#[cfg(test)]
-#[allow(dead_code)]
 mod type2;
-mod typed_mpt;
 mod wire;
 
-pub use core::entrypoint;
+pub use core::{entrypoint, WireDisposition};
 
 mod core;
 
+/// Implementation of the observer for the trace decoder.
+pub mod observer;
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {
     use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};

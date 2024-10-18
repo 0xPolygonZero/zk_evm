@@ -141,7 +141,7 @@
     // stack: addr
     DUP1 %is_non_existent
     SWAP1 %is_empty
-    OR
+    ADD // OR
 %endmacro
 
 // Gets the size of the stack _before_ the macro is run

@@ -174,7 +174,7 @@
     PUSH $c
     // stack: c, input, ...
     LT // Check it backwards: (input > c) == (c < input)
-    // stack: input >= c, ...
+    // stack: input > c, ...
 %endmacro
 
 %macro ge_const(c)
@@ -301,6 +301,16 @@
     // stack: x, c, ...
     %ceil_div
     // stack: ceil(x / c), ...
+%endmacro
+
+/// Same as `%as_u32`, but does not rely on
+/// the AND operation.
+/// *Note*: This is heavier, `%as_u32` should be preferred.
+%macro as_u32_no_and
+    // stack: word
+    PUSH 0x100000000
+    SWAP1
+    MOD
 %endmacro
 
 %macro as_u32
