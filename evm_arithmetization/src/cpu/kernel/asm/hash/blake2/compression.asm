@@ -60,7 +60,7 @@ compression_loop:
     DUP1
     // stack: cur_block, cur_block, t, is_last_block, retdest
     %block_size
-    %increment_twice
+    %add_const(2)
     // stack: cur_block_start_byte, t, cur_block, is_last_block, retdest
 
     // Copy the message from the input space to the message working space.

@@ -184,7 +184,7 @@ global exc_stop:
     SUB
     // First, check the stack length.
     // stack: stack_len-3 = stack_len_before_exc, addr_registers, trap_info
-    DUP2 %increment_twice
+    DUP2 %add_const(2)
     MLOAD_GENERAL
     // stack: stored_stack_length, stack_len_before_exc, addr_registers, trap_info
     DUP2 %assert_eq

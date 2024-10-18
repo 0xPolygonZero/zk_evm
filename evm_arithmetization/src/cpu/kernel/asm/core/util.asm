@@ -73,7 +73,7 @@
     INCR1 DUP1 %mload_trie_data
     // stack: balance, balance_ptr
     ISZERO %not_bit %jumpi(%%false)
-    %increment_twice %mload_trie_data
+    %add_const(2) %mload_trie_data
     // stack: code_hash
     PUSH @EMPTY_STRING_HASH
     EQ

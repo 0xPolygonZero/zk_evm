@@ -180,7 +180,7 @@
     // stack:                         ptr
     %create_bn254_pairing_address
     DUP1
-    %increment_twice
+    %add_const(2)
     // stack:                  addr2, addr
     MLOAD_GENERAL
     // stack:                     x2, addr
@@ -216,7 +216,7 @@
     MLOAD_GENERAL
     // stack:                 x3, x4, addr
     DUP3
-    %increment_twice
+    %add_const(2)
     // stack:           addr2, x3, x4, addr
     MLOAD_GENERAL
     // stack:             x2, x3, x4, addr
@@ -263,7 +263,7 @@
     %swap_mstore
     // stack:                   x2, x3, addr, x5
     DUP3
-    %increment_twice
+    %add_const(2)
     // stack:             addr2, x2, x3, addr, x5
     %swap_mstore
     // stack:                       x3, addr, x5
@@ -310,7 +310,7 @@
     MULFP254
     // stack:                   2*x2, x3, x4, addr
     DUP4
-    %increment_twice
+    %add_const(2)
     // stack:             addr2, 2*x2, x3, x4, addr
     %swap_mstore
     // stack:                         x3, x4, addr
@@ -345,7 +345,7 @@
     PUSH $ptr
     %create_bn254_pairing_address
     // stack: addr, x0, x1, x2, x3, x4, x5
-    %increment_twice
+    %add_const(2)
     DUP1
     // stack: addr2, addr2, x0, x1, x2, x3, x4, x5
     SWAP2 MSTORE_GENERAL
@@ -991,7 +991,7 @@
     MLOAD_GENERAL
     // stack:                  x03, x04, x05, x06, x07, x08, x09, x10, addr
     DUP9
-    %increment_twice
+    %add_const(2)
     // stack:           addr02, x03, x04, x05, x06, x07, x08, x09, x10, addr
     MLOAD_GENERAL
     // stack:             x02, x03, x04, x05, x06, x07, x08, x09, x10, addr
@@ -1108,12 +1108,12 @@
     %swap_mstore
     // stack:              SRC, DEST
     DUP1
-    %increment_twice
+    %add_const(2)
     // stack:       addr02, SRC, DEST
     MLOAD_GENERAL
     // stack:         x02, SRC, DEST
     DUP3
-    %increment_twice
+    %add_const(2)
     // stack: addr02', x02, SRC, DEST
     %swap_mstore
     // stack:              SRC, DEST

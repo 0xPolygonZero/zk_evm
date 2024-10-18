@@ -55,7 +55,7 @@ global mpt_insert_leaf:
     // Replace node_payload_ptr with node_value, which is node_payload[2].
     // stack: node_len, node_key, insert_len, insert_key, node_payload_ptr, insert_value_ptr, retdest
     SWAP4
-    %increment_twice
+    %add_const(2)
     %mload_trie_data
     SWAP4
     // stack: node_len, node_key, insert_len, insert_key, node_value_ptr, insert_value_ptr, retdest
@@ -196,7 +196,7 @@ keys_match:
         -> (node_payload_ptr, node_len, node_key, insert_value_ptr)
     // stack: node_payload_ptr, common_len, common_key, insert_value_ptr, retdest
     DUP4 DUP2
-    %increment_twice
+    %add_const(2)
     %mstore_trie_data
     %stack (node_payload_ptr, common_len, common_key, insert_value_ptr, retdest) -> (node_payload_ptr, retdest)
     PUSH 1 SWAP1 SUB

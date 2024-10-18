@@ -65,7 +65,7 @@ search_transient_storage_not_found:
 
 search_transient_storage_found:
     // stack: i, len, addr, key, retdest
-    DUP1 %increment_twice
+    DUP1 %add_const(2)
     MLOAD_GENERAL
     %stack (val, i, len, addr, key, retdest) -> (retdest, 1, i, addr, val, key) // Return 1 to indicate that the address was already present.
     JUMP

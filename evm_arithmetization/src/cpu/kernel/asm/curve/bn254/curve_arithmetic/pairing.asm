@@ -64,7 +64,7 @@ bn254_input_check:
     // stack:         inp_j, j, k, inp
     DUP1
     // stack: inp_j , inp_j, j, k, inp
-    %increment_twice
+    %add_const(2)
     // stack: inp_j', inp_j, j, k, inp
     %load_fp254_4
     // stack:    Q_j, inp_j, j, k, inp

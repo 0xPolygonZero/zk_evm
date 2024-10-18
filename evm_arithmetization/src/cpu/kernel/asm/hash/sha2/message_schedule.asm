@@ -2,7 +2,7 @@
 %macro message_schedule_addr_from_num_blocks
     // stack: num_blocks
     %mul_const(64)
-    %increment_twice
+    %add_const(2)
     %build_current_general_address
 %endmacro
 

@@ -43,20 +43,20 @@ after_mpt_read:
     //stack: trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP1
     %mload_trie_data
-    %increment_twice
+    %add_const(2)
     %mload_trie_data
     // stack: trie_storage_root, trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     SWAP1
     // stack: trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP6
-    %increment_twice // intial account_ptr = account_ptr_ptr + 2
+    %add_const(2) // intial account_ptr = account_ptr_ptr + 2
     MLOAD_GENERAL
     // stack: account_ptr, trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP1 SWAP2
     // stack: trie_account_ptr_ptr, account_ptr, account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %mstore_trie_data // The trie's account points to the linked list initial account
     // stack: account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    %increment_twice
+    %add_const(2)
     // stack: storage_root_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
 
     %stack

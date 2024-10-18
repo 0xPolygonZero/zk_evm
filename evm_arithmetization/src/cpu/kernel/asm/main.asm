@@ -7,7 +7,7 @@ global init:
     // stack: prev_stack_len, addr_registers
     // First, check the stack length.
     DUP1
-    DUP3 %increment_twice 
+    DUP3 %add_const(2) 
     // stack: stack_len_addr, prev_stack_len, prev_stack_len, addr_registers
     MLOAD_GENERAL
     %assert_eq

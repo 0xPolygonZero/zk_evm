@@ -347,10 +347,6 @@
     %as_u32
 %endmacro
 
-%macro increment_twice
-    %add_const(2)
-%endmacro
-
 %macro decrement
     %sub_const(1)
 %endmacro

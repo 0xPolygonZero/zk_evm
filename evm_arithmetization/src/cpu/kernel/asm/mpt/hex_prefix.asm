@@ -118,7 +118,7 @@ rlp_header_large:
 
     // stack: rlp_addr, num_nibbles, packed_nibbles, terminated, retdest
     // rlp_addr += 2
-    %increment_twice
+    %add_const(2)
 
     // stack: rlp_addr, num_nibbles, packed_nibbles, terminated, retdest
     SWAP3 DUP3 DUP3

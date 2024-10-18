@@ -91,7 +91,7 @@ loop_store_initial_accounts:
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
-    %increment_twice
+    %add_const(2)
     SWAP1
     MSTORE_GENERAL // Store cpy_ptr
     // stack: current_node_ptr, cur_len, retdest
@@ -390,7 +390,7 @@ global store_initial_slots:
 loop_store_initial_slots:
     // stack: current_node_ptr, cur_len, retdest
     DUP1
-    %increment_twice
+    %add_const(2)
     MLOAD_GENERAL
     // stack: value, current_node_ptr, cur_len, retdest
     DUP2
@@ -613,7 +613,7 @@ next_node_ok_with_value:
 
 slot_found_write_value:
     // stack: pred_ptr, addr_key, key, value, retdest
-    %increment_twice
+    %add_const(2)
     %stack (payload_ptr, addr_key, key, value) -> (value, payload_ptr)
     MSTORE_GENERAL
     // stack: retdest
@@ -691,7 +691,7 @@ slot_found_write:
     // The slot was already in the list
     // stack: pred_ptr, addr_key, key, value, retdest
     // Load the old value
-    %increment_twice
+    %add_const(2)
     DUP1
     MLOAD_GENERAL
     // stack: old_value, pred_ptr + 2, addr_key, key, value, retdest
@@ -839,7 +839,7 @@ slot_found_no_write:
     // The slot was already in the list
     // stack: pred_ptr, addr_key, key, value, retdest
     // Load the old value
-    %increment_twice
+    %add_const(2)
     MLOAD_GENERAL
     // stack: old_value, addr_key, key, value, retdest
     %stack (old_value, addr_key, key, value, retdest) -> (retdest, old_value)

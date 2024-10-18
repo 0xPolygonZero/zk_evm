@@ -17,7 +17,7 @@ global insert_all_accounts:
     INCR1
     MLOAD_GENERAL
     // stack: account_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    %increment_twice
+    %add_const(2)
     DUP1
     %mload_trie_data
     // stack: storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -71,7 +71,7 @@ insert_next_slot:
     MLOAD_GENERAL
     // stack: key, addr, storage_ptr_ptr, root_ptr, retdest
     DUP3
-    %increment_twice
+    %add_const(2)
     MLOAD_GENERAL
     // stack: value, key, addr, storage_ptr_ptr, root_ptr, retdest
     // If the value is 0, then payload_ptr = 0, and we don't need to insert a value in the `TrieData` segment.
@@ -116,15 +116,15 @@ global delete_removed_accounts:
     MLOAD_GENERAL
     // stack: key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP2
-    %increment_twice
+    %add_const(2)
     MLOAD_GENERAL // get initial payload_ptr
-    %increment_twice // storage_root_ptr_ptr = payload_ptr + 2
+    %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
     %mload_trie_data
     // stack: storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     INCR1
     MLOAD_GENERAL // get dynamic payload_ptr
-    %increment_twice // storage_root_ptr_ptr = dyn_payload_ptr + 2
+    %add_const(2) // storage_root_ptr_ptr = dyn_payload_ptr + 2
     %stack
         (storage_root_ptr_ptr, storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr) ->
         (key, storage_root_ptr, storage_ptr_ptr, after_delete_removed_slots, storage_root_ptr_ptr, account_ptr_ptr, root_ptr)

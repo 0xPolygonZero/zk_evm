@@ -105,7 +105,7 @@ global encode_account:
     SWAP1 %encode_rlp_scalar
     // stack: rlp_pos_5, value_ptr, cur_len, retdest
     DUP3
-    DUP3 %increment_twice %mload_trie_data // storage_root_ptr = value[2]
+    DUP3 %add_const(2) %mload_trie_data // storage_root_ptr = value[2]
     // stack: storage_root_ptr, cur_len, rlp_pos_5, value_ptr, cur_len, retdest
     DUP3
     // stack: rlp_pos_5, storage_root_ptr, cur_len, rlp_pos_5, value_ptr, cur_len, retdest
@@ -195,7 +195,7 @@ encode_receipt_after_type:
     SWAP1 %encode_rlp_scalar
     // stack: rlp_addr, payload_len_ptr, cur_len, retdest
     // Encode cum_gas_used.
-    DUP2 %increment_twice %mload_trie_data
+    DUP2 %add_const(2) %mload_trie_data
     // stack: cum_gas_used, rlp_addr, payload_len_ptr, cur_len, retdest
     SWAP1 %encode_rlp_scalar
     // stack: rlp_addr, payload_len_ptr, cur_len, retdest
@@ -239,7 +239,7 @@ encode_receipt_logs_loop:
     // stack: address, rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
     SWAP1 %encode_rlp_160
     // stack: rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
-    DUP2 %increment_twice %mload_trie_data
+    DUP2 %add_const(2) %mload_trie_data
     // stack: num_topics, rlp_addr, current_log_ptr, i, num_logs, current_log_ptr, old_rlp_pos, payload_len_ptr, cur_len, retdest
     // Encode topics prefix.
     DUP1 %mul_const(33)

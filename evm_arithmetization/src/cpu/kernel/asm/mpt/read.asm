@@ -116,7 +116,7 @@ global mpt_read_extension_found:
     // stack: key, future_nibbles, node_payload_ptr, retdest
     SWAP2
     // stack: node_payload_ptr, future_nibbles, key, retdest
-    %increment_twice // child pointer is third field of extension node
+    %add_const(2) // child pointer is third field of extension node
     %mload_trie_data
     // stack: child_ptr, future_nibbles, key, retdest
     %jump(mpt_read) // recurse
@@ -144,7 +144,7 @@ global mpt_read_leaf_not_found:
     JUMP
 global mpt_read_leaf_found:
     // stack: node_payload_ptr, retdest
-    %increment_twice // The value pointer is located after num_nibbles and the key.
+    %add_const(2) // The value pointer is located after num_nibbles and the key.
     // stack: value_ptr_ptr, retdest
     SWAP1
     // For leaves, we return the pointer

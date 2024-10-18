@@ -111,7 +111,7 @@ maybe_normalize_branch_leafext:
     // stack: only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr, retdest
     DUP1 INCR1 %mload_trie_data
     // stack: child_len, only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr, retdest
-    DUP2 %increment_twice %mload_trie_data
+    DUP2 %add_const(2) %mload_trie_data
     // stack: child_key, child_len, only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr, retdest
     %mload_kernel_general(1)
     %stack (i, child_key, child_len, only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr) ->
@@ -124,6 +124,6 @@ maybe_normalize_branch_leafext:
     // stack: node_ptr, len, node_ptr, key, only_child_ptr, retdest
     INCR1 %mstore_trie_data // Change len in the child node
     // stack: node_ptr, key, only_child_ptr, retdest
-    %increment_twice %mstore_trie_data // Change key in the child node
+    %add_const(2) %mstore_trie_data // Change key in the child node
     // stack: node_ptr, retdest
     SWAP1 JUMP

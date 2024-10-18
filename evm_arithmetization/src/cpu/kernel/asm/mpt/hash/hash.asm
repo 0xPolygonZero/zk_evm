@@ -212,7 +212,7 @@ global encode_node_extension:
     SWAP4 %add_const(4) SWAP4
     %stack (node_type, node_payload_ptr, rlp_start, encode_value, cur_len)
         -> (node_payload_ptr, rlp_start, encode_value, cur_len, encode_node_extension_after_encode_child, rlp_start, node_payload_ptr)
-    %increment_twice %mload_trie_data
+    %add_const(2) %mload_trie_data
     // stack: child_ptr, rlp_start, encode_value, cur_len, encode_node_extension_after_encode_child, rlp_start, node_payload_ptr, retdest
     %jump(encode_or_hash_node)
 encode_node_extension_after_encode_child:
@@ -273,7 +273,7 @@ global encode_node_leaf:
 encode_node_leaf_after_hex_prefix:
     // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
     SWAP2
-    %increment_twice // The value pointer starts at index 3, after num_nibbles and packed_nibbles.
+    %add_const(2) // The value pointer starts at index 3, after num_nibbles and packed_nibbles.
     // stack: value_ptr_ptr, rlp_start, rlp_pos, encode_value, cur_len, retdest
     %mload_trie_data
     // stack: value_ptr, rlp_start, rlp_pos, encode_value, cur_len, retdest

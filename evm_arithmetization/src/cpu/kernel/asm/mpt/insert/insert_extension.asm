@@ -40,7 +40,7 @@ global mpt_insert_extension:
     // stack: node_payload_ptr, insert_len, insert_key, insert_value_ptr, retdest
 
     // We start by loading the extension node's three fields: node_len, node_key, node_child_ptr
-    DUP1 %increment_twice %mload_trie_data
+    DUP1 %add_const(2) %mload_trie_data
     // stack: node_child_ptr, node_payload_ptr, insert_len, insert_key, insert_value_ptr, retdest
     %stack (node_child_ptr, node_payload_ptr, insert_len, insert_key)
         -> (node_payload_ptr, insert_len, insert_key, node_child_ptr)

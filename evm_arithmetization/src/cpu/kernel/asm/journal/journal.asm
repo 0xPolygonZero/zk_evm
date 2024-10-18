@@ -127,7 +127,7 @@
 %macro journal_load_2
     // ptr
     DUP1
-    %increment_twice
+    %add_const(2)
     %mload_journal_data
     // x, ptr
     INCR2
@@ -145,7 +145,7 @@
     SWAP1
     DUP1
     // ptr, ptr, y
-    %increment_twice
+    %add_const(2)
     %mload_journal_data
     // x, ptr, y
     INCR2
@@ -169,7 +169,7 @@
     SWAP1
     DUP1
     // ptr, ptr, y, z
-    %increment_twice
+    %add_const(2)
     %mload_journal_data
     // x, ptr, y, z
     INCR2

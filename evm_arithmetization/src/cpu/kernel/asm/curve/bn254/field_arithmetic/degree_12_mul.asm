@@ -177,7 +177,7 @@ global mul_fp254_12_sparse:
     // stack:           G2 * sh2(f') + g0 * f, inB, f, inB, f', out, f, inB, f', inA, inB, out
     %stack (f: 6, x, g: 6) -> (g, x, f)
     // stack:          f , inB, G2 * sh2(f') + g0 * f, inB, f', out, f, inB, f', inA, inB, out
-    DUP7  %increment_twice
+    DUP7  %add_const(2)
     // stack: inB1,    f , inB, G2 * sh2(f') + g0 * f, inB, f', out, f, inB, f', inA, inB, out
     %load_fp254_2
     // stack:  G1 ,    f , inB, G2 * sh2(f') + g0 * f, inB, f', out, f, inB, f', inA, inB, out
@@ -207,7 +207,7 @@ global mul_fp254_12_sparse:
     %stack (f: 6, x, g: 6) -> (g, x, f)
     // stack:                                    f' , inB, G2 * sh(f) + g0 * f', inA, inB, out
     DUP7
-    %increment_twice
+    %add_const(2)
     // stack:                           inB1,    f' , inB, G2 * sh(f) + g0 * f', inA, inB, out
     %load_fp254_2
     // stack:                            G1 ,    f' , inB, G2 * sh(f) + g0 * f', inA, inB, out

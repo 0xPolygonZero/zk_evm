@@ -18,7 +18,7 @@
     ADD
     // stack: c0 | (c1 << 8), addr
     DUP2
-    %increment_twice
+    %add_const(2)
     MLOAD_GENERAL
     %shl_const(16)
     ADD

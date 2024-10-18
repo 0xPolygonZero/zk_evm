@@ -3,7 +3,7 @@
 %macro scratch_space_addr_from_num_blocks
     // stack: num_blocks
     %mul_const(320)
-    %increment_twice
+    %add_const(2)
     %build_current_general_address
 %endmacro
 

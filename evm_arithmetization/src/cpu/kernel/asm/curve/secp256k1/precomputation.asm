@@ -65,7 +65,7 @@ precompute_table_loop_contd2:
 precompute_table_loop_contd3:
     %stack (Rx, Ry, i, retdest) -> (i, 24, Rx, i, 25, Ry, i, retdest)
     ADD %mstore_current(@SEGMENT_ECDSA_TABLE) ADD %mstore_current(@SEGMENT_ECDSA_TABLE)
-    %increment_twice
+    %add_const(2)
     DUP1 %eq_const(8) %jumpi(precompute_table_end)
     %jump(precompute_table_loop)
 

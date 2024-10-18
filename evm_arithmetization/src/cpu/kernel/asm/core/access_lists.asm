@@ -277,7 +277,7 @@ global insert_accessed_storage_keys:
 storage_key_found:
     // The address was already in the list
     // stack: pred_ptr, addr, key, retdest
-    %increment_twice
+    %add_const(2)
     %stack (value_ptr, addr, key, retdest) -> (retdest, 0, value_ptr) // Return 0 to indicate that the address was already present.
     JUMP
 
