@@ -226,7 +226,7 @@ where
 {
     macro_rules! prove_table {
         ($stark:ident, $table:expr) => {
-            if !OPTIONAL_TABLE_INDICES.contains(&$table) || table_in_use[*$table] {
+            if table_in_use[*$table] {
                 Some(timed!(
                     timing,
                     &format!("prove {} STARK", stringify!($stark)),

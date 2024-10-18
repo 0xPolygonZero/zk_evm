@@ -4,7 +4,7 @@ use std::fmt::Display;
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
-use log::{error, info};
+use log::error;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -587,27 +587,27 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let mut table_in_use = [true; NUM_TABLES];
     if state.traces.keccak_inputs.is_empty() && OPTIONAL_TABLE_INDICES.contains(&Table::Keccak) {
         assert!(OPTIONAL_TABLE_INDICES.contains(&Table::KeccakSponge));
-        info!("Keccak and KeccakSponge tables not in use");
+        log::debug!("Keccak and KeccakSponge tables not in use");
         table_in_use[*Table::Keccak] = false;
         table_in_use[*Table::KeccakSponge] = false;
     }
     if state.traces.logic_ops.is_empty() && OPTIONAL_TABLE_INDICES.contains(&Table::Logic) {
-        info!("Logic table not in use");
+        log::debug!("Logic table not in use");
         table_in_use[*Table::Logic] = false;
     }
     if state.traces.byte_packing_ops.is_empty()
         && OPTIONAL_TABLE_INDICES.contains(&Table::BytePacking)
     {
-        info!("BytePacking table not in use");
+        log::debug!("BytePacking table not in use");
         table_in_use[*Table::BytePacking] = false;
     }
     #[cfg(feature = "cdk_erigon")]
     if state.traces.poseidon_ops.is_empty() && OPTIONAL_TABLE_INDICES.contains(&Table::Poseidon) {
-        info!("Poseidon table not in use");
+        log::debug!("Poseidon table not in use");
         table_in_use[*Table::Poseidon] = false;
     }
 
-    let (tables, final_len) = timed!(
+    let tables = timed!(
         timing,
         "convert trace data to tables",
         state.traces.into_tables(
@@ -620,8 +620,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         )
     );
 
-    if final_len == 0 && OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
-        info!("MemAfter table not in use");
+    let is_last_segment =
+        segment_data.registers_after.program_counter == KERNEL.global_labels["halt"];
+    if is_last_segment && OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
+        log::debug!("MemAfter table not in use");
         table_in_use[*MemAfter] = false;
     }
 
