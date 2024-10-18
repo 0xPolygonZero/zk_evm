@@ -235,8 +235,8 @@ pub fn segment_with_empty_tables() -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use crate::logic;
     use super::*;
+    use crate::logic;
 
     // Ensures that there are no Keccak and Logic ops in the segment.
     #[test]
