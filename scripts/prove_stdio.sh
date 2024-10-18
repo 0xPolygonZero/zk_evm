@@ -1,6 +1,6 @@
 #!/bin/bash
 # ------------------------------------------------------------------------------
-set -ex
+set -x
 
 # Run prover with the parsed input from the standard terminal.
 # To generate the json input file, use the `rpc` tool, for example:

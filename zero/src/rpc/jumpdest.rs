@@ -169,7 +169,10 @@ pub(crate) fn generate_jumpdest_table<'a>(
             tx_hash = ?tx.hash,
             ?code_hash,
             ctx,
-            entry.pc,
+            pc = entry.pc,
+            pc_hex = format!("{:08x?}", entry.pc),
+            gas = entry.gas,
+            gas_cost = entry.gas_cost,
             op,
             ?entry,
         );

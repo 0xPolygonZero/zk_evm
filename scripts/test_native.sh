@@ -203,24 +203,41 @@ ROUND7="
 19466034
 "
 
+ROUND8="
+19657436
+19508991
+19500774
+19794433
+"
+
 CANCUN=19426587
 TIP=`cast block-number --rpc-url $RPC`
-STATICTIP=20721266
+STATICTIP=20978815
 NUMRANDOMBLOCKS=1000
 RANDOMBLOCKS=`shuf --input-range=$CANCUN-$TIP -n $NUMRANDOMBLOCKS | sort`
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
 
 GITHASH=`git rev-parse --short HEAD`
 echo "Testing against mainnet, current revision: $GITHASH."
 
 #BLOCKS="$CANCUNBLOCKS $RANDOMBLOCKS $ROUND3"
-#BLOCKS="19511272"
-BLOCKS="$ROUND7"
+#BLOCKS="$RANDOMBLOCKS"
+BLOCKS="$ROUND8"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 echo "Testing blocks: $BLOCKS"
 
 echo "Testing:  $BLOCKS"
-printf "\n\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a witnesses/native_results.txt
-echo       "---------------------------------------------------------------------------------------"   | tee -a witnesses/native_results.txt
+
+printf "\n\nr\n" | tee -a witnesses/native_results.txt
+echo "0 is success" | tee -a witnesses/native_results.txt
+echo "5 [defect] is non-matching jumpdest tables" | tee -a witnesses/native_results.txt
+echo "1 [unexpected] is other errors" | tee -a witnesses/native_results.txt
+echo "4 [expected] is Attempted to collapse an extension node" | tee -a witnesses/native_results.txt
+echo "6 [expected] is empty witness. Usually due to Error: Failed to get proof for account" | tee -a witnesses/native_results.txt
+echo "Report started: $(date)" | tee -a witnesses/native_results.txt
+printf "\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a witnesses/native_results.txt
+echo   "---------------------------------------------------------------------------------------"    | tee -a witnesses/native_results.txt
 
 for BLOCK in $BLOCKS; do
   TOTALTIME=0
@@ -229,12 +246,14 @@ for BLOCK in $BLOCKS; do
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
   SECONDS=0
-  nice -19 cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native --jumpdest-src client-fetched-structlogs fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  nice -19 cargo run --quiet --release --bin rpc -- --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type native --jumpdest-src client-fetched-structlogs --timeout 600 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_RPC=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
   TXNONE=`grep '"jumpdest_table": null' $WITNESS | wc -l`
   TXOK=`echo -n $(($TXALL - $TXNONE))`
+  TEST_OUT_PATH="${REPO_ROOT}/$BLOCK.test.out"
+  #rm $TEST_OUT_PATH
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
