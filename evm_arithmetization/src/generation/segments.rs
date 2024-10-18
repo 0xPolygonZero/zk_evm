@@ -1,6 +1,8 @@
 //! Module defining the logic around proof segmentation into chunks,
 //! which allows what is commonly known as zk-continuations.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -9,8 +11,9 @@ use super::TrimmedGenerationInputs;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::State;
-use crate::generation::{debug_inputs, GenerationInputs};
+use crate::generation::{collect_debug_tries, debug_inputs, ErrorWithTries, GenerationInputs};
 use crate::witness::memory::MemoryState;
+use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
 
 /// Structure holding the data needed to initialize a segment.
@@ -29,6 +32,8 @@ pub struct GenerationSegmentData {
     pub(crate) extra_data: ExtraSegmentData,
     /// Log of the maximal cpu length.
     pub(crate) max_cpu_len_log: Option<usize>,
+    /// Counts the number of appearances of each opcode. For debugging purposes.
+    pub(crate) opcode_counts: HashMap<Operation, usize>,
 }
 
 impl GenerationSegmentData {
@@ -75,9 +80,10 @@ fn build_segment_data<F: RichField>(
             trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
-            accounts: interpreter.generation_state.accounts_pointers.clone(),
-            storage: interpreter.generation_state.storage_pointers.clone(),
+            access_lists_ptrs: interpreter.generation_state.access_lists_ptrs.clone(),
+            state_ptrs: interpreter.generation_state.state_ptrs.clone(),
         },
+        opcode_counts: interpreter.opcode_count.clone(),
     }
 }
 
@@ -131,8 +137,10 @@ pub struct SegmentDataIterator<F: RichField> {
 pub type SegmentRunResult = Option<Box<(GenerationSegmentData, Option<GenerationSegmentData>)>>;
 
 #[derive(thiserror::Error, Debug, Serialize, Deserialize)]
-#[error("{}", .0)]
-pub struct SegmentError(pub String);
+#[error("{}", .message)]
+pub struct SegmentError {
+    pub message: String,
+}
 
 impl<F: RichField> SegmentDataIterator<F> {
     pub fn new(inputs: &GenerationInputs<F>, max_cpu_len_log: Option<usize>) -> Self {
@@ -156,7 +164,7 @@ impl<F: RichField> SegmentDataIterator<F> {
     fn generate_next_segment(
         &mut self,
         partial_segment_data: Option<GenerationSegmentData>,
-    ) -> Result<SegmentRunResult, SegmentError> {
+    ) -> Result<SegmentRunResult, ErrorWithTries<SegmentError>> {
         // Get the (partial) current segment data, if it is provided. Otherwise,
         // initialize it.
         let mut segment_data = if let Some(partial) = partial_segment_data {
@@ -174,10 +182,14 @@ impl<F: RichField> SegmentDataIterator<F> {
 
         let segment_index = segment_data.segment_index;
 
+        // Reset opcode counts before executing the segment
+        self.interpreter.reset_opcode_counts();
+
         // Run the interpreter to get `registers_after` and the partial data for the
         // next segment.
-        let run = set_registers_and_run(segment_data.registers_after, &mut self.interpreter);
-        if let Ok((updated_registers, mem_after)) = run {
+        let execution_result =
+            set_registers_and_run(segment_data.registers_after, &mut self.interpreter);
+        if let Ok((updated_registers, mem_after)) = execution_result {
             let partial_segment_data = Some(build_segment_data(
                 segment_index + 1,
                 Some(updated_registers),
@@ -187,6 +199,8 @@ impl<F: RichField> SegmentDataIterator<F> {
             ));
 
             segment_data.registers_after = updated_registers;
+            segment_data.opcode_counts = self.interpreter.opcode_count.clone();
+
             Ok(Some(Box::new((segment_data, partial_segment_data))))
         } else {
             let inputs = &self.interpreter.get_generation_state().inputs;
@@ -200,21 +214,28 @@ impl<F: RichField> SegmentDataIterator<F> {
                     inputs.txn_number_before + inputs.txn_hashes.len()
                 ),
             };
-            let s = format!(
-                "Segment generation {:?} for block {:?} ({}) failed with error {:?}",
-                segment_index,
-                block,
-                txn_range,
-                run.unwrap_err()
-            );
-            Err(SegmentError(s))
+            // In case of the error, return tries as part of the error for easier debugging.
+            Err(ErrorWithTries::new(
+                SegmentError {
+                    message: format!(
+                        "Segment generation {:?} for block:{} batch:{} tx_range:({}) failed with error {:?}",
+                        segment_index,
+                        block.low_u64(),
+                        segment_index,
+                        txn_range,
+                        execution_result.unwrap_err()
+                    ),
+                },
+                collect_debug_tries(self.interpreter.get_generation_state()),
+            ))
         }
     }
 }
 
 /// Returned type from a `SegmentDataIterator`, needed to prove all segments in
 /// a transaction batch.
-pub type AllData<F> = Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), SegmentError>;
+pub type AllData<F> =
+    Result<(TrimmedGenerationInputs<F>, GenerationSegmentData), ErrorWithTries<SegmentError>>;
 
 impl<F: RichField> Iterator for SegmentDataIterator<F> {
     type Item = AllData<F>;

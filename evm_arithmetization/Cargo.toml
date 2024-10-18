@@ -15,47 +15,50 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
-bytes = { workspace = true }
-env_logger = { workspace = true }
-ethereum-types = { workspace = true }
+anyhow.workspace = true
+bytes.workspace = true
+env_logger.workspace = true
+ethereum-types.workspace = true
+hashbrown.workspace = true
 hex = { workspace = true, optional = true }
-hex-literal = { workspace = true }
-itertools = { workspace = true }
-keccak-hash = { workspace = true }
-log = { workspace = true }
-plonky2_maybe_rayon = { workspace = true, features = ["parallel"] }
-num = { workspace = true }
-num-bigint = { workspace = true }
-once_cell = { workspace = true }
-pest = { workspace = true }
-pest_derive = { workspace = true }
+hex-literal.workspace = true
+itertools.workspace = true
+keccak-hash.workspace = true
+line-index = "0.1.1"
+log.workspace = true
+mpt_trie.workspace = true
+num.workspace = true
+num-bigint.workspace = true
+once_cell.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
 plonky2 = { workspace = true, features = ["parallel"] }
-plonky2_util = { workspace = true }
-starky = { workspace = true, features = ["parallel"] }
-rand = { workspace = true }
-rand_chacha = { workspace = true }
-rlp = { workspace = true }
-rlp-derive = { workspace = true }
+plonky2_maybe_rayon = { workspace = true, features = ["parallel"] }
+plonky2_util.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+rlp.workspace = true
+rlp-derive.workspace = true
 serde = { workspace = true, features = ["derive"] }
-sha2 = { workspace = true }
-static_assertions = { workspace = true }
-hashbrown = { workspace = true }
-thiserror = { workspace = true }
-tiny-keccak = { workspace = true }
-serde_json = { workspace = true }
-serde-big-array = { workspace = true }
-
-# Local dependencies
-mpt_trie = { workspace = true }
+serde-big-array.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 smt_trie = { workspace = true, optional = true }
-zk_evm_common = { workspace = true }
-zk_evm_proc_macro = { workspace = true }
+starky = { workspace = true, features = ["parallel"] }
+static_assertions.workspace = true
+thiserror.workspace = true
+tiny-keccak.workspace = true
+tokio.workspace = true
+tower-lsp = "0.20.0"
+tracing.workspace = true
+url.workspace = true
+zk_evm_common.workspace = true
+zk_evm_proc_macro.workspace = true
 
 [dev-dependencies]
-criterion = { workspace = true }
-hex = { workspace = true }
-ripemd = { workspace = true }
+criterion.workspace = true
+hex.workspace = true
+ripemd.workspace = true
 
 [features]
 asmtools = ["hex"]

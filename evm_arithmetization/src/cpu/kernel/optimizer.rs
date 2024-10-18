@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use ethereum_types::U256;
 use Item::{Push, StandardOp};
 use PushTarget::Literal;
@@ -10,6 +12,7 @@ use crate::cpu::kernel::utils::{replace_windows, u256_from_bool};
 
 pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
     // Run the optimizer until nothing changes.
+    let before = code.len();
     loop {
         let old_code = code.clone();
         optimize_asm_once(code);
@@ -17,6 +20,13 @@ pub(crate) fn optimize_asm(code: &mut Vec<Item>) {
             break;
         }
     }
+    let after = code.len();
+    log::trace!(
+        "Assembly optimizer: {}->{} ({}%).",
+        before,
+        after,
+        100 * after / max(1, before)
+    );
 }
 
 /// A single optimization pass.
@@ -27,6 +37,7 @@ fn optimize_asm_once(code: &mut Vec<Item>) {
     remove_swapped_pushes(code);
     remove_swaps_commutative(code);
     remove_ignored_values(code);
+    de_morgan(code);
 }
 
 /// Constant propagation.
@@ -142,15 +153,55 @@ fn remove_swaps_commutative(code: &mut Vec<Item>) {
 // Could be extended to other non-side-effecting operations, e.g. [DUP1, ADD,
 // POP] -> [POP].
 fn remove_ignored_values(code: &mut Vec<Item>) {
-    replace_windows(code, |[a, b]| {
-        if let StandardOp(pop) = b
-            && &pop == "POP"
+    replace_windows(code, |window| {
+        if let [a, StandardOp(pop)] = window
+            && is_push_or_dup(&a)
+            && pop == "POP"
         {
-            match a {
-                Push(_) => Some(vec![]),
-                StandardOp(dup) if dup.starts_with("DUP") => Some(vec![]),
-                _ => None,
-            }
+            Some(vec![])
+        } else {
+            None
+        }
+    });
+}
+
+/// Helper predicate for the De Morgan rules.
+fn is_push_or_dup(op: &Item) -> bool {
+    if matches!(&op, &Push(_)) {
+        return true;
+    };
+    if let StandardOp(inner) = op
+        && inner.starts_with("DUP")
+    {
+        return true;
+    }
+    false
+}
+
+/// De Morgan's First Law: `(not A) and (not B) = not (A or B)`.
+/// e.g. `[PUSH a, NOT, PUSH b, NOT, AND] -> [PUSH a, PUSH b, OR, NOT]`.
+/// De Morgan's Second Law: `(not A) or (not B) = not (A and B)`.
+/// e.g. `[PUSH a, NOT, PUSH b, NOT, OR] -> [PUSH a, PUSH b, AND, NOT]`.
+/// This also handles `DUP` operations.
+fn de_morgan(code: &mut Vec<Item>) {
+    replace_windows(code, |window| {
+        if let [op0, StandardOp(op1), op2, StandardOp(op3), StandardOp(op4)] = window
+            && is_push_or_dup(&op0)
+            && op1 == "NOT"
+            && is_push_or_dup(&op2)
+            && op3 == "NOT"
+            && (op4 == "AND" || op4 == "OR")
+        {
+            Some(vec![
+                op0,
+                op2,
+                if op4 == "AND" {
+                    StandardOp("OR".into())
+                } else {
+                    StandardOp("AND".into())
+                },
+                StandardOp("NOT".into()),
+            ])
         } else {
             None
         }
@@ -284,5 +335,45 @@ mod tests {
         let mut code = vec![StandardOp("DUP5".into()), StandardOp("POP".into())];
         remove_ignored_values(&mut code);
         assert_eq!(code, vec![]);
+    }
+
+    #[test]
+    fn test_demorgan1() {
+        let mut before = vec![
+            Push(Literal(3.into())),
+            StandardOp("NOT".into()),
+            StandardOp("DUP1".into()),
+            StandardOp("NOT".into()),
+            StandardOp("AND".into()),
+        ];
+        let after = vec![
+            Push(Literal(3.into())),
+            StandardOp("DUP1".into()),
+            StandardOp("OR".into()),
+            StandardOp("NOT".into()),
+        ];
+        assert!(is_code_improved(&before, &after));
+        de_morgan(&mut before);
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn test_demorgan2() {
+        let mut before = vec![
+            Push(Literal(3.into())),
+            StandardOp("NOT".into()),
+            Push(Literal(8.into())),
+            StandardOp("NOT".into()),
+            StandardOp("OR".into()),
+        ];
+        let after = vec![
+            Push(Literal(3.into())),
+            Push(Literal(8.into())),
+            StandardOp("AND".into()),
+            StandardOp("NOT".into()),
+        ];
+        assert!(is_code_improved(&before, &after));
+        de_morgan(&mut before);
+        assert_eq!(before, after);
     }
 }

@@ -10,5 +10,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-alloy = { workspace = true }
-__compat_primitive_types = { workspace = true }
+__compat_primitive_types.workspace = true
+alloy.workspace = true

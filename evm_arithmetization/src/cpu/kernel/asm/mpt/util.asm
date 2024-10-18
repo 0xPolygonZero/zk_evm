@@ -53,13 +53,14 @@
     // stack: num_nibbles, key
     %decrement // num_nibbles -= 1
     // stack: num_nibbles, key
-    DUP2
-    // stack: key, num_nibbles, key
-    DUP2 %mul_const(4)
-    // stack: num_nibbles_x4, key, num_nibbles, key
+    PUSH 0x10
+    DUP3
+    // stack: key, nibbles_mod, num_nibbles, key
+    DUP3 %mul_const(4)
+    // stack: num_nibbles_x4, key, nibbles_mod, num_nibbles, key
     SHR
-    // stack: key >> num_nibbles_x4, num_nibbles, key
-    %and_const(0xF)
+    // stack: key >> num_nibbles_x4, nibbles_mod, num_nibbles, key
+    MOD
     // stack: first_nibble, num_nibbles, key
     DUP1
     // stack: first_nibble, first_nibble, num_nibbles, key
@@ -141,9 +142,9 @@
     DUP3 DUP6 MUL ISZERO %jumpi(%%return)
 
     // first_nib_2 = (key_2 >> (bits_2 - 4)) & 0xF
-    DUP6 PUSH 4 DUP7 SUB SHR %and_const(0xF)
+    PUSH 0x10 DUP7 PUSH 4 DUP8 SUB SHR MOD
     // first_nib_1 = (key_1 >> (bits_1 - 4)) & 0xF
-    DUP5 PUSH 4 DUP6 SUB SHR %and_const(0xF)
+    PUSH 0x10 DUP6 PUSH 4 DUP7 SUB SHR MOD
     // stack: first_nib_1, first_nib_2, len_common, key_common, bits_1, key_1, bits_2, key_2
 
     // if first_nib_1 != first_nib_2: break

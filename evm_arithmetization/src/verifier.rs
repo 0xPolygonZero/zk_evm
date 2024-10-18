@@ -1,27 +1,15 @@
-use anyhow::{ensure, Result};
-use ethereum_types::{BigEndianHash, U256};
-use itertools::Itertools;
+use ethereum_types::U256;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
-use plonky2::plonk::config::{GenericConfig, GenericHashOut};
+use plonky2::plonk::config::GenericConfig;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
-use starky::config::StarkConfig;
-use starky::cross_table_lookup::{get_ctl_vars_from_proofs, verify_cross_table_lookups};
-use starky::lookup::GrandProductChallenge;
-use starky::stark::Stark;
-use starky::verifier::verify_stark_proof_with_challenges;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
-use crate::memory::VALUE_LIMBS;
-use crate::proof::{AllProof, AllProofChallenges, PublicValues};
-use crate::util::h2u;
 
 pub(crate) fn initial_memory_merkle_cap<
     F: RichField + Extendable<D>,
@@ -89,328 +77,421 @@ pub(crate) fn initial_memory_merkle_cap<
     .cap
 }
 
-fn verify_initial_memory<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    const D: usize,
->(
-    public_values: &PublicValues<F>,
-    config: &StarkConfig,
-) -> Result<()> {
-    for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
-        config.fri_config.rate_bits,
-        config.fri_config.cap_height,
-    )
-    .0
-    .iter()
-    .zip(public_values.mem_before.mem_cap.iter())
-    {
-        for (&limb1, limb2) in hash1.to_vec().iter().zip(hash2) {
-            ensure!(
-                limb1 == F::from_canonical_u64(limb2.as_u64()),
-                anyhow::Error::msg("Invalid initial MemBefore Merkle cap.")
-            );
+pub mod testing {
+    use anyhow::{ensure, Result};
+    use ethereum_types::{BigEndianHash, U256};
+    use itertools::Itertools;
+    use plonky2::field::extension::Extendable;
+    use plonky2::hash::hash_types::RichField;
+    use plonky2::plonk::config::{GenericConfig, GenericHashOut};
+    use starky::config::StarkConfig;
+    use starky::cross_table_lookup::verify_cross_table_lookups;
+    use starky::cross_table_lookup::CrossTableLookup;
+    use starky::cross_table_lookup::CtlCheckVars;
+    use starky::lookup::GrandProductChallenge;
+    use starky::stark::Stark;
+    use starky::verifier::verify_stark_proof_with_challenges;
+
+    use crate::all_stark::Table;
+    use crate::cpu::kernel::aggregator::KERNEL;
+    use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+    use crate::get_challenges::testing::AllProofChallenges;
+    use crate::memory::segments::Segment;
+    use crate::memory::VALUE_LIMBS;
+    use crate::proof::PublicValues;
+    use crate::proof::*;
+    use crate::util::h2u;
+    use crate::verifier::initial_memory_merkle_cap;
+    use crate::{AllStark, NUM_TABLES};
+
+    impl<F: RichField + Extendable<D>, const D: usize> AllStark<F, D> {
+        pub(crate) fn num_lookups_helper_columns(
+            &self,
+            config: &StarkConfig,
+        ) -> [usize; NUM_TABLES] {
+            [
+                self.arithmetic_stark.num_lookup_helper_columns(config),
+                self.byte_packing_stark.num_lookup_helper_columns(config),
+                self.cpu_stark.num_lookup_helper_columns(config),
+                self.keccak_stark.num_lookup_helper_columns(config),
+                self.keccak_sponge_stark.num_lookup_helper_columns(config),
+                self.logic_stark.num_lookup_helper_columns(config),
+                self.memory_stark.num_lookup_helper_columns(config),
+                self.mem_before_stark.num_lookup_helper_columns(config),
+                self.mem_after_stark.num_lookup_helper_columns(config),
+                #[cfg(feature = "cdk_erigon")]
+                self.poseidon_stark.num_lookup_helper_columns(config),
+            ]
         }
     }
 
-    Ok(())
-}
+    fn verify_initial_memory<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
+        public_values: &PublicValues<F>,
+        config: &StarkConfig,
+    ) -> Result<()> {
+        for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
+            config.fri_config.rate_bits,
+            config.fri_config.cap_height,
+        )
+        .0
+        .iter()
+        .zip(public_values.mem_before.mem_cap.iter())
+        {
+            for (&limb1, limb2) in hash1.to_vec().iter().zip(hash2) {
+                ensure!(
+                    limb1 == F::from_canonical_u64(limb2.as_u64()),
+                    anyhow::Error::msg("Invalid initial MemBefore Merkle cap.")
+                );
+            }
+        }
 
-fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
-    all_stark: &AllStark<F, D>,
-    all_proof: AllProof<F, C, D>,
-    config: &StarkConfig,
-    is_initial: bool,
-) -> Result<()> {
-    let AllProofChallenges {
-        stark_challenges,
-        ctl_challenges,
-    } = all_proof
-        .get_challenges(config)
-        .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
+        Ok(())
+    }
 
-    let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
+    pub fn verify_proof<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
+        all_stark: &AllStark<F, D>,
+        all_proof: AllProof<F, C, D>,
+        config: &StarkConfig,
+        is_initial: bool,
+    ) -> Result<()> {
+        let AllProofChallenges {
+            stark_challenges,
+            ctl_challenges,
+        } = all_proof
+            .get_challenges(config)
+            .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
 
-    let AllStark {
-        arithmetic_stark,
-        byte_packing_stark,
-        cpu_stark,
-        keccak_stark,
-        keccak_sponge_stark,
-        logic_stark,
-        memory_stark,
-        mem_before_stark,
-        mem_after_stark,
+        let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
+
+        let AllStark {
+            arithmetic_stark,
+            byte_packing_stark,
+            cpu_stark,
+            keccak_stark,
+            keccak_sponge_stark,
+            logic_stark,
+            memory_stark,
+            mem_before_stark,
+            mem_after_stark,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_stark,
+            cross_table_lookups,
+        } = all_stark;
+
+        let stark_proofs = &all_proof.multi_proof.stark_proofs;
+
+        macro_rules! verify_table {
+            ($stark:ident, $table:expr) => {
+                let stark_proof = &stark_proofs[*$table]
+                    .as_ref()
+                    .expect("Missing stark_proof")
+                    .proof;
+                let ctl_vars = {
+                    let (total_num_helpers, _, num_helpers_by_ctl) =
+                        CrossTableLookup::num_ctl_helpers_zs_all(
+                            &all_stark.cross_table_lookups,
+                            *$table,
+                            config.num_challenges,
+                            $stark.constraint_degree(),
+                        );
+                    CtlCheckVars::from_proof(
+                        *$table,
+                        &stark_proof,
+                        &all_stark.cross_table_lookups,
+                        &ctl_challenges,
+                        num_lookup_columns[*$table],
+                        total_num_helpers,
+                        &num_helpers_by_ctl,
+                    )
+                };
+                verify_stark_proof_with_challenges(
+                    $stark,
+                    stark_proof,
+                    &stark_challenges[*$table]
+                        .as_ref()
+                        .expect("Missing challenges"),
+                    Some(&ctl_vars),
+                    &[],
+                    config,
+                )?;
+            };
+        }
+
+        verify_table!(arithmetic_stark, Table::Arithmetic);
+        verify_table!(byte_packing_stark, Table::BytePacking);
+        verify_table!(cpu_stark, Table::Cpu);
+        if all_proof.use_keccak_tables {
+            verify_table!(keccak_stark, Table::Keccak);
+            verify_table!(keccak_sponge_stark, Table::KeccakSponge);
+        }
+        verify_table!(logic_stark, Table::Logic);
+        verify_table!(memory_stark, Table::Memory);
+        verify_table!(mem_before_stark, Table::MemBefore);
+        verify_table!(mem_after_stark, Table::MemAfter);
+
         #[cfg(feature = "cdk_erigon")]
-        poseidon_stark,
-        cross_table_lookups,
-    } = all_stark;
+        verify_table!(poseidon_stark, Table::Poseidon);
 
-    let ctl_vars_per_table = get_ctl_vars_from_proofs(
-        &all_proof.multi_proof,
-        cross_table_lookups,
-        &ctl_challenges,
-        &num_lookup_columns,
-        all_stark.arithmetic_stark.constraint_degree(),
-    );
+        let public_values = all_proof.public_values;
 
-    let stark_proofs = &all_proof.multi_proof.stark_proofs;
+        // Verify shift table and kernel code.
+        if is_initial {
+            verify_initial_memory::<F, C, D>(&public_values, config)?;
+        }
 
-    macro_rules! verify_table {
-        ($stark:ident, $table:expr) => {
-            verify_stark_proof_with_challenges(
-                $stark,
-                &stark_proofs[*$table].proof,
-                &stark_challenges[*$table],
-                Some(&ctl_vars_per_table[*$table]),
-                &[],
-                config,
-            )?;
-        };
+        // Extra sums to add to the looked last value.
+        // Only necessary for the Memory values.
+        let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
+
+        // Memory
+        extra_looking_sums[*Table::Memory] = (0..config.num_challenges)
+            .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
+            .collect_vec();
+
+        let all_ctls = &all_stark.cross_table_lookups;
+
+        verify_cross_table_lookups::<F, D, NUM_TABLES>(
+            cross_table_lookups,
+            core::array::from_fn(|i| {
+                if let Some(stark_proof) = &stark_proofs[i] {
+                    stark_proof
+                        .proof
+                        .openings
+                        .ctl_zs_first
+                        .as_ref()
+                        .expect("Missing ctl_zs")
+                        .clone()
+                } else if i == *Table::Keccak {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::Keccak,
+                        config.num_challenges,
+                        keccak_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else if i == *Table::KeccakSponge {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::KeccakSponge,
+                        config.num_challenges,
+                        keccak_sponge_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else {
+                    panic!("Unable to find stark_proof");
+                }
+            }),
+            Some(&extra_looking_sums),
+            config,
+        )
     }
 
-    verify_table!(arithmetic_stark, Table::Arithmetic);
-    verify_table!(byte_packing_stark, Table::BytePacking);
-    verify_table!(cpu_stark, Table::Cpu);
-    verify_table!(keccak_stark, Table::Keccak);
-    verify_table!(keccak_sponge_stark, Table::KeccakSponge);
-    verify_table!(logic_stark, Table::Logic);
-    verify_table!(memory_stark, Table::Memory);
-    verify_table!(mem_before_stark, Table::MemBefore);
-    verify_table!(mem_after_stark, Table::MemAfter);
+    /// Computes the extra product to multiply to the looked value. It contains
+    /// memory operations not in the CPU trace:
+    /// - block metadata writes,
+    /// - trie roots writes.
+    pub(crate) fn get_memory_extra_looking_sum<F, const D: usize>(
+        public_values: &PublicValues<F>,
+        challenge: GrandProductChallenge<F>,
+    ) -> F
+    where
+        F: RichField + Extendable<D>,
+    {
+        let mut sum = F::ZERO;
 
-    #[cfg(feature = "cdk_erigon")]
-    verify_table!(poseidon_stark, Table::Poseidon);
+        // Add metadata and tries writes.
+        let fields = [
+            (
+                GlobalMetadata::BlockBeneficiary,
+                U256::from_big_endian(&public_values.block_metadata.block_beneficiary.0),
+            ),
+            #[cfg(feature = "cdk_erigon")]
+            (
+                GlobalMetadata::BurnAddr,
+                public_values
+                    .burn_addr
+                    .expect("There should be an address set in cdk_erigon."),
+            ),
+            (
+                GlobalMetadata::BlockTimestamp,
+                public_values.block_metadata.block_timestamp,
+            ),
+            (
+                GlobalMetadata::BlockNumber,
+                public_values.block_metadata.block_number,
+            ),
+            (
+                GlobalMetadata::BlockRandom,
+                public_values.block_metadata.block_random.into_uint(),
+            ),
+            (
+                GlobalMetadata::BlockDifficulty,
+                public_values.block_metadata.block_difficulty,
+            ),
+            (
+                GlobalMetadata::BlockGasLimit,
+                public_values.block_metadata.block_gaslimit,
+            ),
+            (
+                GlobalMetadata::BlockChainId,
+                public_values.block_metadata.block_chain_id,
+            ),
+            (
+                GlobalMetadata::BlockBaseFee,
+                public_values.block_metadata.block_base_fee,
+            ),
+            #[cfg(feature = "eth_mainnet")]
+            (
+                GlobalMetadata::ParentBeaconBlockRoot,
+                h2u(public_values.block_metadata.parent_beacon_block_root),
+            ),
+            (
+                GlobalMetadata::BlockCurrentHash,
+                h2u(public_values.block_hashes.cur_hash),
+            ),
+            (
+                GlobalMetadata::BlockGasUsed,
+                public_values.block_metadata.block_gas_used,
+            ),
+            #[cfg(feature = "eth_mainnet")]
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                public_values.block_metadata.block_blob_gas_used,
+            ),
+            #[cfg(feature = "eth_mainnet")]
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                public_values.block_metadata.block_excess_blob_gas,
+            ),
+            (
+                GlobalMetadata::TxnNumberBefore,
+                public_values.extra_block_data.txn_number_before,
+            ),
+            (
+                GlobalMetadata::TxnNumberAfter,
+                public_values.extra_block_data.txn_number_after,
+            ),
+            (
+                GlobalMetadata::BlockGasUsedBefore,
+                public_values.extra_block_data.gas_used_before,
+            ),
+            (
+                GlobalMetadata::BlockGasUsedAfter,
+                public_values.extra_block_data.gas_used_after,
+            ),
+            (
+                GlobalMetadata::StateTrieRootDigestBefore,
+                h2u(public_values.trie_roots_before.state_root),
+            ),
+            (
+                GlobalMetadata::TransactionTrieRootDigestBefore,
+                h2u(public_values.trie_roots_before.transactions_root),
+            ),
+            (
+                GlobalMetadata::ReceiptTrieRootDigestBefore,
+                h2u(public_values.trie_roots_before.receipts_root),
+            ),
+            (
+                GlobalMetadata::StateTrieRootDigestAfter,
+                h2u(public_values.trie_roots_after.state_root),
+            ),
+            (
+                GlobalMetadata::TransactionTrieRootDigestAfter,
+                h2u(public_values.trie_roots_after.transactions_root),
+            ),
+            (
+                GlobalMetadata::ReceiptTrieRootDigestAfter,
+                h2u(public_values.trie_roots_after.receipts_root),
+            ),
+            (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
+            (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
+        ];
 
-    let public_values = all_proof.public_values;
+        let segment = F::from_canonical_usize(Segment::GlobalMetadata.unscale());
 
-    // Verify shift table and kernel code.
-    if is_initial {
-        verify_initial_memory::<F, C, D>(&public_values, config)?;
+        fields.map(|(field, val)| {
+            // These fields are already scaled by their segment, and are in context 0
+            // (kernel).
+            sum = add_data_write(challenge, segment, sum, field.unscale(), val)
+        });
+
+        // Add block bloom writes.
+        let bloom_segment = F::from_canonical_usize(Segment::GlobalBlockBloom.unscale());
+        for index in 0..8 {
+            let val = public_values.block_metadata.block_bloom[index];
+            sum = add_data_write(challenge, bloom_segment, sum, index, val);
+        }
+
+        // Add Blockhashes writes.
+        let block_hashes_segment = F::from_canonical_usize(Segment::BlockHashes.unscale());
+        for index in 0..256 {
+            let val = h2u(public_values.block_hashes.prev_hashes[index]);
+            sum = add_data_write(challenge, block_hashes_segment, sum, index, val);
+        }
+
+        let registers_segment = F::from_canonical_usize(Segment::RegistersStates.unscale());
+        let registers_before = [
+            public_values.registers_before.program_counter,
+            public_values.registers_before.is_kernel,
+            public_values.registers_before.stack_len,
+            public_values.registers_before.stack_top,
+            public_values.registers_before.context,
+            public_values.registers_before.gas_used,
+        ];
+        for i in 0..registers_before.len() {
+            sum = add_data_write(challenge, registers_segment, sum, i, registers_before[i]);
+        }
+        let registers_after = [
+            public_values.registers_after.program_counter,
+            public_values.registers_after.is_kernel,
+            public_values.registers_after.stack_len,
+            public_values.registers_after.stack_top,
+            public_values.registers_after.context,
+            public_values.registers_after.gas_used,
+        ];
+        for i in 0..registers_before.len() {
+            sum = add_data_write(
+                challenge,
+                registers_segment,
+                sum,
+                registers_before.len() + i,
+                registers_after[i],
+            );
+        }
+
+        sum
     }
 
-    // Extra sums to add to the looked last value.
-    // Only necessary for the Memory values.
-    let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
+    fn add_data_write<F, const D: usize>(
+        challenge: GrandProductChallenge<F>,
+        segment: F,
+        running_sum: F,
+        index: usize,
+        val: U256,
+    ) -> F
+    where
+        F: RichField + Extendable<D>,
+    {
+        let mut row = [F::ZERO; 13];
+        row[0] = F::ZERO; // is_read
+        row[1] = F::ZERO; // context
+        row[2] = segment;
+        row[3] = F::from_canonical_usize(index);
 
-    // Memory
-    extra_looking_sums[*Table::Memory] = (0..config.num_challenges)
-        .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
-        .collect_vec();
-
-    verify_cross_table_lookups::<F, D, NUM_TABLES>(
-        cross_table_lookups,
-        all_proof
-            .multi_proof
-            .stark_proofs
-            .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
-        Some(&extra_looking_sums),
-        config,
-    )
-}
-
-/// Computes the extra product to multiply to the looked value. It contains
-/// memory operations not in the CPU trace:
-/// - block metadata writes,
-/// - trie roots writes.
-pub(crate) fn get_memory_extra_looking_sum<F, const D: usize>(
-    public_values: &PublicValues<F>,
-    challenge: GrandProductChallenge<F>,
-) -> F
-where
-    F: RichField + Extendable<D>,
-{
-    let mut sum = F::ZERO;
-
-    // Add metadata and tries writes.
-    let fields = [
-        (
-            GlobalMetadata::BlockBeneficiary,
-            U256::from_big_endian(&public_values.block_metadata.block_beneficiary.0),
-        ),
-        #[cfg(feature = "cdk_erigon")]
-        (
-            GlobalMetadata::BurnAddr,
-            public_values
-                .burn_addr
-                .expect("There should be an address set in cdk_erigon."),
-        ),
-        (
-            GlobalMetadata::BlockTimestamp,
-            public_values.block_metadata.block_timestamp,
-        ),
-        (
-            GlobalMetadata::BlockNumber,
-            public_values.block_metadata.block_number,
-        ),
-        (
-            GlobalMetadata::BlockRandom,
-            public_values.block_metadata.block_random.into_uint(),
-        ),
-        (
-            GlobalMetadata::BlockDifficulty,
-            public_values.block_metadata.block_difficulty,
-        ),
-        (
-            GlobalMetadata::BlockGasLimit,
-            public_values.block_metadata.block_gaslimit,
-        ),
-        (
-            GlobalMetadata::BlockChainId,
-            public_values.block_metadata.block_chain_id,
-        ),
-        (
-            GlobalMetadata::BlockBaseFee,
-            public_values.block_metadata.block_base_fee,
-        ),
-        #[cfg(feature = "eth_mainnet")]
-        (
-            GlobalMetadata::ParentBeaconBlockRoot,
-            h2u(public_values.block_metadata.parent_beacon_block_root),
-        ),
-        (
-            GlobalMetadata::BlockCurrentHash,
-            h2u(public_values.block_hashes.cur_hash),
-        ),
-        (
-            GlobalMetadata::BlockGasUsed,
-            public_values.block_metadata.block_gas_used,
-        ),
-        #[cfg(feature = "eth_mainnet")]
-        (
-            GlobalMetadata::BlockBlobGasUsed,
-            public_values.block_metadata.block_blob_gas_used,
-        ),
-        #[cfg(feature = "eth_mainnet")]
-        (
-            GlobalMetadata::BlockExcessBlobGas,
-            public_values.block_metadata.block_excess_blob_gas,
-        ),
-        (
-            GlobalMetadata::TxnNumberBefore,
-            public_values.extra_block_data.txn_number_before,
-        ),
-        (
-            GlobalMetadata::TxnNumberAfter,
-            public_values.extra_block_data.txn_number_after,
-        ),
-        (
-            GlobalMetadata::BlockGasUsedBefore,
-            public_values.extra_block_data.gas_used_before,
-        ),
-        (
-            GlobalMetadata::BlockGasUsedAfter,
-            public_values.extra_block_data.gas_used_after,
-        ),
-        (
-            GlobalMetadata::StateTrieRootDigestBefore,
-            h2u(public_values.trie_roots_before.state_root),
-        ),
-        (
-            GlobalMetadata::TransactionTrieRootDigestBefore,
-            h2u(public_values.trie_roots_before.transactions_root),
-        ),
-        (
-            GlobalMetadata::ReceiptTrieRootDigestBefore,
-            h2u(public_values.trie_roots_before.receipts_root),
-        ),
-        (
-            GlobalMetadata::StateTrieRootDigestAfter,
-            h2u(public_values.trie_roots_after.state_root),
-        ),
-        (
-            GlobalMetadata::TransactionTrieRootDigestAfter,
-            h2u(public_values.trie_roots_after.transactions_root),
-        ),
-        (
-            GlobalMetadata::ReceiptTrieRootDigestAfter,
-            h2u(public_values.trie_roots_after.receipts_root),
-        ),
-        (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
-        (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
-    ];
-
-    let segment = F::from_canonical_usize(Segment::GlobalMetadata.unscale());
-
-    fields.map(|(field, val)| {
-        // These fields are already scaled by their segment, and are in context 0
-        // (kernel).
-        sum = add_data_write(challenge, segment, sum, field.unscale(), val)
-    });
-
-    // Add block bloom writes.
-    let bloom_segment = F::from_canonical_usize(Segment::GlobalBlockBloom.unscale());
-    for index in 0..8 {
-        let val = public_values.block_metadata.block_bloom[index];
-        sum = add_data_write(challenge, bloom_segment, sum, index, val);
+        for j in 0..VALUE_LIMBS {
+            row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
+        }
+        row[12] = F::TWO; // timestamp
+        running_sum + challenge.combine(row.iter()).inverse()
     }
-
-    // Add Blockhashes writes.
-    let block_hashes_segment = F::from_canonical_usize(Segment::BlockHashes.unscale());
-    for index in 0..256 {
-        let val = h2u(public_values.block_hashes.prev_hashes[index]);
-        sum = add_data_write(challenge, block_hashes_segment, sum, index, val);
-    }
-
-    let registers_segment = F::from_canonical_usize(Segment::RegistersStates.unscale());
-    let registers_before = [
-        public_values.registers_before.program_counter,
-        public_values.registers_before.is_kernel,
-        public_values.registers_before.stack_len,
-        public_values.registers_before.stack_top,
-        public_values.registers_before.context,
-        public_values.registers_before.gas_used,
-    ];
-    for i in 0..registers_before.len() {
-        sum = add_data_write(challenge, registers_segment, sum, i, registers_before[i]);
-    }
-    let registers_after = [
-        public_values.registers_after.program_counter,
-        public_values.registers_after.is_kernel,
-        public_values.registers_after.stack_len,
-        public_values.registers_after.stack_top,
-        public_values.registers_after.context,
-        public_values.registers_after.gas_used,
-    ];
-    for i in 0..registers_before.len() {
-        sum = add_data_write(
-            challenge,
-            registers_segment,
-            sum,
-            registers_before.len() + i,
-            registers_after[i],
-        );
-    }
-
-    sum
-}
-
-fn add_data_write<F, const D: usize>(
-    challenge: GrandProductChallenge<F>,
-    segment: F,
-    running_sum: F,
-    index: usize,
-    val: U256,
-) -> F
-where
-    F: RichField + Extendable<D>,
-{
-    let mut row = [F::ZERO; 13];
-    row[0] = F::ZERO; // is_read
-    row[1] = F::ZERO; // context
-    row[2] = segment;
-    row[3] = F::from_canonical_usize(index);
-
-    for j in 0..VALUE_LIMBS {
-        row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
-    }
-    row[12] = F::TWO; // timestamp
-    running_sum + challenge.combine(row.iter()).inverse()
-}
-
-/// A utility module designed to verify proofs.
-pub mod testing {
-    use super::*;
 
     pub fn verify_all_proofs<
         F: RichField + Extendable<D>,
@@ -435,7 +516,13 @@ pub mod testing {
 
 #[cfg(debug_assertions)]
 pub(crate) mod debug_utils {
+    use ethereum_types::BigEndianHash;
+
     use super::*;
+    use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+    use crate::memory::VALUE_LIMBS;
+    use crate::proof::*;
+    use crate::util::h2u;
 
     /// Output all the extra memory rows that don't appear in the CPU trace but
     /// are necessary to correctly check the MemoryStark CTL.

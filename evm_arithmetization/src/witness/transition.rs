@@ -451,6 +451,10 @@ where
             .try_into()
             .map_err(|_| ProgramError::InvalidJumpDestination)?;
 
+        if !self.is_kernel() && dst > MAX_CODE_SIZE as u32 {
+            return Err(ProgramError::InvalidJumpDestination);
+        }
+
         if !self.generate_jumpdest_analysis(dst as usize) {
             row.mem_channels[1].value[0] = F::ONE;
 
@@ -518,6 +522,11 @@ where
             let dst: u32 = dst
                 .try_into()
                 .map_err(|_| ProgramError::InvalidJumpiDestination)?;
+
+            if !self.is_kernel() && dst > MAX_CODE_SIZE as u32 {
+                return Err(ProgramError::InvalidJumpiDestination);
+            }
+
             if !self.generate_jumpdest_analysis(dst as usize) {
                 row.general.jumps_mut().should_jump = F::ONE;
                 let cond_sum_u64 = cond

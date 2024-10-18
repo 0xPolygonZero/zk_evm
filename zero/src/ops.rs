@@ -2,9 +2,10 @@ zk_evm_common::check_chain_features!();
 
 use std::time::Instant;
 
+use anyhow::anyhow;
 use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
-use evm_arithmetization::{Field, PublicValues, TrimmedGenerationInputs};
+use evm_arithmetization::{Field, ProofWithPublicValues, PublicValues, TrimmedGenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
@@ -13,10 +14,8 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 use tracing::{event, info_span, Level};
 
-use crate::proof_types::{
-    BatchAggregatableProof, GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedTxnAggProof,
-    SegmentAggregatableProof,
-};
+use crate::debug_utils::save_tries_to_disk;
+use crate::proof_types::{BatchAggregatableProof, GeneratedBlockProof, SegmentAggregatableProof};
 use crate::prover_state::ProverState;
 use crate::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
@@ -29,7 +28,7 @@ pub struct SegmentProof {
 
 impl Operation for SegmentProof {
     type Input = evm_arithmetization::AllData;
-    type Output = crate::proof_types::SegmentAggregatableProof;
+    type Output = SegmentAggregatableProof;
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
         let all_data =
@@ -63,39 +62,65 @@ impl Operation for SegmentProof {
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
         };
 
-        Ok(proof.into())
+        Ok(SegmentAggregatableProof::Segment(proof))
     }
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct SegmentProofTestOnly {
     pub save_inputs_on_error: bool,
+    pub save_tries_on_error: bool,
 }
 
 impl Operation for SegmentProofTestOnly {
-    type Input = (GenerationInputs, usize);
+    // The input is a tuple of the batch generation inputs, max_cpu_len_log and
+    // batch index.
+    type Input = (GenerationInputs, usize, usize);
     type Output = ();
 
     fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
-        if self.save_inputs_on_error {
-            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|e| {
-                if let Err(write_err) = save_inputs_to_disk(
-                    format!(
-                        "b{}_txns_{}..{}_input.json",
-                        inputs.0.block_metadata.block_number,
-                        inputs.0.txn_number_before,
-                        inputs.0.txn_number_before + inputs.0.signed_txns.len(),
-                    ),
-                    inputs.0,
-                ) {
-                    error!("Failed to save txn proof input to disk: {:?}", write_err);
+        if self.save_inputs_on_error || self.save_tries_on_error {
+            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|err| {
+                let block_number = inputs.0.block_metadata.block_number.low_u64();
+                let batch_index = inputs.2;
+
+                let err = if self.save_tries_on_error {
+                    if let Some(ref tries) = err.tries {
+                        if let Err(write_err) =
+                            save_tries_to_disk(&err.to_string(), block_number, batch_index, tries)
+                        {
+                            error!("Failed to save tries to disk: {:?}", write_err);
+                        }
+                    }
+                    anyhow!(
+                        "block:{} batch:{} error: {}",
+                        block_number,
+                        batch_index,
+                        err.to_string()
+                    )
+                } else {
+                    err.into()
+                };
+
+                if self.save_inputs_on_error {
+                    if let Err(write_err) = save_inputs_to_disk(
+                        format!(
+                            "b{}_txns_{}..{}_input.json",
+                            block_number,
+                            inputs.0.txn_number_before,
+                            inputs.0.txn_number_before + inputs.0.signed_txns.len(),
+                        ),
+                        inputs.0,
+                    ) {
+                        error!("Failed to save txn proof input to disk: {:?}", write_err);
+                    }
                 }
 
-                FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
+                FatalError::from_anyhow(err, FatalStrategy::Terminate)
             })?
         } else {
             simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
-                .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?;
+                .map_err(|err| FatalError::from_anyhow(err.into(), FatalStrategy::Terminate))?;
         }
 
         Ok(())
@@ -189,8 +214,8 @@ pub struct SegmentAggProof {
 
 fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValues {
     match elem {
-        SegmentAggregatableProof::Seg(info) => info.p_vals,
-        SegmentAggregatableProof::Agg(info) => info.p_vals,
+        SegmentAggregatableProof::Segment(info) => info.public_values,
+        SegmentAggregatableProof::Agg(info) => info.public_values,
     }
 }
 
@@ -199,14 +224,14 @@ fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValu
 /// Note that the child proofs may be either transaction or aggregation proofs.
 ///
 /// If a transaction only contains a single segment, this function must still be
-/// called to generate a `GeneratedSegmentAggProof`. In that case, you can set
+/// called to generate a `ProofWithPublicValues`. In that case, you can set
 /// `has_dummy` to `true`, and provide an arbitrary proof for the right child.
 pub fn generate_segment_agg_proof(
     p_state: &ProverState,
     lhs_child: &SegmentAggregatableProof,
     rhs_child: &SegmentAggregatableProof,
     has_dummy: bool,
-) -> anyhow::Result<GeneratedSegmentAggProof> {
+) -> anyhow::Result<ProofWithPublicValues> {
     if has_dummy {
         assert!(
             !lhs_child.is_agg(),
@@ -215,33 +240,27 @@ pub fn generate_segment_agg_proof(
     }
 
     let lhs_prover_output_data = ProverOutputData {
+        is_agg: lhs_child.is_agg(),
         is_dummy: false,
-        proof_with_pis: lhs_child.intern().clone(),
-        public_values: lhs_child.public_values(),
+        proof_with_pvs: lhs_child.proof_with_pvs(),
     };
     let rhs_prover_output_data = ProverOutputData {
+        is_agg: rhs_child.is_agg(),
         is_dummy: has_dummy,
-        proof_with_pis: rhs_child.intern().clone(),
-        public_values: rhs_child.public_values(),
+        proof_with_pvs: rhs_child.proof_with_pvs(),
     };
-    let agg_output_data = p_state.state.prove_segment_aggregation(
-        lhs_child.is_agg(),
-        &lhs_prover_output_data,
-        rhs_child.is_agg(),
-        &rhs_prover_output_data,
-    )?;
+    let agg_output_data = p_state
+        .state
+        .prove_segment_aggregation(&lhs_prover_output_data, &rhs_prover_output_data)?;
 
-    let p_vals = agg_output_data.public_values;
-    let intern = agg_output_data.proof_with_pis;
-
-    Ok(GeneratedSegmentAggProof { p_vals, intern })
+    Ok(agg_output_data.proof_with_pvs)
 }
 
 impl Monoid for SegmentAggProof {
     type Elem = SegmentAggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let result = generate_segment_agg_proof(p_state(), &a, &b, false).map_err(|e| {
+        let proof = generate_segment_agg_proof(p_state(), &a, &b, false).map_err(|e| {
             if self.save_inputs_on_error {
                 let pv = vec![
                     get_seg_agg_proof_public_values(a),
@@ -261,7 +280,7 @@ impl Monoid for SegmentAggProof {
             FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
         })?;
 
-        Ok(result.into())
+        Ok(SegmentAggregatableProof::Agg(proof))
     }
 
     fn empty(&self) -> Self::Elem {
@@ -276,9 +295,9 @@ pub struct BatchAggProof {
 }
 fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
     match elem {
-        BatchAggregatableProof::Segment(info) => info.p_vals,
-        BatchAggregatableProof::Txn(info) => info.p_vals,
-        BatchAggregatableProof::Agg(info) => info.p_vals,
+        BatchAggregatableProof::Segment(info) => info.public_values,
+        BatchAggregatableProof::SegmentAgg(info) => info.public_values,
+        BatchAggregatableProof::BatchAgg(info) => info.public_values,
     }
 }
 
@@ -287,11 +306,11 @@ impl Monoid for BatchAggProof {
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
         let lhs = match a {
-            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::from(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg(
                 generate_segment_agg_proof(
                     p_state(),
-                    &SegmentAggregatableProof::from(segment.clone()),
-                    &SegmentAggregatableProof::from(segment),
+                    &SegmentAggregatableProof::Segment(segment.clone()),
+                    &SegmentAggregatableProof::Segment(segment),
                     true,
                 )
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
@@ -300,11 +319,11 @@ impl Monoid for BatchAggProof {
         };
 
         let rhs = match b {
-            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::from(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg(
                 generate_segment_agg_proof(
                     p_state(),
-                    &SegmentAggregatableProof::from(segment.clone()),
-                    &SegmentAggregatableProof::from(segment),
+                    &SegmentAggregatableProof::Segment(segment.clone()),
+                    &SegmentAggregatableProof::Segment(segment),
                     true,
                 )
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?,
@@ -312,15 +331,13 @@ impl Monoid for BatchAggProof {
             _ => b,
         };
 
-        let (proof, p_vals) = p_state()
+        let proof = p_state()
             .state
             .prove_batch_aggregation(
                 lhs.is_agg(),
-                lhs.intern(),
-                lhs.public_values(),
+                lhs.proof_with_pvs(),
                 rhs.is_agg(),
-                rhs.intern(),
-                rhs.public_values(),
+                rhs.proof_with_pvs(),
             )
             .map_err(|e| {
                 if self.save_inputs_on_error {
@@ -342,11 +359,7 @@ impl Monoid for BatchAggProof {
                 FatalError::from_str(&e.to_string(), FatalStrategy::Terminate)
             })?;
 
-        Ok(GeneratedTxnAggProof {
-            p_vals,
-            intern: proof,
-        }
-        .into())
+        Ok(BatchAggregatableProof::BatchAgg(proof))
     }
 
     fn empty(&self) -> Self::Elem {
@@ -362,24 +375,24 @@ pub struct BlockProof {
 }
 
 impl Operation for BlockProof {
-    type Input = GeneratedTxnAggProof;
+    type Input = ProofWithPublicValues;
     type Output = GeneratedBlockProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let b_height = input.p_vals.block_metadata.block_number.low_u64();
+        let b_height = input.public_values.block_metadata.block_number.low_u64();
         let parent_intern = self.prev.as_ref().map(|p| &p.intern);
 
-        let (b_proof_intern, _) = p_state()
+        let block_proof = p_state()
             .state
-            .prove_block(parent_intern, &input.intern, input.p_vals.clone())
+            .prove_block(parent_intern, &input)
             .map_err(|e| {
                 if self.save_inputs_on_error {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
                             "b{}_block_input.json",
-                            input.p_vals.block_metadata.block_number
+                            input.public_values.block_metadata.block_number
                         ),
-                        input.p_vals,
+                        input.public_values,
                     ) {
                         error!("Failed to save block proof input to disk: {:?}", write_err);
                     }
@@ -390,7 +403,7 @@ impl Operation for BlockProof {
 
         Ok(GeneratedBlockProof {
             b_height,
-            intern: b_proof_intern,
+            intern: block_proof.intern,
         })
     }
 }

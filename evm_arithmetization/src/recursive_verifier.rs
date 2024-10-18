@@ -4,6 +4,7 @@ use core::fmt::Debug;
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, U256};
 use plonky2::field::extension::Extendable;
+use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::exponentiation::ExponentiationGate;
 use plonky2::gates::gate::GateRef;
 use plonky2::gates::noop::NoopGate;
@@ -325,6 +326,9 @@ pub(crate) fn add_common_recursion_gates<F: RichField + Extendable<D>, const D: 
 ) {
     builder.add_gate_to_gate_set(GateRef::new(ExponentiationGate::new_from_config(
         &builder.config,
+    )));
+    builder.add_gate_to_gate_set(GateRef::new(ConstantGate::new(
+        builder.config.num_constants,
     )));
 }
 

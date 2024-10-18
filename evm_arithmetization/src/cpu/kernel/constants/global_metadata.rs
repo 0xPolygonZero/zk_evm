@@ -65,8 +65,6 @@ pub(crate) enum GlobalMetadata {
     AccessedStorageKeysLen,
     /// Length of the self-destruct list.
     SelfDestructListLen,
-    /// Length of the bloom entry buffer.
-    BloomEntryLen,
 
     /// Length of the journal.
     JournalLen,
@@ -160,7 +158,6 @@ impl GlobalMetadata {
             Self::AccessedAddressesLen,
             Self::AccessedStorageKeysLen,
             Self::SelfDestructListLen,
-            Self::BloomEntryLen,
             Self::JournalLen,
             Self::JournalDataLen,
             Self::CurrentCheckpoint,
@@ -223,7 +220,6 @@ impl GlobalMetadata {
             Self::AccessedAddressesLen => "GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN",
             Self::AccessedStorageKeysLen => "GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN",
             Self::SelfDestructListLen => "GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN",
-            Self::BloomEntryLen => "GLOBAL_METADATA_BLOOM_ENTRY_LEN",
             Self::JournalLen => "GLOBAL_METADATA_JOURNAL_LEN",
             Self::JournalDataLen => "GLOBAL_METADATA_JOURNAL_DATA_LEN",
             Self::CurrentCheckpoint => "GLOBAL_METADATA_CURRENT_CHECKPOINT",

@@ -1,0 +1,6 @@
+.vscode-test
+*.ignoreme
+*.vsix
+/lsp-server
+node_modules
+out

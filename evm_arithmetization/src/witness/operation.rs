@@ -2,6 +2,7 @@ use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::hash::hash_types::RichField;
+use serde::{Deserialize, Serialize};
 
 use super::state::KERNEL_CONTEXT;
 use super::transition::Transition;
@@ -29,7 +30,7 @@ use crate::witness::util::{
 };
 use crate::{arithmetic, logic};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub(crate) enum Operation {
     Iszero,
     Not,
