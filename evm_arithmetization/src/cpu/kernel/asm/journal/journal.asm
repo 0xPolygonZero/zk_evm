@@ -22,7 +22,7 @@
     // stack: journal_size, pointer, journal_size
     %mstore_journal
     // stack: journal_size
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_LEN)
     // stack: (empty)
 %endmacro
@@ -51,7 +51,7 @@
     // stack: size, value, size
     %mstore_journal_data
     // stack: size
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_DATA_LEN)
 %endmacro
 
@@ -119,7 +119,7 @@
 
 %macro journal_load_1
     // ptr
-    %add_const(1)
+    INCR1
     %mload_journal_data
     // w
 %endmacro
@@ -130,8 +130,8 @@
     %add_const(2)
     %mload_journal_data
     // x, ptr
+    INCR2
     SWAP1
-    %add_const(1)
     %mload_journal_data
     // w, x
 %endmacro
@@ -148,8 +148,8 @@
     %add_const(2)
     %mload_journal_data
     // x, ptr, y
+    INCR2
     SWAP1
-    %add_const(1)
     %mload_journal_data
     // w, x, y
 %endmacro
@@ -172,8 +172,8 @@
     %add_const(2)
     %mload_journal_data
     // x, ptr, y, z
+    INCR2
     SWAP1
-    %add_const(1)
     %mload_journal_data
     // w, x, y, z
 %endmacro
@@ -197,10 +197,10 @@
     // stack: i, current_checkpoint
     DUP2 DUP2 %mstore_current(@SEGMENT_CONTEXT_CHECKPOINTS)
     // stack: i, current_checkpoint
-    %increment
+    INCR1
     %mstore_context_metadata(@CTX_METADATA_CHECKPOINTS_LEN)
     // stack: current_checkpoint
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_CURRENT_CHECKPOINT)
     // stack: (empty)
 %endmacro

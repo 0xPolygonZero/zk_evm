@@ -52,7 +52,7 @@
     // stack:       ptr
     %create_bn254_pairing_address
     DUP1
-    %add_const(1)
+    INCR1
     // stack: addr1, addr
     MLOAD_GENERAL
     // stack:   x1, addr
@@ -185,7 +185,7 @@
     MLOAD_GENERAL
     // stack:                     x2, addr
     DUP2
-    %add_const(1)
+    INCR1
     // stack:              addr1, x2, addr
     MLOAD_GENERAL
     // stack:                 x1, x2, addr
@@ -221,7 +221,7 @@
     MLOAD_GENERAL
     // stack:             x2, x3, x4, addr
     DUP4
-    %add_const(1)
+    INCR1
     // stack:       addr1, x2, x3, x4, addr
     MLOAD_GENERAL
     // stack:         x1, x2, x3, x4, addr
@@ -258,7 +258,7 @@
     %swap_mstore
     // stack:               x1, x2, x3, addr, x5
     DUP4
-    %add_const(1)
+    INCR1
     // stack:         addr1, x1, x2, x3, addr, x5
     %swap_mstore
     // stack:                   x2, x3, addr, x5
@@ -302,7 +302,7 @@
     MULFP254
     // stack:               2*x1, x2, x3, x4, addr
     DUP5
-    %add_const(1)
+    INCR1
     // stack:         addr1, 2*x1, x2, x3, x4, addr
     %swap_mstore
     // stack:                     x2, x3, x4, addr
@@ -350,17 +350,17 @@
     // stack: addr2, addr2, x0, x1, x2, x3, x4, x5
     SWAP2 MSTORE_GENERAL
     // stack:    addr2, x1, x2, x3, x4, x5
-    %add_const(1)
+    INCR1
     DUP1
     // stack: addr3, addr3, x1, x2, x3, x4, x5
     SWAP2 MSTORE_GENERAL
     // stack:        addr3, x2, x3, x4, x5
-    %add_const(1)
+    INCR1
     DUP1
     // stack: addr4, addr4, x2, x3, x4, x5
     SWAP2 MSTORE_GENERAL
     // stack:            addr4, x3, x4, x5
-    %add_const(1)
+    INCR1
     // stack:            addr5, x3, x4, x5
     %swap_mstore
     // stack:                       x4, x5
@@ -369,7 +369,7 @@
     PUSH $ptr  
     %create_bn254_pairing_address
     DUP1
-    %add_const(1)
+    INCR1
     // stack:          addr1, addr, y5, y4
     SWAP3
     MSTORE_GENERAL
@@ -996,7 +996,7 @@
     MLOAD_GENERAL
     // stack:             x02, x03, x04, x05, x06, x07, x08, x09, x10, addr
     DUP10
-    %add_const(1)
+    INCR1
     // stack:      addr01, x02, x03, x04, x05, x06, x07, x08, x09, x10, addr
     MLOAD_GENERAL
     // stack:        x01, x02, x03, x04, x05, x06, x07, x08, x09, x10, addr
@@ -1098,12 +1098,12 @@
     %swap_mstore
     // stack:              SRC, DEST
     DUP1
-    %add_const(1)
+    INCR1
     // stack:       addr01, SRC, DEST
     MLOAD_GENERAL
     // stack:         x01, SRC, DEST
     DUP3
-    %add_const(1)
+    INCR1
     // stack: addr01', x01, SRC, DEST
     %swap_mstore
     // stack:              SRC, DEST

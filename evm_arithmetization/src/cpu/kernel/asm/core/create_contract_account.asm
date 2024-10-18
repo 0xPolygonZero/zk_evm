@@ -72,6 +72,6 @@
     // stack: nb_created_contracts, address, nb_created_contracts
     %mstore_kernel(@SEGMENT_CREATED_CONTRACTS)
     // stack: nb_created_contracts
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_CREATED_CONTRACTS_LEN)
 %endmacro

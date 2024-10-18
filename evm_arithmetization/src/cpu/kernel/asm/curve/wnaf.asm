@@ -66,7 +66,7 @@ trailing_zeros_loop:
     // stack: x&1, count, x, retdest
     %jumpi(trailing_zeros_end)
     // stack: count, x, retdest
-    %increment SWAP1 PUSH 1 SHR SWAP1
+    INCR1 SWAP1 PUSH 1 SHR SWAP1
     // stack: count, x>>1, retdest
     %jump(trailing_zeros_loop)
 trailing_zeros_end:

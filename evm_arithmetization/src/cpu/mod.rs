@@ -8,6 +8,7 @@ pub(crate) mod decode;
 mod dup_swap;
 mod gas;
 mod halt;
+mod incr;
 mod jumps;
 pub mod kernel;
 pub(crate) mod membus;

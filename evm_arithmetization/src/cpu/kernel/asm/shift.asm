@@ -7,7 +7,7 @@
     %rep 255
         // stack: 2^i, addr_i
         dup2
-        %increment
+        INCR1
         // stack: addr_(i+1), 2^i, addr_i
         dup2
         dup1

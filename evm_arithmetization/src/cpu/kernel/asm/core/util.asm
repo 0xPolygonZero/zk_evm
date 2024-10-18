@@ -70,7 +70,7 @@
     DUP1 %mload_trie_data
     // stack: nonce, account_ptr
     ISZERO %not_bit %jumpi(%%false)
-    %increment DUP1 %mload_trie_data
+    INCR1 DUP1 %mload_trie_data
     // stack: balance, balance_ptr
     ISZERO %not_bit %jumpi(%%false)
     %add_const(2) %mload_trie_data
@@ -112,7 +112,7 @@
 
 %macro set_and_prune_ctx
     // stack: context
-    PUSH 1 ADD
+    INCR1
     SET_CONTEXT
     // stack: (empty)
 %endmacro
