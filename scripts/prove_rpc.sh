@@ -20,19 +20,6 @@ export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
 echo "Block batch size: $BLOCK_BATCH_SIZE"
 
-# Circuit sizes only matter in non test_only mode.
-if ! [[ $8 == "test_only" ]]; then
-    export ARITHMETIC_CIRCUIT_SIZE="16..21"
-    export BYTE_PACKING_CIRCUIT_SIZE="8..21"
-    export CPU_CIRCUIT_SIZE="8..21"
-    export KECCAK_CIRCUIT_SIZE="4..20"
-    export KECCAK_SPONGE_CIRCUIT_SIZE="8..17"
-    export LOGIC_CIRCUIT_SIZE="4..21"
-    export MEMORY_CIRCUIT_SIZE="17..24"
-    export MEMORY_BEFORE_CIRCUIT_SIZE="16..23"
-    export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
-fi
-
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
