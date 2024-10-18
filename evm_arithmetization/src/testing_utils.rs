@@ -19,7 +19,7 @@ use crate::proof::TrieRoots;
 #[cfg(test)]
 use crate::witness::operation::Operation;
 use crate::{
-    generation::mpt::AccountRlp, logic, proof::BlockMetadata, util::h2u, GenerationInputs,
+    generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
     GenerationSegmentData, SegmentDataIterator,
 };
 
@@ -235,6 +235,7 @@ pub fn segment_with_empty_tables() -> Result<(
 
 #[cfg(test)]
 mod tests {
+    use crate::logic;
     use super::*;
 
     // Ensures that there are no Keccak and Logic ops in the segment.
