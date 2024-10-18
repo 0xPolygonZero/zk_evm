@@ -836,7 +836,6 @@ where
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
 
-        // TODO(sdeng): enable more optional Tables
         let table_dummy_proofs = core::array::from_fn(|i| {
             if OPTIONAL_TABLE_INDICES.contains(&i) {
                 let init_degree = degree_bits_ranges[i].start;
@@ -953,8 +952,8 @@ where
         for (i, pi) in pis.iter().enumerate() {
             for j in 0..stark_config.num_challenges {
                 if OPTIONAL_TABLE_INDICES.contains(&i) {
-                    // Ensures that the correct CTL challenges are used in Keccak tables when
-                    // `enable_keccak_tables` is true.
+                    // Ensures that the correct CTL challenges are used when an optional table
+                    // is in use.
                     builder.conditional_assert_eq(
                         table_in_use[i].target,
                         ctl_challenges.challenges[j].beta,

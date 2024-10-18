@@ -229,7 +229,7 @@ pub fn segment_with_empty_tables() -> Result<(
         SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
-    // Ensures that there is no Keccak and Logic ops in the segment.
+    // Ensures that there are no Keccak and Logic ops in the segment.
     let opcode_counts = &segment_data.opcode_counts;
     assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
     assert!(!opcode_counts.contains_key(&Operation::BinaryLogic(logic::Op::And)));

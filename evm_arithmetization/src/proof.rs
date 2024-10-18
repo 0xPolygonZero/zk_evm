@@ -48,7 +48,7 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues<F>,
-    /// A flag indicating whether the table contain only padding values (i.e.,
+    /// A flag indicating whether the table only contains padding values (i.e.,
     /// no meaningful data).
     pub table_in_use: [bool; NUM_TABLES],
 }
