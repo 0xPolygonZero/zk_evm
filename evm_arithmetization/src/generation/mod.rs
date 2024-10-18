@@ -585,7 +585,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     };
 
     let mut table_in_use = [true; NUM_TABLES];
-    if OPTIONAL_TABLE_INDICES.contains(&Table::Keccak) {
+    if state.traces.keccak_inputs.is_empty() && OPTIONAL_TABLE_INDICES.contains(&Table::Keccak) {
         assert!(OPTIONAL_TABLE_INDICES.contains(&Table::KeccakSponge));
         info!("Keccak and KeccakSponge tables not in use");
         table_in_use[*Table::Keccak] = false;
