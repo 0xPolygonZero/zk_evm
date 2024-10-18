@@ -232,3 +232,18 @@ pub fn segment_with_empty_tables() -> Result<(
 
     Ok((trimmed_inputs, segment_data))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_segment_with_empty_tables() -> Result<()> {
+        let (_, segment_data) = segment_with_empty_tables()?;
+
+        let opcode_counts = &segment_data.opcode_counts;
+        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+
+        Ok(())
+    }
+}
