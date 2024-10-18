@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
-use clap::{Parser, Subcommand, ValueHint};
+use clap::{Parser, Subcommand, ValueEnum, ValueHint};
 use zero::prover::cli::CliProverConfig;
 use zero::prover_state::cli::CliProverStateConfig;
 use zero::rpc::RpcType;
+
+const WORKER_HELP_HEADING: &str = "Worker Config options";
 
 /// zero-bin leader config
 #[derive(Parser)]
@@ -23,6 +25,24 @@ pub(crate) struct Cli {
     // mode.
     #[clap(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
+
+    // Mode to use for worker for setup (affinity or default)
+    #[arg(long = "worker-run-mode", help_heading = WORKER_HELP_HEADING, value_enum, default_value = "default")]
+    pub(crate) worker_run_mode: WorkerRunMode,
+}
+
+/// Defines the mode for worker setup in terms of job allocation:
+///
+/// - `Affinity`: Workers are assigned specific types of jobs based on their
+///   capabilities, distinguishing between heavy and light jobs.
+/// - `Default`: No job distinction is made — any worker can handle any type of
+///   job, whether heavy or light.
+///
+/// This enum allows for flexible worker configuration based on workload needs.
+#[derive(ValueEnum, Clone, PartialEq, Debug)]
+pub enum WorkerRunMode {
+    Affinity,
+    Default,
 }
 
 #[derive(Subcommand)]

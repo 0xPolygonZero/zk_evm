@@ -1,5 +1,7 @@
 #![cfg(feature = "eth_mainnet")]
 
+use std::time::Duration;
+
 use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{init_logger, segment_with_empty_tables};
@@ -8,6 +10,7 @@ use evm_arithmetization::AllStark;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::timed;
+use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 
@@ -58,6 +61,7 @@ fn empty_tables() -> anyhow::Result<()> {
             &config,
         )
     );
+
     let segment_proof = timed!(
         timing,
         log::Level::Info,
@@ -75,6 +79,34 @@ fn empty_tables() -> anyhow::Result<()> {
 
     // Print timing details
     timing.print();
+
+    // Test serialization of preprocessed circuits
+    {
+        let gate_serializer = DefaultGateSerializer;
+        let generator_serializer = DefaultGeneratorSerializer::<C, D>::default();
+
+        let timing = TimingTree::new("serialize AllRecursiveCircuits", log::Level::Info);
+        let all_circuits_bytes = all_circuits
+            .to_bytes(false, &gate_serializer, &generator_serializer)
+            .map_err(|_| anyhow::Error::msg("AllRecursiveCircuits serialization failed."))?;
+        timing.filter(Duration::from_millis(100)).print();
+        log::info!(
+            "AllRecursiveCircuits length: {} bytes",
+            all_circuits_bytes.len()
+        );
+
+        let timing = TimingTree::new("deserialize AllRecursiveCircuits", log::Level::Info);
+        let all_circuits_from_bytes = AllRecursiveCircuits::from_bytes(
+            &all_circuits_bytes,
+            false,
+            &gate_serializer,
+            &generator_serializer,
+        )
+        .map_err(|_| anyhow::Error::msg("AllRecursiveCircuits deserialization failed."))?;
+        timing.filter(Duration::from_millis(100)).print();
+
+        assert_eq!(all_circuits, all_circuits_from_bytes);
+    }
 
     Ok(())
 }
