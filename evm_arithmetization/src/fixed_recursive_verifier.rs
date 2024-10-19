@@ -9,7 +9,8 @@ use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
-use plonky2::fri::FriParams;
+use plonky2::fri::{FriConfig, FriParams};
+use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
 use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
@@ -62,7 +63,7 @@ use crate::verifier::initial_memory_merkle_cap;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
 /// this size.
-const THRESHOLD_DEGREE_BITS: usize = 13;
+const THRESHOLD_DEGREE_BITS: usize = 10;
 
 /// An internal proof for a segment execution along with its public values,
 /// for proper connection with contiguous proofs.
@@ -3100,8 +3101,21 @@ where
 /// gates, we might as well use a narrower witness.
 fn shrinking_config() -> CircuitConfig {
     CircuitConfig {
-        num_routed_wires: 40,
-        ..CircuitConfig::standard_recursion_config()
+        num_wires: 135,
+        num_routed_wires: 80,
+        num_constants: 2,
+        use_base_arithmetic_gate: true,
+        security_bits: 1,
+        num_challenges: 2,
+        zero_knowledge: false,
+        max_quotient_degree_factor: 8,
+        fri_config: FriConfig {
+            rate_bits: 3,
+            cap_height: 4,
+            proof_of_work_bits: 1,
+            reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
+            num_query_rounds: 1,
+        },
     }
 }
 

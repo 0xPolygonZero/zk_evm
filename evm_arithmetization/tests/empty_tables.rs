@@ -8,6 +8,8 @@ use evm_arithmetization::testing_utils::{init_logger, segment_with_empty_tables}
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::fri::reduction_strategies::FriReductionStrategy;
+use plonky2::fri::FriConfig;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::timed;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
@@ -24,8 +26,30 @@ fn empty_tables() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = StarkConfig {
+        security_bits: 1,
+        num_challenges: 1,
+        fri_config: FriConfig {
+            rate_bits: 1,
+            cap_height: 4,
+            proof_of_work_bits: 1,
+            reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
+            num_query_rounds: 1,
+        },
+    };
     let timing = &mut TimingTree::new("Empty Table Test", log::Level::Info);
+
+    // Process and generate segment proof
+    let all_circuits = timed!(
+        timing,
+        log::Level::Info,
+        "Create all recursive circuits",
+        AllRecursiveCircuits::<F, C, D>::new(
+            &all_stark,
+            &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
+            &config,
+        )
+    );
 
     // Generate segment data
     let (payload, mut segment_data) = segment_with_empty_tables()?;
@@ -49,18 +73,6 @@ fn empty_tables() -> anyhow::Result<()> {
 
     // Verify the generated STARK proofs
     verify_all_proofs(&all_stark, &proofs, &config)?;
-
-    // Process and generate segment proof
-    let all_circuits = timed!(
-        timing,
-        log::Level::Info,
-        "Create all recursive circuits",
-        AllRecursiveCircuits::<F, C, D>::new(
-            &all_stark,
-            &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
-            &config,
-        )
-    );
 
     let segment_proof = timed!(
         timing,
