@@ -94,7 +94,7 @@ where
 /// using a Geth structlog as input.
 pub(crate) fn generate_jumpdest_table<'a>(
     tx: &Transaction,
-    struct_log: &[StructLog],
+    structlog: &[StructLog],
     tx_traces: impl Iterator<Item = (Address, &'a TxnTrace)>,
 ) -> anyhow::Result<JumpDestTableWitness> {
     trace!("Generating JUMPDEST table for tx: {}", tx.hash);
@@ -146,7 +146,8 @@ pub(crate) fn generate_jumpdest_table<'a>(
     let mut call_stack = vec![(entrypoint_code_hash, next_ctx_available)];
     next_ctx_available += 1;
 
-    for (step, entry) in struct_log.iter().enumerate() {
+    let mut stuctlog_iter = structlog.iter().enumerate().peekable();
+    while let Some((step, entry)) = stuctlog_iter.next() {
         let op = entry.op.as_str();
         let curr_depth: usize = entry.depth.try_into().unwrap();
 
@@ -169,6 +170,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
             tx_hash = ?tx.hash,
             ?code_hash,
             ctx,
+            next_ctx_available,
             pc = entry.pc,
             pc_hex = format!("{:08x?}", entry.pc),
             gas = entry.gas,
@@ -224,6 +226,19 @@ pub(crate) fn generate_jumpdest_table<'a>(
                         &callee_address
                     );
                 }
+
+                if let Some((_next_step, next_entry)) = &stuctlog_iter.peek() {
+                    let next_depth: usize = next_entry.depth.try_into().unwrap();
+                    if next_depth < curr_depth {
+                        // The call caused an exception.  Skip over incrementing `next_ctx_available`.
+                        continue;
+                    }
+                }
+                // `peek()` only returns `None` if we are at the last entry of
+                // the Structlog, whether we are on a `CALL` op that throws an
+                // exception or not. But this is of no consequence to the
+                // generated Jumpdest table, so we can ignore the case.
+
                 next_ctx_available += 1;
             }
             "CREATE" | "CREATE2" => {
