@@ -227,10 +227,11 @@ pub(crate) fn generate_jumpdest_table<'a>(
                     );
                 }
 
-                if let Some((_next_step, next_entry)) = &stuctlog_iter.peek() {
+                if let Some((_next_step, next_entry)) = stuctlog_iter.peek() {
                     let next_depth: usize = next_entry.depth.try_into().unwrap();
                     if next_depth < curr_depth {
-                        // The call caused an exception.  Skip over incrementing `next_ctx_available`.
+                        // The call caused an exception.  Skip over incrementing
+                        // `next_ctx_available`.
                         continue;
                     }
                 }

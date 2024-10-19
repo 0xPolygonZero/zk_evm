@@ -6,8 +6,51 @@ if [ -z $RPC ]; then
   # You must set an RPC endpoint
   exit 1
 fi
+
+if [ git diff --quiet --exit-code HEAD ]; then
+  exit 1
+fi
+
+
 mkdir -p witnesses
 
+
+
+RESULT_LEN=$(cat witnesses/native_results.txt | wc -l)
+
+
+function statistics()
+{
+  PREFIX_LEN=$(($RESULT_LEN + 13))
+  wc -l witnesses/native_results.txt
+  cat witnesses/native_results.txt | tail -n +$PREFIX_LEN
+  
+  SUMOK=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f8  |  paste -s -d+ - | bc)
+  SUMFAIL=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f9  |  paste -s -d+ - | bc)
+  SUMTOTAL=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f10 |  paste -s -d+ - | bc)
+  echo $SUMTOTAL
+  echo $SUMFAIL
+  echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%")
+  echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%")
+
+  ZEROES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "0")
+  ONES=$(  cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "1")
+  TWOS=$(  cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "2")
+  THREES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "3")
+  FOURS=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "4")
+  FIVES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "5")
+  SIXES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "6")
+  echo $ZEROES
+  echo $ONES
+  echo $TWOS
+  echo $THREES
+  echo $FOURS
+  echo $FIVES
+  echo $SIXES
+  echo "good bye"
+  exit 0
+}
+trap statistics INT # EXIT QUIT HUP TERM
 # Must match the values in prove_stdio.sh or build is dirty.
 #export RAYON_NUM_THREADS=1
 #export TOKIO_WORKER_THREADS=1
@@ -222,8 +265,8 @@ GITHASH=`git rev-parse --short HEAD`
 echo "Testing against mainnet, current revision: $GITHASH."
 
 #BLOCKS="$CANCUNBLOCKS $RANDOMBLOCKS $ROUND3"
-#BLOCKS="$RANDOMBLOCKS"
-BLOCKS="$ROUND8"
+BLOCKS="$RANDOMBLOCKS"
+#BLOCKS="$ROUND8"
 BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 echo "Testing blocks: $BLOCKS"
 
@@ -252,8 +295,6 @@ for BLOCK in $BLOCKS; do
   TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
   TXNONE=`grep '"jumpdest_table": null' $WITNESS | wc -l`
   TXOK=`echo -n $(($TXALL - $TXNONE))`
-  TEST_OUT_PATH="${REPO_ROOT}/$BLOCK.test.out"
-  #rm $TEST_OUT_PATH
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
@@ -269,4 +310,12 @@ for BLOCK in $BLOCKS; do
     VERDICT="failure"
   fi
   printf "%s %10i %s %3i  %8s   %8s   %8s    %3i     %3i      %3i \n" $GITHASH $BLOCK $VERDICT $EXITCODE $DURATION_RPC $DURATION_PRV $TOTALTIME $TXOK $TXNONE $TXALL | tee -a witnesses/native_results.txt
+
+
+  ### Clean up
+  TEST_OUT_PATH="${REPO_ROOT}/$BLOCK.test.out"
+  rm $TEST_OUT_PATH
+  rm $WITNESS
+
 done
+
