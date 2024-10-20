@@ -40,12 +40,12 @@ impl BlockInterval {
     /// end_block is treated as inclusive because it may have been specified
     /// as a block hash.
     pub async fn new(
-        cached_provider: Arc<impl BlockProvider>,
+        provider: Arc<impl BlockProvider>,
         start_block: BlockId,
         end_block: Option<BlockId>,
     ) -> Result<BlockInterval, anyhow::Error> {
         // Ensure the start block is a valid block number.
-        let start_block_num = Self::block_to_num(cached_provider.clone(), start_block).await?;
+        let start_block_num = Self::block_to_num(provider.clone(), start_block).await?;
 
         // Create the block interval.
         match end_block {
@@ -55,7 +55,7 @@ impl BlockInterval {
             }
             // Bounded range provided.
             Some(end_block) => {
-                let end_block_num = Self::block_to_num(cached_provider.clone(), end_block).await?;
+                let end_block_num = Self::block_to_num(provider.clone(), end_block).await?;
                 if end_block_num <= start_block_num {
                     return Err(anyhow!(
                         "invalid block interval range ({start_block_num}..{end_block_num})"
@@ -102,20 +102,16 @@ impl BlockInterval {
 
     /// Convert the block interval into an unbounded async stream of block
     /// numbers. Query the blockchain node for the latest block number.
-    pub async fn into_unbounded_stream<ProviderT, TransportT>(
+    pub async fn into_unbounded_stream(
         self,
-        cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
+        provider: Arc<impl BlockProvider + 'static>,
         block_time: u64,
-    ) -> Result<BlockIntervalStream, anyhow::Error>
-    where
-        ProviderT: Provider<TransportT> + 'static,
-        TransportT: Transport + Clone,
-    {
+    ) -> Result<BlockIntervalStream, anyhow::Error> {
         match self {
             BlockInterval::FollowFrom { start_block } => Ok(Box::pin(try_stream! {
                 let mut current = start_block;
                  loop {
-                    let last_block_number = cached_provider.get_provider().await?.get_block_number().await.map_err(|e: alloy::transports::RpcError<_>| {
+                    let last_block_number = provider.latest_block_number().await.map_err(|e| {
                         anyhow!("could not retrieve latest block number from the provider: {e}")
                     })?;
 
@@ -139,7 +135,7 @@ impl BlockInterval {
 
     /// Converts a [`BlockId`] into a block number by querying the provider.
     pub async fn block_to_num(
-        cached_provider: Arc<impl BlockProvider>,
+        provider: Arc<impl BlockProvider>,
         block: BlockId,
     ) -> Result<u64, anyhow::Error> {
         let block_num = match block {
@@ -150,7 +146,7 @@ impl BlockInterval {
 
             // Hash provided, query the provider for the block number.
             BlockId::Hash(hash) => {
-                let block = cached_provider
+                let block = provider
                     .get_block_by_id(BlockId::Hash(hash))
                     .await
                     .map_err(|e| {

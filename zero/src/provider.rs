@@ -20,6 +20,8 @@ pub trait BlockProvider {
         &self,
         block_id: BlockId,
     ) -> impl Future<Output = anyhow::Result<Option<Block>>> + Send;
+
+    fn latest_block_number(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
 }
 
 /// Wrapper around alloy provider to cache blocks and other
@@ -144,5 +146,9 @@ where
             self.get_block(block_id, BlockTransactionsKind::Hashes)
                 .await?,
         ))
+    }
+
+    async fn latest_block_number(&self) -> anyhow::Result<u64> {
+        Ok(self.provider.get_block_number().await?)
     }
 }
