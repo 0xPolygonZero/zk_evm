@@ -1,32 +1,32 @@
-/// Linked lists for accounts and storage slots.
-/// The accounts linked list is stored in SEGMENT_ACCOUNTS_LINKED_LIST while the slots 
-/// are stored in SEGMENT_STORAGE_LINKED_LIST. The length of
-/// the segments is stored in the associated global metadata.
-/// Both arrays are stored in the kernel memory (context=0).
-/// Searching and inserting is done by guessing the predecessor in the list.
-/// If the address/storage key isn't found in the array, it is inserted 
-/// at the correct location. These linked lists are used to keep track of
-/// inserted and deleted accounts/slots during the execution, so that the 
-/// initial and final MPT state tries can be reconstructed at the end of the execution.
-/// An empty account linked list is written as
-/// [@U256_MAX, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST.
-/// The linked list is preinitialized by appending accounts to the segment. Each account is encoded
-/// using 4 values.
-/// The values at the respective positions are:
-/// - 0: The account key
-/// - 1: A ptr to the payload (the account values)
-/// - 2: A ptr to the initial payload.
-/// - 3: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
-/// Similarly, an empty storage linked list is written as
-/// [@U256_MAX, _, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST.
-/// The linked list is preinitialized by appending storage slots to the segment. 
-/// Each slot is encoded using 5 values.
-/// The values at the respective positions are:
-/// - 0: The account key
-/// - 1: The slot key
-/// - 2: The slot value.
-/// - 3: The initial slot value.
-/// - 4: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
+// Linked lists for accounts and storage slots.
+// The accounts linked list is stored in SEGMENT_ACCOUNTS_LINKED_LIST while the slots 
+// are stored in SEGMENT_STORAGE_LINKED_LIST. The length of
+// the segments is stored in the associated global metadata.
+// Both arrays are stored in the kernel memory (context=0).
+// Searching and inserting is done by guessing the predecessor in the list.
+// If the address/storage key isn't found in the array, it is inserted 
+// at the correct location. These linked lists are used to keep track of
+// inserted and deleted accounts/slots during the execution, so that the 
+// initial and final MPT state tries can be reconstructed at the end of the execution.
+// An empty account linked list is written as
+// [@U256_MAX, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST.
+// The linked list is preinitialized by appending accounts to the segment. Each account is encoded
+// using 4 values.
+// The values at the respective positions are:
+// - 0: The account key
+// - 1: A ptr to the payload (the account values)
+// - 2: A ptr to the initial payload.
+// - 3: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
+// Similarly, an empty storage linked list is written as
+// [@U256_MAX, _, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST.
+// The linked list is preinitialized by appending storage slots to the segment. 
+// Each slot is encoded using 5 values.
+// The values at the respective positions are:
+// - 0: The account key
+// - 1: The slot key
+// - 2: The slot value.
+// - 3: The initial slot value.
+// - 4: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
 
 %macro store_initial_accounts
     PUSH %%after
@@ -34,15 +34,15 @@
 %%after:
 %endmacro
 
-/// Iterates over the initial account linked list and shallow copies
-/// the accounts, storing a pointer to the copied account in the node.
-/// Computes the length of `SEGMENT_ACCOUNTS_LINKED_LIST` and 
-/// stores it in `GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE`.
-/// It also checks that the next node address is current address + 4
-/// and that all keys are strictly increasing.
-/// NOTE: It may be more efficient to check that the next node addres != U256_MAX
-/// (i.e. node was not deleted) and ensure that no node with repeated key
-/// is ever read.
+// Iterates over the initial account linked list and shallow copies
+// the accounts, storing a pointer to the copied account in the node.
+// Computes the length of `SEGMENT_ACCOUNTS_LINKED_LIST` and 
+// stores it in `GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE`.
+// It also checks that the next node address is current address + 4
+// and that all keys are strictly increasing.
+// NOTE: It may be more efficient to check that the next node addres != U256_MAX
+// (i.e. node was not deleted) and ensure that no node with repeated key
+// is ever read.
 global store_initial_accounts:
     // stack: retdest
     PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
@@ -256,8 +256,8 @@ insert_new_account:
     JUMP
 
 
-/// Searches the account addr in the linked list.
-/// Returns 0 if the account was not found or `original_ptr` if it was already present.
+// Searches the account addr in the linked list.
+// Returns 0 if the account was not found or `original_ptr` if it was already present.
 global search_account:
     // stack: addr_key, retdest
     PROVER_INPUT(linked_list::search_account)
@@ -311,8 +311,8 @@ account_not_found:
 %%after:
 %endmacro
 
-/// Removes the address and its value from the access list.
-/// Panics if the key is not in the list.
+// Removes the address and its value from the access list.
+// Panics if the key is not in the list.
 global remove_account:
     // stack: addr_key, retdest
     PROVER_INPUT(linked_list::remove_account)
@@ -356,15 +356,15 @@ global remove_account:
 %endmacro
 
 
-/// Iterates over the initial account linked list and shallow copies
-/// the accounts, storing a pointer to the copied account in the node.
-/// Computes the length of `SEGMENT_STORAGE_LINKED_LIST` and 
-/// checks against `GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE`.
-/// It also checks that the next node address is current address + 5
-/// and that all keys are strictly increasing.
-/// NOTE: It may be more efficient to check that the next node addres != U256_MAX
-/// (i.e. node was not deleted) and ensure that no node with repeated key
-/// is ever read.
+// Iterates over the initial account linked list and shallow copies
+// the accounts, storing a pointer to the copied account in the node.
+// Computes the length of `SEGMENT_STORAGE_LINKED_LIST` and 
+// checks against `GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE`.
+// It also checks that the next node address is current address + 5
+// and that all keys are strictly increasing.
+// NOTE: It may be more efficient to check that the next node addres != U256_MAX
+// (i.e. node was not deleted) and ensure that no node with repeated key
+// is ever read.
 global store_initial_slots:
     // stack: retdest
     PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
@@ -486,8 +486,8 @@ store_initial_slots_end:
     %add_const(@SEGMENT_STORAGE_LINKED_LIST)
 %endmacro
 
-/// Inserts the pair (address_key, storage_key) and a new payload pointer into the linked list if it is not already present,
-/// or modifies its payload if it was already present.
+// Inserts the pair (address_key, storage_key) and a new payload pointer into the linked list if it is not already present,
+// or modifies its payload if it was already present.
 global insert_slot_with_value:
     // stack: addr_key, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -638,9 +638,9 @@ slot_found_write_value:
     // stack: (empty)
 %endmacro
 
-/// Inserts the pair (address_key, storage_key) and payload pointer into the linked list if it is not already present,
-/// or modifies its payload if it was already present.
-/// Returns `value` if the storage key was inserted, `old_value` if it was already present.
+// Inserts the pair (address_key, storage_key) and payload pointer into the linked list if it is not already present,
+// or modifies its payload if it was already present.
+// Returns `value` if the storage key was inserted, `old_value` if it was already present.
 global insert_slot:
     // stack: addr_key, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -782,8 +782,8 @@ next_node_ok:
     %stack (addr_key, key, value, retdest) -> (retdest, value)
     JUMP
 
-/// Searches the pair (address_key, storage_key) in the storage the linked list.
-/// Returns `value` if the storage key was inserted, `old_value` if it was already present.
+// Searches the pair (address_key, storage_key) in the storage the linked list.
+// Returns `value` if the storage key was inserted, `old_value` if it was already present.
 global search_slot:
     // stack: addr_key, key, value, retdest
     PROVER_INPUT(linked_list::search_slot)
@@ -859,8 +859,8 @@ slot_found_no_write:
 %%after:
 %endmacro
 
-/// Removes the storage key and its value from the list.
-/// Panics if the key is not in the list.
+// Removes the storage key and its value from the list.
+// Panics if the key is not in the list.
 global remove_slot:
     // stack: addr_key, key, retdest
     PROVER_INPUT(linked_list::remove_slot)
@@ -898,7 +898,7 @@ global remove_slot:
     %pop2
     JUMP
 
-/// Called when an account is deleted: it deletes all slots associated with the account.
+// Called when an account is deleted: it deletes all slots associated with the account.
 global remove_all_account_slots:
     // stack: addr_key, retdest
     PROVER_INPUT(linked_list::remove_address_slots)

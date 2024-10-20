@@ -1,4 +1,4 @@
-/// Division modulo 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f, the Secp256k1 base field order
+// Division modulo 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f, the Secp256k1 base field order
 
 // Returns y * (x^-1) where the inverse is taken modulo N
 %macro moddiv_secp_base

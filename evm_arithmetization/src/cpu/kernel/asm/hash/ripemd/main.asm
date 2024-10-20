@@ -1,19 +1,19 @@
-/// Variables beginning with _ are in memory
-///
-/// def ripemd160(_input):
-///     STATE, count, _buffer = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0], 0, [0]*64
-///     STATE, count, _buffer = ripemd_update(STATE, count, _buffer,           len(input) , bytes =          _input  )
-///     STATE, count, _buffer = ripemd_update(STATE, count, _buffer, padlength(len(input)), bytes =     [0x80]+[0]*63)
-///     STATE, count, _buffer = ripemd_update(STATE, count, _buffer,                     8, bytes = size(len(_input)))
-///     return process(STATE)
-/// 
-/// The hardcoded memory structure, where each register is only a byte, is given as follows
-///     { 0-63: buffer, 64-71: bytes(8*len(_input)), 72-135: [0x80]+[0]*63 }
-///
-/// ripemd_update receives and return the stack in the form:
-///     stack: STATE, count, length, virt
-/// where virt is the virtual address of the bytes argument
-///
+// Variables beginning with _ are in memory
+//
+// def ripemd160(_input):
+//     STATE, count, _buffer = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0], 0, [0]*64
+//     STATE, count, _buffer = ripemd_update(STATE, count, _buffer,           len(input) , bytes =          _input  )
+//     STATE, count, _buffer = ripemd_update(STATE, count, _buffer, padlength(len(input)), bytes =     [0x80]+[0]*63)
+//     STATE, count, _buffer = ripemd_update(STATE, count, _buffer,                     8, bytes = size(len(_input)))
+//     return process(STATE)
+// 
+// The hardcoded memory structure, where each register is only a byte, is given as follows
+//     { 0-63: buffer, 64-71: bytes(8*len(_input)), 72-135: [0x80]+[0]*63 }
+//
+// ripemd_update receives and return the stack in the form:
+//     stack: STATE, count, length, virt
+// where virt is the virtual address of the bytes argument
+//
 
 global ripemd:
     // stack:                               virt, length
@@ -102,9 +102,9 @@ process:
     JUMP
 
 
-/// def padlength(length):
-///     t = length % 64
-///     return 56 + 64*(t > 55) - t
+// def padlength(length):
+//     t = length % 64
+//     return 56 + 64*(t > 55) - t
 
 %macro padlength
     // stack:          count

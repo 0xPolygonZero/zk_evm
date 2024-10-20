@@ -1,25 +1,25 @@
-/// _block is stored in memory: its address virt stays on the stack
-/// def compress(STATE: 5, _block):
-/// 
-///     STATEL = STATE
-///     STATEL = loop(STATEL)
-///
-///     STATER = state
-///     STATER = loop(STATER)
-///
-///     return mix(STATER, STATEL, STATE)
-///
-///
-/// def mix(STATER, STATEL, STATE):
-///     return
-///         u32(s1 + l2 + r3),
-///         u32(s2 + l3 + r4),
-///         u32(s3 + l4 + r0),
-///         u32(s4 + l0 + r1),
-///         u32(s0 + l1 + r2)
-/// 
-/// where si, li, ri, oi, VR, RD respectively denote 
-/// STATE[i], STATEL[i], STATER[i], OUTPUT[i], virt, retdest
+// _block is stored in memory: its address virt stays on the stack
+// def compress(STATE: 5, _block):
+// 
+//     STATEL = STATE
+//     STATEL = loop(STATEL)
+//
+//     STATER = state
+//     STATER = loop(STATER)
+//
+//     return mix(STATER, STATEL, STATE)
+//
+//
+// def mix(STATER, STATEL, STATE):
+//     return
+//         u32(s1 + l2 + r3),
+//         u32(s2 + l3 + r4),
+//         u32(s3 + l4 + r0),
+//         u32(s4 + l0 + r1),
+//         u32(s0 + l1 + r2)
+// 
+// where si, li, ri, oi, VR, RD respectively denote 
+// STATE[i], STATEL[i], STATER[i], OUTPUT[i], virt, retdest
 
 global compress:
     // stack:                                       STATE, virt, retdest
@@ -96,21 +96,21 @@ mix:
     JUMP
 
 
-/// def loop(STATE: 5):
-///     while rounds:
-///         update_round_vars()
-///         round(STATE: 5, F, K, rounds, sides)
-///
-/// def update_round_vars():
-///     F = load(F)(sides, rounds)
-///     K = load(K)(sides, rounds)
-///
-/// def round(STATE, rounds, sides):
-///     while boxes:
-///         box(STATE, F, K)
-///         boxes -= 1
-///     boxes   = 16
-///     rounds -= 1
+// def loop(STATE: 5):
+//     while rounds:
+//         update_round_vars()
+//         round(STATE: 5, F, K, rounds, sides)
+//
+// def update_round_vars():
+//     F = load(F)(sides, rounds)
+//     K = load(K)(sides, rounds)
+//
+// def round(STATE, rounds, sides):
+//     while boxes:
+//         box(STATE, F, K)
+//         boxes -= 1
+//     boxes   = 16
+//     rounds -= 1
 
 loop:  
     // stack:          STATE, F, K, 16, rounds, sides, virt, retdest

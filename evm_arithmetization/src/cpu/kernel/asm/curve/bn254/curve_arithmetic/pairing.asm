@@ -1,38 +1,38 @@
-/// The input to the pairing script is a list of points
-///     P_i = n_i*G: Curve, Q_i = m_i*H: TwistedCurve
-/// where G, H are the respective generators, such that
-///     sum_i n_i*m_i = 0
-/// and therefore, due to bilinearity of the pairing:
-///     prod_i e(P_i, Q_i) 
-///   = prod_i e(n_i G, m_i H) 
-///   = prod_i e(G,H)^{n_i * m_i} 
-///   = e(G,H)^{sum_i n_i * m_i}
-///   = e(G,H)^0
-///   = 1: Fp12 
+// The input to the pairing script is a list of points
+//     P_i = n_i*G: Curve, Q_i = m_i*H: TwistedCurve
+// where G, H are the respective generators, such that
+//     sum_i n_i*m_i = 0
+// and therefore, due to bilinearity of the pairing:
+//     prod_i e(P_i, Q_i) 
+//   = prod_i e(n_i G, m_i H) 
+//   = prod_i e(G,H)^{n_i * m_i} 
+//   = e(G,H)^{sum_i n_i * m_i}
+//   = e(G,H)^0
+//   = 1: Fp12 
 
-/// def bn254_pairing(pairs: List((Curve, TwistedCurve))) -> Bool:
-///     
-///     for P, Q in pairs:
-///         if not (P.is_valid and Q.is_valid):
-///             return @U256_MAX
-///     
-///     out = 1
-///     for P, Q in pairs:
-///         if P != 0 and Q != 0:
-///             out *= miller_loop(P, Q)
-///
-///     result = bn254_final_exponent(out)
-///     return result == unit_fp12
+// def bn254_pairing(pairs: List((Curve, TwistedCurve))) -> Bool:
+//     
+//     for P, Q in pairs:
+//         if not (P.is_valid and Q.is_valid):
+//             return @U256_MAX
+//     
+//     out = 1
+//     for P, Q in pairs:
+//         if P != 0 and Q != 0:
+//             out *= miller_loop(P, Q)
+//
+//     result = bn254_final_exponent(out)
+//     return result == unit_fp12
 
-/// The following is a key to this API
-/// 
-/// - k is the number of inputs
-/// - each input given by a pair of points, one on the curve and one on the twisted curve
-/// - each input consists of 6 stack terms---2 for the curve point and 4 for the twisted curve point
-/// - the inputs are presumed to be placed on the kernel contiguously
-/// - the output (as defined above) is an Fp12 element
-/// - out and inp are the BnPairing segment offsets for the output element and input
-/// - the assembly code currently uses offsets 0-78 for scratch space
+// The following is a key to this API
+// 
+// - k is the number of inputs
+// - each input given by a pair of points, one on the curve and one on the twisted curve
+// - each input consists of 6 stack terms---2 for the curve point and 4 for the twisted curve point
+// - the inputs are presumed to be placed on the kernel contiguously
+// - the output (as defined above) is an Fp12 element
+// - out and inp are the BnPairing segment offsets for the output element and input
+// - the assembly code currently uses offsets 0-78 for scratch space
 
 global bn254_pairing:
     // stack: k, inp, out, retdest 

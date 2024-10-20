@@ -10,7 +10,7 @@
     POP
 %endmacro
 
-/// Inserts the address into the list if it is not already present.
+// Inserts the address into the list if it is not already present.
 global insert_touched_addresses:
     // stack: addr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TOUCHED_ADDRESSES_LEN)
@@ -45,8 +45,8 @@ insert_touched_addresses_found:
     %stack (i, len, addr, retdest) -> (retdest)
     JUMP
 
-/// Remove the address from the list.
-/// Panics if the address is not in the list.
+// Remove the address from the list.
+// Panics if the address is not in the list.
 global remove_touched_addresses:
     // stack: addr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TOUCHED_ADDRESSES_LEN)

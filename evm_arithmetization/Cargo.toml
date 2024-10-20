@@ -17,6 +17,8 @@ keywords.workspace = true
 [dependencies]
 anyhow.workspace = true
 bytes.workspace = true
+derive-quote-to-tokens = "0.1.1"
+derive-syn-parse = "0.2.0"
 env_logger.workspace = true
 ethereum-types.workspace = true
 hashbrown.workspace = true
@@ -35,6 +37,8 @@ pest_derive.workspace = true
 plonky2 = { workspace = true, features = ["parallel"] }
 plonky2_maybe_rayon = { workspace = true, features = ["parallel"] }
 plonky2_util.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
 rlp.workspace = true
@@ -46,6 +50,7 @@ sha2.workspace = true
 smt_trie = { workspace = true, optional = true }
 starky = { workspace = true, features = ["parallel"] }
 static_assertions.workspace = true
+syn.workspace = true
 thiserror.workspace = true
 tiny-keccak.workspace = true
 tokio.workspace = true
@@ -56,9 +61,14 @@ zk_evm_common.workspace = true
 zk_evm_proc_macro.workspace = true
 
 [dev-dependencies]
+camino = "1.1.9"
 criterion.workspace = true
+glob = "0.3.1"
 hex.workspace = true
+libtest-mimic = "0.7.3"
+pretty_assertions = "1.4.1"
 ripemd.workspace = true
+syn-miette = "0.3.0"
 
 [features]
 default = ["eth_mainnet"]
@@ -79,6 +89,9 @@ harness = false
 name = "fibonacci_25m_gas"
 harness = false
 
+[[test]]
+name = "parse"
+harness = false
 
 # Display math equations properly in documentation
 [package.metadata.docs.rs]

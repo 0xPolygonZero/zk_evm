@@ -1,6 +1,6 @@
-/// Self-destruct list.
-/// Implemented as an array, with the length stored in the global metadata.
-/// Note: This array allows duplicates.
+// Self-destruct list.
+// Implemented as an array, with the length stored in the global metadata.
+// Note: This array allows duplicates.
 
 %macro insert_selfdestruct_list
     // stack: addr
@@ -13,8 +13,8 @@
     %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN) // Store new length.
 %endmacro
 
-/// Remove one occurrence of the address from the list.
-/// No effect if the address is not in the list.
+// Remove one occurrence of the address from the list.
+// No effect if the address is not in the list.
 global remove_selfdestruct_list:
     // stack: addr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)

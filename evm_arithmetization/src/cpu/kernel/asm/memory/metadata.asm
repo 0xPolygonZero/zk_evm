@@ -277,7 +277,7 @@ global sys_basefee:
     SWAP1
     EXIT_KERNEL
 
-/// Blob-related macros are only available for Ethereum mainnet.
+// Blob-related macros are only available for Ethereum mainnet.
 #[cfg(feature = eth_mainnet)]
 {
     global sys_blobhash:

@@ -1,5 +1,5 @@
-/// def rol(n, x):
-///     return (u32(x << n)) | (x >> (32 - n))
+// def rol(n, x):
+//     return (u32(x << n)) | (x >> (32 - n))
 
 global rol:
     // stack:                        n, x, retdest
@@ -61,8 +61,8 @@ global rol:
   // stack: (rnd==j)*F + acc, rnd
 %endmacro
 
-/// def F0(x, y, z):
-///     return x ^ y ^ z
+// def F0(x, y, z):
+//     return x ^ y ^ z
 
 global F0: 
     // stack: x , y , z, retdest
@@ -73,8 +73,8 @@ global F0:
     SWAP1  
     JUMP
 
-/// def F1(x, y, z):
-///     return (x & y) | (u32(~x) & z)
+// def F1(x, y, z):
+//     return (x & y) | (u32(~x) & z)
 
 global F1:  
     // stack:            x, y, z, retdest
@@ -97,8 +97,8 @@ global F1:
     SWAP1  
     JUMP
 
-/// def F2(x, y, z):
-///     return (x | u32(~y)) ^ z
+// def F2(x, y, z):
+//     return (x | u32(~y)) ^ z
 
 global F2:
     // stack:   x , y,   z, retdest
@@ -113,8 +113,8 @@ global F2:
     SWAP1  
     JUMP
 
-/// def F3(x, y, z):
-///     return (x & z) | (u32(~z) & y)
+// def F3(x, y, z):
+//     return (x & z) | (u32(~z) & y)
 
 global F3: 
     // stack:       x,    y , z , retdest
@@ -133,8 +133,8 @@ global F3:
     SWAP1  
     JUMP 
 
-/// def F4(x, y, z):
-///     return x ^ (y | u32(~z))
+// def F4(x, y, z):
+//     return x ^ (y | u32(~z))
 
 global F4:
     // stack:   x,  y,   z, retdest

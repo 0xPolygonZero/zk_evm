@@ -27,10 +27,10 @@ global test_frob_fp254_12_6:
     %jump(0xdeadbeef)
 
 
-/// def frob_fp254_12_n(f, f'):
-///     g  =             frob_fp254_6(n, f )
-///     g' = FROB_z[n] * frob_fp254_6(n, f')
-///     return g, g'
+// def frob_fp254_12_n(f, f'):
+//     g  =             frob_fp254_6(n, f )
+//     g' = FROB_z[n] * frob_fp254_6(n, f')
+//     return g, g'
 
 %macro frob_fp254_12_1
     // stack:           ptr
@@ -140,14 +140,14 @@ global test_frob_fp254_6_3:
     %jump(0xdeadbeef)
 
 
-/// let Z` denote the complex conjugate of Z
+// let Z` denote the complex conjugate of Z
 
-/// def frob_fp254_6_n(C0, C1, C2):
-///     if n%2:
-///         D0, D1, D2 = C0`, FROB_T1[n] * C1`, FROB_T2[n] * C2`
-///     else: 
-///         D0, D1, D2 = C0 , FROB_T1[n] * C1 , FROB_T2[n] * C2
-///     return D0, D1, D2 
+// def frob_fp254_6_n(C0, C1, C2):
+//     if n%2:
+//         D0, D1, D2 = C0`, FROB_T1[n] * C1`, FROB_T2[n] * C2`
+//     else: 
+//         D0, D1, D2 = C0 , FROB_T1[n] * C1 , FROB_T2[n] * C2
+//     return D0, D1, D2 
 
 %macro frob_fp254_6_1
     // stack: C0 , C1 , C2

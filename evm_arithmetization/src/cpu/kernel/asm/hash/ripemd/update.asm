@@ -1,21 +1,21 @@
-/// ripemd_update will receive and return the stack in the form:
-///     stack: STATE, count, length, virt
-///
-/// def ripemd_update(state, count, buffer, length, bytestring):
-///     have  = (count // 8) % 64
-///     need  = 64 - have
-///     shift = 0
-///     P = length >= need and have
-///     Q = length >= need
-///     if P: 
-///         update_1()
-///     if Q:
-///         update_2()
-///     R = length > shift
-///     if R:
-///         buffer_update(virt + shift, have, length - shift)
-/// 
-///     return state, count + 8*length, buffer
+// ripemd_update will receive and return the stack in the form:
+//     stack: STATE, count, length, virt
+//
+// def ripemd_update(state, count, buffer, length, bytestring):
+//     have  = (count // 8) % 64
+//     need  = 64 - have
+//     shift = 0
+//     P = length >= need and have
+//     Q = length >= need
+//     if P: 
+//         update_1()
+//     if Q:
+//         update_2()
+//     R = length > shift
+//     if R:
+//         buffer_update(virt + shift, have, length - shift)
+// 
+//     return state, count + 8*length, buffer
 
 global ripemd_update:
     // stack:                           STATE, count, length, virt, retdest
@@ -67,11 +67,11 @@ return_step:
     JUMP
 
 
-/// def update_1():
-///     buffer_update(virt, have, need)
-///     shift = need
-///     have  = 0
-///     state = compress(state, buffer)
+// def update_1():
+//     buffer_update(virt, have, need)
+//     shift = need
+//     have  = 0
+//     state = compress(state, buffer)
 
 update_1:
     // stack: Q, STATE, shift, need, have, count, length, virt, retdest
@@ -83,10 +83,10 @@ update_1a:
     // stack:                                STATE, 0, update_2, shift = need, need, have = 0, count, length, virt, retdest
     %jump(compress)
 
-/// def update_2():
-///     while length >= shift + 64:
-///         shift += 64
-///         state  = compress(state, bytestring[shift-64:])
+// def update_2():
+//     while length >= shift + 64:
+//         shift += 64
+//         state  = compress(state, bytestring[shift-64:])
 
 update_2:
     // stack:       STATE, shift, need, have, count, length, virt, retdest
@@ -108,9 +108,9 @@ update_2:
     %jump(compress)
 
 
-/// def buffer_update(get, set, times):
-///     for i in range(times):
-///         buffer[set+i] = bytestring[get+i]
+// def buffer_update(get, set, times):
+//     for i in range(times):
+//         buffer[set+i] = bytestring[get+i]
 
 buffer_update:
     // stack:           get  , set  , times  , retdest

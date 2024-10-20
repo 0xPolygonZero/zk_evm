@@ -1,21 +1,21 @@
-///////////////////////////////////////
-///// GENERAL FP12 MULTIPLICATION /////
-///////////////////////////////////////
+//////////////////////////
+//// GENERAL FP12 MULTIPLICATION ////
+//////////////////////////
 
-/// inputs:
-///     F = f + f'z
-///     G = g + g'z
-///
-/// output:
-///     H = h + h'z = FG
-///
-///     h  = fg + sh(f'g')
-///     h' = (f+f')(g+g') - fg - f'g'
-///
-/// memory pointers [ind' = ind+6]
-///     {inA: f, inA: f', inB: g, inB':g', out: h, out': h'}
-///
-/// f, f', g, g' consist of six elements on the stack
+// inputs:
+//     F = f + f'z
+//     G = g + g'z
+//
+// output:
+//     H = h + h'z = FG
+//
+//     h  = fg + sh(f'g')
+//     h' = (f+f')(g+g') - fg - f'g'
+//
+// memory pointers [ind' = ind+6]
+//     {inA: f, inA: f', inB: g, inB':g', out: h, out': h'}
+//
+// f, f', g, g' consist of six elements on the stack
 
 global mul_fp254_12:
     // stack:                                   inA, inB, out 
@@ -111,25 +111,25 @@ mul_fp254_12_3:
     JUMP
 
 
-//////////////////////////////////////
-///// SPARSE FP12 MULTIPLICATION /////
-//////////////////////////////////////
+//////////////////////////
+//// SPARSE FP12 MULTIPLICATION ////
+//////////////////////////
 
-/// input:
-///     F = f + f'z
-///     G = g0 + (G1)t + (G2)tz
-///
-/// output:
-///     H = h + h'z = FG
-///       = g0 * [f + f'z] + G1 * [sh(f) + sh(f')z] + G2 * [sh2(f') + sh(f)z]
-///     
-///     h  = g0 * f  + G1 * sh(f ) + G2 * sh2(f') 
-///     h' = g0 * f' + G1 * sh(f') + G2 * sh (f )
-///
-/// memory pointers [ind' = ind+6, inB2 = inB1 + 2 = inB + 3]
-///     { inA: f, inA': f', inB: g0, inB1: G1, inB2: G2, out: h, out': h'}
-///
-/// f, f' consist of six elements; G1, G1' consist of two elements; and g0 of one element 
+// input:
+//     F = f + f'z
+//     G = g0 + (G1)t + (G2)tz
+//
+// output:
+//     H = h + h'z = FG
+//       = g0 * [f + f'z] + G1 * [sh(f) + sh(f')z] + G2 * [sh2(f') + sh(f)z]
+//     
+//     h  = g0 * f  + G1 * sh(f ) + G2 * sh2(f') 
+//     h' = g0 * f' + G1 * sh(f') + G2 * sh (f )
+//
+// memory pointers [ind' = ind+6, inB2 = inB1 + 2 = inB + 3]
+//     { inA: f, inA': f', inB: g0, inB1: G1, inB2: G2, out: h, out': h'}
+//
+// f, f' consist of six elements; G1, G1' consist of two elements; and g0 of one element 
 
 global mul_fp254_12_sparse:
     // stack:                                                                    inA, inB, out
@@ -224,23 +224,23 @@ global mul_fp254_12_sparse:
     JUMP
 
 
-/////////////////////////
-///// FP12 SQUARING /////
-/////////////////////////
+/////////////////
+//// FP12 SQUARING ////
+/////////////////
 
-/// input:
-///     F = f + f'z
-///
-/// output:
-///     H = h + h'z = FF
-///
-///     h  = ff + sh(f'f')
-///     h' = 2ff'
-///
-/// memory pointers [ind' = ind+6]
-///     {inp: f, inp: f', out: h, out': h'}
-///
-/// f, f' consist of six elements on the stack
+// input:
+//     F = f + f'z
+//
+// output:
+//     H = h + h'z = FF
+//
+//     h  = ff + sh(f'f')
+//     h' = 2ff'
+//
+// memory pointers [ind' = ind+6]
+//     {inp: f, inp: f', out: h, out': h'}
+//
+// f, f' consist of six elements on the stack
 
 global square_fp254_12:
     // stack:                                                                               inp, out
