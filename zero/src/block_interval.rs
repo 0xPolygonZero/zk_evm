@@ -187,20 +187,22 @@ mod test {
 
     #[tokio::test]
     async fn can_create_block_interval_from_inclusive_range() {
-        let mock = Arc::new(MockBlockProvider::new());
         assert_eq!(
-            BlockInterval::new(mock, BlockId::from(0), Some(BlockId::from(10)))
-                .await
-                .unwrap(),
+            BlockInterval::new(
+                Arc::new(MockBlockProvider::new()),
+                BlockId::from(0),
+                Some(BlockId::from(10))
+            )
+            .await
+            .unwrap(),
             BlockInterval::Range(0..11)
         );
     }
 
     #[tokio::test]
     async fn can_create_follow_from_block_interval() {
-        let mock = Arc::new(MockBlockProvider::new());
         assert_eq!(
-            BlockInterval::new(mock, BlockId::from(100), None)
+            BlockInterval::new(Arc::new(MockBlockProvider::new()), BlockId::from(100), None)
                 .await
                 .unwrap(),
             BlockInterval::FollowFrom { start_block: 100 }
@@ -209,10 +211,9 @@ mod test {
 
     #[tokio::test]
     async fn can_create_single_block_interval() {
-        let mock = Arc::new(MockBlockProvider::new());
         assert_eq!(
             BlockInterval::new(
-                mock,
+                Arc::new(MockBlockProvider::new()),
                 BlockId::from(123415131),
                 Some(BlockId::from(123415131))
             )
@@ -224,18 +225,22 @@ mod test {
 
     #[tokio::test]
     async fn cannot_create_invalid_range() {
-        let mock = Arc::new(MockBlockProvider::new());
         assert_eq!(
-            BlockInterval::new(mock, BlockId::from(123415131), Some(BlockId::from(0)))
-                .await
-                .unwrap_err()
-                .to_string(),
+            BlockInterval::new(
+                Arc::new(MockBlockProvider::new()),
+                BlockId::from(123415131),
+                Some(BlockId::from(0))
+            )
+            .await
+            .unwrap_err()
+            .to_string(),
             anyhow!("invalid block interval range (123415131..0)").to_string()
         );
     }
 
     #[tokio::test]
     async fn can_create_single_block_interval_from_hash() {
+        // Mock the block for single block interval.
         let mut mock = MockBlockProvider::new();
         let block_id = BlockId::Hash(
             "0xb51ceca7ba912779ed6721d2b93849758af0d2354683170fb71dead6e439e6cb"
@@ -243,14 +248,9 @@ mod test {
                 .unwrap()
                 .into(),
         );
-        let mut block: Block<Transaction, Header> = Block::default();
-        block.header.number = 12345;
-        mock.expect_get_block_by_id()
-            .with(eq(block_id))
-            .returning(move |_| {
-                let block = block.clone();
-                Box::pin(async move { Ok(Some(block)) })
-            });
+        mock_block(&mut mock, block_id, 12345);
+
+        // Create the interval.
         let mock = Arc::new(mock);
         assert_eq!(
             BlockInterval::new(mock, block_id, Some(block_id))
@@ -262,6 +262,7 @@ mod test {
 
     #[tokio::test]
     async fn can_create_block_interval_from_inclusive_hash_range() {
+        // Mock the blocks for the range.
         let mut mock = MockBlockProvider::new();
         let start_block_id = BlockId::Hash(
             "0xb51ceca7ba912779ed6721d2b93849758af0d2354683170fb71dead6e439e6cb"
@@ -269,28 +270,16 @@ mod test {
                 .unwrap()
                 .into(),
         );
+        mock_block(&mut mock, start_block_id, 12345);
         let end_block_id = BlockId::Hash(
             "0x351ceca7ba912779ed6721d2b93849758af0d2354683170fb71dead6e439e6cb"
                 .parse::<B256>()
                 .unwrap()
                 .into(),
         );
-        let mut start_block: Block<Transaction, Header> = Block::default();
-        start_block.header.number = 12345;
-        mock.expect_get_block_by_id()
-            .with(eq(start_block_id))
-            .returning(move |_| {
-                let block = start_block.clone();
-                Box::pin(async move { Ok(Some(block)) })
-            });
-        let mut end_block: Block<Transaction, Header> = Block::default();
-        end_block.header.number = 12355;
-        mock.expect_get_block_by_id()
-            .with(eq(end_block_id))
-            .returning(move |_| {
-                let block = end_block.clone();
-                Box::pin(async move { Ok(Some(block)) })
-            });
+        mock_block(&mut mock, end_block_id, 12355);
+
+        // Create the interval.
         let mock = Arc::new(mock);
         assert_eq!(
             BlockInterval::new(mock, start_block_id, Some(end_block_id))
@@ -302,21 +291,17 @@ mod test {
 
     #[tokio::test]
     async fn can_create_follow_from_block_interval_hash() {
-        let mut mock = MockBlockProvider::new();
+        // Mock a block for range to start from.
         let start_block_id = BlockId::Hash(
             "0xb51ceca7ba912779ed6721d2b93849758af0d2354683170fb71dead6e439e6cb"
                 .parse::<B256>()
                 .unwrap()
                 .into(),
         );
-        let mut start_block: Block<Transaction, Header> = Block::default();
-        start_block.header.number = 12345;
-        mock.expect_get_block_by_id()
-            .with(eq(start_block_id))
-            .returning(move |_| {
-                let block = start_block.clone();
-                Box::pin(async move { Ok(Some(block)) })
-            });
+        let mut mock = MockBlockProvider::new();
+        mock_block(&mut mock, start_block_id, 12345);
+
+        // Create the interval.
         let mock = Arc::new(mock);
         assert_eq!(
             BlockInterval::new(mock, start_block_id, None)
@@ -326,16 +311,32 @@ mod test {
         );
     }
 
+    /// Configures the mock to expect a query for a block by id and return the
+    /// expected block number.
+    fn mock_block(mock: &mut MockBlockProvider, query_id: BlockId, resulting_block_num: u64) {
+        let mut block: Block<Transaction, Header> = Block::default();
+        block.header.number = resulting_block_num;
+        mock.expect_get_block_by_id()
+            .with(eq(query_id))
+            .returning(move |_| {
+                let block = block.clone();
+                Box::pin(async move { Ok(Some(block)) })
+            });
+    }
+
     #[tokio::test]
     async fn can_into_bounded_stream() {
         use futures::StreamExt;
         let mut result = Vec::new();
-        let mock = Arc::new(MockBlockProvider::new());
-        let mut stream = BlockInterval::new(mock, BlockId::from(1), Some(BlockId::from(9)))
-            .await
-            .unwrap()
-            .into_bounded_stream()
-            .unwrap();
+        let mut stream = BlockInterval::new(
+            Arc::new(MockBlockProvider::new()),
+            BlockId::from(1),
+            Some(BlockId::from(9)),
+        )
+        .await
+        .unwrap()
+        .into_bounded_stream()
+        .unwrap();
         while let Some(val) = stream.next().await {
             result.push(val.unwrap());
         }
