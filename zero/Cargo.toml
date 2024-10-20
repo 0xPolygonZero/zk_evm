@@ -47,10 +47,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 zk_evm_common.workspace = true
+mockall = "0.13.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
-
 
 [build-dependencies]
 anyhow.workspace = true

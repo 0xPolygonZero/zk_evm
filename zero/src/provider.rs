@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -5,12 +6,21 @@ use alloy::primitives::BlockHash;
 use alloy::rpc::types::{Block, BlockId, BlockTransactionsKind};
 use alloy::{providers::Provider, transports::Transport};
 use anyhow::Context;
+use mockall::automock;
 use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
 use crate::rpc::RpcType;
 
 const CACHE_SIZE: usize = 1024;
 const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
+
+#[automock]
+pub trait BlockProvider {
+    fn get_block_by_id(
+        &self,
+        block_id: BlockId,
+    ) -> impl Future<Output = anyhow::Result<Option<Block>>> + Send;
+}
 
 /// Wrapper around alloy provider to cache blocks and other
 /// frequently used data.
@@ -121,5 +131,18 @@ where
 
             Ok(block)
         }
+    }
+}
+
+impl<ProviderT, TransportT> BlockProvider for CachedProvider<ProviderT, TransportT>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    async fn get_block_by_id(&self, block_id: BlockId) -> anyhow::Result<Option<Block>> {
+        Ok(Some(
+            self.get_block(block_id, BlockTransactionsKind::Hashes)
+                .await?,
+        ))
     }
 }
