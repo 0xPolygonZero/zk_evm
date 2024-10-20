@@ -46,6 +46,7 @@ pub enum WorkerRunMode {
     Default,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Deletes all the previously cached circuits.
@@ -70,7 +71,7 @@ pub(crate) enum Command {
         /// The end of the block range to prove (inclusive).
         #[arg(long, short = 'e')]
         end_block: Option<BlockId>,
-        /// The checkpoint block number.
+        /// The checkpoint block.
         #[arg(short, long, default_value = "0")]
         checkpoint_block: BlockId,
         /// The previous proof output.

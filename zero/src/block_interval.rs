@@ -3,14 +3,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use alloy::rpc::types::eth::BlockId;
-use alloy::rpc::types::{Block, BlockTransactionsKind};
-use alloy::{providers::Provider, transports::Transport};
 use anyhow::{anyhow, Result};
 use async_stream::try_stream;
 use futures::Stream;
 use tracing::info;
 
-use crate::provider::{BlockProvider, CachedProvider};
+use crate::provider::BlockProvider;
 
 /// The async stream of block numbers.
 /// The second bool flag indicates if the element is last in the interval.
@@ -179,7 +177,7 @@ impl std::fmt::Display for BlockInterval {
 #[cfg(test)]
 mod test {
     use alloy::primitives::B256;
-    use alloy::rpc::types::{Header, Transaction};
+    use alloy::rpc::types::{Block, Header, Transaction};
     use mockall::predicate::*;
 
     use super::*;

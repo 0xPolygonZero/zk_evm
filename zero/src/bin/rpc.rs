@@ -25,7 +25,6 @@ struct FetchParams {
     pub start_block: u64,
     pub end_block: u64,
     pub checkpoint_block_number: Option<u64>,
-    pub rpc_type: RpcType,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -127,7 +126,6 @@ impl Cli {
                     start_block,
                     end_block,
                     checkpoint_block_number,
-                    rpc_type: self.config.rpc_type,
                 };
 
                 let block_prover_inputs =
@@ -153,7 +151,6 @@ impl Cli {
                             start_block: block_number,
                             end_block: block_number,
                             checkpoint_block_number: None,
-                            rpc_type: self.config.rpc_type,
                         };
 
                         let block_prover_inputs =
