@@ -106,9 +106,24 @@ pub const NUM_TABLES: usize = if cfg!(feature = "cdk_erigon") {
     Table::MemAfter as usize + 1
 };
 
-/// Indices of Keccak Tables
-pub const KECCAK_TABLES_INDICES: [usize; 2] =
-    [Table::Keccak as usize, Table::KeccakSponge as usize];
+/// Indices of optional Tables
+#[cfg(not(feature = "cdk_erigon"))]
+pub const OPTIONAL_TABLE_INDICES: [usize; 5] = [
+    Table::BytePacking as usize,
+    Table::Keccak as usize,
+    Table::KeccakSponge as usize,
+    Table::Logic as usize,
+    Table::MemAfter as usize,
+];
+#[cfg(feature = "cdk_erigon")]
+pub const OPTIONAL_TABLE_INDICES: [usize; 6] = [
+    Table::BytePacking as usize,
+    Table::Keccak as usize,
+    Table::KeccakSponge as usize,
+    Table::Logic as usize,
+    Table::MemAfter as usize,
+    Table::Poseidon as usize,
+];
 
 impl Table {
     /// Returns all STARK table indices.

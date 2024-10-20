@@ -93,7 +93,7 @@ pub mod testing {
     use starky::stark::Stark;
     use starky::verifier::verify_stark_proof_with_challenges;
 
-    use crate::all_stark::{Table, MEMORY_CTL_IDX, NUM_CTLS};
+    use crate::all_stark::{Table, MEMORY_CTL_IDX, NUM_CTLS, OPTIONAL_TABLE_INDICES};
     use crate::cpu::kernel::aggregator::KERNEL;
     use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
     use crate::get_challenges::testing::AllProofChallenges;
@@ -123,6 +123,22 @@ pub mod testing {
                 #[cfg(feature = "cdk_erigon")]
                 self.poseidon_stark.num_lookup_helper_columns(config),
             ]
+        }
+
+        pub fn get_constraint_degree(&self, table: Table) -> usize {
+            match table {
+                Table::Arithmetic => self.arithmetic_stark.constraint_degree(),
+                Table::BytePacking => self.byte_packing_stark.constraint_degree(),
+                Table::Cpu => self.cpu_stark.constraint_degree(),
+                Table::Keccak => self.keccak_stark.constraint_degree(),
+                Table::KeccakSponge => self.keccak_sponge_stark.constraint_degree(),
+                Table::Logic => self.logic_stark.constraint_degree(),
+                Table::Memory => self.memory_stark.constraint_degree(),
+                Table::MemBefore => self.mem_before_stark.constraint_degree(),
+                Table::MemAfter => self.mem_after_stark.constraint_degree(),
+                #[cfg(feature = "cdk_erigon")]
+                Table::Poseidon => self.poseidon_stark.constraint_degree(),
+            }
         }
     }
 
@@ -191,48 +207,48 @@ pub mod testing {
 
         macro_rules! verify_table {
             ($stark:ident, $table:expr) => {
-                let stark_proof = &stark_proofs[*$table]
-                    .as_ref()
-                    .expect("Missing stark_proof")
-                    .proof;
-                let ctl_vars = {
-                    let (total_num_helpers, _, num_helpers_by_ctl) =
-                        CrossTableLookup::num_ctl_helpers_zs_all(
-                            &all_stark.cross_table_lookups,
-                            *$table,
-                            config.num_challenges,
-                            $stark.constraint_degree(),
-                        );
-                    CtlCheckVars::from_proof(
-                        *$table,
-                        &stark_proof,
-                        &all_stark.cross_table_lookups,
-                        &ctl_challenges,
-                        num_lookup_columns[*$table],
-                        total_num_helpers,
-                        &num_helpers_by_ctl,
-                    )
-                };
-                verify_stark_proof_with_challenges(
-                    $stark,
-                    stark_proof,
-                    &stark_challenges[*$table]
+                if !OPTIONAL_TABLE_INDICES.contains(&*$table) || all_proof.table_in_use[*$table] {
+                    let stark_proof = &stark_proofs[*$table]
                         .as_ref()
-                        .expect("Missing challenges"),
-                    Some(&ctl_vars),
-                    &[],
-                    config,
-                )?;
+                        .expect("Missing stark_proof")
+                        .proof;
+                    let ctl_vars = {
+                        let (total_num_helpers, _, num_helpers_by_ctl) =
+                            CrossTableLookup::num_ctl_helpers_zs_all(
+                                &all_stark.cross_table_lookups,
+                                *$table,
+                                config.num_challenges,
+                                $stark.constraint_degree(),
+                            );
+                        CtlCheckVars::from_proof(
+                            *$table,
+                            &stark_proof,
+                            &all_stark.cross_table_lookups,
+                            &ctl_challenges,
+                            num_lookup_columns[*$table],
+                            total_num_helpers,
+                            &num_helpers_by_ctl,
+                        )
+                    };
+                    verify_stark_proof_with_challenges(
+                        $stark,
+                        stark_proof,
+                        &stark_challenges[*$table]
+                            .as_ref()
+                            .expect("Missing challenges"),
+                        Some(&ctl_vars),
+                        &[],
+                        config,
+                    )?;
+                }
             };
         }
 
         verify_table!(arithmetic_stark, Table::Arithmetic);
         verify_table!(byte_packing_stark, Table::BytePacking);
         verify_table!(cpu_stark, Table::Cpu);
-        if all_proof.use_keccak_tables {
-            verify_table!(keccak_stark, Table::Keccak);
-            verify_table!(keccak_sponge_stark, Table::KeccakSponge);
-        }
+        verify_table!(keccak_stark, Table::Keccak);
+        verify_table!(keccak_sponge_stark, Table::KeccakSponge);
         verify_table!(logic_stark, Table::Logic);
         verify_table!(memory_stark, Table::Memory);
         verify_table!(mem_before_stark, Table::MemBefore);
@@ -263,37 +279,34 @@ pub mod testing {
 
         let all_ctls = &all_stark.cross_table_lookups;
 
+        let table_all = Table::all();
+        let ctl_zs_first_values = core::array::from_fn(|i| {
+            let table = table_all[i];
+            if let Some(stark_proof) = &stark_proofs[i] {
+                stark_proof
+                    .proof
+                    .openings
+                    .ctl_zs_first
+                    .as_ref()
+                    .expect("Missing ctl_zs")
+                    .clone()
+            } else if OPTIONAL_TABLE_INDICES.contains(&table) {
+                let degree = all_stark.get_constraint_degree(table);
+                let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                    all_ctls,
+                    i,
+                    config.num_challenges,
+                    degree,
+                );
+                vec![F::ZERO; n]
+            } else {
+                panic!("Unable to find stark_proof for table {:?}", table);
+            }
+        });
+
         verify_cross_table_lookups::<F, D, NUM_TABLES>(
             cross_table_lookups,
-            core::array::from_fn(|i| {
-                if let Some(stark_proof) = &stark_proofs[i] {
-                    stark_proof
-                        .proof
-                        .openings
-                        .ctl_zs_first
-                        .as_ref()
-                        .expect("Missing ctl_zs")
-                        .clone()
-                } else if i == *Table::Keccak {
-                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
-                        all_ctls,
-                        *Table::Keccak,
-                        config.num_challenges,
-                        keccak_stark.constraint_degree(),
-                    );
-                    vec![F::ZERO; n]
-                } else if i == *Table::KeccakSponge {
-                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
-                        all_ctls,
-                        *Table::KeccakSponge,
-                        config.num_challenges,
-                        keccak_sponge_stark.constraint_degree(),
-                    );
-                    vec![F::ZERO; n]
-                } else {
-                    panic!("Unable to find stark_proof");
-                }
-            }),
+            ctl_zs_first_values,
             &extra_looking_sums,
             config,
         )
