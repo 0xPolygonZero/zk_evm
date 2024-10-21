@@ -53,10 +53,20 @@ global extcodehash:
 %%after:
 %endmacro
 
-%macro ext_code_empty
+#[cfg(feature = eth_mainnet)]
+{
+    %macro ext_code_empty
     %extcodehash
     %eq_const(@EMPTY_STRING_HASH)
 %endmacro
+}
+#[cfg(feature = cdk_erigon)]
+{
+    %macro ext_code_empty
+        %extcodehash
+        %eq_const(@EMPTY_STRING_POSEIDON_HASH)
+    %endmacro
+}
 
 %macro extcodesize
     %stack (address) -> (address, %%after)

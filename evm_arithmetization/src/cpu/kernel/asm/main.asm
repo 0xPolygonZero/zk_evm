@@ -135,9 +135,9 @@ global start_txns:
     #[cfg(feature = cdk_erigon)]
     {
         // If txn_idx == 0, perform pre-state execution for CDK erigon.
-        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
-        ISZERO
-        %jumpi(pre_block_execution)
+        // %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        // ISZERO
+        // %jumpi(pre_block_execution)
     }
 
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
@@ -186,7 +186,9 @@ global txn_loop_after:
 global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
-    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) %assert_eq
+    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER)
+global debug_gas_error:
+    %assert_eq
     DUP3
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
     %pop3

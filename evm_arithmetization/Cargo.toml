@@ -58,6 +58,7 @@ hex = { workspace = true }
 ripemd = { workspace = true }
 
 [features]
+default = ["cdk_erigon"]
 asmtools = ["hex"]
 polygon_pos = []
 cdk_erigon = ["smt_trie"]

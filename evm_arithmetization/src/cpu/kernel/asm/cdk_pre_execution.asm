@@ -106,7 +106,7 @@ global create_scalable_l2_account:
     // the code hash 
     
     // stack: retdest
-    PUSH @EMPTY_STRING_HASH
+    PUSH @EMPTY_STRING_POSEIDON_HASH
     PUSH @ADDRESS_SCALABLE_L2
 global debug_setting_scalable_code:
     %set_code // code hash

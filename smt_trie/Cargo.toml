@@ -17,6 +17,7 @@ keywords.workspace = true
 ethereum-types = { workspace = true }
 hex-literal = { workspace = true }
 plonky2 = { workspace = true }
+mpt_trie = {workspace = true}
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 log = { workspace = true }

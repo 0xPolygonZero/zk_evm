@@ -5,7 +5,7 @@ use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
-use ethereum_types::U256;
+use ethereum_types::{H256, U256};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
@@ -17,6 +17,7 @@ use crate::db::{Db, MemoryDb};
 use crate::utils::{
     f2limbs, get_unique_sibling, hash0, hash_key_hash, hashout2u, key2u, limbs2f, u2h, u2k,
 };
+use mpt_trie::partial_trie::HashedPartialTrie;
 
 pub(crate) const HASH_TYPE: u8 = 0;
 pub(crate) const INTERNAL_TYPE: u8 = 1;
@@ -683,5 +684,11 @@ fn _hash_serialize(v: &[U256], ptr: usize) -> HashOut {
             F::poseidon(node.0)[0..4].try_into().unwrap()
         }
         _ => panic!("Should not happen"),
+    }
+}
+
+impl<D: Db> From<(HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)> for Smt<D> {
+    fn from(_: (HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)) -> Self {
+        todo!()
     }
 }

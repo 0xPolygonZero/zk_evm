@@ -60,7 +60,7 @@ vergen-git2 = { version = "1.0.0", features = ["build"] }
 
 
 [features]
-default = ["eth_mainnet"]
+default = ["cdk_erigon"]
 eth_mainnet = ["evm_arithmetization/eth_mainnet", "trace_decoder/eth_mainnet"]
 cdk_erigon = ["evm_arithmetization/cdk_erigon", "trace_decoder/cdk_erigon"]
 polygon_pos = ["evm_arithmetization/polygon_pos", "trace_decoder/polygon_pos"]
