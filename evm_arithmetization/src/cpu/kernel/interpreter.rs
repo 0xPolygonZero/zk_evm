@@ -11,7 +11,7 @@ use std::collections::{BTreeSet, HashMap};
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use keccak_hash::H256;
-use log::{trace, Level};
+use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -177,13 +177,6 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
             } else {
                 &vec![]
             };
-            trace!(
-                "code: {:?}, code_addr: {:?}, {:?} <============",
-                &code,
-                &code_addr,
-                code_map.contains_key(code_addr),
-            );
-            trace!("code_map: {:?}", &code_map);
             prove_context_jumpdests(code, ctx_jumpdests)
         })
         .collect();

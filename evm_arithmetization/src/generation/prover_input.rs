@@ -7,7 +7,6 @@ use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use keccak_hash::keccak;
-use log::{info, trace};
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -792,10 +791,6 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        // Simulate the user's code and (unnecessarily) part of the kernel code,
-        // skipping the validate table call
-
-        info!("Generating JUMPDEST tables");
         let rpcw = self.inputs.jumpdest_table.clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
@@ -804,15 +799,11 @@ impl<F: RichField> GenerationState<F> {
             self.jumpdest_table = rpcp;
             return Ok(());
         }
-
-        info!("Generating JUMPDEST tables: Running SIM");
-
+        // Simulate the user's code and (unnecessarily) part of the kernel code,
+        // skipping the validate table call
         let (simp, _simw) = simulate_cpu_and_get_user_jumps("terminate_common", self)
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
         self.jumpdest_table = Some(simp);
-
-        info!("Generating JUMPDEST tables: finished");
-
         Ok(())
     }
 
@@ -828,7 +819,6 @@ impl<F: RichField> GenerationState<F> {
             |(ctx, jumpdest_table)| {
                 let code = self.get_code(ctx).unwrap();
                 let code_hash = keccak(code.clone());
-                trace!("ctx: {ctx}, code_hash: {:?} code: {:?}", code_hash, code);
                 for offset in jumpdest_table.clone() {
                     jdtw.insert(code_hash, ctx, offset);
                 }

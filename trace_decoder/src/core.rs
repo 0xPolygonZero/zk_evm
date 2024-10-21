@@ -21,7 +21,6 @@ use evm_arithmetization::{
 };
 use itertools::Itertools as _;
 use keccak_hash::H256;
-use log::debug;
 use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
@@ -859,9 +858,6 @@ impl Hash2Code {
     }
     pub fn get(&mut self, hash: H256) -> Option<Vec<u8>> {
         let res = self.inner.get(&hash).cloned();
-        if res.is_none() {
-            debug!("no code for hash {:#x}", hash);
-        }
         res
     }
     pub fn insert(&mut self, code: Vec<u8>) {

@@ -24,7 +24,7 @@ use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
-use tracing::{trace, warn};
+use tracing::warn;
 
 use crate::rpc::H256;
 
@@ -70,7 +70,6 @@ where
         match timeout(*fetch_timeout, block_stackonly_structlog_traces_fut).await {
             Ok(traces) => traces?,
             Err(elapsed) => {
-                trace!(target: "fetching block structlogs timed out", ?elapsed);
                 bail!(elapsed);
             }
         };
@@ -97,8 +96,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
     structlog: &[StructLog],
     tx_traces: impl Iterator<Item = (Address, &'a TxnTrace)>,
 ) -> anyhow::Result<JumpDestTableWitness> {
-    trace!("Generating JUMPDEST table for tx: {}", tx.hash);
-
     let mut jumpdest_table = JumpDestTableWitness::default();
 
     // This map does neither contain the `init` field of Contract Deployment
@@ -111,17 +108,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 .map(|code| (callee_addr, get_code_hash(code)))
         })
         .collect();
-
-    // REVIEW: will be removed before merge
-    trace!(
-        "Transaction: {} is a {}.",
-        tx.hash,
-        if tx.to.is_some() {
-            "message call"
-        } else {
-            "contract creation"
-        }
-    );
 
     let entrypoint_code_hash: H256 = match tx.to {
         Some(to_address) if is_precompile(to_address.compat()) => return Ok(jumpdest_table),
@@ -147,7 +133,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
     next_ctx_available += 1;
 
     let mut stuctlog_iter = structlog.iter().enumerate().peekable();
-    while let Some((step, entry)) = stuctlog_iter.next() {
+    while let Some((_step, entry)) = stuctlog_iter.next() {
         let op = entry.op.as_str();
         let curr_depth: usize = entry.depth.try_into().unwrap();
 
@@ -163,22 +149,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
         );
         let (code_hash, ctx) = call_stack.last().unwrap();
 
-        // REVIEW: will be removed before merge
-        trace!(
-            step,
-            curr_depth,
-            tx_hash = ?tx.hash,
-            ?code_hash,
-            ctx,
-            next_ctx_available,
-            pc = entry.pc,
-            pc_hex = format!("{:08x?}", entry.pc),
-            gas = entry.gas,
-            gas_cost = entry.gas_cost,
-            op,
-            ?entry,
-        );
-
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
                 prev_jump = None;
@@ -191,7 +161,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 let operands_used = 2;
 
                 if evm_stack.len() < operands_used {
-                    trace!( "Opcode {op} expected {operands_used} operands at the EVM stack, but only {} were found.", evm_stack.len());
                     // Note for future debugging:  There may exist edge cases, where the call
                     // context has been incremented before the call op fails. This should be
                     // accounted for before this and the following `continue`.  The details are
@@ -208,21 +177,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
                     let next_code_hash = callee_addr_to_code_hash[&callee_address];
                     call_stack.push((next_code_hash, next_ctx_available));
                 };
-
-                if is_precompile(callee_address.compat()) {
-                    trace!("Called precompile at address {}.", &callee_address);
-                };
-
-                if callee_addr_to_code_hash.contains_key(&callee_address).not()
-                    && is_precompile(callee_address.compat()).not()
-                {
-                    // This case happens if calling an EOA. This is described
-                    // under opcode `STOP`: https://www.evm.codes/#00?fork=cancun
-                    trace!(
-                        "Callee address {} has no associated `code_hash`.",
-                        &callee_address
-                    );
-                }
 
                 if let Some((_next_step, next_entry)) = stuctlog_iter.peek() {
                     let next_depth: usize = next_entry.depth.try_into().unwrap();
@@ -252,7 +206,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
                 let operands = 1;
                 if evm_stack.len() < operands {
-                    trace!( "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.", evm_stack.len() );
                     continue;
                 }
                 let [jump_target, ..] = evm_stack[..] else {
@@ -268,7 +221,6 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 let evm_stack: Vec<_> = entry.stack.as_ref().unwrap().iter().rev().collect();
                 let operands = 2;
                 if evm_stack.len() < operands {
-                    trace!( "Opcode {op} expected {operands} operands at the EVM stack, but only {} were found.", evm_stack.len());
                     continue;
                 };
 
@@ -290,20 +242,11 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 prev_jump = None;
 
                 if jumped_here.not() {
-                    trace!(
-                        "{op}: JUMPDESTs at offset {} was reached through fall-through.",
-                        entry.pc
-                    );
                     continue;
                 }
 
                 let jumpdest_offset = TryInto::<usize>::try_into(entry.pc);
                 if jumpdest_offset.is_err() {
-                    trace!(
-                        "{op}: Could not cast offset {} to usize {}.",
-                        entry.pc,
-                        usize::MAX
-                    );
                     continue;
                 }
                 ensure!(jumpdest_offset.unwrap() < 24576);
