@@ -13,14 +13,9 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::linked_list::testing::LinkedList;
-use crate::generation::linked_list::ACCOUNTS_LINKED_LIST_NODE_SIZE;
-use crate::generation::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::memory::MemorySegmentState;
-
-pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
-pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
 
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));

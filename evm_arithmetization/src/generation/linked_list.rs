@@ -9,6 +9,10 @@ pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 pub const STATE_LINKED_LIST_NODE_SIZE: usize = 4;
 
+pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
+pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
+pub(crate) type StateLinkedList<'a> = LinkedList<'a, STATE_LINKED_LIST_NODE_SIZE>;
+
 pub const DUMMYHEAD: (U256, U256) = (U256::MAX, U256::zero());
 
 // Provides quick access to pointers that reference the memory location

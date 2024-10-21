@@ -22,7 +22,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
 use crate::generation::linked_list::LinkedListsPtrs;
-use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
+use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
@@ -234,14 +234,9 @@ impl<F: RichField> Interpreter<F> {
         // Set state's inputs. We trim unnecessary components.
         self.generation_state.inputs = inputs.trim();
 
-        // Initialize the MPT's pointers.
-        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.state_ptrs.accounts,
-                &mut self.generation_state.state_ptrs.storage,
-                &inputs.tries,
-            )
-            .expect("Invalid MPT data for preinitialization");
+        let trie_root_ptrs = self
+            .generation_state
+            .preinitialize_trie_data_and_get_trie_ptrs(tries);
 
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
