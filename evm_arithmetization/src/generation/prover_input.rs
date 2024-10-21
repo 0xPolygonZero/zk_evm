@@ -362,9 +362,6 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
-        // TODO(einar-polygon) <make issue>
-        // get_code from self.memory
-
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
         }
