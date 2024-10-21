@@ -1,103 +1,18 @@
-//! Principled trie types and abstractions used in this library.
+//! Principled trie types used in this library.
 
 use core::fmt;
-use std::{cmp, collections::BTreeMap, marker::PhantomData};
+use std::cmp;
 
 use anyhow::ensure;
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
-use ethereum_types::{Address, BigEndianHash as _, H256, U256};
+use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
-///
-/// Portions of the trie may be _hashed out_: see [`Self::insert_hash`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TypedMpt<T> {
-    inner: HashedPartialTrie,
-    _ty: PhantomData<fn() -> T>,
-}
-
-impl<T> TypedMpt<T> {
-    const PANIC_MSG: &str = "T encoding/decoding should round-trip,\
-    and only encoded `T`s are ever inserted";
-    fn new() -> Self {
-        Self {
-            inner: HashedPartialTrie::new(Node::Empty),
-            _ty: PhantomData,
-        }
-    }
-    /// Insert a node which represents an out-of-band sub-trie.
-    ///
-    /// See [module documentation](super) for more.
-    fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
-        self.inner.insert(key.into_nibbles(), hash)?;
-        Ok(())
-    }
-    /// Returns [`Err`] if the `key` crosses into a part of the trie that
-    /// is hashed out.
-    fn insert(&mut self, key: MptKey, value: T) -> anyhow::Result<()>
-    where
-        T: rlp::Encodable + rlp::Decodable,
-    {
-        self.inner
-            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())?;
-        Ok(())
-    }
-    /// Note that this returns [`None`] if `key` crosses into a part of the
-    /// trie that is hashed out.
-    ///
-    /// # Panics
-    /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
-    fn get(&self, key: MptKey) -> Option<T>
-    where
-        T: rlp::Decodable,
-    {
-        let bytes = self.inner.get(key.into_nibbles())?;
-        Some(rlp::decode(bytes).expect(Self::PANIC_MSG))
-    }
-    const fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
-        &self.inner
-    }
-    fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        &mut self.inner
-    }
-    fn root(&self) -> H256 {
-        self.inner.hash()
-    }
-    /// Note that this returns owned paths and items.
-    fn iter(&self) -> impl Iterator<Item = (MptKey, T)> + '_
-    where
-        T: rlp::Decodable,
-    {
-        self.inner.keys().filter_map(|nib| {
-            let path = MptKey::from_nibbles(nib);
-            Some((path, self.get(path)?))
-        })
-    }
-}
-
-impl<T> Default for TypedMpt<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a TypedMpt<T>
-where
-    T: rlp::Decodable,
-{
-    type Item = (MptKey, T);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.iter())
-    }
-}
-
 /// Bounded sequence of [`U4`],
-/// used as a key for [`TypedMpt`].
+/// used as a key for [MPT](HashedPartialTrie) types in this module.
 ///
 /// Semantically equivalent to [`mpt_trie::nibbles::Nibbles`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -115,17 +30,6 @@ impl fmt::Display for MptKey {
 impl MptKey {
     pub fn new(components: impl IntoIterator<Item = U4>) -> anyhow::Result<Self> {
         Ok(MptKey(CopyVec::try_from_iter(components)?))
-    }
-    pub fn into_hash_left_padded(mut self) -> H256 {
-        for _ in 0..self.0.spare_capacity_mut().len() {
-            self.0.insert(0, U4::Dec00)
-        }
-        let mut packed = [0u8; 32];
-        AsNibbles(&mut packed).pack_from_slice(&self.0);
-        H256::from_slice(&packed)
-    }
-    pub fn from_address(address: Address) -> Self {
-        Self::from_hash(keccak_hash::keccak(address))
     }
     pub fn from_slot_position(pos: U256) -> Self {
         let mut bytes = [0; 32];
@@ -189,7 +93,7 @@ fn mpt_key_into_hash() {
 }
 
 /// Bounded sequence of bits,
-/// used as a key for [`StateSmt`].
+/// used as a key for SMT tries.
 ///
 /// Semantically equivalent to [`smt_trie::bits::Bits`].
 #[derive(Clone, Copy)]
@@ -366,243 +270,87 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
-/// TODO(0xaatif): document this after refactoring is done <https://github.com/0xPolygonZero/zk_evm/issues/275>
-pub trait StateTrie {
-    type Key;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()>;
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<Self::Key>>;
-    /// _Hash out_ parts of the trie that aren't in `addresses`.
-    fn mask(&mut self, address: impl IntoIterator<Item = Self::Key>) -> anyhow::Result<()>;
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
-    fn root(&self) -> H256;
-}
-
 /// Global, [`Address`] `->` [`AccountRlp`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StateMpt {
-    typed: TypedMpt<AccountRlp>,
+    /// Values are always [`rlp`]-encoded [`AccountRlp`],
+    /// inserted at [256 bits](MptKey::from_hash).
+    inner: HashedPartialTrie,
+}
+
+impl Default for StateMpt {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[track_caller]
+fn assert_rlp_account(bytes: impl AsRef<[u8]>) -> AccountRlp {
+    rlp::decode(bytes.as_ref()).expect("invalid RLP in StateMPT")
 }
 
 impl StateMpt {
-    pub fn new(strategy: OnOrphanedHashNode) -> Self {
+    pub fn new() -> Self {
         Self {
-            typed: TypedMpt {
-                inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
-                _ty: PhantomData,
-            },
+            inner: HashedPartialTrie::new_with_strategy(
+                Node::Empty,
+                // This frontend is intended to be used with our custom `zeroTracer`,
+                // which covers branch-to-extension collapse edge cases.
+                OnOrphanedHashNode::CollapseToExtension,
+            ),
         }
     }
+    pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
+        &self.inner
+    }
     /// Insert a _hashed out_ part of the trie
-    pub fn insert_hash_by_key(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
-        self.typed.insert_hash(key, hash)
+    pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
+        Ok(self.inner.insert(key.into_nibbles(), hash)?)
     }
-    #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
-    pub fn insert_by_hashed_address(
-        &mut self,
-        key: H256,
-        account: AccountRlp,
-    ) -> anyhow::Result<()> {
-        self.typed.insert(MptKey::from_hash(key), account)
+    pub fn insert(&mut self, key: H256, account: AccountRlp) -> anyhow::Result<()> {
+        Ok(self.inner.insert(
+            MptKey::from_hash(key).into_nibbles(),
+            rlp::encode(&account).to_vec(),
+        )?)
     }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
+    pub fn get(&self, key: H256) -> Option<AccountRlp> {
+        self.inner
+            .get(MptKey::from_hash(key).into_nibbles())
+            .map(assert_rlp_account)
     }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
+    pub fn root(&self) -> H256 {
+        self.inner.hash()
     }
-}
-
-impl StateTrie for StateMpt {
-    type Key = MptKey;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
-        #[expect(deprecated)]
-        self.insert_by_hashed_address(keccak_hash::keccak(address), account)
-    }
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.typed
-            .get(MptKey::from_hash(keccak_hash::keccak(address)))
-    }
-    /// Delete the account at `address`, returning any remaining branch on
-    /// collapse
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
+    pub fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<MptKey>> {
         delete_node_and_report_remaining_key_if_branch_collapsed(
-            self.typed.as_mut_hashed_partial_trie_unchecked(),
-            MptKey::from_address(address),
+            &mut self.inner,
+            MptKey::from_hash(keccak_hash::keccak(address)),
         )
     }
-    fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
-        let inner = mpt_trie::trie_subsets::create_trie_subset(
-            self.typed.as_hashed_partial_trie(),
+    pub fn mask(&mut self, addresses: impl IntoIterator<Item = MptKey>) -> anyhow::Result<()> {
+        let new = mpt_trie::trie_subsets::create_trie_subset(
+            &self.inner,
             addresses.into_iter().map(MptKey::into_nibbles),
         )?;
-        self.typed = TypedMpt {
-            inner,
-            _ty: PhantomData,
-        };
+        self.inner = new;
         Ok(())
     }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
-    }
-    fn root(&self) -> H256 {
-        self.typed.root()
+    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.inner.items().filter_map(|(key, rlp)| match rlp {
+            mpt_trie::trie_ops::ValOrHash::Val(vec) => Some((
+                MptKey::from_nibbles(key).into_hash().expect("bad depth"),
+                assert_rlp_account(vec),
+            )),
+            mpt_trie::trie_ops::ValOrHash::Hash(_) => None,
+        })
     }
 }
 
 impl From<StateMpt> for HashedPartialTrie {
-    fn from(value: StateMpt) -> Self {
-        let StateMpt {
-            typed: TypedMpt { inner, _ty },
-        } = value;
+    fn from(StateMpt { inner }: StateMpt) -> Self {
         inner
-    }
-}
-
-// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/706
-// We're covering for [`smt_trie`] in a couple of ways:
-// - insertion operations aren't fallible, they just panic.
-// - it documents a requirement that `set_hash` is called before `set`.
-#[derive(Clone, Debug)]
-pub struct StateSmt {
-    address2state: BTreeMap<Address, AccountRlp>,
-    hashed_out: BTreeMap<SmtKey, H256>,
-}
-
-impl StateTrie for StateSmt {
-    type Key = SmtKey;
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) -> anyhow::Result<()> {
-        self.address2state.insert(address, account);
-        Ok(())
-    }
-    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.address2state.get(&address).copied()
-    }
-    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<SmtKey>> {
-        self.address2state.remove(&address);
-        Ok(None)
-    }
-    fn mask(&mut self, address: impl IntoIterator<Item = SmtKey>) -> anyhow::Result<()> {
-        let _ = address;
-        Ok(())
-    }
-    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.address2state
-            .iter()
-            .map(|(addr, acct)| (keccak_hash::keccak(addr), *acct))
-    }
-    fn root(&self) -> H256 {
-        conv_hash::smt2eth(self.as_smt().root)
-    }
-}
-
-impl StateSmt {
-    pub(crate) fn new_unchecked(
-        address2state: BTreeMap<Address, AccountRlp>,
-        hashed_out: BTreeMap<SmtKey, H256>,
-    ) -> Self {
-        Self {
-            address2state,
-            hashed_out,
-        }
-    }
-
-    fn as_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
-        let Self {
-            address2state,
-            hashed_out,
-        } = self;
-        let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
-        for (k, v) in hashed_out {
-            smt.set_hash(k.into_smt_bits(), conv_hash::eth2smt(*v));
-        }
-        for (
-            addr,
-            AccountRlp {
-                nonce,
-                balance,
-                storage_root,
-                code_hash,
-            },
-        ) in address2state
-        {
-            smt.set(smt_trie::keys::key_nonce(*addr), *nonce);
-            smt.set(smt_trie::keys::key_balance(*addr), *balance);
-            smt.set(smt_trie::keys::key_code(*addr), code_hash.into_uint());
-            smt.set(
-                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/707
-                //                combined abstraction for state and storage
-                smt_trie::keys::key_storage(*addr, U256::zero()),
-                storage_root.into_uint(),
-            );
-        }
-        smt
-    }
-}
-
-mod conv_hash {
-    //! We [`u64::to_le_bytes`] because:
-    //! - Reference go code just puns the bytes: <https://github.com/gateway-fm/vectorized-poseidon-gold/blob/7640564fa7d5ed93c829b156a83cb11cef744586/src/vectorizedposeidongold/vectorizedposeidongold_fallback.go#L39-L45>
-    //! - It's better to fix the endianness for correctness.
-    //! - Most (consumer) CPUs are little-endian.
-
-    use std::array;
-
-    use ethereum_types::H256;
-    use itertools::Itertools as _;
-    use plonky2::{
-        field::{
-            goldilocks_field::GoldilocksField,
-            types::{Field as _, PrimeField64},
-        },
-        hash::hash_types::HashOut,
-    };
-
-    /// # Panics
-    /// - On certain inputs if `debug_assertions` are enabled. See
-    ///   [`GoldilocksField::from_canonical_u64`] for more.
-    pub fn eth2smt(H256(bytes): H256) -> smt_trie::smt::HashOut {
-        let mut bytes = bytes.into_iter();
-        // (no unsafe, no unstable)
-        let ret = HashOut {
-            elements: array::from_fn(|_ix| {
-                let (a, b, c, d, e, f, g, h) = bytes.next_tuple().unwrap();
-                GoldilocksField::from_canonical_u64(u64::from_le_bytes([a, b, c, d, e, f, g, h]))
-            }),
-        };
-        assert_eq!(bytes.len(), 0);
-        ret
-    }
-    pub fn smt2eth(HashOut { elements }: smt_trie::smt::HashOut) -> H256 {
-        H256(
-            build_array::ArrayBuilder::from_iter(
-                elements
-                    .iter()
-                    .map(GoldilocksField::to_canonical_u64)
-                    .flat_map(u64::to_le_bytes),
-            )
-            .build_exact()
-            .unwrap(),
-        )
-    }
-
-    #[test]
-    fn test() {
-        use plonky2::field::types::Field64 as _;
-        let mut max = std::iter::repeat(GoldilocksField::ORDER - 1).flat_map(u64::to_le_bytes);
-        for h in [
-            H256::zero(),
-            H256(array::from_fn(|ix| ix as u8)),
-            H256(array::from_fn(|_| max.next().unwrap())),
-        ] {
-            assert_eq!(smt2eth(eth2smt(h)), h);
-        }
     }
 }
 
@@ -622,10 +370,9 @@ impl StorageTrie {
     pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
         self.untyped.get(key.into_nibbles())
     }
-    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
-        let prev = self.get(&key).map(Vec::from);
+    pub fn insert(&mut self, key: MptKey, value: Vec<u8>) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), value)?;
-        Ok(prev)
+        Ok(())
     }
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         self.untyped.insert(key.into_nibbles(), hash)?;
