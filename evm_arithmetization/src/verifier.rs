@@ -85,7 +85,9 @@ pub mod testing {
     use plonky2::hash::hash_types::RichField;
     use plonky2::plonk::config::{GenericConfig, GenericHashOut};
     use starky::config::StarkConfig;
-    use starky::cross_table_lookup::{get_ctl_vars_from_proofs, verify_cross_table_lookups};
+    use starky::cross_table_lookup::verify_cross_table_lookups;
+    use starky::cross_table_lookup::CrossTableLookup;
+    use starky::cross_table_lookup::CtlCheckVars;
     use starky::lookup::GrandProductChallenge;
     use starky::stark::Stark;
     use starky::verifier::verify_stark_proof_with_challenges;
@@ -184,25 +186,39 @@ pub mod testing {
             cross_table_lookups,
         } = all_stark;
 
-        let ctl_vars_per_table = get_ctl_vars_from_proofs(
-            &all_proof.multi_proof,
-            cross_table_lookups,
-            &ctl_challenges,
-            &num_lookup_columns,
-            all_stark.arithmetic_stark.constraint_degree(),
-        );
-
         let stark_proofs = &all_proof.multi_proof.stark_proofs;
 
         macro_rules! verify_table {
             ($stark:ident, $table:expr) => {
+                let stark_proof = &stark_proofs[*$table]
+                    .as_ref()
+                    .expect("Missing stark_proof")
+                    .proof;
+                let ctl_vars = {
+                    let (total_num_helpers, _, num_helpers_by_ctl) =
+                        CrossTableLookup::num_ctl_helpers_zs_all(
+                            &all_stark.cross_table_lookups,
+                            *$table,
+                            config.num_challenges,
+                            $stark.constraint_degree(),
+                        );
+                    CtlCheckVars::from_proof(
+                        *$table,
+                        &stark_proof,
+                        &all_stark.cross_table_lookups,
+                        &ctl_challenges,
+                        num_lookup_columns[*$table],
+                        total_num_helpers,
+                        &num_helpers_by_ctl,
+                    )
+                };
                 verify_stark_proof_with_challenges(
                     $stark,
-                    &stark_proofs[*$table].proof,
+                    stark_proof,
                     &stark_challenges[*$table]
                         .as_ref()
                         .expect("Missing challenges"),
-                    Some(&ctl_vars_per_table[*$table]),
+                    Some(&ctl_vars),
                     &[],
                     config,
                 )?;
@@ -240,12 +256,39 @@ pub mod testing {
             .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
             .collect_vec();
 
+        let all_ctls = &all_stark.cross_table_lookups;
+
         verify_cross_table_lookups::<F, D, NUM_TABLES>(
             cross_table_lookups,
-            all_proof
-                .multi_proof
-                .stark_proofs
-                .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
+            core::array::from_fn(|i| {
+                if let Some(stark_proof) = &stark_proofs[i] {
+                    stark_proof
+                        .proof
+                        .openings
+                        .ctl_zs_first
+                        .as_ref()
+                        .expect("Missing ctl_zs")
+                        .clone()
+                } else if i == *Table::Keccak {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::Keccak,
+                        config.num_challenges,
+                        keccak_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else if i == *Table::KeccakSponge {
+                    let (_, n, _) = CrossTableLookup::num_ctl_helpers_zs_all(
+                        all_ctls,
+                        *Table::KeccakSponge,
+                        config.num_challenges,
+                        keccak_sponge_stark.constraint_degree(),
+                    );
+                    vec![F::ZERO; n]
+                } else {
+                    panic!("Unable to find stark_proof");
+                }
+            }),
             Some(&extra_looking_sums),
             config,
         )

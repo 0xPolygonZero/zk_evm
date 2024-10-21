@@ -3,16 +3,17 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use alloy::primitives::U256;
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
-use paladin::runtime::Runtime;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{BlockProverInput, ProverConfig};
 
+use crate::ProofRuntime;
+
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
-    runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     port: u16,
     output_dir: PathBuf,
     prover_config: Arc<ProverConfig>,
@@ -22,10 +23,7 @@ pub(crate) async fn http_main(
 
     let app = Router::new().route(
         "/prove",
-        post({
-            let runtime = runtime.clone();
-            move |body| prove(body, runtime, output_dir.clone(), prover_config)
-        }),
+        post(move |body| prove(body, proof_runtime, output_dir.clone(), prover_config)),
     );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     Ok(axum::serve(listener, app).await?)
@@ -62,7 +60,7 @@ struct HttpProverInput {
 
 async fn prove(
     Json(payload): Json<HttpProverInput>,
-    runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     output_dir: PathBuf,
     prover_config: Arc<ProverConfig>,
 ) -> StatusCode {
@@ -74,7 +72,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                runtime,
+                proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -83,7 +81,7 @@ async fn prove(
         payload
             .prover_input
             .prove(
-                runtime,
+                proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )

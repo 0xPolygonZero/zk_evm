@@ -16,6 +16,7 @@ use zero::block_interval::BlockInterval;
 use zero::block_interval::BlockIntervalStream;
 use zero::parsing::parse_duration;
 use zero::prover::BlockProverInput;
+use zero::prover::WIRE_DISPOSITION;
 use zero::provider::CachedProvider;
 use zero::rpc;
 use zero::rpc::JumpdestSrc;
@@ -194,6 +195,7 @@ impl Cli {
                             block_prover_input.other_data,
                             batch_size,
                             &mut DummyObserver::new(),
+                            WIRE_DISPOSITION,
                         )?;
 
                         if let Some(index) = tx_info.transaction_index {
