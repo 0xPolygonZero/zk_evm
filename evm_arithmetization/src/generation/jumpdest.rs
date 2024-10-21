@@ -182,4 +182,36 @@ mod test {
         assert_eq!(86, max_ctx);
         assert_eq!(expected, actual)
     }
+
+    #[test]
+    fn test_extend_from_iter() {
+        let code_hash = H256::default();
+
+        let ctx_map = vec![
+            (code_hash, 1, 1),
+            (code_hash, 2, 2),
+            (code_hash, 42, 3),
+            (code_hash, 43, 4),
+        ];
+        let table1 = JumpDestTableWitness::from_iter(ctx_map);
+        let table2 = table1.clone();
+
+        let jdts = [&table1, &table2];
+        let (actual, max_ctx) = JumpDestTableWitness::merge(jdts);
+
+        let ctx_map_merged = vec![
+            (code_hash, 1, 1),
+            (code_hash, 2, 2),
+            (code_hash, 42, 3),
+            (code_hash, 43, 4),
+            (code_hash, 44, 1),
+            (code_hash, 45, 2),
+            (code_hash, 85, 3),
+            (code_hash, 86, 4),
+        ];
+        let expected = JumpDestTableWitness::from_iter(ctx_map_merged);
+
+        assert_eq!(86, max_ctx);
+        assert_eq!(expected, actual)
+    }
 }
