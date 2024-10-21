@@ -11,6 +11,9 @@ use mpt_trie::{
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::fri::reduction_strategies::FriReductionStrategy;
+use plonky2::fri::FriConfig;
+use starky::config::StarkConfig;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
@@ -26,6 +29,19 @@ use crate::{
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 ));
+
+/// A fast STARK config for testing purposes only.
+pub const TEST_STARK_CONFIG: StarkConfig = StarkConfig {
+    security_bits: 1,
+    num_challenges: 1,
+    fri_config: FriConfig {
+        rate_bits: 1,
+        cap_height: 4,
+        proof_of_work_bits: 1,
+        reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
+        num_query_rounds: 1,
+    },
+};
 
 pub fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));

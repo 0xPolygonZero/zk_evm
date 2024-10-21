@@ -4,17 +4,16 @@ use std::time::Duration;
 
 use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
 use evm_arithmetization::prover::prove;
-use evm_arithmetization::testing_utils::{init_logger, segment_with_empty_tables};
+use evm_arithmetization::testing_utils::{
+    init_logger, segment_with_empty_tables, TEST_STARK_CONFIG,
+};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::fri::reduction_strategies::FriReductionStrategy;
-use plonky2::fri::FriConfig;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::timed;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
-use starky::config::StarkConfig;
 
 /// This test focuses on testing zkVM proofs with some empty tables.
 #[test]
@@ -26,17 +25,7 @@ fn empty_tables() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig {
-        security_bits: 1,
-        num_challenges: 1,
-        fri_config: FriConfig {
-            rate_bits: 1,
-            cap_height: 4,
-            proof_of_work_bits: 1,
-            reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
-            num_query_rounds: 1,
-        },
-    };
+    let config = TEST_STARK_CONFIG;
     let timing = &mut TimingTree::new("Empty Table Test", log::Level::Info);
 
     // Process and generate segment proof
