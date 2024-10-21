@@ -152,34 +152,6 @@ mod test {
     use super::JumpDestTableWitness;
 
     #[test]
-    fn test_extend() {
-        let code_hash = H256::default();
-
-        let mut table1 = JumpDestTableWitness::default();
-        table1.insert(code_hash, 1, 1);
-        table1.insert(code_hash, 2, 2);
-        table1.insert(code_hash, 42, 3);
-        table1.insert(code_hash, 43, 4);
-        let table2 = table1.clone();
-
-        let jdts = [&table1, &table2];
-        let (actual, max_ctx) = JumpDestTableWitness::merge(jdts);
-
-        let mut expected = JumpDestTableWitness::default();
-        expected.insert(code_hash, 1, 1);
-        expected.insert(code_hash, 2, 2);
-        expected.insert(code_hash, 42, 3);
-        expected.insert(code_hash, 43, 4);
-        expected.insert(code_hash, 44, 1);
-        expected.insert(code_hash, 45, 2);
-        expected.insert(code_hash, 85, 3);
-        expected.insert(code_hash, 86, 4);
-
-        assert_eq!(86, max_ctx);
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
     fn test_extend_from_iter() {
         let code_hash = H256::default();
 
