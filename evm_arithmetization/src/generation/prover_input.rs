@@ -829,7 +829,7 @@ impl<F: RichField> GenerationState<F> {
             // info!("RPCP {:?}", &rpcp);
             // info!("SIMP == RPCP ? {}", &simp == &rpcp);
         } else {
-            info!("JUMPDEST tables similar");
+            info!("JUMPDEST tables are equal.");
         }
 
         self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
