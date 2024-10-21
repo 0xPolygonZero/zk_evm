@@ -345,14 +345,6 @@ where
     where
         Self: Sized,
     {
-        self.perform_op(op, row)?;
-        self.incr_pc(match op {
-            Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
-            Operation::Push(n) => n as usize + 1,
-            Operation::Jump | Operation::Jumpi => 0,
-            _ => 1,
-        });
-
         self.incr_gas(gas_to_charge(op));
         let registers = self.get_registers();
         let gas_limit_address = MemoryAddress::new(
@@ -372,6 +364,14 @@ where
                 Err(_) => return Err(ProgramError::IntegerTooLarge),
             }
         }
+
+        self.perform_op(op, row)?;
+        self.incr_pc(match op {
+            Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
+            Operation::Push(n) => n as usize + 1,
+            Operation::Jump | Operation::Jumpi => 0,
+            _ => 1,
+        });
 
         Ok(op)
     }
