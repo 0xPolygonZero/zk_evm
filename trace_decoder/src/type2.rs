@@ -173,8 +173,10 @@ fn visit(
             address,
             value,
         }) => {
+            ensure!(address.len() == Address::len_bytes());
             let address = Address::from_slice(&address);
             let collated = leaves.entry(address).or_default();
+            ensure!(value.len() <= 32);
             let value = U256::from_big_endian(&value);
             macro_rules! ensure {
                 ($expr:expr) => {
@@ -195,6 +197,7 @@ fn visit(
                     collated.code = Some(value)
                 }
                 SmtLeafType::Storage(slot) => {
+                    ensure!(slot.len() <= 32);
                     let clobbered = collated.storage.insert(U256::from_big_endian(&slot), value);
                     ensure!(clobbered.is_none())
                 }
