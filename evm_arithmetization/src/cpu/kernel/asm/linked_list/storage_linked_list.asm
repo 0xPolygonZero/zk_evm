@@ -426,6 +426,16 @@ global remove_slot:
 %%after:
 %endmacro
 
+%macro remove_slot_from_addr
+    // stack: addr, slot
+    %addr_to_state_key
+    SWAP1
+    %slot_to_storage_key
+    %stack (key, addr_key) -> (addr_key, key, %%after)
+    %jump(remove_slot)
+%%after:
+%endmacro
+
 %macro read_slot_from_current_addr
     // stack: slot
     %slot_to_storage_key
