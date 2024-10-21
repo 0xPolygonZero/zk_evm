@@ -14,7 +14,7 @@ global increment_bounded_rlp:
     %jumpi(case_0x81ff)
     // If rlp_index != 0x80 and rlp_index != 0x7f and rlp_index != 0x81ff
     // we only need to add one and keep the number of nibbles
-    %increment
+    INCR1
     %stack (next_rlp_index, next_num_nibbles, retdest) -> (retdest, next_rlp_index, next_num_nibbles)
     JUMP
 

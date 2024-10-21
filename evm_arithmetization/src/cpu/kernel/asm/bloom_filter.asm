@@ -53,7 +53,7 @@ logs_bloom_loop:
     // stack: log_payload_len_ptr, i, logs_len, retdest
     
     // Add address to bloom filter.
-    %increment
+    INCR1
     // stack: addr_ptr, i, logs_len, retdest
     PUSH @SEGMENT_LOGS_DATA %build_kernel_address
     DUP1
@@ -63,12 +63,12 @@ logs_bloom_loop:
     // stack: is_topic, addr, full_addr_ptr, i, logs_len, retdest
     %add_to_bloom
     // stack: full_addr_ptr, i, logs_len, retdest
-    %increment
+    INCR1
     // stack: full_num_topics_ptr, i, logs_len, retdest
     DUP1
     MLOAD_GENERAL
     // stack: num_topics, full_num_topics_ptr, i, logs_len, retdest
-    SWAP1 %increment
+    INCR2 SWAP1
     // stack: full_topics_ptr, num_topics, i, logs_len, retdest
     PUSH 0
 
@@ -85,13 +85,13 @@ logs_bloom_topic_loop:
     // stack: is_topic, topic, j, topics_ptr, num_topics, i, logs_len, retdest
     %add_to_bloom
     // stack: j, topics_ptr, num_topics, i, logs_len, retdest
-    %increment
+    INCR1
     %jump(logs_bloom_topic_loop)
 
 logs_bloom_topic_end:
     // stack: num_topics, topics_ptr, num_topics, i, logs_len, retdest
     %pop3
-    %increment
+    INCR1
     %jump(logs_bloom_loop)
 
 logs_bloom_end:

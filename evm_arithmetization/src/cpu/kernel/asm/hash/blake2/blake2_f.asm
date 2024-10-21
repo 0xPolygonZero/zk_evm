@@ -9,7 +9,7 @@ global blake2_f:
         %stack (addr, rounds, h_i) -> (h_i, addr, addr, rounds)
         // stack: h_i, addr, addr, rounds, ...
         MSTORE_GENERAL
-        %increment
+        INCR1
     %endrep
 
     // stack: addr, rounds, m0...m15, t0, t1, flag, retdest
@@ -24,7 +24,7 @@ global blake2_f:
         %stack (message_addr, rounds, m_i) -> (m_i, message_addr, message_addr, rounds)
         // stack: m_i, message_addr, message_addr, rounds, ...
         MSTORE_GENERAL
-        %increment
+        INCR1
     %endrep
 
     // stack: message_addr, rounds, t0, t1, flag, retdest
@@ -58,7 +58,7 @@ global blake2_f:
         DUP1
         SWAP2
         MSTORE_GENERAL
-        %increment
+        INCR1
     %endrep
     // stack: start + 8, rounds, t0, t1, flag, retdest
 
@@ -69,9 +69,7 @@ global blake2_f:
         // stack: i, addr, ...
         DUP2
         // stack: addr, i, addr, ...
-        %increment
-        // stack: addr + 1, i, addr, ...
-        SWAP2
+        INCR3
         // stack: addr, i, addr + 1, ...
         DUP2
         // stack: i, addr, i, addr + 1, ...
@@ -79,7 +77,7 @@ global blake2_f:
         // stack: IV_i, addr, i, addr + 1, ...
         MSTORE_GENERAL
         // stack: i, addr + 1, ...
-        %increment
+        INCR1
         // stack: i + 1, addr + 1,...
     %endrep
     // stack: 4, start + 12, rounds, t0, t1, flag, retdest
@@ -107,15 +105,15 @@ global blake2_f:
         // stack: val ^ IV_i, addr, i, addr, val, next_val,...
         MSTORE_GENERAL
         // stack: i, addr, val, next_val,...
-        %increment
+        INCR1
         // stack: i + 1, addr, val, next_val,...
         SWAP2
         // stack: val, addr, i + 1, next_val,...
         POP
         // stack: addr, i + 1, next_val,...
-        %increment
-        // stack: addr + 1, i + 1, next_val,...
         SWAP1
+        // stack: i + 1, addr, next_val,...
+        INCR2
         // stack: i + 1, addr + 1, next_val,...
     %endrep
     // stack: 8, start + 16, rounds, retdest

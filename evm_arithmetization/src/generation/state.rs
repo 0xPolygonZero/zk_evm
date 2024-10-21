@@ -232,7 +232,12 @@ pub(crate) trait State<F: RichField> {
                     }
                 } else {
                     if !running {
-                        debug_assert!(self.get_clock() - final_clock == NUM_EXTRA_CYCLES_AFTER - 1);
+                        debug_assert!(
+                            self.get_clock() - final_clock == NUM_EXTRA_CYCLES_AFTER - 1,
+                            "Got {:?}, expected {:?}",
+                            self.get_clock() - final_clock,
+                            NUM_EXTRA_CYCLES_AFTER - 1
+                        );
                     }
                     let final_mem = self.get_active_memory();
                     #[cfg(not(test))]

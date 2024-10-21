@@ -150,7 +150,7 @@ global run_rounds_g_function:
     %call_blake2_g_function(2, 7, 8, 13, 12, 13)
     %call_blake2_g_function(3, 4, 9, 14, 14, 15)
     // stack: current_round, start, rounds, retdest
-    %increment
+    INCR1
     // stack: current_round + 1, start, rounds, retdest
     %jump(run_rounds_g_function)
 run_rounds_g_function_end:

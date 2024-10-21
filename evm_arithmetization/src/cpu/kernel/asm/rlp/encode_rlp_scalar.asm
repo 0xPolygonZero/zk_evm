@@ -16,7 +16,7 @@ global encode_rlp_scalar:
     %stack (rlp_addr, scalar) -> (0x80, rlp_addr, rlp_addr)
     MSTORE_GENERAL
     // stack: rlp_addr, retdest
-    %increment
+    INCR1
     // stack: rlp_addr', retdest
     SWAP1
     JUMP
@@ -50,11 +50,11 @@ global doubly_encode_rlp_scalar:
     %stack (rlp_addr, scalar) -> (0x81, rlp_addr, rlp_addr)
     MSTORE_GENERAL
     // stack: rlp_addr, retdest
-    %increment
+    INCR1
     DUP1 PUSH 0x80
     MSTORE_GENERAL
     // stack: rlp_addr, retdest
-    %increment
+    INCR1
     // stack: rlp_addr, retdest
     SWAP1
     JUMP
@@ -80,7 +80,7 @@ encode_rlp_scalar_small:
     // stack: scalar, rlp_addr, rlp_addr, retdest
     MSTORE_GENERAL
     // stack: rlp_addr, retdest
-    %increment
+    INCR1
     // stack: rlp_addr', retdest
     SWAP1
     JUMP

@@ -7,7 +7,7 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 
 use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 
-const OPCODES_LEN: usize = if cfg!(feature = "cdk_erigon") { 6 } else { 5 };
+const OPCODES_LEN: usize = if cfg!(feature = "cdk_erigon") { 7 } else { 6 };
 
 /// List of opcode blocks
 /// Each block corresponds to exactly one flag, and each flag corresponds to
@@ -46,7 +46,8 @@ const OPCODES: [(u8, usize, bool, usize); OPCODES_LEN] = [
     // JUMPDEST and KECCAK_GENERAL are handled manually here.
     (0x56, 1, false, COL_MAP.op.jumps),     // 0x56-0x57
     (0x80, 5, false, COL_MAP.op.dup_swap),  // 0x80-0x9f
-    (0xf6, 1, true, COL_MAP.op.context_op), //0xf6-0xf7
+    (0xe0, 2, true, COL_MAP.op.incr),       // 0xe0-0xe3
+    (0xf6, 1, true, COL_MAP.op.context_op), // 0xf6-0xf7
     (0xf9, 0, true, COL_MAP.op.exit_kernel),
     // MLOAD_GENERAL and MSTORE_GENERAL flags are handled manually here.
 ];

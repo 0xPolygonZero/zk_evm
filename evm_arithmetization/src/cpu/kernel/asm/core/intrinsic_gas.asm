@@ -20,9 +20,8 @@ count_zeros_loop:
     %stack (data_i_is_zero, i, zeros) -> (data_i_is_zero, zeros, i)
     ADD
     // stack: zeros', i, retdest
+    INCR2
     SWAP1
-    // stack: i, zeros', retdest
-    %increment
     // stack: i', zeros', retdest
     %jump(count_zeros_loop)
 
