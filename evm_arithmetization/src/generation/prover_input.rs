@@ -795,41 +795,23 @@ impl<F: RichField> GenerationState<F> {
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
 
-        // REVIEW: This will be rewritten to only run simulation when
-        // `self.inputs.jumpdest_table` is `None`.
         info!("Generating JUMPDEST tables");
         let rpcw = self.inputs.jumpdest_table.clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
             .map(|jdt| get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
-        info!("Generating JUMPDEST tables: Running SIM");
-
-        self.inputs.jumpdest_table = None;
-        let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
-
-        let (simp, ref simw): (Option<JumpDestTableProcessed>, Option<JumpDestTableWitness>) =
-            sims.map_or_else(|| (None, None), |(sim, simw)| (Some(sim), Some(simw)));
-
-        info!("Generating JUMPDEST tables: finished");
-
-        if rpcw.is_some() && simw != &rpcw {
-            if let Some(s) = simw {
-                info!("SIMW {}", s);
-            }
-            if let Some(r) = rpcw.as_ref() {
-                info!("RPCW {}", r);
-            }
-            info!("SIMW == RPCW ? {}", simw == &rpcw);
-            info!("tx: {:?}", self.inputs.txn_hashes);
-            // panic!();
-            // info!("SIMP {:?}", &simp);
-            // info!("RPCP {:?}", &rpcp);
-            // info!("SIMP == RPCP ? {}", &simp == &rpcp);
-        } else {
-            info!("JUMPDEST tables are equal.");
+        if rpcp.is_some() {
+            self.jumpdest_table = rpcp;
+            return Ok(());
         }
 
-        self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
+        info!("Generating JUMPDEST tables: Running SIM");
+
+        let (simp, _simw) = simulate_cpu_and_get_user_jumps("terminate_common", self)
+            .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
+        self.jumpdest_table = Some(simp);
+
+        info!("Generating JUMPDEST tables: finished");
 
         Ok(())
     }
