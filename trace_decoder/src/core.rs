@@ -143,7 +143,7 @@ pub fn entrypoint(
                 checkpoint_state_trie_root,
                 checkpoint_consolidated_hash,
                 contract_code: {
-                    let initcodes =
+                    let init_codes =
                         byte_code
                             .iter()
                             .filter_map(|nonempty_txn_bytes| -> Option<Vec<u8>> {
@@ -154,31 +154,11 @@ pub fn entrypoint(
                                     TxKind::Call(_address) => None,
                                 }
                             });
-
-                    // TODO convert to Hash2Code
-                    let initmap: HashMap<_, _> = initcodes
-                        .into_iter()
-                        .map(|it| (keccak_hash::keccak(&it), it))
-                        .collect();
-                    log::trace!("Initmap {:?}", initmap);
-
-                    let contractmap: HashMap<_, _> = contract_code
-                        .into_iter()
-                        .map(|it| (keccak_hash::keccak(&it), it))
-                        .collect();
-                    log::trace!("Contractmap {:?}", contractmap);
-
-                    let codemap: HashMap<_, _> = code_db
-                        .clone()
-                        .into_iter()
-                        .map(|it| (keccak_hash::keccak(&it), it))
-                        .collect();
-                    log::trace!("Codemap {:?}", codemap);
-
-                    let mut res = codemap;
-                    res.extend(contractmap);
-                    res.extend(initmap);
-                    res
+                    let mut result = Hash2Code::default();
+                    result.extend(init_codes);
+                    result.extend(contract_code);
+                    result.extend(code_db.clone());
+                    result.into_hashmap()
                 },
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
@@ -863,6 +843,7 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// trace.
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
+#[derive(Default)]
 struct Hash2Code {
     /// Key must always be [`hash`] of value.
     inner: HashMap<H256, Vec<u8>>,
@@ -885,6 +866,9 @@ impl Hash2Code {
     }
     pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(keccak_hash::keccak(&code), code);
+    }
+    pub fn into_hashmap(self) -> HashMap<H256, Vec<u8>> {
+        self.inner
     }
 }
 
