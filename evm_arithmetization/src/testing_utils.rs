@@ -13,6 +13,7 @@ use mpt_trie::{
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::fri::FriConfig;
+use plonky2::plonk::circuit_data::CircuitConfig;
 use starky::config::StarkConfig;
 
 pub use crate::cpu::kernel::cancun_constants::*;
@@ -34,6 +35,25 @@ pub const EMPTY_NODE_HASH: H256 = H256(hex!(
 pub const TEST_STARK_CONFIG: StarkConfig = StarkConfig {
     security_bits: 1,
     num_challenges: 1,
+    fri_config: FriConfig {
+        rate_bits: 1,
+        cap_height: 4,
+        proof_of_work_bits: 1,
+        reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
+        num_query_rounds: 1,
+    },
+};
+
+/// A fast Circuit config for testing purposes only.
+pub const TEST_SHRINKING_CONFIG: CircuitConfig = CircuitConfig {
+    num_wires: 135,
+    num_routed_wires: 40,
+    num_constants: 2,
+    use_base_arithmetic_gate: true,
+    security_bits: 1,
+    num_challenges: 1,
+    zero_knowledge: false,
+    max_quotient_degree_factor: 8,
     fri_config: FriConfig {
         rate_bits: 1,
         cap_height: 4,

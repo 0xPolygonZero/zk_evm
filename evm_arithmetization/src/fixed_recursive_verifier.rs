@@ -786,9 +786,15 @@ where
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
         stark_config: &StarkConfig,
+        shrinking_circuit_config: Option<&CircuitConfig>,
+        threshold_degree_bits: Option<usize>,
     ) -> Self {
         // Sanity check on the provided config
         assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
+
+        let shrinking_config = shrinking_config();
+        let shrinking_circuit_config = shrinking_circuit_config.unwrap_or(&shrinking_config);
+        let threshold_degree_bits = threshold_degree_bits.unwrap_or(THRESHOLD_DEGREE_BITS);
 
         macro_rules! create_recursive_circuit {
             ($table_enum:expr, $stark_field:ident) => {
@@ -798,6 +804,8 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
+                    shrinking_circuit_config,
+                    threshold_degree_bits,
                 )
             };
         }
@@ -2900,6 +2908,8 @@ where
         degree_bits_range: Range<usize>,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        shrinking_circuit_config: &CircuitConfig,
+        threshold_degree_bits: usize,
     ) -> Self {
         let by_stark_size = degree_bits_range
             .map(|degree_bits| {
@@ -2911,6 +2921,8 @@ where
                         degree_bits,
                         all_ctls,
                         stark_config,
+                        shrinking_circuit_config,
+                        threshold_degree_bits,
                     ),
                 )
             })
@@ -3023,6 +3035,8 @@ where
         degree_bits: usize,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        shrinking_config: &CircuitConfig,
+        threshold_degree_bits: usize,
     ) -> Self {
         let initial_wrapper = recursive_stark_circuit(
             table,
@@ -3030,8 +3044,8 @@ where
             degree_bits,
             all_ctls,
             stark_config,
-            &shrinking_config(),
-            THRESHOLD_DEGREE_BITS,
+            shrinking_config,
+            threshold_degree_bits,
         );
         let mut shrinking_wrappers = vec![];
 
@@ -3042,12 +3056,12 @@ where
                 .map(|wrapper: &PlonkWrapperCircuit<F, C, D>| &wrapper.circuit)
                 .unwrap_or(&initial_wrapper.circuit);
             let last_degree_bits = last.common.degree_bits();
-            assert!(last_degree_bits >= THRESHOLD_DEGREE_BITS);
-            if last_degree_bits == THRESHOLD_DEGREE_BITS {
+            assert!(last_degree_bits >= threshold_degree_bits);
+            if last_degree_bits == threshold_degree_bits {
                 break;
             }
 
-            let mut builder = CircuitBuilder::new(shrinking_config());
+            let mut builder = CircuitBuilder::new(shrinking_config.clone());
             let proof_with_pis_target = builder.add_virtual_proof_with_pis(&last.common);
             let last_vk = builder.constant_verifier_data(&last.verifier_only);
             builder.verify_proof::<C>(&proof_with_pis_target, &last_vk, &last.common);
@@ -3058,7 +3072,7 @@ where
             assert!(
                 circuit.common.degree_bits() < last_degree_bits,
                 "Couldn't shrink to expected recursion threshold of 2^{}; stalled at 2^{}",
-                THRESHOLD_DEGREE_BITS,
+                threshold_degree_bits,
                 circuit.common.degree_bits()
             );
             shrinking_wrappers.push(PlonkWrapperCircuit {

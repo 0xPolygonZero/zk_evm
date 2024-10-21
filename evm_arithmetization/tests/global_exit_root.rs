@@ -14,7 +14,7 @@ use evm_arithmetization::testing_utils::{
     TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
+use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;

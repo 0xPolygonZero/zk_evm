@@ -248,6 +248,8 @@ impl CircuitConfig {
             &AllStark::default(),
             self.as_degree_bits_ranges(),
             &StarkConfig::standard_fast_config(),
+            None,
+            None,
         )
     }
 }

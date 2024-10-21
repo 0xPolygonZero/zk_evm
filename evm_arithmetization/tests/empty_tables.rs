@@ -5,7 +5,7 @@ use std::time::Duration;
 use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    init_logger, segment_with_empty_tables, TEST_STARK_CONFIG,
+    init_logger, segment_with_empty_tables, TEST_SHRINKING_CONFIG, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
@@ -60,6 +60,8 @@ fn empty_tables() -> anyhow::Result<()> {
             &all_stark,
             &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
             &config,
+            Some(&TEST_SHRINKING_CONFIG),
+            None,
         )
     );
 

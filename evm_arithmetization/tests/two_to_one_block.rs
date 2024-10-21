@@ -10,7 +10,8 @@ use evm_arithmetization::proof::{
 };
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    TEST_SHRINKING_CONFIG, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -174,6 +175,8 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         &all_stark,
         &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 16..17, 7..8],
         &config,
+        Some(&TEST_SHRINKING_CONFIG),
+        None,
     );
 
     let bp = some_timestamps
