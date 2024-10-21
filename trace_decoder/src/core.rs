@@ -1,15 +1,22 @@
+use core::{convert::Into as _, option::Option::None};
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
     mem,
 };
 
+use alloy::{
+    consensus::{Transaction, TxEnvelope},
+    primitives::{address, TxKind},
+    rlp::Decodable as _,
+};
 use alloy_compat::Compat as _;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H160, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
+    jumpdest::JumpDestTableWitness,
     proof::{BlockMetadata, TrieRoots},
     GenerationInputs,
 };
@@ -29,6 +36,24 @@ use crate::{
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,
 };
+
+/// Addresses of precompiled Ethereum contracts.
+pub fn is_precompile(addr: H160) -> bool {
+    let precompiled_addresses = if cfg!(feature = "eth_mainnet") {
+        address!("0000000000000000000000000000000000000001")
+            ..address!("000000000000000000000000000000000000000a")
+    } else {
+        // Remove KZG Peval for non-Eth mainnet networks
+        address!("0000000000000000000000000000000000000001")
+            ..address!("0000000000000000000000000000000000000009")
+    };
+
+    precompiled_addresses.contains(&addr.compat())
+        || (cfg!(feature = "polygon_pos")
+        // Include P256Verify for Polygon PoS
+        && addr.compat()
+            == address!("0000000000000000000000000000000000000100"))
+}
 
 /// Expected trie type when parsing from binary in a [`BlockTrace`].
 ///
@@ -63,7 +88,7 @@ pub fn entrypoint(
     };
     let (state, storage, mut code) = start(trie_pre_images, wire_disposition)?;
 
-    code.extend(code_db);
+    code.extend(code_db.clone());
 
     let OtherBlockData {
         b_data:
@@ -135,6 +160,7 @@ pub fn entrypoint(
                      },
                  after,
                  withdrawals,
+                 jumpdest_tables,
              }| GenerationInputs {
                 txn_number_before: first_txn_ix.into(),
                 gas_used_before: running_gas_used.into(),
@@ -142,7 +168,7 @@ pub fn entrypoint(
                     running_gas_used += gas_used;
                     running_gas_used.into()
                 },
-                signed_txns: byte_code.into_iter().map(Into::into).collect(),
+                signed_txns: byte_code.clone().into_iter().map(Into::into).collect(),
                 withdrawals,
                 ger_data,
                 tries: TrieInputs {
@@ -157,13 +183,37 @@ pub fn entrypoint(
                 trie_roots_after: after,
                 checkpoint_state_trie_root,
                 checkpoint_consolidated_hash,
-                contract_code: contract_code
-                    .into_iter()
-                    .map(|it| (keccak_hash::keccak(&it), it))
-                    .collect(),
+                contract_code: {
+                    let init_codes =
+                        byte_code
+                            .iter()
+                            .filter_map(|nonempty_txn_bytes| -> Option<Vec<u8>> {
+                                let tx_envelope =
+                                    TxEnvelope::decode(&mut &nonempty_txn_bytes[..]).unwrap();
+                                match tx_envelope.to() {
+                                    TxKind::Create => Some(tx_envelope.input().to_vec()),
+                                    TxKind::Call(_address) => None,
+                                }
+                            });
+                    let mut result = Hash2Code::default();
+                    result.extend(init_codes);
+                    result.extend(contract_code);
+                    result.extend(code_db.clone());
+                    result.into_hashmap()
+                },
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
                 burn_addr,
+                jumpdest_table: {
+                    // TODO(einar-polygon): <https://github.com/0xPolygonZero/zk_evm/issues/653>
+                    // Note that this causes any batch containing just a single `None` to collapse
+                    // into a `None`, which causing failover to simulating jumpdest analysis for the
+                    // whole batch. There is an optimization opportunity here.
+                    jumpdest_tables
+                        .into_iter()
+                        .collect::<Option<Vec<_>>>()
+                        .map(|jdt| JumpDestTableWitness::merge(jdt.iter()).0)
+                },
             },
         )
         .collect())
@@ -330,6 +380,8 @@ struct Batch<StateTrieT> {
 
     /// Empty for all but the final batch
     pub withdrawals: Vec<(Address, U256)>,
+
+    pub jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
 }
 
 impl<T> Batch<T> {
@@ -342,6 +394,7 @@ impl<T> Batch<T> {
             before,
             after,
             withdrawals,
+            jumpdest_tables,
         } = self;
         Batch {
             first_txn_ix,
@@ -351,6 +404,7 @@ impl<T> Batch<T> {
             before: before.map(f),
             after,
             withdrawals,
+            jumpdest_tables,
         }
     }
 }
@@ -464,6 +518,8 @@ where
             )?;
         }
 
+        let mut jumpdest_tables = vec![];
+
         for txn in batch {
             let do_increment_txn_ix = txn.is_some();
             let TxnInfo {
@@ -473,6 +529,7 @@ where
                         byte_code,
                         new_receipt_trie_node_byte,
                         gas_used: txn_gas_used,
+                        jumpdest_table,
                     },
             } = txn.unwrap_or_default();
 
@@ -619,6 +676,8 @@ where
                 }
             }
 
+            jumpdest_tables.push(jumpdest_table);
+
             if do_increment_txn_ix {
                 txn_ix += 1;
             }
@@ -671,6 +730,7 @@ where
                 transactions_root: transaction_trie.root(),
                 receipts_root: receipt_trie.root(),
             },
+            jumpdest_tables,
         });
 
         observer.collect_tries(
@@ -900,6 +960,7 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// trace.
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
+#[derive(Default)]
 struct Hash2Code {
     /// Key must always be [`hash`](keccak_hash) of value.
     inner: HashMap<H256, Vec<u8>>,
@@ -914,10 +975,14 @@ impl Hash2Code {
         this
     }
     pub fn get(&mut self, hash: H256) -> Option<Vec<u8>> {
-        self.inner.get(&hash).cloned()
+        let res = self.inner.get(&hash).cloned();
+        res
     }
     pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(keccak_hash::keccak(&code), code);
+    }
+    pub fn into_hashmap(self) -> HashMap<H256, Vec<u8>> {
+        self.inner
     }
 }
 

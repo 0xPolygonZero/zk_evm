@@ -10,13 +10,15 @@ use plonky2::hash::hash_types::RichField;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
+use crate::generation::jumpdest::JumpDestTableProcessed;
 use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 
 impl<F: RichField> Interpreter<F> {
     pub(crate) fn set_jumpdest_analysis_inputs(&mut self, jumps: HashMap<usize, BTreeSet<usize>>) {
-        self.generation_state.set_jumpdest_analysis_inputs(jumps);
+        let (jdtp, _jdtw) = self.generation_state.get_jumpdest_analysis_inputs(jumps);
+        self.generation_state.jumpdest_table = Some(jdtp);
     }
 
     pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
@@ -106,7 +108,10 @@ fn test_jumpdest_analysis() -> Result<()> {
         interpreter.generation_state.jumpdest_table,
         // Context 3 has jumpdest 1, 5, 7. All have proof 0 and hence
         // the list [proof_0, jumpdest_0, ... ] is [0, 1, 0, 5, 0, 7, 8, 40]
-        Some(HashMap::from([(3, vec![0, 1, 0, 5, 0, 7, 8, 40])]))
+        Some(JumpDestTableProcessed::new(HashMap::from([(
+            3,
+            vec![0, 1, 0, 5, 0, 7, 8, 40]
+        )])))
     );
 
     // Run jumpdest analysis with context = 3
@@ -175,7 +180,9 @@ fn test_packed_verification() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
     interpreter.set_code(CONTEXT, code.clone());
-    interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
+    interpreter.generation_state.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from(
+        [(3, vec![1, 33])],
+    )));
 
     interpreter.run()?;
 
@@ -188,7 +195,9 @@ fn test_packed_verification() -> Result<()> {
         let mut interpreter: Interpreter<F> =
             Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
         interpreter.set_code(CONTEXT, code.clone());
-        interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
+        interpreter.generation_state.jumpdest_table = Some(JumpDestTableProcessed::new(
+            HashMap::from([(3, vec![1, 33])]),
+        ));
 
         assert!(interpreter.run().is_err());
 
