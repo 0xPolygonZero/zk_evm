@@ -21,7 +21,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
-use crate::generation::jumpdest::{ContextJumpDests, JumpDestTableProcessed, JumpDestTableWitness};
+use crate::generation::jumpdest::{Context, JumpDestTableProcessed, JumpDestTableWitness};
 use crate::generation::linked_list::LinkedListsPtrs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::prover_input::get_proofs_and_jumpdests;
@@ -161,6 +161,10 @@ pub(crate) fn set_registers_and_run<F: RichField>(
 ///
 /// - `jumpdest_table_rpc`:  The raw table received from RPC.
 /// - `code_db`: The corresponding database of contract code used in the trace.
+///
+/// # Output
+///
+/// Returns a [`JumpDestTableProccessed`].
 pub(crate) fn get_jumpdest_analysis_inputs_rpc(
     jumpdest_table_rpc: &JumpDestTableWitness,
     code_map: &HashMap<H256, Vec<u8>>,
@@ -190,15 +194,15 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
 ///
 /// # Arguments
 ///
-/// - `ctx_jumpdests`: Map from `ctx` to its list of offsets to reached
-///   `JUMPDEST`s.
-/// - `code`: The bytecode for the contexts.  This is the same for all contexts.
-fn prove_context_jumpdests(
-    code: &[u8],
-    ctx_jumpdests: &ContextJumpDests,
-) -> HashMap<usize, Vec<usize>> {
-    ctx_jumpdests
-        .0
+/// - `code`: The bytecode for the context `ctx`.
+/// - `ctx`: Map from `ctx` to its list of `JUMPDEST` offsets.
+///
+/// # Outputs
+///
+/// Returns a [`HashMap`] from `ctx` to [`Vec`] of proofs. Each proofs ia a
+/// pair.
+fn prove_context_jumpdests(code: &[u8], ctx: &Context) -> HashMap<usize, Vec<usize>> {
+    ctx.0
         .iter()
         .map(|(&ctx, jumpdests)| {
             let proofs = jumpdests.last().map_or(Vec::default(), |&largest_address| {

@@ -26,9 +26,9 @@ use std::cmp::max;
 use std::{
     collections::{BTreeSet, HashMap},
     fmt::Display,
-    ops::{Deref, DerefMut},
 };
 
+use derive_more::derive::{Deref, DerefMut};
 use itertools::{sorted, Itertools};
 use keccak_hash::H256;
 use serde::{Deserialize, Serialize};
@@ -36,18 +36,18 @@ use serde::{Deserialize, Serialize};
 /// Each `CodeHash` can be called one or more times,
 /// each time creating a new `Context`.
 /// Each `Context` will contain one or more offsets of `JUMPDEST`.
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ContextJumpDests(pub HashMap<usize, BTreeSet<usize>>);
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default, Deref, DerefMut)]
+pub struct Context(pub HashMap<usize, BTreeSet<usize>>);
 
 /// The result after proving a [`JumpDestTableWitness`].
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default, Deref, DerefMut)]
 pub(crate) struct JumpDestTableProcessed(HashMap<usize, Vec<usize>>);
 
 /// Map `CodeHash -> (Context -> [JumpDests])`
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
-pub struct JumpDestTableWitness(HashMap<H256, ContextJumpDests>);
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default, Deref, DerefMut)]
+pub struct JumpDestTableWitness(HashMap<H256, Context>);
 
-impl ContextJumpDests {
+impl Context {
     pub fn insert(&mut self, ctx: usize, offset: usize) {
         self.entry(ctx).or_default().insert(offset);
     }
@@ -64,7 +64,7 @@ impl JumpDestTableProcessed {
 }
 
 impl JumpDestTableWitness {
-    pub fn get(&self, code_hash: &H256) -> Option<&ContextJumpDests> {
+    pub fn get(&self, code_hash: &H256) -> Option<&Context> {
         self.0.get(code_hash)
     }
 
@@ -97,6 +97,7 @@ impl JumpDestTableWitness {
     }
 }
 
+// The following Display instances are added to make it easier to read diffs.
 impl Display for JumpDestTableWitness {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "\n=== JumpDestTableWitness ===")?;
@@ -108,7 +109,7 @@ impl Display for JumpDestTableWitness {
     }
 }
 
-impl Display for ContextJumpDests {
+impl Display for Context {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let v: Vec<_> = self.0.iter().sorted().collect();
         for (ctx, offsets) in v.into_iter() {
@@ -134,45 +135,13 @@ impl Display for JumpDestTableProcessed {
     }
 }
 
-impl Deref for ContextJumpDests {
-    type Target = HashMap<usize, BTreeSet<usize>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ContextJumpDests {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Deref for JumpDestTableProcessed {
-    type Target = HashMap<usize, Vec<usize>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for JumpDestTableProcessed {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Deref for JumpDestTableWitness {
-    type Target = HashMap<H256, ContextJumpDests>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for JumpDestTableWitness {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl FromIterator<(H256, usize, usize)> for JumpDestTableWitness {
+    fn from_iter<T: IntoIterator<Item = (H256, usize, usize)>>(iter: T) -> Self {
+        let mut jdtw = JumpDestTableWitness::default();
+        for (code_hash, ctx, offset) in iter.into_iter() {
+            jdtw.insert(code_hash, ctx, offset);
+        }
+        jdtw
     }
 }
 
@@ -205,6 +174,38 @@ mod test {
         expected.insert(code_hash, 45, 2);
         expected.insert(code_hash, 85, 3);
         expected.insert(code_hash, 86, 4);
+
+        assert_eq!(86, max_ctx);
+        assert_eq!(expected, actual)
+    }
+
+    #[test]
+    fn test_extend_from_iter() {
+        let code_hash = H256::default();
+
+        let ctx_map = vec![
+            (code_hash, 1, 1),
+            (code_hash, 2, 2),
+            (code_hash, 42, 3),
+            (code_hash, 43, 4),
+        ];
+        let table1 = JumpDestTableWitness::from_iter(ctx_map);
+        let table2 = table1.clone();
+
+        let jdts = [&table1, &table2];
+        let (actual, max_ctx) = JumpDestTableWitness::merge(jdts);
+
+        let ctx_map_merged = vec![
+            (code_hash, 1, 1),
+            (code_hash, 2, 2),
+            (code_hash, 42, 3),
+            (code_hash, 43, 4),
+            (code_hash, 44, 1),
+            (code_hash, 45, 2),
+            (code_hash, 85, 3),
+            (code_hash, 86, 4),
+        ];
+        let expected = JumpDestTableWitness::from_iter(ctx_map_merged);
 
         assert_eq!(86, max_ctx);
         assert_eq!(expected, actual)
