@@ -10,7 +10,7 @@ use evm_arithmetization::proof::{
 };
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -168,7 +168,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     let some_timestamps = [127, 42, 65, 43];
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
 
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
