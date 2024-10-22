@@ -3060,7 +3060,7 @@ where
         );
         let mut shrinking_wrappers = vec![];
 
-        // When using test configurations, the initial wrapper is simple enough that the
+        // When using test configurations, the initial wrapper is so simple that the
         // circuit's common data cannot match the shrinking wrapper circuit's
         // data. Therefore, we always add at least one shrinking wrapper here.
         if threshold_degree_bits < THRESHOLD_DEGREE_BITS {

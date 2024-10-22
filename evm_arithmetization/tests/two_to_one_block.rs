@@ -162,8 +162,8 @@ fn get_test_block_proof(
     Ok(wrapped_block_proof)
 }
 
-#[test]
 #[ignore]
+#[test]
 fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     init_logger();
     let some_timestamps = [127, 42, 65, 43];
