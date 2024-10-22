@@ -31,6 +31,15 @@ pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 ));
 
+/// The recursion threshold when using test configurations
+pub const TEST_THRESHOLD_DEGREE_BITS: usize = 10;
+
+/// The recursion threshold for segment aggregation circuit.
+// const THRESHOLD_SEGMENT_AGG_CIRCUIT_DEGREE_BITS: usize = 12;
+
+/// The recursion threshold for 2-to-1 block circuit.
+pub const TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS: usize = 13;
+
 /// A fast STARK config for testing purposes only.
 pub const TEST_STARK_CONFIG: StarkConfig = StarkConfig {
     security_bits: 1,
@@ -45,9 +54,9 @@ pub const TEST_STARK_CONFIG: StarkConfig = StarkConfig {
 };
 
 /// A fast Circuit config for testing purposes only.
-pub const TEST_SHRINKING_CONFIG: CircuitConfig = CircuitConfig {
+pub const TEST_RECURSION_CONFIG: CircuitConfig = CircuitConfig {
     num_wires: 135,
-    num_routed_wires: 40,
+    num_routed_wires: 80,
     num_constants: 2,
     use_base_arithmetic_gate: true,
     security_bits: 1,
@@ -55,7 +64,7 @@ pub const TEST_SHRINKING_CONFIG: CircuitConfig = CircuitConfig {
     zero_knowledge: false,
     max_quotient_degree_factor: 8,
     fri_config: FriConfig {
-        rate_bits: 1,
+        rate_bits: 3,
         cap_height: 4,
         proof_of_work_bits: 1,
         reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),

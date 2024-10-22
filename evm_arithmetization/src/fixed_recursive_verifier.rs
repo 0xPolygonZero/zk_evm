@@ -7,9 +7,9 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
+use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
-use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
 use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
@@ -57,6 +57,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
+use crate::testing_utils::TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS;
 use crate::util::h256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
@@ -787,6 +788,7 @@ where
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
         stark_config: &StarkConfig,
         shrinking_circuit_config: Option<&CircuitConfig>,
+        recursion_circuit_config: Option<&CircuitConfig>,
         threshold_degree_bits: Option<usize>,
     ) -> Self {
         // Sanity check on the provided config
@@ -794,6 +796,8 @@ where
 
         let shrinking_config = shrinking_config();
         let shrinking_circuit_config = shrinking_circuit_config.unwrap_or(&shrinking_config);
+        let circuit_config = CircuitConfig::standard_recursion_config();
+        let recursion_circuit_config = recursion_circuit_config.unwrap_or(&circuit_config);
         let threshold_degree_bits = threshold_degree_bits.unwrap_or(THRESHOLD_DEGREE_BITS);
 
         macro_rules! create_recursive_circuit {
@@ -837,13 +841,31 @@ where
             poseidon,
         ];
 
-        let root = Self::create_segment_circuit(&by_table, stark_config);
+        let root = Self::create_segment_circuit(&by_table, stark_config, recursion_circuit_config);
+        info!("root degree bits: {}", root.circuit.common.degree_bits());
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
+        info!(
+            "segment_aggregation degree bits: {}",
+            root.circuit.common.degree_bits()
+        );
         let batch_aggregation =
             Self::create_batch_aggregation_circuit(&segment_aggregation, stark_config);
+        info!(
+            "batch_aggregation degree bits: {}",
+            root.circuit.common.degree_bits()
+        );
         let block = Self::create_block_circuit(&batch_aggregation);
+        info!("block degree bits: {}", root.circuit.common.degree_bits());
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
+        info!(
+            "block_wrapper degree bits: {}",
+            root.circuit.common.degree_bits()
+        );
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
+        info!(
+            "two_to_one_block degree bits: {}",
+            root.circuit.common.degree_bits()
+        );
 
         let table_dummy_proofs = core::array::from_fn(|i| {
             if OPTIONAL_TABLE_INDICES.contains(&i) {
@@ -905,11 +927,12 @@ where
     fn create_segment_circuit(
         by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         stark_config: &StarkConfig,
+        circuit_config: &CircuitConfig,
     ) -> RootCircuitData<F, C, D> {
         let inner_common_data: [_; NUM_TABLES] =
             core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
 
-        let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::new(circuit_config.clone());
 
         let table_in_use: [BoolTarget; NUM_TABLES] =
             core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
@@ -1113,6 +1136,11 @@ where
             vec![],
         );
 
+        // Should pad to match the segment_aggregation circuit's degree.
+        // while log2_ceil(builder.num_gates()) <
+        // THRESHOLD_SEGMENT_AGG_CIRCUIT_DEGREE_BITS {     builder.
+        // add_gate(NoopGate, vec![]); }
+
         RootCircuitData {
             circuit: builder.build::<C>(),
             proof_with_pis: recursive_proofs,
@@ -1279,12 +1307,17 @@ where
             lhs_pv.registers_after,
         );
 
+        info!("num_gates before padding = {}", builder.num_gates());
+
         // Pad to match the root circuit's degree.
         while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }
 
+        info!("num_gates = {}", builder.num_gates());
         let circuit = builder.build::<C>();
+        info!("finish build");
+
         SegmentAggregationCircuitData {
             circuit,
             lhs: lhs_segment,
@@ -1492,15 +1525,16 @@ where
         // Here, we have two block proofs and we aggregate them together.
         // The block circuit is similar to the agg circuit; both verify two inner
         // proofs.
-        let expected_common_data = CommonCircuitData {
-            fri_params: FriParams {
-                degree_bits: 14,
-                ..agg.circuit.common.fri_params.clone()
-            },
-            ..agg.circuit.common.clone()
-        };
+        // let expected_common_data = CommonCircuitData {
+        //     fri_params: FriParams {
+        //         degree_bits: expected_block_circuit_degree_bits,
+        //         ..agg.circuit.common.fri_params.clone()
+        //     },
+        //     ..agg.circuit.common.clone()
+        // };
+        let expected_common_data = agg.circuit.common.clone();
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::<F, D>::new(agg.circuit.common.config.clone());
         let public_values = add_virtual_public_values_public_input(&mut builder);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
@@ -1574,6 +1608,10 @@ where
 
         let agg_verifier_data = builder.constant_verifier_data(&agg.circuit.verifier_only);
         builder.verify_proof::<C>(&agg_root_proof, &agg_verifier_data, &agg.circuit.common);
+
+        while log2_ceil(builder.num_gates()) < agg.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
         BlockCircuitData {
@@ -1751,6 +1789,13 @@ where
             builder.add_gate(NoopGate, vec![]);
         }
 
+        // When using test configurations, the block circuit's degree is less than the
+        // 2-to-1 circuit's degree. Therefore, we also need to ensure its size meets
+        // the 2-to-1 circuit's recursion threshold degree bits.
+        while log2_ceil(builder.num_gates()) < TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS {
+            builder.add_gate(NoopGate, vec![]);
+        }
+
         let circuit = builder.build::<C>();
 
         BlockWrapperCircuitData {
@@ -1833,6 +1878,11 @@ where
         let mix_hash_virtual = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
         builder.connect_hashes(mix_hash, mix_hash_virtual);
+
+        // Pad to match the block circuit's degree.
+        while log2_ceil(builder.num_gates()) < block_wrapper_circuit.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {

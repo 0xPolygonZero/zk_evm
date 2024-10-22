@@ -250,6 +250,7 @@ impl CircuitConfig {
             &StarkConfig::standard_fast_config(),
             None,
             None,
+            None,
         )
     }
 }
