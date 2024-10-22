@@ -3060,6 +3060,28 @@ where
         );
         let mut shrinking_wrappers = vec![];
 
+        // When using test configurations, the initial wrapper is simple enough that the
+        // circuit's common data cannot match the shrinking wrapper circuit's
+        // data. Therefore, we always add at least one shrinking wrapper here.
+        if threshold_degree_bits < THRESHOLD_DEGREE_BITS {
+            let mut builder = CircuitBuilder::new(shrinking_config.clone());
+            let proof_with_pis_target =
+                builder.add_virtual_proof_with_pis(&initial_wrapper.circuit.common);
+            let last_vk = builder.constant_verifier_data(&initial_wrapper.circuit.verifier_only);
+            builder.verify_proof::<C>(
+                &proof_with_pis_target,
+                &last_vk,
+                &initial_wrapper.circuit.common,
+            );
+            builder.register_public_inputs(&proof_with_pis_target.public_inputs);
+            add_common_recursion_gates(&mut builder);
+            let circuit = builder.build::<C>();
+            shrinking_wrappers.push(PlonkWrapperCircuit {
+                circuit,
+                proof_with_pis_target,
+            });
+        }
+
         // Shrinking recursion loop.
         loop {
             let last = shrinking_wrappers
