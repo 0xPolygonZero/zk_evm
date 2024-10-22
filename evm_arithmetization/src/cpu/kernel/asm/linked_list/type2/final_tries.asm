@@ -69,8 +69,8 @@ global debug_delete_node:
     // stack: node_ptr_ptr, root_ptr, retdest
     DUP1
     MLOAD_GENERAL
-    %stack (key, node_ptr_ptr, root_ptr) -> (root_ptr, 64, key, after_mpt_delete, node_ptr_ptr)
-    %jump(mpt_delete)
+    %stack (key, node_ptr_ptr, root_ptr) -> (root_ptr, key, after_mpt_delete, node_ptr_ptr)
+    %jump(smt_delete)
 after_mpt_delete:
     // stack: root_ptr', node_ptr_ptr, retdest
     SWAP1

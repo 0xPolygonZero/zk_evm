@@ -17,7 +17,7 @@ global nonce:
     #[cfg(feature = cdk_erigon)]
     {
         // stack: address, retdest
-        %read_nonce %mload_trie_data
+        %read_nonce
         // stack: nonce, retdest
         SWAP1 JUMP
     }
