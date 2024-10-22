@@ -9,16 +9,12 @@ pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 pub const STATE_LINKED_LIST_NODE_SIZE: usize = 4;
 
-pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
-pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
-pub(crate) type StateLinkedList<'a> = LinkedList<'a, STATE_LINKED_LIST_NODE_SIZE>;
-
 pub const DUMMYHEAD: (U256, U256) = (U256::MAX, U256::zero());
 
 // Provides quick access to pointers that reference the memory location
 // of a storage or accounts linked list node, containing a specific key.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub(crate) struct LinkedListsPtrs {
+pub(crate) struct AccessLinkedListsPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
@@ -27,6 +23,32 @@ pub(crate) struct LinkedListsPtrs {
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
     pub(crate) storage: BTreeMap<(U256, U256), usize>,
+}
+
+// Provides quick access to pointers that reference the memory location
+// of state nodes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg(feature = "eth_mainnet")]
+pub(crate) struct StateLinkedListsPtrs {
+    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
+    /// of an account in the accounts linked list, and ptr is the respective
+    /// node address in memory.
+    pub(crate) accounts: BTreeMap<U256, usize>,
+    /// Each entry contains the pair ((account_key, slot_key), ptr) where
+    /// account_key is the (hashed) key of an account, slot_key is the slot
+    /// key, and ptr is the respective node address in memory.
+    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+}
+
+// Provides quick access to pointers that reference the memory location
+// of state nodes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg(feature = "cdk_erigon")]
+pub(crate) struct StateLinkedListsPtrs {
+    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
+    /// of an account in the accounts linked list, and ptr is the respective
+    /// node address in memory.
+    pub(crate) state: BTreeMap<U256, usize>,
 }
 
 pub(crate) fn empty_list_mem<const N: usize>(offset: usize) -> [Option<U256>; N] {

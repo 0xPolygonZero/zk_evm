@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
 use super::linked_list::{
-    LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD, STORAGE_LINKED_LIST_NODE_SIZE,
+    AccessLinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD, STORAGE_LINKED_LIST_NODE_SIZE,
 };
 #[cfg(feature = "eth_mainnet")]
 use super::mpt::load_state_mpt;
@@ -410,14 +410,21 @@ impl<F: RichField> GenerationState<F> {
     /// jump address.
     #[cfg(feature = "cdk_erigon")]
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        use crate::generation::linked_list::StateLinkedList;
         let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "state ll = {:?}",
-            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
-        log::debug!("state btree = {:#?}", self.state_pointers);
-        log::debug!("input state popopo = {}", self.inputs.trimmed_tries.state_trie);
+
+        #[cfg(test)]
+        {
+            use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+            log::debug!(
+                "state ll = {:?}",
+                StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+            );
+            log::debug!("state btree = {:#?}", self.state_ptrs);
+            log::debug!(
+                "input state popopo = {}",
+                self.inputs.trimmed_tries.state_trie
+            );
+        }
 
         match input_fn.0[1].as_str() {
             "insert_state" | "search_state" => self.run_next_insert_state(input_fn),
@@ -579,7 +586,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     fn run_reset(&mut self) -> Result<U256, ProgramError> {
-        self.access_lists_ptrs = LinkedListsPtrs::default();
+        self.access_lists_ptrs = AccessLinkedListsPtrs::default();
         Ok(U256::zero())
     }
 
@@ -613,13 +620,13 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_insert_state(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let key = stack_peek(self, 0)?;
         let (&pred_key, &pred_ptr) = self
-            .state_pointers
+            .state_ptrs
             .range(..=key)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_key != key && input_fn.0[1].as_str() == "insert_state" {
-            self.state_pointers.insert(
+            self.state_ptrs.insert(
                 key,
                 u256_to_usize(
                     self.memory
@@ -689,15 +696,15 @@ impl<F: RichField> GenerationState<F> {
 
         log::debug!(
             "los que viene antes: = {:?}",
-            self.state_pointers.range(..addr).next_back()
+            self.state_ptrs.range(..addr).next_back()
         );
 
         let (_, &ptr) = self
-            .state_pointers
+            .state_ptrs
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        self.state_pointers
+        self.state_ptrs
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 

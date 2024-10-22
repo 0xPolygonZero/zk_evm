@@ -10,7 +10,6 @@ use plonky2::hash::hash_types::RichField;
 #[cfg(feature = "cdk_erigon")]
 use smt_trie::code::hash_bytecode_u256;
 
-use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -19,7 +18,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::linked_list::{
-    empty_list_mem, StateLinkedList, STATE_LINKED_LIST_NODE_SIZE,
+    empty_list_mem, AccessLinkedListsPtrs, StateLinkedListsPtrs, STATE_LINKED_LIST_NODE_SIZE,
 };
 #[cfg(feature = "eth_mainnet")]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
@@ -206,10 +205,14 @@ pub(crate) trait State<F: RichField> {
             .get_generation_state()
             .memory
             .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "initial state linked list = {:?}",
-            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
+        #[cfg(test)]
+        {
+            use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+            log::debug!(
+                "initial state linked list = {:?}",
+                StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+            );
+        }
 
         loop {
             let registers = self.get_registers();
@@ -397,11 +400,11 @@ pub struct GenerationState<F: RichField> {
 
     /// Provides quick access to pointers that reference the location
     /// of either and account or a slot in the respective access list.
-    pub(crate) access_lists_ptrs: LinkedListsPtrs,
+    pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
 
     /// Provides quick access to pointers that reference the memory location of
     /// either and account or a slot in the respective access list.
-    pub(crate) state_ptrs: LinkedListsPtrs,
+    pub(crate) state_ptrs: StateLinkedListsPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -466,7 +469,7 @@ impl<F: RichField> GenerationState<F> {
             .state_trie
             .load_linked_list_data::<{ Segment::AccountsLinkedList as usize }>(
                 &mut state_linked_list_data,
-                &mut self.state_pointers,
+                &mut self.state_ptrs.accounts,
             );
 
         self.memory.insert_preinitialized_segment(
@@ -510,8 +513,8 @@ impl<F: RichField> GenerationState<F> {
                     receipt_root_ptr: 0,
                 },
                 jumpdest_table: None,
-                access_lists_ptrs: LinkedListsPtrs::default(),
-                state_ptrs: LinkedListsPtrs::default(),
+                access_lists_ptrs: AccessLinkedListsPtrs::default(),
+                state_ptrs: StateLinkedListsPtrs::default(),
                 ger_prover_inputs,
             };
             let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
@@ -538,8 +541,8 @@ impl<F: RichField> GenerationState<F> {
                     receipt_root_ptr: 0,
                 },
                 jumpdest_table: None,
-                access_lists_ptrs: LinkedListsPtrs::default(),
-                state_ptrs: LinkedListsPtrs::default(),
+                access_lists_ptrs: AccessLinkedListsPtrs::default(),
+                state_ptrs: StateLinkedListsPtrs::default(),
                 ger_prover_inputs,
             };
             let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
@@ -710,7 +713,8 @@ impl<F: RichField> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
-            state_pointers: self.state_pointers.clone(),
+            access_lists_ptrs: self.access_lists_ptrs.clone(),
+            state_ptrs: self.state_ptrs.clone(),
         }
     }
 
@@ -756,8 +760,10 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.state_pointers
-            .clone_from(&segment_data.extra_data.state);
+        self.access_lists_ptrs
+            .clone_from(&segment_data.extra_data.access_lists_ptrs);
+        self.state_ptrs
+            .clone_from(&segment_data.extra_data.state_ptrs);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,

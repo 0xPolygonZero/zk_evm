@@ -21,7 +21,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
-use crate::generation::linked_list::LinkedListsPtrs;
+use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
 use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -117,8 +117,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    pub(crate) access_lists_ptrs: LinkedListsPtrs,
-    pub(crate) state_ptrs: LinkedListsPtrs,
+    pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
+    pub(crate) state_ptrs: StateLinkedListsPtrs,
     pub(crate) next_txn_index: usize,
 }
 

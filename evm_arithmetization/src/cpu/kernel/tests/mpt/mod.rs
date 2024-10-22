@@ -6,12 +6,17 @@ use mpt_trie::partial_trie::PartialTrie;
 use crate::generation::mpt::AccountRlp;
 use crate::Node;
 
+#[cfg(feature = "eth_mainnet")]
 mod delete;
+#[cfg(feature = "eth_mainnet")]
 mod hash;
 mod hex_prefix;
+#[cfg(feature = "eth_mainnet")]
 mod insert;
-mod linked_list;
+pub(crate) mod linked_list;
+#[cfg(feature = "eth_mainnet")]
 mod load;
+#[cfg(feature = "eth_mainnet")]
 mod read;
 
 pub(crate) fn nibbles_64<T: Into<U256>>(v: T) -> Nibbles {

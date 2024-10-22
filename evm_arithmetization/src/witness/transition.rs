@@ -8,12 +8,12 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::linked_list::StateLinkedList;
 use crate::generation::state::State;
 use crate::memory::segments::Segment;
 // TO REMOVE!
@@ -312,26 +312,28 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
-    if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
-        let mem = state
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "state linked list = {:?}",
-            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
-    }
+    // if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
+    //     let mem = state
+    //         .get_generation_state()
+    //         .memory
+    //         .get_preinit_memory(Segment::AccountsLinkedList);
+    //     log::debug!(
+    //         "state linked list = {:?}",
+    //         StateLinkedList::from_mem_and_segment(&mem,
+    // Segment::AccountsLinkedList)     );
+    // }
 
     if KERNEL.offset_name(pc) == "smt_hash_state" {
-        let mem = state
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "state linked list = {:?}",
-            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
+        // let mem = state
+        //     .get_generation_state()
+        //     .memory
+        //     .get_preinit_memory(Segment::AccountsLinkedList);
+
+        // log::debug!(
+        //     "state linked list = {:?}",
+        //     StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        // );
+
         let root_ptr = u256_to_usize(
             state
                 .get_generation_state()
