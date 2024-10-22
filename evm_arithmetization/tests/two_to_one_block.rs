@@ -11,7 +11,7 @@ use evm_arithmetization::proof::{
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    TEST_RECURSION_CONFIG, TEST_SHRINKING_CONFIG, TEST_STARK_CONFIG,
+    TEST_RECURSION_CONFIG, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;

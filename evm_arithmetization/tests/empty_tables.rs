@@ -29,21 +29,6 @@ fn empty_tables() -> anyhow::Result<()> {
     let config = TEST_STARK_CONFIG;
     let timing = &mut TimingTree::new("Empty Table Test", log::Level::Info);
 
-    // Process and generate segment proof
-    let all_circuits = timed!(
-        timing,
-        log::Level::Info,
-        "Create all recursive circuits",
-        AllRecursiveCircuits::<F, C, D>::new(
-            &all_stark,
-            &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
-            &config,
-            Some(&TEST_RECURSION_CONFIG),
-            Some(&TEST_RECURSION_CONFIG),
-            Some(TEST_THRESHOLD_DEGREE_BITS),
-        )
-    );
-
     // Generate segment data
     let (payload, mut segment_data) = segment_with_empty_tables()?;
 
@@ -66,6 +51,21 @@ fn empty_tables() -> anyhow::Result<()> {
 
     // Verify the generated STARK proofs
     verify_all_proofs(&all_stark, &proofs, &config)?;
+
+    // Process and generate segment proof
+    let all_circuits = timed!(
+        timing,
+        log::Level::Info,
+        "Create all recursive circuits",
+        AllRecursiveCircuits::<F, C, D>::new(
+            &all_stark,
+            &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
+            &config,
+            Some(&TEST_RECURSION_CONFIG),
+            Some(&TEST_RECURSION_CONFIG),
+            Some(TEST_THRESHOLD_DEGREE_BITS),
+        )
+    );
 
     let segment_proof = timed!(
         timing,
