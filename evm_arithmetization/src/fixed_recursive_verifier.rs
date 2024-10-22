@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
-use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::gates::constant::ConstantGate;
@@ -842,30 +841,12 @@ where
         ];
 
         let root = Self::create_segment_circuit(&by_table, stark_config, recursion_circuit_config);
-        info!("root degree bits: {}", root.circuit.common.degree_bits());
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
-        info!(
-            "segment_aggregation degree bits: {}",
-            root.circuit.common.degree_bits()
-        );
         let batch_aggregation =
             Self::create_batch_aggregation_circuit(&segment_aggregation, stark_config);
-        info!(
-            "batch_aggregation degree bits: {}",
-            root.circuit.common.degree_bits()
-        );
         let block = Self::create_block_circuit(&batch_aggregation);
-        info!("block degree bits: {}", root.circuit.common.degree_bits());
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
-        info!(
-            "block_wrapper degree bits: {}",
-            root.circuit.common.degree_bits()
-        );
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
-        info!(
-            "two_to_one_block degree bits: {}",
-            root.circuit.common.degree_bits()
-        );
 
         let table_dummy_proofs = core::array::from_fn(|i| {
             if OPTIONAL_TABLE_INDICES.contains(&i) {
@@ -1136,11 +1117,6 @@ where
             vec![],
         );
 
-        // Should pad to match the segment_aggregation circuit's degree.
-        // while log2_ceil(builder.num_gates()) <
-        // THRESHOLD_SEGMENT_AGG_CIRCUIT_DEGREE_BITS {     builder.
-        // add_gate(NoopGate, vec![]); }
-
         RootCircuitData {
             circuit: builder.build::<C>(),
             proof_with_pis: recursive_proofs,
@@ -1307,17 +1283,12 @@ where
             lhs_pv.registers_after,
         );
 
-        info!("num_gates before padding = {}", builder.num_gates());
-
         // Pad to match the root circuit's degree.
         while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }
 
-        info!("num_gates = {}", builder.num_gates());
         let circuit = builder.build::<C>();
-        info!("finish build");
-
         SegmentAggregationCircuitData {
             circuit,
             lhs: lhs_segment,
@@ -1522,16 +1493,6 @@ where
     fn create_block_circuit(
         agg: &BatchAggregationCircuitData<F, C, D>,
     ) -> BlockCircuitData<F, C, D> {
-        // Here, we have two block proofs and we aggregate them together.
-        // The block circuit is similar to the agg circuit; both verify two inner
-        // proofs.
-        // let expected_common_data = CommonCircuitData {
-        //     fri_params: FriParams {
-        //         degree_bits: expected_block_circuit_degree_bits,
-        //         ..agg.circuit.common.fri_params.clone()
-        //     },
-        //     ..agg.circuit.common.clone()
-        // };
         let expected_common_data = agg.circuit.common.clone();
 
         let mut builder = CircuitBuilder::<F, D>::new(agg.circuit.common.config.clone());

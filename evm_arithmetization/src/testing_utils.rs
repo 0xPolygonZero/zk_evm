@@ -34,9 +34,6 @@ pub const EMPTY_NODE_HASH: H256 = H256(hex!(
 /// The recursion threshold when using test configurations
 pub const TEST_THRESHOLD_DEGREE_BITS: usize = 10;
 
-/// The recursion threshold for segment aggregation circuit.
-// const THRESHOLD_SEGMENT_AGG_CIRCUIT_DEGREE_BITS: usize = 12;
-
 /// The recursion threshold for 2-to-1 block circuit.
 pub const TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS: usize = 13;
 
