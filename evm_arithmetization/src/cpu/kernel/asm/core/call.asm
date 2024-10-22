@@ -247,7 +247,9 @@ after_call_instruction_failed:
     %jump(after_call_instruction_contd)
 
 call_insufficient_balance:
-    %stack (new_ctx, kexit_info, callgas, address, value, args_offset, args_size, ret_offset, ret_size) ->
+    // stack: new_ctx, kexit_info, callgas, address, value, args_offset, args_size, ret_offset, ret_size
+    %prune_context
+    %stack (kexit_info, callgas, address, value, args_offset, args_size, ret_offset, ret_size) ->
         (callgas, kexit_info, 0)
     %shl_const(192) SWAP1 SUB
     // stack: kexit_info', 0
