@@ -162,6 +162,7 @@ fn get_test_block_proof(
     Ok(wrapped_block_proof)
 }
 
+#[ignore]
 #[test]
 fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     init_logger();

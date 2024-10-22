@@ -30,7 +30,7 @@ fn main() -> Result<()> {
     let verifier = args
         .prover_state_config
         .into_prover_state_manager()
-        .verifier(args.use_test_config)?;
+        .verifier()?;
 
     if input_proofs.into_iter().all(|block_proof| {
         verifier

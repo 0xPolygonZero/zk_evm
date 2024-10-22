@@ -5,9 +5,6 @@ use std::{
     str::FromStr,
 };
 
-use evm_arithmetization::testing_utils::{
-    TEST_RECURSION_CONFIG, TEST_STARK_CONFIG, TEST_THRESHOLD_DEGREE_BITS,
-};
 pub use evm_arithmetization::NUM_TABLES;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, StarkConfig};
 
@@ -246,26 +243,15 @@ impl CircuitConfig {
     }
 
     /// Build the circuits from the current config.
-    pub fn as_all_recursive_circuits(&self, use_test_config: bool) -> AllRecursiveCircuits {
-        if use_test_config {
-            AllRecursiveCircuits::new(
-                &AllStark::default(),
-                self.as_degree_bits_ranges(),
-                &TEST_STARK_CONFIG,
-                Some(&TEST_RECURSION_CONFIG),
-                Some(&TEST_RECURSION_CONFIG),
-                Some(TEST_THRESHOLD_DEGREE_BITS),
-            )
-        } else {
-            AllRecursiveCircuits::new(
-                &AllStark::default(),
-                self.as_degree_bits_ranges(),
-                &StarkConfig::standard_fast_config(),
-                None,
-                None,
-                None,
-            )
-        }
+    pub fn as_all_recursive_circuits(&self) -> AllRecursiveCircuits {
+        AllRecursiveCircuits::new(
+            &AllStark::default(),
+            self.as_degree_bits_ranges(),
+            &StarkConfig::standard_fast_config(),
+            None,
+            None,
+            None,
+        )
     }
 }
 
