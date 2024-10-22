@@ -6,7 +6,6 @@ use alloy::primitives::BlockHash;
 use alloy::rpc::types::{Block, BlockId, BlockTransactionsKind};
 use alloy::{providers::Provider, transports::Transport};
 use anyhow::Context;
-use mockall::automock;
 use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
 use crate::rpc::RpcType;
@@ -14,7 +13,10 @@ use crate::rpc::RpcType;
 const CACHE_SIZE: usize = 1024;
 const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
 
-#[automock]
+#[cfg(test)]
+use mockall::automock;
+
+#[cfg_attr(test, automock)]
 pub trait ZeroBlockProvider {
     fn get_block_by_id(
         &self,

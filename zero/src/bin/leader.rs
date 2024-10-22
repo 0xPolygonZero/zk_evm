@@ -106,8 +106,8 @@ async fn main() -> Result<()> {
             checkpoint_block,
             previous_proof,
             block_time,
-            end_block,
             start_block,
+            end_block,
             backoff,
             max_retries,
         } => {

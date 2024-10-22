@@ -69,6 +69,8 @@ pub(crate) enum Command {
         #[arg(long, short = 's')]
         start_block: BlockId,
         /// The end of the block range to prove (inclusive).
+        /// If not provided, leader will work in dynamic mode from `start_block`
+        /// following head of the blockchain.
         #[arg(long, short = 'e')]
         end_block: Option<BlockId>,
         /// The checkpoint block.

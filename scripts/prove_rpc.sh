@@ -182,7 +182,8 @@ $PREV_PROOF_EXTRA_ARG "
                 rm "$OUT_LOG_PATH"
             fi
         fi
-        echo "Successfully generated proofs!"
+        proof_count=$(grep -c 'INFO zero::prover: Proving block \d' <  "$OUT_LOG_PATH")
+        echo "Successfully generated $proof_count proofs!"
     fi
 fi
 

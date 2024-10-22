@@ -10,6 +10,7 @@ use zero::block_interval::{BlockInterval, BlockIntervalStream};
 use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
+use zero::provider::CachedProvider;
 use zero::rpc;
 
 use crate::ProofRuntime;
@@ -24,7 +25,7 @@ pub struct LeaderConfig {
 /// The main function for the client.
 pub(crate) async fn client_main<ProviderT, TransportT>(
     proof_runtime: Arc<ProofRuntime>,
-    cached_provider: Arc<zero::provider::CachedProvider<ProviderT, TransportT>>,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_time: u64,
     block_interval: BlockInterval,
     mut leader_config: LeaderConfig,
