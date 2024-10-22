@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
         if let paladin::config::Runtime::InMemory = args.paladin.runtime {
             args.prover_state_config
                 .into_prover_state_manager()
-                .initialize()?;
+                .initialize(args.use_test_config)?;
         }
     }
 

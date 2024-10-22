@@ -29,6 +29,10 @@ pub(crate) struct Cli {
     // Mode to use for worker for setup (affinity or default)
     #[arg(long = "worker-run-mode", help_heading = WORKER_HELP_HEADING, value_enum, default_value = "default")]
     pub(crate) worker_run_mode: WorkerRunMode,
+
+    /// Run in an unsafe but fast configuration for testing purposes
+    #[arg(long)]
+    pub(crate) use_test_config: bool,
 }
 
 /// Defines the mode for worker setup in terms of job allocation:

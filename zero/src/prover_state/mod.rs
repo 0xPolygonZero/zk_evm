@@ -283,14 +283,16 @@ impl ProverStateManager {
     }
 
     /// Initialize global prover state from the configuration.
-    pub fn initialize(&self) -> anyhow::Result<()> {
+    pub fn initialize(&self, use_test_config: bool) -> anyhow::Result<()> {
         info!("initializing prover state...");
 
         let state = match self.persistence {
             CircuitPersistence::None => {
                 info!("generating circuits...");
                 ProverState {
-                    state: self.circuit_config.as_all_recursive_circuits(),
+                    state: self
+                        .circuit_config
+                        .as_all_recursive_circuits(use_test_config),
                 }
             }
             CircuitPersistence::Disk(strategy) => {
@@ -310,8 +312,9 @@ impl ProverStateManager {
                     }
                     Err(_) => {
                         info!("failed to load preprocessed circuits from disk. generating circuits...");
-                        let all_recursive_circuits =
-                            self.circuit_config.as_all_recursive_circuits();
+                        let all_recursive_circuits = self
+                            .circuit_config
+                            .as_all_recursive_circuits(use_test_config);
                         info!("saving preprocessed circuits to disk");
                         persistence::persist_all_to_disk(
                             &all_recursive_circuits,
@@ -343,12 +346,14 @@ impl ProverStateManager {
     }
 
     /// Loads a verifier state from disk or generate it.
-    pub fn verifier(&self) -> anyhow::Result<VerifierState> {
+    pub fn verifier(&self, use_test_config: bool) -> anyhow::Result<VerifierState> {
         info!("initializing verifier state...");
         match self.persistence {
             CircuitPersistence::None => {
                 info!("generating circuit...");
-                let prover_state = self.circuit_config.as_all_recursive_circuits();
+                let prover_state = self
+                    .circuit_config
+                    .as_all_recursive_circuits(use_test_config);
                 Ok(VerifierState {
                     state: prover_state.final_verifier_data(),
                 })
@@ -364,7 +369,9 @@ impl ProverStateManager {
                     }
                     Err(_) => {
                         info!("failed to load preprocessed verifier circuit from disk. generating it...");
-                        let prover_state = self.circuit_config.as_all_recursive_circuits();
+                        let prover_state = self
+                            .circuit_config
+                            .as_all_recursive_circuits(use_test_config);
 
                         info!("saving preprocessed verifier circuit to disk");
                         let state = prover_state.final_verifier_data();
