@@ -20,8 +20,6 @@ struct Cli {
     paladin: paladin::config::Config,
     #[clap(flatten)]
     prover_state_config: CliProverStateConfig,
-    #[arg(long)]
-    use_test_config: bool,
 }
 
 #[tokio::main]
@@ -33,7 +31,7 @@ async fn main() -> Result<()> {
 
     args.prover_state_config
         .into_prover_state_manager()
-        .initialize(args.use_test_config)?;
+        .initialize()?;
 
     let runtime = WorkerRuntime::from_config(&args.paladin, register()).await?;
     runtime.main_loop().await?;
