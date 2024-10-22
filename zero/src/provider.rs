@@ -15,7 +15,7 @@ const CACHE_SIZE: usize = 1024;
 const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
 
 #[automock]
-pub trait BlockProvider {
+pub trait ZeroBlockProvider {
     fn get_block_by_id(
         &self,
         block_id: BlockId,
@@ -36,7 +36,6 @@ pub struct CachedProvider<ProviderT, TransportT> {
     blocks_by_number: Arc<Mutex<lru::LruCache<u64, Block>>>,
     blocks_by_hash: Arc<Mutex<lru::LruCache<BlockHash, u64>>>,
     _phantom: std::marker::PhantomData<TransportT>,
-
     pub rpc_type: RpcType,
 }
 
@@ -136,7 +135,7 @@ where
     }
 }
 
-impl<ProviderT, TransportT> BlockProvider for CachedProvider<ProviderT, TransportT>
+impl<ProviderT, TransportT> ZeroBlockProvider for CachedProvider<ProviderT, TransportT>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,

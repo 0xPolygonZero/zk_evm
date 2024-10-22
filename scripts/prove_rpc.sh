@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Args:
-# 1 --> Start block (number or hash)
-# 2 --> End block (number or hash, inclusive)
+# 1 --> Start block (number in decimal or block hash with prefix 0x). E.g. `1234` or `0x1d5e7a08dd1f4ce7fa52afe7f4960d78e82e508c874838dee594d5300b8df625`.
+# 2 --> End block (number or hash, inclusive). Same format as start block.
 # 3 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
 # 4 --> Rpc type (eg. jerigon / native)
-# 5 --> Checkpoint block (number or hash to ignore previous proofs. empty [""] when specifying start block by number to rely on previous proofs)
+# 5 --> Checkpoint block (number or hash). If argument is missing, start block predecessor will be used.
 # 6 --> Backoff in milliseconds (optional [default: 0])
 # 7 --> Number of retries (optional [default: 0])
 # 8 --> Test run only flag `test_only` (optional)
@@ -57,6 +57,26 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p "$PROOF_OUTPUT_DIR"
 
+# Validate start block args
+for block_id in "$START_BLOCK" "$END_BLOCK"; do
+    if [[ $block_id == 0x* ]]; then
+        if ! [[ ${#block_id} -eq 66 ]]; then
+            echo "Invalid block hash length: $block_id"
+            exit 1
+        fi
+        if ! [[ $block_id =~ ^0x[0-9a-fA-F]+$ ]]; then
+            echo "Invalid block hash format: $block_id"
+            exit 1
+        fi
+    else
+        if ! [[ $block_id =~ ^[0-9]+$ ]]; then
+            echo "Invalid block number format: $block_id"
+            exit 1
+        fi
+    fi
+done
+
+# Handle checkpoint block arg
 if [ -n "$CHECKPOINT_BLOCK" ] ; then
     # Checkpoint block provided, pass it to the prover as a flag
     PREV_PROOF_EXTRA_ARG="--checkpoint-block $CHECKPOINT_BLOCK"
