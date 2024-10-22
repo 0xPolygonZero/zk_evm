@@ -13,4 +13,7 @@ pub(crate) struct Cli {
     /// and the verifier state.
     #[clap(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
+    /// Run in an unsafe but fast configuration for testing
+    #[arg(long)]
+    pub(crate) use_test_config: bool,
 }
