@@ -57,7 +57,7 @@ global update_txn_trie:
     // First we write txn rlp length
     DUP1 %append_to_trie_data
     // stack: txn_rlp_len, value_ptr, txn_counter, num_nibbles, ret_dest
-    DUP2 %increment
+    DUP2 INCR1
     // stack: rlp_start=value_ptr+1, txn_rlp_len, value_ptr, txn_counter, num_nibbles, retdest
 
     // and now copy txn_rlp to the new block

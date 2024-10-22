@@ -43,7 +43,7 @@ global get_create2_address:
     PUSH 0xff
     MSTORE_GENERAL
     // stack: addr, sender, code_hash, salt, retdest
-    %increment
+    INCR1
     %stack (addr, sender, code_hash, salt, retdest) -> (addr, sender, salt, code_hash, retdest)
     MSTORE_32BYTES_20
     // stack: addr, salt, code_hash, retdest

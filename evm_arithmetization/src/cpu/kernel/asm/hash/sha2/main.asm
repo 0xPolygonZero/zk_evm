@@ -23,7 +23,7 @@ global sha2_pad:
     // stack: 128, num_bytes, retdest
     DUP2
     // stack: num_bytes, 128, num_bytes, retdest
-    %increment
+    INCR1
     // stack: num_bytes+1, 128, num_bytes, retdest
     %mstore_current_general
     // stack: num_bytes, retdest
@@ -33,7 +33,7 @@ global sha2_pad:
     %add_const(8)
     %shr_const(6)
     
-    %increment
+    INCR1
     // stack: num_blocks = (num_bytes+8)//64 + 1, num_bytes, retdest
     // STEP 3: calculate length := num_bytes*8
     SWAP1

@@ -40,12 +40,10 @@ add_loop:
     // stack: a_cur_addr, c[cur], carry_new,  base_addr, i, a_cur_loc, b_cur_loc, retdest
     %swap_mstore
     // stack: carry_new, base_addr, i, a_cur_loc, b_cur_loc, retdest
-    SWAP3
-    %increment
-    SWAP3
+    INCR4
     // stack: carry_new, base_addr, i, a_cur_loc + 1, b_cur_loc, retdest
     SWAP4
-    %increment
+    INCR1
     SWAP4
     // stack: carry_new, base_addr, i, a_cur_loc + 1, b_cur_loc + 1, retdest
     SWAP2
