@@ -417,7 +417,7 @@ impl<F: RichField> GenerationState<F> {
             StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
         );
         log::debug!("state btree = {:#?}", self.state_pointers);
-        log::debug!("input state = {}", self.inputs.trimmed_tries.state_trie);
+        log::debug!("input state popopo = {}", self.inputs.trimmed_tries.state_trie);
 
         match input_fn.0[1].as_str() {
             "insert_state" | "search_state" => self.run_next_insert_state(input_fn),
@@ -660,8 +660,8 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Returns a pointer `ptr` to a node of the form [..] -> [next_addr, ..]
-    /// list such that `next_addr = addr` and `addr` is the top of the stack.
-    /// If the element is not in the list, loops forever.
+    /// such that `next_addr = addr` and `addr` is the top of the stack.
+    /// If the element is not in the list, returns an error.
     #[cfg(feature = "eth_mainnet")]
     fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
@@ -681,11 +681,16 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Returns a pointer `ptr` to a node of the form [..] -> [next_key, ..]
-    /// list such that `next_key = addr` and `key` is the top of the stack.
+    /// such that `next_key = addr` and `key` is the top of the stack.
     /// If the element is not in the list, returns an error.
     #[cfg(feature = "cdk_erigon")]
     fn run_next_remove_state(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
+
+        log::debug!(
+            "los que viene antes: = {:?}",
+            self.state_pointers.range(..addr).next_back()
+        );
 
         let (_, &ptr) = self
             .state_pointers

@@ -16,6 +16,7 @@ global process_normalized_txn:
 
     // Assert gas_limit >= intrinsic_gas.
     %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
+global debug_invalid_txn:
     %assert_ge(invalid_txn)
 
     // Assert block gas limit >= txn gas limit.
@@ -32,11 +33,14 @@ global process_normalized_txn:
     // stack: sender_nonce, sender, retdest
     %mload_txn_field(@TXN_FIELD_NONCE)
     // stack: tx_nonce, sender_nonce, sender, retdest
+global debug_eq_nonce:
     %assert_eq(invalid_txn_1)
     // stack: sender, retdest
 
     // Assert sender has no code.
-    DUP1 %ext_code_empty %assert_nonzero(invalid_txn_1)
+    DUP1 %ext_code_empty 
+global debug_no_code:
+    %assert_nonzero(invalid_txn_1)
     // stack: sender, retdest
 
     // Assert sender balance >= gas_limit * gas_price + value.

@@ -12,9 +12,11 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-ethereum-types.workspace = true
-plonky2.workspace = true
-rand.workspace = true
+ethereum-types = { workspace = true }
+hex-literal = { workspace = true }
+plonky2 = { workspace = true }
+mpt_trie = {workspace = true}
+rand = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 log = { workspace = true }
 

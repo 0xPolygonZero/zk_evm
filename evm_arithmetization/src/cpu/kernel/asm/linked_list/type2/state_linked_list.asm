@@ -374,7 +374,7 @@ global debug_o_margot:
     %remove_key
 %endmacro
 
-%macro remove_slot_from_addr_key
+%macro remove_slot_from_addr
     %key_storage
     %remove_key
 %endmacro
@@ -383,7 +383,7 @@ global debug_o_margot:
 /// Panics if the key is not in the list.
 global remove_key:
     // stack: key, retdest
-    PROVER_INPUT(linked_list::remove_slot)
+    PROVER_INPUT(linked_list::remove_state)
     // stack: pred_ptr/4, key, retdest
     %get_valid_state_ptr
     // stack: pred_ptr, key, retdest

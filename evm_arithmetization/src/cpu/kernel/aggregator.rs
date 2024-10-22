@@ -12,7 +12,7 @@ use crate::cpu::kernel::parser::parse;
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     158
 } else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
-    160
+    159
 } else {
     // unreachable
     0
@@ -21,6 +21,7 @@ pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
     "global jumped_to_1: PANIC",
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/beacon_roots.asm"),
     include_str!("asm/bignum/add.asm"),
     include_str!("asm/bignum/addmul.asm"),

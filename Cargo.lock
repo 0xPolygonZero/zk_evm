@@ -4603,6 +4603,7 @@ dependencies = [
  "ethereum-types",
  "hex-literal",
  "log",
+ "mpt_trie",
  "plonky2",
  "rand",
  "serde",

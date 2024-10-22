@@ -135,9 +135,8 @@ sstore_noop:
 sstore_delete:
     // stack: slot, value, kexit_info
     %address
-    %addr_to_state_key
-    // stack: addr_key, slot, value, kexit_info
-    %remove_slot_from_addr_key
+    // stack: addr, slot, value, kexit_info
+    %remove_slot_from_addr
     // stack: value, kexit_info
     POP
     EXIT_KERNEL
