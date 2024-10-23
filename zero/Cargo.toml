@@ -27,6 +27,7 @@ hex.workspace = true
 itertools.workspace = true
 keccak-hash.workspace = true
 lru.workspace = true
+mockall = "0.13.0"
 mpt_trie.workspace = true
 num-traits.workspace = true
 once_cell.workspace = true
@@ -47,7 +48,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 zk_evm_common.workspace = true
-mockall = "0.13.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
