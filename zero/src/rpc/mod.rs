@@ -326,16 +326,17 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+mod canned {
     use std::{
         borrow::Cow,
         collections::BTreeMap,
         future::ready,
+        sync::Arc,
         task::{Context, Poll},
     };
 
     use alloy::{
-        providers::{Provider as _, RootProvider},
+        providers::{Provider, RootProvider},
         transports::{BoxTransport, TransportConnect, TransportError},
     };
     use alloy_json_rpc::{
@@ -346,18 +347,35 @@ mod tests {
     use serde_json::Value;
     use tower::Service;
 
-    /// Fixed ("canned") responses to JSON-RPC method calls.
-    ///
-    /// Used for testing.
-    #[derive(Clone, Default)]
+    /// Fixed ("canned") responses to JSON-RPC requests,
+    /// used as a test [`Provider`].
     pub struct Canned {
-        method2response: BTreeMap<String, Value>,
+        provider: RootProvider<BoxTransport>,
+    }
+
+    impl Provider for Canned {
+        fn root(&self) -> &RootProvider<BoxTransport> {
+            &self.provider
+        }
     }
 
     impl Canned {
-        pub fn new() -> Self {
-            Self::default()
+        pub fn builder() -> Builder {
+            Builder {
+                method2response: BTreeMap::new(),
+            }
         }
+    }
+
+    /// See [`Canned`].
+    pub struct Builder {
+        method2response: BTreeMap<String, Value>,
+    }
+
+    impl Builder {
+        /// # Panics
+        /// - If `method` has already been set.
+        /// - If `response` fails to serialize.
         #[track_caller]
         pub fn respond(mut self, method: impl Into<String>, response: impl Serialize) -> Self {
             let clobbered = self.method2response.insert(
@@ -370,15 +388,25 @@ mod tests {
             );
             self
         }
-        pub fn into_provider(self) -> RootProvider<BoxTransport> {
-            RootProvider::connect_boxed(self)
+        pub fn build(self) -> Canned {
+            let Self { method2response } = self;
+            Canned {
+                provider: RootProvider::connect_boxed(Transport {
+                    method2response: Arc::new(method2response),
+                })
                 .now_or_never()
-                .expect("Canned::get_transport is non blocking")
-                .expect("Canned::get_transport is infallible")
+                .expect("Transport::get_transport is non blocking")
+                .expect("Transport::get_transport is infallible"),
+            }
         }
     }
 
-    impl TransportConnect for Canned {
+    #[derive(Clone)]
+    struct Transport {
+        method2response: Arc<BTreeMap<String, Value>>,
+    }
+
+    impl TransportConnect for Transport {
         type Transport = Self;
         fn is_local(&self) -> bool {
             true
@@ -390,7 +418,7 @@ mod tests {
         }
     }
 
-    impl Service<RequestPacket> for Canned {
+    impl Service<RequestPacket> for Transport {
         type Response = ResponsePacket;
         type Error = TransportError;
         type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -434,9 +462,9 @@ mod tests {
     #[test]
     fn eth_block_number() {
         let expected = 100;
-        let actual = Canned::new()
+        let actual = Canned::builder()
             .respond("eth_blockNumber", expected)
-            .into_provider()
+            .build()
             .get_block_number()
             .now_or_never()
             .unwrap()
@@ -447,8 +475,8 @@ mod tests {
     #[test]
     #[should_panic = "method eth_blockNumber not implemented"]
     fn not_implemented() {
-        Canned::new()
-            .into_provider()
+        Canned::builder()
+            .build()
             .get_block_number()
             .now_or_never()
             .unwrap()
