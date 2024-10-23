@@ -21,7 +21,7 @@ categories = ["cryptography::cryptocurrencies"]
 
 [workspace.dependencies]
 __compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
-alloy = { version = '0.3.0', default-features = false, features = [
+alloy = { version = '0.5.3', default-features = false, features = [
   "consensus",
   "reqwest",
   "json-rpc",

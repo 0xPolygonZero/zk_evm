@@ -65,3 +65,6 @@ polygon_pos = ["evm_arithmetization/polygon_pos", "trace_decoder/polygon_pos"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+alloy-json-rpc = "0.5.3"
