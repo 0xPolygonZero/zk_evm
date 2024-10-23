@@ -123,8 +123,8 @@ run_constructor:
     // stack: new_ctx, address, kexit_info
 
     // All but 1/64 of the sender's remaining gas goes to the constructor.
-    SWAP2
-    // stack: kexit_info, address, new_ctx
+    %stack(new_ctx, address, kexit_info) -> (kexit_info, new_ctx, address, new_ctx)
+    // stack: kexit_info, new_ctx, address, new_ctx
     %drain_all_but_one_64th_gas
     %stack (kexit_info, drained_gas, address, new_ctx) -> (drained_gas, new_ctx, address, kexit_info)
     %set_new_ctx_gas_limit_no_check
@@ -221,16 +221,14 @@ create_collision:
 // stack: new_ctx, leftover_gas, success, address, kexit_info
 create_first_byte_ef:
     %revert_checkpoint
-    %prune_context
-    %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+    %stack (new_ctx, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 // stack: code_size, new_ctx, leftover_gas, success, address, kexit_info
 create_code_too_large:
     %revert_checkpoint
     POP
-    %prune_context
-    %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+    %stack (new_ctx, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 // stack: code_size_cost, new_ctx, leftover_gas, success, address, kexit_info
@@ -238,8 +236,7 @@ create_oog:
     %revert_checkpoint
     %mstore_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 0)
     POP
-    %prune_context
-    %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+    %stack (new_ctx, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 create_too_deep:
