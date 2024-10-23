@@ -324,3 +324,162 @@ where
     };
     Ok(other_data)
 }
+
+#[cfg(test)]
+mod canned {
+    use std::{
+        borrow::Cow,
+        collections::BTreeMap,
+        future::ready,
+        sync::Arc,
+        task::{Context, Poll},
+    };
+
+    use alloy::{
+        providers::{Provider, RootProvider},
+        transports::{BoxTransport, TransportConnect, TransportError},
+    };
+    use alloy_json_rpc::{
+        ErrorPayload, RequestMeta, RequestPacket, Response, ResponsePacket, ResponsePayload,
+    };
+    use futures::{future::BoxFuture, FutureExt as _};
+    use serde::Serialize;
+    use serde_json::Value;
+    use tower::Service;
+
+    /// Fixed ("canned") responses to JSON-RPC requests,
+    /// used as a test [`Provider`].
+    pub struct Canned {
+        provider: RootProvider<BoxTransport>,
+    }
+
+    impl Provider for Canned {
+        fn root(&self) -> &RootProvider<BoxTransport> {
+            &self.provider
+        }
+    }
+
+    impl Canned {
+        pub fn builder() -> Builder {
+            Builder {
+                method2response: BTreeMap::new(),
+            }
+        }
+    }
+
+    /// See [`Canned`].
+    pub struct Builder {
+        method2response: BTreeMap<String, Value>,
+    }
+
+    impl Builder {
+        /// # Panics
+        /// - If `method` has already been set.
+        /// - If `response` fails to serialize.
+        #[track_caller]
+        pub fn respond(mut self, method: impl Into<String>, response: impl Serialize) -> Self {
+            let clobbered = self.method2response.insert(
+                method.into(),
+                serde_json::to_value(response).expect("serialization failure"),
+            );
+            assert!(
+                clobbered.is_none(),
+                "duplicate response registered - this is probably not what you want"
+            );
+            self
+        }
+        pub fn build(self) -> Canned {
+            let Self { method2response } = self;
+            Canned {
+                provider: RootProvider::connect_boxed(Transport {
+                    method2response: Arc::new(method2response),
+                })
+                .now_or_never()
+                .expect("Transport::get_transport is non blocking")
+                .expect("Transport::get_transport is infallible"),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct Transport {
+        method2response: Arc<BTreeMap<String, Value>>,
+    }
+
+    impl TransportConnect for Transport {
+        type Transport = Self;
+        fn is_local(&self) -> bool {
+            true
+        }
+        fn get_transport<'a: 'b, 'b>(
+            &'a self,
+        ) -> BoxFuture<'b, Result<Self::Transport, TransportError>> {
+            ready(Ok(self.clone())).boxed()
+        }
+    }
+
+    impl Service<RequestPacket> for Transport {
+        type Response = ResponsePacket;
+        type Error = TransportError;
+        type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+        fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: RequestPacket) -> Self::Future {
+            fn error(message: impl Into<Cow<'static, str>>) -> TransportError {
+                TransportError::ErrorResp(ErrorPayload {
+                    code: 0,
+                    message: message.into(),
+                    data: None,
+                })
+            }
+
+            match req {
+                RequestPacket::Single(it) => {
+                    let (RequestMeta { method, id, .. }, _params) = it.decompose();
+                    ready(
+                        self.method2response
+                            .get(&*method)
+                            .map(|it| {
+                                ResponsePacket::Single(Response {
+                                    id,
+                                    payload: ResponsePayload::Success(
+                                        serde_json::value::to_raw_value(it).unwrap(),
+                                    ),
+                                })
+                            })
+                            .ok_or_else(|| error(format!("method {method} not implemented"))),
+                    )
+                    .boxed()
+                }
+                RequestPacket::Batch(_) => {
+                    ready(Err(error("batched messages are not supported"))).boxed()
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn eth_block_number() {
+        let expected = 100;
+        let actual = Canned::builder()
+            .respond("eth_blockNumber", expected)
+            .build()
+            .get_block_number()
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    #[should_panic = "method eth_blockNumber not implemented"]
+    fn not_implemented() {
+        Canned::builder()
+            .build()
+            .get_block_number()
+            .now_or_never()
+            .unwrap()
+            .unwrap();
+    }
+}

@@ -336,6 +336,7 @@ fn prestate_tracing_options(diff_mode: bool) -> GethDebugTracingOptions {
     GethDebugTracingOptions {
         tracer_config: PreStateConfig {
             diff_mode: Some(diff_mode),
+            ..Default::default()
         }
         .into(),
         tracer: Some(GethDebugTracerType::BuiltInTracer(
