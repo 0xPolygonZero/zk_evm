@@ -179,6 +179,7 @@ store_initial_state_end:
 /// or modifies the vealue if it was already present.
 global insert_key:
     // stack: key, value, retdest
+    DUP2 ISZERO %jumpi(insert_zero)
     PROVER_INPUT(linked_list::insert_state)
     // stack: pred_ptr/4, key, value, retdest
     %get_valid_state_ptr
@@ -208,6 +209,12 @@ global insert_key:
     %jump_neq_const(@U256_MAX, key_found_with_overwrite)
     // The key is not in the list.
     PANIC
+
+insert_zero:
+    // stack: key, value, retdest
+    %remove_key
+    POP
+    JUMP
 
 key_found_with_overwrite:
     // The key was already in the list
