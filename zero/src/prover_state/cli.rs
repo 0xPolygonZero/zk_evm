@@ -62,7 +62,7 @@ macro_rules! gen_prover_state_config {
             pub persistence: CircuitPersistence,
             #[clap(long, help_heading = HEADING, default_value_t = TableLoadStrategy::OnDemand)]
             pub load_strategy: TableLoadStrategy,
-            /// Run in an unsafe but fast configuration for testing
+            /// Run with a low-security but fast STARK configuration. Enable this only for testing.
             #[arg(long)]
             pub use_test_config: bool,
 
