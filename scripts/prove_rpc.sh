@@ -57,31 +57,12 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p "$PROOF_OUTPUT_DIR"
 
-# Validate start block args
-for block_id in "$START_BLOCK" "$END_BLOCK"; do
-    if [[ $block_id == 0x* ]]; then
-        if ! [[ ${#block_id} -eq 66 ]]; then
-            echo "Invalid block hash length: $block_id"
-            exit 1
-        fi
-        if ! [[ $block_id =~ ^0x[0-9a-fA-F]+$ ]]; then
-            echo "Invalid block hash format: $block_id"
-            exit 1
-        fi
-    else
-        if ! [[ $block_id =~ ^[0-9]+$ ]]; then
-            echo "Invalid block number format: $block_id"
-            exit 1
-        fi
-    fi
-done
-
 # Handle checkpoint block arg
 if [ -n "$CHECKPOINT_BLOCK" ] ; then
     # Checkpoint block provided, pass it to the prover as a flag
     PREV_PROOF_EXTRA_ARG="--checkpoint-block $CHECKPOINT_BLOCK"
 else
-    # Checkpoint block not provided, but is required hash-based start block
+    # Checkpoint block not provided, but is required for hash-based start block
     if [[ $START_BLOCK == 0x* ]]; then
         echo "Checkpoint block is required when specifying blocks by hash"
         exit 1
