@@ -191,4 +191,68 @@ load_code_padded_ctd:
     remove_padding_after:
         %stack (offset, ctx, retdest) -> (retdest, offset)
         JUMP
+
+    // Convenience macro to call poseidon_hash_code_unpadded and return where we left off.
+    %macro poseidon_hash_code_unpadded
+        %stack (addr, len) -> (addr, len, %%after)
+        %jump(poseidon_hash_code_unpadded)
+    %%after:
+    %endmacro
+
+    /// Applies the padding rule to the code located at the provided address before hashing it.
+    /// Memory cells after the last code byte will be overwritten.
+    global poseidon_hash_code_unpadded:
+        // stack: addr, len, retdest
+        DUP2 ISZERO %jumpi(poseidon_empty_code)
+        DUP2 DUP2 ADD
+        // stack: padding_addr, addr, len, retdest
+
+        // write 1 after the last code byte
+        DUP1 PUSH 1 MSTORE_GENERAL
+        // stack: padding_addr, addr, len, retdest
+        %increment
+        // stack: padding_addr, addr, len, retdest
+
+        // Pad with 0s until the length is a multiple of 56
+        PUSH 56
+        DUP4 %increment
+        // stack: curr_len, 56, padding_addr, addr, len, retdest
+        PUSH 56 SUB
+        // stack: 56 - curr_len, 56, padding_addr, addr, len, retdest
+        MOD
+        // stack: padding_len, padding_addr, addr, len, retdest
+        SWAP3 DUP4
+        // stack: padding_len, len, padding_addr, addr, padding_len, retdest
+        ADD
+        // stack: last_byte_offset, padding_addr, addr, padding_len, retdest
+        %stack (last_byte_offset, padding_addr, addr, padding_len)
+            -> (padding_addr, padding_len, after_padding, addr, last_byte_offset)
+        %jump(memset)
+    after_padding:
+        // stack: addr, last_byte_offset, retdest
+
+        // Xor the last element with 0x80
+        PUSH 1 DUP3 ADD
+        // stack: total_code_len, addr, last_byte_offset, retdest
+        SWAP2
+        // stack: last_byte_offset, addr, total_code_len, retdest
+        DUP2 ADD
+        // stack: last_byte_addr, addr, total_code_len, retdest
+        DUP1 MLOAD_GENERAL
+        // stack: last_byte, last_byte_addr, addr, total_code_len, retdest
+        PUSH 0x80 ADD
+        // stack: last_byte_updated, last_byte_addr, addr, total_code_len, retdest
+        MSTORE_GENERAL
+        // stack: addr, total_code_len, retdest
+
+        POSEIDON_GENERAL
+        // stack: codehash, retdest
+        SWAP1
+        JUMP
+
+    global poseidon_empty_code:
+        // stack: addr, len, retdest
+        %stack (addr, len, retdest) -> (retdest, @EMPTY_STRING_POSEIDON_HASH)
+        JUMP
+
 }
