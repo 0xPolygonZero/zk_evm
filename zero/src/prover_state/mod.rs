@@ -15,6 +15,7 @@ use std::borrow::Borrow;
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
+use evm_arithmetization::testing_utils::TEST_STARK_CONFIG;
 use evm_arithmetization::{
     fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
     AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
@@ -207,20 +208,20 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        config: &StarkConfig,
     ) -> anyhow::Result<ProofWithPublicValues> {
-        let config = StarkConfig::standard_fast_config();
         let all_stark = AllStark::default();
 
         let all_proof = prove(
             &all_stark,
-            &config,
+            config,
             input,
             segment_data,
             &mut TimingTree::default(),
             None,
         )?;
 
-        let table_circuits = self.load_table_circuits(&config, &all_proof)?;
+        let table_circuits = self.load_table_circuits(config, &all_proof)?;
 
         let proof_with_pvs =
             p_state()
@@ -236,10 +237,11 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        config: &StarkConfig,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let p_out = p_state().state.prove_segment(
             &AllStark::default(),
-            &StarkConfig::standard_fast_config(),
+            config,
             input,
             segment_data,
             &mut TimingTree::default(),
@@ -269,15 +271,20 @@ impl ProverStateManager {
         input: (TrimmedGenerationInputs, GenerationSegmentData),
     ) -> anyhow::Result<ProofWithPublicValues> {
         let (generation_inputs, mut segment_data) = input;
+        let config = if self.circuit_config.use_test_config {
+            TEST_STARK_CONFIG
+        } else {
+            StarkConfig::standard_fast_config()
+        };
 
         match self.persistence {
             CircuitPersistence::None | CircuitPersistence::Disk(TableLoadStrategy::Monolithic) => {
                 info!("using monolithic circuit {:?}", self);
-                self.segment_proof_monolithic(generation_inputs, &mut segment_data)
+                self.segment_proof_monolithic(generation_inputs, &mut segment_data, &config)
             }
             CircuitPersistence::Disk(TableLoadStrategy::OnDemand) => {
                 info!("using on demand circuit {:?}", self);
-                self.segment_proof_on_demand(generation_inputs, &mut segment_data)
+                self.segment_proof_on_demand(generation_inputs, &mut segment_data, &config)
             }
         }
     }
