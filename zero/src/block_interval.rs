@@ -1,14 +1,48 @@
-use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::{future::Future, ops::Range};
 
-use alloy::rpc::types::eth::BlockId;
+use alloy::providers::Provider;
+use alloy::rpc::types::BlockTransactionsKind;
+use alloy::rpc::types::{eth::BlockId, Block};
+use alloy::transports::Transport;
 use anyhow::{anyhow, Result};
 use async_stream::try_stream;
 use futures::Stream;
+#[cfg(test)]
+use mockall::automock;
 use tracing::info;
 
-use crate::provider::ZeroBlockProvider;
+use crate::provider::CachedProvider;
+
+#[cfg_attr(test, automock)]
+pub trait BlockIntervalProvider {
+    fn get_block_by_id(
+        &self,
+        block_id: BlockId,
+    ) -> impl Future<Output = anyhow::Result<Option<Block>>> + Send;
+
+    fn latest_block_number(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
+}
+
+impl<ProviderT, TransportT> BlockIntervalProvider for CachedProvider<ProviderT, TransportT>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    /// Retrieves block without transaction contents from the provider.
+    async fn get_block_by_id(&self, block_id: BlockId) -> anyhow::Result<Option<Block>> {
+        Ok(Some(
+            self.get_block(block_id, BlockTransactionsKind::Hashes)
+                .await?,
+        ))
+    }
+
+    /// Retrieves the latest block number from the provider.
+    async fn latest_block_number(&self) -> anyhow::Result<u64> {
+        Ok(self.get_provider().await?.get_block_number().await?)
+    }
+}
 
 /// The async stream of block numbers.
 /// The second bool flag indicates if the element is last in the interval.
@@ -39,7 +73,7 @@ impl BlockInterval {
     /// end_block is always treated as inclusive because it may have been
     /// specified as a block hash.
     pub async fn new(
-        provider: Arc<impl ZeroBlockProvider>,
+        provider: Arc<impl BlockIntervalProvider>,
         start_block: BlockId,
         end_block: Option<BlockId>,
     ) -> Result<BlockInterval, anyhow::Error> {
@@ -103,7 +137,7 @@ impl BlockInterval {
     /// numbers. Query the blockchain node for the latest block number.
     pub async fn into_unbounded_stream(
         self,
-        provider: Arc<impl ZeroBlockProvider + 'static>,
+        provider: Arc<impl BlockIntervalProvider + 'static>,
         block_time: u64,
     ) -> Result<BlockIntervalStream, anyhow::Error> {
         match self {
@@ -134,7 +168,7 @@ impl BlockInterval {
 
     /// Converts a [`BlockId`] into a block number by querying the provider.
     pub async fn block_to_num(
-        provider: Arc<impl ZeroBlockProvider>,
+        provider: Arc<impl BlockIntervalProvider>,
         block: BlockId,
     ) -> Result<u64, anyhow::Error> {
         let block_num = match block {
@@ -180,15 +214,15 @@ mod test {
     use alloy::primitives::B256;
     use alloy::rpc::types::{Block, Header, Transaction};
     use mockall::predicate::*;
+    use MockBlockIntervalProvider;
 
     use super::*;
-    use crate::provider::MockZeroBlockProvider;
 
     #[tokio::test]
     async fn can_create_block_interval_from_inclusive_range() {
         assert_eq!(
             BlockInterval::new(
-                Arc::new(MockZeroBlockProvider::new()),
+                Arc::new(MockBlockIntervalProvider::new()),
                 BlockId::from(0),
                 Some(BlockId::from(10))
             )
@@ -202,7 +236,7 @@ mod test {
     async fn can_create_follow_from_block_interval() {
         assert_eq!(
             BlockInterval::new(
-                Arc::new(MockZeroBlockProvider::new()),
+                Arc::new(MockBlockIntervalProvider::new()),
                 BlockId::from(100),
                 None
             )
@@ -216,7 +250,7 @@ mod test {
     async fn can_create_single_block_interval() {
         assert_eq!(
             BlockInterval::new(
-                Arc::new(MockZeroBlockProvider::new()),
+                Arc::new(MockBlockIntervalProvider::new()),
                 BlockId::from(123415131),
                 Some(BlockId::from(123415131))
             )
@@ -230,7 +264,7 @@ mod test {
     async fn cannot_create_invalid_range() {
         assert_eq!(
             BlockInterval::new(
-                Arc::new(MockZeroBlockProvider::new()),
+                Arc::new(MockBlockIntervalProvider::new()),
                 BlockId::from(123415131),
                 Some(BlockId::from(0))
             )
@@ -244,7 +278,7 @@ mod test {
     #[tokio::test]
     async fn can_create_single_block_interval_from_hash() {
         // Mock the block for single block interval.
-        let mut mock = MockZeroBlockProvider::new();
+        let mut mock = MockBlockIntervalProvider::new();
         let block_id = BlockId::Hash(
             "0xb51ceca7ba912779ed6721d2b93849758af0d2354683170fb71dead6e439e6cb"
                 .parse::<B256>()
@@ -266,7 +300,7 @@ mod test {
     #[tokio::test]
     async fn can_create_block_interval_from_inclusive_hash_range() {
         // Mock the blocks for the range.
-        let mut mock = MockZeroBlockProvider::new();
+        let mut mock = MockBlockIntervalProvider::new();
         let start_block_id = BlockId::Hash(
             "0xb51ceca7ba912779ed6721d2b93849758af0d2354683170fb71dead6e439e6cb"
                 .parse::<B256>()
@@ -301,7 +335,7 @@ mod test {
                 .unwrap()
                 .into(),
         );
-        let mut mock = MockZeroBlockProvider::new();
+        let mut mock = MockBlockIntervalProvider::new();
         mock_block(&mut mock, start_block_id, 12345);
 
         // Create the interval.
@@ -316,7 +350,11 @@ mod test {
 
     /// Configures the mock to expect a query for a block by id and return the
     /// expected block number.
-    fn mock_block(mock: &mut MockZeroBlockProvider, query_id: BlockId, resulting_block_num: u64) {
+    fn mock_block(
+        mock: &mut MockBlockIntervalProvider,
+        query_id: BlockId,
+        resulting_block_num: u64,
+    ) {
         let mut block: Block<Transaction, Header> = Block::default();
         block.header.number = resulting_block_num;
         mock.expect_get_block_by_id()
@@ -332,7 +370,7 @@ mod test {
         use futures::StreamExt;
         let mut result = Vec::new();
         let mut stream = BlockInterval::new(
-            Arc::new(MockZeroBlockProvider::new()),
+            Arc::new(MockBlockIntervalProvider::new()),
             BlockId::from(1),
             Some(BlockId::from(9)),
         )

@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -12,19 +11,6 @@ use crate::rpc::RpcType;
 
 const CACHE_SIZE: usize = 1024;
 const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
-
-#[cfg(test)]
-use mockall::automock;
-
-#[cfg_attr(test, automock)]
-pub trait ZeroBlockProvider {
-    fn get_block_by_id(
-        &self,
-        block_id: BlockId,
-    ) -> impl Future<Output = anyhow::Result<Option<Block>>> + Send;
-
-    fn latest_block_number(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
-}
 
 /// Wrapper around alloy provider to cache blocks and other
 /// frequently used data.
@@ -134,22 +120,5 @@ where
 
             Ok(block)
         }
-    }
-}
-
-impl<ProviderT, TransportT> ZeroBlockProvider for CachedProvider<ProviderT, TransportT>
-where
-    ProviderT: Provider<TransportT>,
-    TransportT: Transport + Clone,
-{
-    async fn get_block_by_id(&self, block_id: BlockId) -> anyhow::Result<Option<Block>> {
-        Ok(Some(
-            self.get_block(block_id, BlockTransactionsKind::Hashes)
-                .await?,
-        ))
-    }
-
-    async fn latest_block_number(&self) -> anyhow::Result<u64> {
-        Ok(self.provider.get_block_number().await?)
     }
 }
