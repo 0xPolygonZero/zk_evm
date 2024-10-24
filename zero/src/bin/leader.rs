@@ -27,7 +27,7 @@ mod leader {
 
 const HEAVY_PROOF_ROUTING_KEY: &str = "heavy-proof";
 const LIGHT_PROOF_ROUTING_KEY: &str = "light-proof";
-const DEFAULT_ROUTING_KEY: &str = paladin::runtime::DEFAULT_ROUTING_KEY;
+const TASK_IPC_ROUTING_KEY: &str = paladin::runtime::TASK_IPC_ROUTING_KEY;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,8 +41,8 @@ async fn main() -> Result<()> {
         return zero::prover_state::persistence::delete_all();
     }
 
-    let mut light_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
-    let mut heavy_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    let mut light_proof_routing_key = TASK_IPC_ROUTING_KEY.to_string();
+    let mut heavy_proof_routing_key = TASK_IPC_ROUTING_KEY.to_string();
     if args.worker_run_mode == cli::WorkerRunMode::Affinity {
         // If we're running in affinity mode, we need to set the routing key for the
         // heavy proof and light proof.

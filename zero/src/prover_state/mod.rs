@@ -12,6 +12,8 @@
 //! - Global prover state management via the `P_STATE` static and the
 //!   [`p_state`] function.
 use std::borrow::Borrow;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
@@ -207,6 +209,7 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let config = StarkConfig::standard_fast_config();
         let all_stark = AllStark::default();
@@ -217,7 +220,7 @@ impl ProverStateManager {
             input,
             segment_data,
             &mut TimingTree::default(),
-            None,
+            abort_signal,
         )?;
 
         let table_circuits = self.load_table_circuits(&config, &all_proof)?;
@@ -236,6 +239,7 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let p_out = p_state().state.prove_segment(
             &AllStark::default(),
@@ -243,7 +247,7 @@ impl ProverStateManager {
             input,
             segment_data,
             &mut TimingTree::default(),
-            None,
+            abort_signal,
         )?;
 
         let ProverOutputData {
@@ -267,17 +271,18 @@ impl ProverStateManager {
     pub fn generate_segment_proof(
         &self,
         input: (TrimmedGenerationInputs, GenerationSegmentData),
+        abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let (generation_inputs, mut segment_data) = input;
 
         match self.persistence {
             CircuitPersistence::None | CircuitPersistence::Disk(TableLoadStrategy::Monolithic) => {
                 info!("using monolithic circuit {:?}", self);
-                self.segment_proof_monolithic(generation_inputs, &mut segment_data)
+                self.segment_proof_monolithic(generation_inputs, &mut segment_data, abort_signal)
             }
             CircuitPersistence::Disk(TableLoadStrategy::OnDemand) => {
                 info!("using on demand circuit {:?}", self);
-                self.segment_proof_on_demand(generation_inputs, &mut segment_data)
+                self.segment_proof_on_demand(generation_inputs, &mut segment_data, abort_signal)
             }
         }
     }
