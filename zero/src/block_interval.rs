@@ -5,15 +5,12 @@ use std::{future::Future, ops::Range};
 use alloy::providers::Provider;
 use alloy::rpc::types::BlockTransactionsKind;
 use alloy::rpc::types::{eth::BlockId, Block};
-use alloy::transports::Transport;
 use anyhow::{anyhow, Result};
 use async_stream::try_stream;
 use futures::Stream;
 #[cfg(test)]
 use mockall::automock;
 use tracing::info;
-
-use crate::provider::CachedProvider;
 
 #[cfg_attr(test, automock)]
 pub trait BlockIntervalProvider {
@@ -25,22 +22,17 @@ pub trait BlockIntervalProvider {
     fn latest_block_number(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
 }
 
-impl<ProviderT, TransportT> BlockIntervalProvider for CachedProvider<ProviderT, TransportT>
-where
-    ProviderT: Provider<TransportT>,
-    TransportT: Transport + Clone,
-{
+impl<T: Provider> BlockIntervalProvider for T {
     /// Retrieves block without transaction contents from the provider.
     async fn get_block_by_id(&self, block_id: BlockId) -> anyhow::Result<Option<Block>> {
-        Ok(Some(
-            self.get_block(block_id, BlockTransactionsKind::Hashes)
-                .await?,
-        ))
+        Ok(self
+            .get_block(block_id, BlockTransactionsKind::Hashes)
+            .await?)
     }
 
     /// Retrieves the latest block number from the provider.
     async fn latest_block_number(&self) -> anyhow::Result<u64> {
-        Ok(self.get_provider().await?.get_block_number().await?)
+        Ok(self.get_block_number().await?)
     }
 }
 
