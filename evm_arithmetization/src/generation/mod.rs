@@ -607,7 +607,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         table_in_use[*Table::Poseidon] = false;
     }
 
-    let (tables, final_len) = timed!(
+    let tables = timed!(
         timing,
         "convert trace data to tables",
         state.traces.into_tables(
@@ -620,7 +620,9 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         )
     );
 
-    if final_len == 0 && OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
+    let is_last_segment =
+        segment_data.registers_after.program_counter == KERNEL.global_labels["halt"];
+    if is_last_segment && OPTIONAL_TABLE_INDICES.contains(&MemAfter) {
         log::debug!("MemAfter table not in use");
         table_in_use[*MemAfter] = false;
     }
