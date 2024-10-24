@@ -146,6 +146,8 @@ after_constructor:
     // stack: success, leftover_gas, new_ctx, address, kexit_info
     SWAP2
     // stack: new_ctx, leftover_gas, success, address, kexit_info
+    POP
+
     // EIP-3541: Reject new contract code starting with the 0xEF byte
     PUSH @SEGMENT_RETURNDATA
     GET_CONTEXT
@@ -154,15 +156,14 @@ after_constructor:
     %eq_const(0xEF) %jumpi(create_first_byte_ef)
 
     // Charge gas for the code size.
-    // stack: new_ctx, leftover_gas, success, address, kexit_info
+    // stack: leftover_gas, success, address, kexit_info
     %returndatasize // Size of the code.
-    // stack: code_size, new_ctx, leftover_gas, success, address, kexit_info
+    // stack: code_size, leftover_gas, success, address, kexit_info
     DUP1 %gt_const(@MAX_CODE_SIZE) %jumpi(create_code_too_large)
-    // stack: code_size, new_ctx, leftover_gas, success, address, kexit_info
+    // stack: code_size, leftover_gas, success, address, kexit_info
     %mul_const(@GAS_CODEDEPOSIT)
-    // stack: code_size_cost, new_ctx, leftover_gas, success, address, kexit_info
-    DUP3 DUP2 GT %jumpi(create_oog)
-    SWAP1 POP
+    // stack: code_size_cost, leftover_gas, success, address, kexit_info
+    DUP2 DUP2 GT %jumpi(create_oog)
     SWAP1 SUB
     // stack: leftover_gas, success, address, kexit_info
     %pop_checkpoint
@@ -221,22 +222,20 @@ create_collision:
 // stack: new_ctx, leftover_gas, success, address, kexit_info
 create_first_byte_ef:
     %revert_checkpoint
-    %stack (new_ctx, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+     %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 // stack: code_size, new_ctx, leftover_gas, success, address, kexit_info
 create_code_too_large:
     %revert_checkpoint
-    POP
-    %stack (new_ctx, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+    %stack (code_size, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 // stack: code_size_cost, new_ctx, leftover_gas, success, address, kexit_info
 create_oog:
     %revert_checkpoint
     %mstore_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 0)
-    POP
-    %stack (new_ctx, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+    %stack (code_size_cost, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 create_too_deep:
