@@ -51,10 +51,12 @@ zk_evm_common.workspace = true
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
 
-
 [build-dependencies]
 anyhow.workspace = true
 vergen-git2 = { version = "1.0.0", features = ["build"] }
+
+[dev-dependencies]
+mockall = "0.13.0"
 
 
 [features]

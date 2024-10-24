@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use alloy::providers::Provider;
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
-use alloy::transports::http::reqwest::Url;
+use alloy::transports::Transport;
 use anyhow::{anyhow, Result};
 use tokio::sync::mpsc;
 use tracing::info;
@@ -9,19 +10,10 @@ use zero::block_interval::{BlockInterval, BlockIntervalStream};
 use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
+use zero::provider::CachedProvider;
 use zero::rpc;
-use zero::rpc::{retry::build_http_retry_provider, RpcType};
 
 use crate::ProofRuntime;
-
-#[derive(Debug)]
-pub struct RpcParams {
-    pub rpc_url: Url,
-    pub rpc_type: RpcType,
-    pub backoff: u64,
-    pub max_retries: u32,
-    pub block_time: u64,
-}
 
 #[derive(Debug)]
 pub struct LeaderConfig {
@@ -31,23 +23,20 @@ pub struct LeaderConfig {
 }
 
 /// The main function for the client.
-pub(crate) async fn client_main(
+pub(crate) async fn client_main<ProviderT, TransportT>(
     proof_runtime: Arc<ProofRuntime>,
-    rpc_params: RpcParams,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
+    block_time: u64,
     block_interval: BlockInterval,
     mut leader_config: LeaderConfig,
-) -> Result<()> {
+) -> Result<()>
+where
+    ProviderT: Provider<TransportT> + 'static,
+    TransportT: Transport + Clone,
+{
     use futures::StreamExt;
 
     let test_only = leader_config.prover_config.test_only;
-
-    let cached_provider = Arc::new(zero::provider::CachedProvider::new(
-        build_http_retry_provider(
-            rpc_params.rpc_url.clone(),
-            rpc_params.backoff,
-            rpc_params.max_retries,
-        )?,
-    ));
 
     if !test_only {
         // For actual proof runs, perform a sanity check on the provided inputs.
@@ -76,7 +65,7 @@ pub(crate) async fn client_main(
     let mut block_interval_stream: BlockIntervalStream = match block_interval {
         block_interval @ BlockInterval::FollowFrom { .. } => {
             block_interval
-                .into_unbounded_stream(cached_provider.clone(), rpc_params.block_time)
+                .into_unbounded_stream(cached_provider.clone(), block_time)
                 .await?
         }
         _ => block_interval.into_bounded_stream()?,
@@ -92,7 +81,6 @@ pub(crate) async fn client_main(
             cached_provider.clone(),
             block_id,
             leader_config.checkpoint_block_number,
-            rpc_params.rpc_type,
         )
         .await?;
         block_tx

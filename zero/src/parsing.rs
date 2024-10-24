@@ -34,19 +34,6 @@ where
     parse_range_gen(s, "..", false)
 }
 
-/// Parse an inclusive range from a string.
-///
-/// A valid range is of the form `lhs..=rhs`, where `lhs` and `rhs` are numbers.
-pub(crate) fn parse_range_inclusive<NumberT>(
-    s: &str,
-) -> Result<Range<NumberT>, RangeParseError<NumberT>>
-where
-    NumberT: Display + FromStr + From<u8> + Add<Output = NumberT>,
-    NumberT::Err: Display,
-{
-    parse_range_gen(s, "..=", true)
-}
-
 pub(crate) fn parse_range_gen<NumberT, SeparatorT>(
     s: &str,
     separator: SeparatorT,
@@ -86,11 +73,6 @@ mod test {
     #[test]
     fn it_parses_exclusive_ranges() {
         assert_eq!(parse_range_exclusive::<usize>("0..10"), Ok(0..10));
-    }
-
-    #[test]
-    fn it_parses_inclusive_ranges() {
-        assert_eq!(parse_range_inclusive::<usize>("0..=10"), Ok(0..11));
     }
 
     #[test]

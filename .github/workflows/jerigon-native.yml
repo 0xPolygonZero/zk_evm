@@ -74,14 +74,14 @@ jobs:
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           ulimit -n 8192
-          OUTPUT_TO_TERMINAL=true ./scripts/prove_rpc.sh 0x1 0xf $ETH_RPC_URL native true 3000 100 test_only
+          OUTPUT_TO_TERMINAL=true ./scripts/prove_rpc.sh 1 15 $ETH_RPC_URL native 0 3000 100 test_only
           echo "Proving blocks in test_only mode finished"
 
       - name: Run prove blocks with native tracer in real mode
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./scripts/prove_rpc.sh 0x4 0x7 $ETH_RPC_URL native true 3000 100
+          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./scripts/prove_rpc.sh 4 7 $ETH_RPC_URL native 3 3000 100
           echo "Proving blocks in real mode finished"
 
       - name: Shut down network
