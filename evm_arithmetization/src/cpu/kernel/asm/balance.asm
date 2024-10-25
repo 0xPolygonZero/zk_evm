@@ -43,7 +43,7 @@ global balance:
         // stack: address, retdest
         %read_balance
         // stack: balance, retdest
-    SWAP1 JUMP
+        SWAP1 JUMP
     }
 retzero:
     %stack (account_ptr, retdest) -> (retdest, 0)

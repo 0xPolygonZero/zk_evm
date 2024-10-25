@@ -10,6 +10,8 @@ use crate::utils::hashout2u;
 pub fn hash_contract_bytecode(mut code: Vec<u8>) -> HashOut {
     poseidon_pad_byte_vec(&mut code);
 
+    println!("code bytes = {:?}", code);
+    println!("hash = {:?}", hashout2u(poseidon_hash_padded_byte_vec(code.clone())));
     poseidon_hash_padded_byte_vec(code)
 }
 
@@ -37,6 +39,7 @@ pub fn poseidon_hash_padded_byte_vec(bytes: Vec<u8>) -> HashOut {
 
 pub fn poseidon_pad_byte_vec(bytes: &mut Vec<u8>) {
     bytes.push(0x01);
+    println!("code len = {:?}", bytes.len());
     while bytes.len() % 56 != 0 {
         bytes.push(0x00);
     }

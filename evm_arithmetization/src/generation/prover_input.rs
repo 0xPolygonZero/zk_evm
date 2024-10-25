@@ -679,8 +679,7 @@ impl<F: RichField> GenerationState<F> {
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
         self.state_pointers
-            .remove(&addr)
-            .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+            .remove(&addr);
 
         Ok(U256::from(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }

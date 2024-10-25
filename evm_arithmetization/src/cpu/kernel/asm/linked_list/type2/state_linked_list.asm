@@ -387,35 +387,54 @@ global debug_o_margot:
 %endmacro
 
 /// Removes the key and its value from the state linked list.
-/// Panics if the key is not in the list.
 global remove_key:
     // stack: key, retdest
     PROVER_INPUT(linked_list::remove_state)
     // stack: pred_ptr/4, key, retdest
     %get_valid_state_ptr
     // stack: pred_ptr, key, retdest
+    DUP1
     %add_const(@STATE_NEXT_NODE_PTR)
-    // stack: next_ptr_ptr, key, retdest
+    // stack: next_ptr_ptr, pred_ptr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_ptr, next_ptr_ptr,  key, retdest
+    // stack: next_ptr, next_ptr_ptr,  pred_ptr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_key, next_ptr, next_ptr_ptr, key, retdest
-    DUP4
-    %assert_eq
-    // stack: next_ptr, next_ptr_ptr, key, retdest
+    // stack: next_key, next_ptr, next_ptr_ptr, pred_ptr, key, retdest
+    DUP5
+    DUP2
+    %assert_eq(not_found)
+    POP
+    // stack: next_ptr, next_ptr_ptr, pred_ptr, key, retdest
     %add_const(@STATE_NEXT_NODE_PTR)
-    // stack: next_next_ptr_ptr, next_ptr_ptr, key, retdest
+    // stack: next_next_ptr_ptr, next_ptr_ptr, pred_ptr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, key, retdest
+    // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, pred_ptr, key, retdest
     SWAP1
     %mstore_u256_max
-    // stack: next_next_ptr, next_ptr_ptr, key, retdest
+    // stack: next_next_ptr, next_ptr_ptr, pred_ptr, key, retdest
     MSTORE_GENERAL
-    POP
+    %pop2
     JUMP
+not_found:
+     // stack: next_key, next_ptr, next_ptr_ptr, pred_ptr, key, retdest
+     DUP5
+     %assert_lt
+     // stack: next_ptr, next_ptr_ptr, pred_ptr, key, retdest
+     %pop2
+     MLOAD_GENERAL
+     // stack: prev_key, key, retdest
+     SWAP1
+     DUP2
+     LT
+     // prev_key < key, prev_key, retdest
+     SWAP1
+     %eq_const(@U256_MAX)
+     ADD
+     %assert_nonzero
+     JUMP
 
 %macro read_slot_from_current_addr
     // stack: slot
