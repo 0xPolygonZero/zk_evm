@@ -4,12 +4,10 @@ use std::sync::Arc;
 use alloy::primitives::BlockHash;
 use alloy::providers::RootProvider;
 use alloy::rpc::types::{Block, BlockId, BlockTransactionsKind};
-use alloy::transports::BoxTransport;
 use alloy::{providers::Provider, transports::Transport};
 use anyhow::Context;
 use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
-use crate::rpc::retry::RetryService;
 use crate::rpc::RpcType;
 
 const CACHE_SIZE: usize = 1024;

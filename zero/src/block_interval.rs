@@ -5,12 +5,12 @@ use std::{future::Future, ops::Range};
 use alloy::providers::Provider;
 use alloy::rpc::types::BlockTransactionsKind;
 use alloy::rpc::types::{eth::BlockId, Block};
-use alloy::transports::{BoxTransport, Transport};
+use alloy::transports::Transport;
 use anyhow::{anyhow, Result};
 use async_stream::try_stream;
 use futures::Stream;
-#[cfg(test)]
-use mockall::automock;
+//#[cfg(test)]
+//use mockall::mock;
 use tracing::info;
 
 //#[cfg_attr(test, automock)]
@@ -264,8 +264,8 @@ impl std::fmt::Display for BlockInterval {
 //            .await
 //            .unwrap_err()
 //            .to_string(),
-//            anyhow!("invalid block interval range (123415131..0)").to_string()
-//        );
+//            anyhow!("invalid block interval range
+// (123415131..0)").to_string()        );
 //    }
 //
 //    #[tokio::test]
@@ -345,8 +345,8 @@ impl std::fmt::Display for BlockInterval {
 //        );
 //    }
 //
-//    /// Configures the mock to expect a query for a block by id and return the
-//    /// expected block number.
+//    /// Configures the mock to expect a query for a block by id and return
+// the    /// expected block number.
 //    fn mock_block(
 //        mock: &mut MockBlockIntervalProvider,
 //        query_id: BlockId,
@@ -386,4 +386,3 @@ impl std::fmt::Display for BlockInterval {
 //        assert_eq!(result, expected);
 //    }
 //}
-//
