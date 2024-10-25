@@ -50,7 +50,8 @@ where
 {
     let block = cached_provider
         .get_block(block_number, BlockTransactionsKind::Full)
-        .await?;
+        .await?
+        .ok_or(anyhow::anyhow!("block not found"))?;
 
     let (code_db, txn_info) =
         txn::process_transactions(&block, cached_provider.get_provider().await?.deref()).await?;

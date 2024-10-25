@@ -15,7 +15,7 @@ use crate::rpc::RpcType;
 const CACHE_SIZE: usize = 1024;
 const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
 
-impl<T: Transport + Clone> Provider<T> for CachedProvider<RootProvider<T>, T> {
+impl<T: Transport + Clone, R: Provider<T>> Provider<T> for CachedProvider<R, T> {
     fn root(&self) -> &RootProvider<T> {
         self.provider.root()
     }
