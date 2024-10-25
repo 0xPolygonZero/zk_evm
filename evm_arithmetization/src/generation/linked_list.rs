@@ -18,11 +18,11 @@ pub(crate) struct AccessLinkedListsPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
-    pub(crate) accounts: BTreeMap<U256, usize>,
+    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
     /// Each entry contains the pair ((account_key, slot_key), ptr) where
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
 }
 
 // Provides quick access to pointers that reference the memory location
@@ -33,11 +33,11 @@ pub(crate) struct StateLinkedListsPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
-    pub(crate) accounts: BTreeMap<U256, usize>,
+    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
     /// Each entry contains the pair ((account_key, slot_key), ptr) where
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
 }
 
 // Provides quick access to pointers that reference the memory location

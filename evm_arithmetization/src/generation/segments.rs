@@ -124,8 +124,9 @@ fn build_segment_data<F: RichField>(
             trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
-            state: interpreter.generation_state.state_pointers.clone(),
+            state_ptrs: interpreter.generation_state.state_pointers.clone(),
         },
+        opcode_counts: interpreter.opcode_count.clone(),
     }
 }
 

@@ -11,12 +11,26 @@ use crate::generation::mpt::AccountRlp;
 use crate::Node;
 
 // Test account with a given code hash.
+#[cfg(feature = "eth_mainnet")]
 fn test_account(balance: U256) -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance,
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
         code_hash: H256::from_uint(&U256::from(8888)),
+    }
+}
+
+// Test account with a given code hash.
+#[cfg(feature = "cdk_erigon")]
+fn test_account(balance: U256) -> AccountRlp {
+    use smt_trie::code::hash_bytecode_u256;
+
+    AccountRlp {
+        nonce: U256::from(1111),
+        balance,
+        code_hash: hash_bytecode_u256(vec![0x01, 0x00]),
+        code_length: 2.into(),
     }
 }
 

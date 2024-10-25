@@ -419,7 +419,7 @@ impl<F: RichField> GenerationState<F> {
                 "state ll = {:?}",
                 StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
             );
-            log::debug!("state btree = {:#?}", self.state_ptrs);
+            log::debug!("state btree = {:#?}", self.inputs.trimmed_tries.state_trie);
             log::debug!(
                 "input state popopo = {}",
                 self.inputs.trimmed_tries.state_trie
@@ -620,13 +620,14 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_insert_state(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let key = stack_peek(self, 0)?;
         let (&pred_key, &pred_ptr) = self
-            .state_ptrs
+            .state_pointers
+            .state
             .range(..=key)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_key != key && input_fn.0[1].as_str() == "insert_state" {
-            self.state_ptrs.insert(
+            self.state_pointers.state.insert(
                 key,
                 u256_to_usize(
                     self.memory
@@ -696,15 +697,17 @@ impl<F: RichField> GenerationState<F> {
 
         log::debug!(
             "los que viene antes: = {:?}",
-            self.state_ptrs.range(..addr).next_back()
+            self.state_pointers.state.range(..addr).next_back()
         );
 
         let (_, &ptr) = self
-            .state_ptrs
+            .state_pointers
+            .state
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        self.state_ptrs
+        self.state_pointers
+            .state
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 

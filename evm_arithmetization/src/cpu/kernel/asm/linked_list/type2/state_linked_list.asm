@@ -307,7 +307,7 @@ global debug_fail_1:
 global debug_fail_2:
     PANIC
 
-key_found:
+global key_found:
     // The key was already in the list.
     // stack: pred_ptr, key, retdest
     %increment

@@ -117,6 +117,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    #[cfg(feature = "eth_mainnet")]
     pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
     pub(crate) state_ptrs: StateLinkedListsPtrs,
     pub(crate) next_txn_index: usize,

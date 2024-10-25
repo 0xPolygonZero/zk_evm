@@ -488,14 +488,6 @@ pub mod cancun_constants {
         code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
     };
 
-    #[cfg(feature = "cdk_erigon")]
-    pub static BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
-        nonce: U256::zero(),
-        balance: U256::zero(),
-        code_length: BEACON_ROOTS_CONTRACT_CODE_LEN_U256,
-        code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
-    };
-
     #[test]
     fn hashed() {
         assert_eq!(
@@ -556,13 +548,6 @@ pub mod global_exit_root {
         storage_root: H256(hex!(
             "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
         )),
-        code_hash: H256(GLOBAL_EXIT_ROOT_CONTRACT_CODE_HASH),
-    };
-    #[cfg(feature = "cdk_erigon")]
-    pub static GLOBAL_EXIT_ROOT_ACCOUNT: AccountRlp = AccountRlp {
-        nonce: U256::zero(),
-        balance: U256::zero(),
-        code_length: GLOBAL_EXIT_ROOT_CONTRACT_CODE_LEN_U256,
         code_hash: H256(GLOBAL_EXIT_ROOT_CONTRACT_CODE_HASH),
     };
 

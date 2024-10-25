@@ -689,9 +689,13 @@ pub(crate) fn collect_debug_tries<F: RichField>(
     .inspect_err(|e| error!("failed to retrieve state trie pointer: {e:?}"))
     .ok()?;
 
+    #[cfg(feature = "eth_mainnet")]
     let state_trie = get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
         .inspect_err(|e| error!("unable to retrieve state trie for debugging purposes: {e:?}"))
         .ok()?;
+
+    #[cfg(feature = "cdk_erigon")]
+    let state_trie = HashedPartialTrie::default();
 
     let txn_trie_ptr = u256_to_usize(
         state

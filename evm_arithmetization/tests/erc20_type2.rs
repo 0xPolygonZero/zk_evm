@@ -15,11 +15,7 @@ use evm_arithmetization::testing_utils::ADDRESS_SCALABLE_L2;
 use evm_arithmetization::testing_utils::LAST_BLOCK_STORAGE_POS;
 use evm_arithmetization::testing_utils::STATE_ROOT_STORAGE_POS;
 use evm_arithmetization::testing_utils::TIMESTAMP_STORAGE_POS;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, create_account_storage, init_logger,
-    preinitialized_state_and_storage_tries, sd2u, update_beacon_roots_account_storage,
-};
-use evm_arithmetization::util::h2u;
+use evm_arithmetization::testing_utils::{init_logger, sd2u};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
@@ -29,7 +25,6 @@ use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 use plonky2::field::types::PrimeField64;
-use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 use smt_trie::code::hash_bytecode_u256;
@@ -301,7 +296,7 @@ fn giver_account() -> AccountRlp {
     AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        code_hash: H256::from_uint(&hash_bytecode_u256(code)),
+        code_hash: hash_bytecode_u256(code),
         code_length: len.into(),
     }
 }
@@ -312,7 +307,7 @@ fn token_account() -> AccountRlp {
     AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        code_hash: H256::from_uint(&hash_bytecode_u256(code)),
+        code_hash: hash_bytecode_u256(code),
         code_length: len.into(),
     }
 }
@@ -364,7 +359,8 @@ fn set_account<D: Db>(
     );
     smt.set(key_balance(addr), account.balance);
     smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), h2u(account.code_hash));
+    log::debug!("account code {:?}", account.code_hash);
+    smt.set(key_code(addr), account.code_hash);
     let key = key_code_length(addr);
     log::debug!(
         "setting {:?} code length, the key is {:?}",

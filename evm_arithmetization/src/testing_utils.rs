@@ -10,7 +10,10 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
-use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::{
+    field::goldilocks_field::GoldilocksField, util::serialization::gate_serialization::default,
+};
+use smt_trie::smt::Smt;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
@@ -90,6 +93,7 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> A
 
 /// Returns an initial state trie containing the beacon roots and global exit
 /// roots contracts, along with their storage tries.
+#[cfg(feature = "eth_mainnet")]
 pub fn preinitialized_state_and_storage_tries(
 ) -> anyhow::Result<(HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)> {
     let mut state_trie = HashedPartialTrie::from(Node::Empty);
@@ -165,13 +169,6 @@ pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp
     }
 }
 
-pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
-        storage_root: storage_trie.hash(),
-        ..Default::default()
-    }
-}
-
 fn empty_payload() -> Result<GenerationInputs> {
     // Set up default block metadata
     let block_metadata = BlockMetadata {
@@ -188,13 +185,22 @@ fn empty_payload() -> Result<GenerationInputs> {
 
     // Initialize an empty state trie and storage tries
     let state_trie_before = HashedPartialTrie::from(crate::Node::Empty);
+    #[cfg(feature = "eth_mainnet")]
     let storage_tries = Vec::new();
     let checkpoint_state_trie_root = state_trie_before.hash();
 
     // Prepare the tries without any transactions or receipts
+    #[cfg(feature = "eth_mainnet")]
     let tries_before = TrieInputs {
         state_trie: state_trie_before.clone(),
         storage_tries: storage_tries.clone(),
+        transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
+        receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
+    };
+
+    #[cfg(feature = "cdk_erigon")]
+    let tries_before = TrieInputs {
+        state_trie: Smt::default(),
         transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
         receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
     };

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
@@ -399,12 +399,13 @@ pub struct GenerationState<F: RichField> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
     /// Provides quick access to pointers that reference the location
-    /// of either and account or a slot in the respective access list.
+    /// of either an account or a slot in the respective access list.
     pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
 
-    /// Provides quick access to pointers that reference the memory location of
-    /// either and account or a slot in the respective access list.
-    pub(crate) state_ptrs: StateLinkedListsPtrs,
+    /// Provides quick access to pointers that reference the location
+    /// of either an account or a slot in the respective linked list.
+    #[cfg(feature = "eth_mainnet")]
+    pub(crate) state_pointers: StateLinkedListsPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -435,8 +436,8 @@ impl<F: RichField> GenerationState<F> {
     fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
         let (state_leaves, storage_leaves, trie_data) = load_linked_lists_and_txn_and_receipt_mpts(
-            &mut generation_state.accounts_pointers,
-            &mut generation_state.storage_pointers,
+            &mut generation_state.state_pointers.accounts_pointers,
+            &mut generation_state.state_pointers.storage_pointers,
             trie_inputs,
         )
         .expect("Invalid MPT data for preinitialization");
@@ -459,7 +460,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     #[cfg(feature = "cdk_erigon")]
-    fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
+    pub(crate) fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
         let mut smt_data = vec![Some(U256::zero()); 2]; // For empty hash node.
         let mut state_linked_list_data =
@@ -469,7 +470,7 @@ impl<F: RichField> GenerationState<F> {
             .state_trie
             .load_linked_list_data::<{ Segment::AccountsLinkedList as usize }>(
                 &mut state_linked_list_data,
-                &mut self.state_ptrs.accounts,
+                &mut self.state_pointers.state,
             );
 
         self.memory.insert_preinitialized_segment(
@@ -514,7 +515,10 @@ impl<F: RichField> GenerationState<F> {
                 },
                 jumpdest_table: None,
                 access_lists_ptrs: AccessLinkedListsPtrs::default(),
-                state_ptrs: StateLinkedListsPtrs::default(),
+                state_pointers: StateLinkedListsPtrs {
+                    accounts_pointers: BTreeMap::new(),
+                    storage_pointers: BTreeMap::new(),
+                },
                 ger_prover_inputs,
             };
             let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
@@ -542,7 +546,9 @@ impl<F: RichField> GenerationState<F> {
                 },
                 jumpdest_table: None,
                 access_lists_ptrs: AccessLinkedListsPtrs::default(),
-                state_ptrs: StateLinkedListsPtrs::default(),
+                state_pointers: StateLinkedListsPtrs {
+                    state: BTreeMap::new(),
+                },
                 ger_prover_inputs,
             };
             let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
@@ -558,8 +564,6 @@ impl<F: RichField> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: trimmed_inputs.clone(),
-            state_ptrs: segment_data.extra_data.state_ptrs.clone(),
-            access_lists_ptrs: segment_data.extra_data.access_lists_ptrs.clone(),
             ..Default::default()
         };
 
@@ -667,7 +671,6 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Clones everything but the traces.
-    #[cfg(feature = "eth_mainnet")]
     pub(crate) fn soft_clone(&self) -> GenerationState<F> {
         Self {
             inputs: self.inputs.clone(), // inputs have already been trimmed here
@@ -688,33 +691,7 @@ impl<F: RichField> GenerationState<F> {
             },
             jumpdest_table: None,
             access_lists_ptrs: self.access_lists_ptrs.clone(),
-            state_ptrs: self.state_ptrs.clone(),
-        }
-    }
-
-    /// Clones everything but the traces.
-    #[cfg(feature = "cdk_erigon")]
-    pub(crate) fn soft_clone(&self) -> GenerationState<F> {
-        Self {
-            inputs: self.inputs.clone(), // inputs have already been trimmed here
-            registers: self.registers,
-            memory: self.memory.clone(),
-            traces: Traces::default(),
-            next_txn_index: 0,
-            stale_contexts: Vec::new(),
-            rlp_prover_inputs: self.rlp_prover_inputs.clone(),
-            state_key_to_address: self.state_key_to_address.clone(),
-            bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
-            withdrawal_prover_inputs: self.withdrawal_prover_inputs.clone(),
-            ger_prover_inputs: self.ger_prover_inputs.clone(),
-            trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: Some(0),
-                txn_root_ptr: 0,
-                receipt_root_ptr: 0,
-            },
-            jumpdest_table: None,
-            access_lists_ptrs: self.access_lists_ptrs.clone(),
-            state_ptrs: self.state_ptrs.clone(),
+            state_pointers: self.state_pointers.clone(),
         }
     }
 
@@ -732,7 +709,7 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.state_ptrs
+        self.state_pointers
             .clone_from(&segment_data.extra_data.state_ptrs);
         self.access_lists_ptrs
             .clone_from(&segment_data.extra_data.access_lists_ptrs);
@@ -760,10 +737,10 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
+        self.state_pointers
+            .clone_from(&segment_data.extra_data.state_ptrs);
         self.access_lists_ptrs
             .clone_from(&segment_data.extra_data.access_lists_ptrs);
-        self.state_ptrs
-            .clone_from(&segment_data.extra_data.state_ptrs);
         self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,
