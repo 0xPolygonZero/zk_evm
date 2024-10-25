@@ -51,7 +51,7 @@ where
     let block = cached_provider
         .get_block(block_number, BlockTransactionsKind::Full)
         .await?
-        .ok_or(anyhow::anyhow!("block not found"))?;
+        .ok_or(anyhow::anyhow!("block not found {}", block_number))?;
 
     let (code_db, txn_info) =
         txn::process_transactions(&block, cached_provider.get_provider().await?.deref()).await?;

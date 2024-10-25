@@ -106,7 +106,7 @@ where
                         .get_block((block_num as u64).into(), BlockTransactionsKind::Hashes)
                         .await
                         .expect("could not retrieve block from provider")
-                        .ok_or(anyhow!("block not found"))?;
+                        .ok_or(anyhow!("block not found {block_num}"))?;
                     anyhow::Ok([
                         (block.header.hash, Some(block_num)),
                         (block.header.parent_hash, previous_block_number),
@@ -213,7 +213,7 @@ where
     let target_block = cached_provider
         .get_block(target_block_id, BlockTransactionsKind::Hashes)
         .await?
-        .ok_or(anyhow!("target block not found"))?;
+        .ok_or(anyhow!("target block not found {}", target_block_id))?;
     let chain_id = cached_provider.get_provider().await?.get_chain_id().await?;
 
     // Grab interval checkpoint block state trie
@@ -223,7 +223,10 @@ where
             BlockTransactionsKind::Hashes,
         )
         .await?
-        .ok_or(anyhow!("checkpoint block not found"))?
+        .ok_or(anyhow!(
+            "checkpoint block not found {}",
+            checkpoint_block_number
+        ))?
         .header
         .state_root;
 
