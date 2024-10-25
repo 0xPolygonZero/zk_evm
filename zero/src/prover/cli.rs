@@ -23,6 +23,9 @@ pub struct CliProverConfig {
     /// If true, save the public inputs to disk on error.
     #[arg(short='i', long, help_heading = HELP_HEADING, default_value_t = false)]
     save_inputs_on_error: bool,
+    /// Keep going if a block proof fails.
+    #[arg(short='K', long, help_heading = HELP_HEADING, default_value_t = false)]
+    keep_going: bool,
     /// If true, only test the trace decoder and witness generation without
     /// generating a proof.
     #[arg(long, help_heading = HELP_HEADING, default_value_t = false)]

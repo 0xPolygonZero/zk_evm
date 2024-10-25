@@ -797,7 +797,10 @@ impl<F: RichField> GenerationState<F> {
 
         // REVIEW: This will be rewritten to only run simulation when
         // `self.inputs.jumpdest_table` is `None`.
-        info!("Generating JUMPDEST tables");
+        info!(
+            "Generating JUMPDEST tables for block: {}, tx: {:?}",
+            self.inputs.block_metadata.block_number, self.inputs.txn_hashes
+        );
         let rpcw = self.inputs.jumpdest_table.clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
@@ -821,6 +824,13 @@ impl<F: RichField> GenerationState<F> {
             }
             info!("SIMW == RPCW ? {}", simw == &rpcw);
             info!("tx: {:?}", self.inputs.txn_hashes);
+            // let is_equal = simw == &rpcw;
+            // let block_num = self.inputs.block_metadata.block_number;
+            // tracing::error!(
+            //     block_num,
+            //     tables_match = is_equal,
+            //     tx = self.inputs.txn_hashes
+            // )
             // panic!();
             // info!("SIMP {:?}", &simp);
             // info!("RPCP {:?}", &rpcp);

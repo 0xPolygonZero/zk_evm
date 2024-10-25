@@ -21,25 +21,25 @@ RESULT_LEN=$(cat witnesses/native_results.txt | wc -l)
 
 function statistics()
 {
-  PREFIX_LEN=$(($RESULT_LEN + 13))
+  PREFIX_LEN=1000
   wc -l witnesses/native_results.txt
-  cat witnesses/native_results.txt | tail -n +$PREFIX_LEN
+  cat witnesses/native_results.txt | tail -n $PREFIX_LEN
   
-  SUMOK=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f8  |  paste -s -d+ - | bc)
-  SUMFAIL=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f9  |  paste -s -d+ - | bc)
-  SUMTOTAL=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f10 |  paste -s -d+ - | bc)
+  SUMOK=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f8  |  paste -s -d+ - | bc)
+  SUMFAIL=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f9  |  paste -s -d+ - | bc)
+  SUMTOTAL=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f10 |  paste -s -d+ - | bc)
   echo $SUMTOTAL
   echo $SUMFAIL
   echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%")
   echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%")
 
-  ZEROES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "0")
-  ONES=$(  cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "1")
-  TWOS=$(  cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "2")
-  THREES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "3")
-  FOURS=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "4")
-  FIVES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "5")
-  SIXES=$(cat witnesses/native_results.txt | tail -n +$PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "6")
+  ZEROES=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "0")
+  ONES=$(  cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "1")
+  TWOS=$(  cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "2")
+  THREES=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "3")
+  FOURS=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "4")
+  FIVES=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "5")
+  SIXES=$(cat witnesses/native_results.txt | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "6")
   echo $ZEROES
   echo $ONES
   echo $TWOS
@@ -50,7 +50,11 @@ function statistics()
   echo "good bye"
   exit 0
 }
-trap statistics INT # EXIT QUIT HUP TERM
+trap statistics INT EXIT QUIT HUP TERM
+
+statistics
+
+exit 0
 # Must match the values in prove_stdio.sh or build is dirty.
 #export RAYON_NUM_THREADS=1
 #export TOKIO_WORKER_THREADS=1
