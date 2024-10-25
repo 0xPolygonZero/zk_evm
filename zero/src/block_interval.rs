@@ -29,7 +29,11 @@ mod block_interval_provider_impl {
     use super::{Block, BlockId, BlockIntervalProvider};
 
     /// Implements the [`BlockIntervalProvider`] trait for [`Provider`].
-    impl<T: Transport + Clone, P: Provider<T>> BlockIntervalProvider<T> for P {
+    impl<T, P> BlockIntervalProvider<T> for P
+    where
+        T: Transport + Clone,
+        P: Provider<T>,
+    {
         /// Retrieves block without transaction contents from the provider.
         async fn get_block_by_id(&self, block_id: BlockId) -> anyhow::Result<Option<Block>> {
             Ok(self
