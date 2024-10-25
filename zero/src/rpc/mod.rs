@@ -104,8 +104,7 @@ where
                 async move {
                     let block = cached_provider
                         .get_block((block_num as u64).into(), BlockTransactionsKind::Hashes)
-                        .await
-                        .expect("could not retrieve block from provider")
+                        .await?
                         .ok_or(anyhow!("block not found {block_num}"))?;
                     anyhow::Ok([
                         (block.header.hash, Some(block_num)),
