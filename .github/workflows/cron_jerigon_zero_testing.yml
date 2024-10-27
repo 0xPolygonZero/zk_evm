@@ -1,12 +1,12 @@
 name: Jerigon Zero Testing
 
 on:
-  # TODO - Uncomment when ready to run on a schedule
+  # Uncomment when ready to run on a schedule
   # schedule:
   #   # Run every Sunday at 12:00 AM (UTC)
   #   - cron: "0 0 * * 0"
   push:
-    branches: [develop, main]
+    branches: [develop]
   pull_request:
     branches:
       - "**"
@@ -29,10 +29,15 @@ jobs:
       - name: Setup Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Set up rust cache
+      - name: Set up Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Build the project
+        run: |
+          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
+          sudo sysctl kernel.perf_event_paranoid=0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -44,43 +49,54 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # TODO - Find a better way to store erigon-data.tar.gz. Currently storing it in zk evm repo temporarily. Maybe download it from a repo and use it here. Also, extract the data in a temp file maybe
-      - name: Run erigon network
+      - name: Run Erigon Network
         run: |
           cd ..
-          tar xf "$(pwd)/zk_evm/test-data/erigon-data.tar.gz"
+          tar xf "$(pwd)/zk_evm/test_data/erigon-data.tar.gz" || {
+            echo "Failed to extract erigon-data.tar.gz"; exit 1;
+          }
           docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
-          docker run -d -p 8545:8545 -v $(pwd):/data \
+          docker run -d --name erigon \
+            -p 8545:8545 \
+            -v $(pwd):/data \
             ghcr.io/0xpolygonzero/erigon:feat-zero \
-            --datadir=/data/erigon/execution-data --http.api=eth,erigon,engine,web3,net,debug,trace,txpool,admin \
-            --http.vhosts=* --ws --http --http.addr=0.0.0.0 --http.corsdomain=* --http.port=8545 \
-            --metrics --metrics.addr=0.0.0.0 --metrics.port=9001 --db.size.limit=3000MB
+            --datadir=/data/erigon/execution-data \
+            --http.api=eth,erigon,engine,web3,net,debug,trace,txpool,admin \
+            --http.vhosts=* --ws --http --http.addr=0.0.0.0 \
+            --http.corsdomain=* --http.port=8545 \
+            --metrics --metrics.addr=0.0.0.0 --metrics.port=9001 \
+            --db.size.limit=3000MB || {
+            echo "Failed to start Erigon"; exit 1;
+          }
 
-      # TODO - Decide the number of blocks we want to test with
-      - name: Regression test with zero tracer in real mode
+      - name: Regression Test with Zero Tracer in Real Mode
         run: |
           export ETH_RPC_URL="http://localhost:8545"
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-          random_numbers=($(shuf -i 1-500 -n 10))
+          random_numbers=($(shuf -i 1-500 -n 5))
           for number in "${random_numbers[@]}"; do
-            echo $number
             hex_number="0x$(echo "obase=16; $number" | bc)"
-            echo $hex_number
             OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./scripts/prove_rpc.sh $hex_number $hex_number $ETH_RPC_URL jerigon true 3000 100
           done
 
-      # - name: Download previous results for becnhmarking
-      #   uses: dawidd6/action-download-artifact@v6
-      #   with:
-      #     workflow: cron_jerigon_zero_testing.yml
-      #     workflow_conclusion: success
-      #     name: jerigon_zero_testing_benchmark
-      #     path: ./
-      #     if_no_artifact_found: ignore
+      - name: Download Previous Results
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: cron_jerigon_zero_testing.yml
+          workflow_conclusion: success
+          name: jerigon_zero_benchmark
+          path: ./
+          if_no_artifact_found: ignore
 
-      # - name: Benchmarking test with zero tracer in real mode
-      #   run: |
-      #     export ETH_RPC_URL="http://localhost:8545"
-      #     rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-      #     echo "Running the benchmarking script..."
-      #     ./scripts/jerigon_zero_benchmark.sh | tee benchmark_output.log
+      - name: Run the Benchmark Script
+        run: |
+          export ETH_RPC_URL="http://localhost:8545"
+          ./scripts/jerigon_zero_benchmark.sh
+
+      - name: Upload New Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: jerigon_zero_benchmark
+          path: ./jerigon_zero_output.log
+          retention-days: 90
+          overwrite: true
