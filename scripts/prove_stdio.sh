@@ -158,8 +158,3 @@ echo "Note, this duration is inclusive of circuit handling and overall process i
 
 # Clean up in case of success
 rm "$OUTPUT_LOG"
-
-
-
-
-
