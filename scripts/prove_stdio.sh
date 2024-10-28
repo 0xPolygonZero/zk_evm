@@ -103,7 +103,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    nice -19 cargo run --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR --batch-size $BATCH_SIZE --save-inputs-on-error stdio < $INPUT_FILE |& tee &> $TEST_OUT_PATH
+    nice -19 -- "${REPO_ROOT}/target/release/leader" --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR --batch-size $BATCH_SIZE --save-inputs-on-error stdio < $INPUT_FILE |& tee &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         #rm $TEST_OUT_PATH
