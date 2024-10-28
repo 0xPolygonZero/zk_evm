@@ -4,6 +4,9 @@ on:
     paths:
       - '**/*.sh'
       - 'scripts/**'
+  workflow_dispatch:
+    branches:
+      - "**"
 
 jobs:
   shellcheck_scripts:
