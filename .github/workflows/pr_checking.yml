@@ -54,4 +54,3 @@ jobs:
         run: gh pr close ${{ github.event.pull_request.number }} --comment "Spam detected"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
