@@ -3,10 +3,6 @@ on:
   push:
     paths: 
       - '**/Cargo.toml'
-  #TODO: REMOVE AFTER TESTING
-  pull_request:
-    branches:
-      - "**"
 
 jobs:
   security_audit:
