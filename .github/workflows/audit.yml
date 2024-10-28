@@ -3,12 +3,38 @@ on:
   push:
     paths: 
       - '**/Cargo.toml'
+  #TODO: REMOVE AFTER TESTING
+  pull_request:
+    branches:
+      - "**"
+
 jobs:
   security_audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
+
       - uses: rustsec/audit-check@v1.4.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  outdated_dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated
+
+      - name: Run cargo outdated
+        run: cargo outdated --color always --format list > ./outdated_dependencies.txt
+
+      - name: Upload outdated list
+        uses: actions/upload-artifact@v3
+        with:
+          name: outdated_dependencies
+          path: ./outdated_dependencies.txt
