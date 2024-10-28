@@ -22,7 +22,6 @@ jobs:
     name: Test mpt_trie
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -50,8 +49,6 @@ jobs:
       RUST_LOG: info
       CARGO_INCREMENTAL: 1
       RUST_BACKTRACE: 1
-
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -73,7 +70,6 @@ jobs:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -97,7 +93,6 @@ jobs:
     name: Test zero_bin
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -123,7 +118,6 @@ jobs:
     name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
