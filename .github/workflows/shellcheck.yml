@@ -1,11 +1,9 @@
 name: Shellcheck
 on:
   push:
-    paths: 
+    paths:
+      - '**/*.sh'
       - 'scripts/**'
-  pull_request:
-    branches:
-      - "**"
 
 jobs:
   shellcheck_scripts:
