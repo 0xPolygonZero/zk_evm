@@ -7,13 +7,13 @@ on:
 
 jobs:
   shellcheck_scripts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - name: Install shellcheck
-        run: sudo apt-get install shellcheck
+        run: sudo apt-get install shellcheck=0.8.0-2
 
       - name: Run shellcheck
         run: |
