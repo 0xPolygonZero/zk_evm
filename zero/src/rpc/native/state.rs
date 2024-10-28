@@ -35,6 +35,7 @@ where
     let prev_state_root = cached_provider
         .get_block((block_number - 1).into(), BlockTransactionsKind::Hashes)
         .await?
+        .ok_or(anyhow::anyhow!("block not found {}", block_number - 1))?
         .header
         .state_root;
 
