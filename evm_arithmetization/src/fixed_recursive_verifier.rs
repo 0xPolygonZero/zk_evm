@@ -1,5 +1,6 @@
 use core::mem::{self, MaybeUninit};
 use core::ops::Range;
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -1746,14 +1747,17 @@ where
         // Pad to match the (non-existing yet!) 2-to-1 circuit's degree.
         // We use the block circuit's degree as target reference here, as they end up
         // having same degree.
-        while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
-            builder.add_gate(NoopGate, vec![]);
-        }
+        let degree_bits_to_be_padded = block.circuit.common.degree_bits();
 
         // When using test configurations, the block circuit's degree is less than the
         // 2-to-1 circuit's degree. Therefore, we also need to ensure its size meets
         // the 2-to-1 circuit's recursion threshold degree bits.
-        while log2_ceil(builder.num_gates()) < TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS {
+        let degree_bits_to_be_padded = max(
+            degree_bits_to_be_padded,
+            TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS,
+        );
+
+        while log2_ceil(builder.num_gates()) < degree_bits_to_be_padded {
             builder.add_gate(NoopGate, vec![]);
         }
 
