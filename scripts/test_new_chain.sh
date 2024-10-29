@@ -81,7 +81,7 @@ nice -19 cargo build --release --bin leader
 echo "Testing against jerigon testnet 2, current revision: $GITHASH."
 
 #BLOCKS="$(seq $STATICTIP)"
-BLOCKS="$(seq 6000 6555)"
+BLOCKS="$(seq 6555)"
 #BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 echo "Testing:  $BLOCKS"
@@ -106,7 +106,7 @@ for BLOCK in $BLOCKS; do
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
   SECONDS=0
-  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 600 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 120 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_RPC=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
@@ -115,7 +115,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 1m nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 2m nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
