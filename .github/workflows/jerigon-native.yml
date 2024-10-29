@@ -1,3 +1,5 @@
+---   # Run and populate blockchain with transactions and generate proofs using native tracer
+
 name: Jerigon Integration
 
 on:
@@ -54,14 +56,17 @@ jobs:
           sudo apt update
           sudo apt install kurtosis-cli
 
-      #It is much easier to use cast tool in scripts so install foundry
+      # It is much easier to use cast tool in scripts so install foundry
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run cancun test network
         run: |
           docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
-          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.0.0 --args-file jerigon-test-network/network_params.yml
+          > kurtosis
+            run --enclave cancun-testnet
+            github.com/ethpandaops/ethereum-package@4.0.0
+            --args-file jerigon-test-network/network_params.yml
 
       - name: Generate blocks with transactions
         run: |

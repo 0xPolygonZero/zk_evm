@@ -1,10 +1,10 @@
 name: "Rust"
 description: |
   Common steps for CI
-  
   See <https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action>
+
 runs:
-  using: composite  
+  using: composite
   steps:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: Swatinem/rust-cache@v2
