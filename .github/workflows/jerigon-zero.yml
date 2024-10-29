@@ -63,9 +63,7 @@ jobs:
       - name: Run cancun test network
         run: |
           docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
-          > kurtosis run
-            --enclave cancun-testnet
-            github.com/ethpandaops/ethereum-package@4.0.0
+          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.0.0 \
             --args-file jerigon-test-network/network_params.yml
 
       - name: Generate blocks with transactions
