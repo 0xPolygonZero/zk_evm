@@ -1,3 +1,5 @@
+---  # Common CI steps
+
 name: "Rust"
 description: |
   Common steps for CI

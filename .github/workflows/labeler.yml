@@ -1,4 +1,4 @@
----   # Add labels to the PR
+---  # Add labels to the PR
 
 name: "Pull Request Labeler"
 on:
