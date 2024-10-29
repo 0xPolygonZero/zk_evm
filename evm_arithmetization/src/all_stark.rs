@@ -106,9 +106,24 @@ pub const NUM_TABLES: usize = if cfg!(feature = "cdk_erigon") {
     Table::MemAfter as usize + 1
 };
 
-/// Indices of Keccak Tables
-pub const KECCAK_TABLES_INDICES: [usize; 2] =
-    [Table::Keccak as usize, Table::KeccakSponge as usize];
+/// Indices of optional Tables
+#[cfg(not(feature = "cdk_erigon"))]
+pub const OPTIONAL_TABLE_INDICES: [usize; 5] = [
+    Table::BytePacking as usize,
+    Table::Keccak as usize,
+    Table::KeccakSponge as usize,
+    Table::Logic as usize,
+    Table::MemAfter as usize,
+];
+#[cfg(feature = "cdk_erigon")]
+pub const OPTIONAL_TABLE_INDICES: [usize; 6] = [
+    Table::BytePacking as usize,
+    Table::Keccak as usize,
+    Table::KeccakSponge as usize,
+    Table::Logic as usize,
+    Table::MemAfter as usize,
+    Table::Poseidon as usize,
+];
 
 impl Table {
     /// Returns all STARK table indices.
@@ -128,6 +143,11 @@ impl Table {
         ]
     }
 }
+
+/// The total number of CTLs used by the zkEVM.
+pub(crate) const NUM_CTLS: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 10 };
+/// The position of the Memory CTL within all CTLs of the zkEVM.
+pub(crate) const MEMORY_CTL_IDX: usize = 6;
 
 /// Returns all the `CrossTableLookups` used for proving the EVM.
 pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
@@ -418,4 +438,18 @@ fn ctl_poseidon_general_output<F: Field>() -> CrossTableLookup<F> {
         vec![cpu_stark::ctl_poseidon_general_output()],
         poseidon_stark::ctl_looked_general_output(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+
+    use super::*;
+
+    type F = GoldilocksField;
+
+    #[test]
+    fn check_num_ctls() {
+        assert_eq!(all_cross_table_lookups::<F>().len(), NUM_CTLS);
+    }
 }
