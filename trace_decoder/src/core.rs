@@ -152,6 +152,7 @@ pub fn entrypoint(
                     },
                     transactions_trie: transaction.into(),
                     receipts_trie: receipt.into(),
+                    #[cfg(feature = "eth_mainnet")]
                     storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
                 },
                 trie_roots_after: after,

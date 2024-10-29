@@ -391,13 +391,15 @@ fn test_serialize_and_prune() {
             .collect::<Vec<_>>()
     };
 
-    let pruned_ser = smt.serialize_and_prune(subset);
-    assert_eq!(hash_serialize(&pruned_ser), smt.root);
-    assert!(pruned_ser.len() <= ser.len());
+    let mut v = vec![U256::zero(), U256::zero()];
+    smt.serialize_and_prune(subset, &mut v, 0);
+    assert_eq!(hash_serialize(&v), smt.root);
+    assert!(v.len() <= ser.len());
 
-    let trivial_ser = smt.serialize_and_prune::<Key, Vec<_>>(vec![]);
+    let mut v = vec![U256::zero(), U256::zero()];
+    smt.serialize_and_prune::<Key, Vec<_>>(vec![], &mut v, 0);
     assert_eq!(
-        trivial_ser,
+        v,
         vec![
             U256::zero(),
             U256::zero(),
@@ -405,5 +407,5 @@ fn test_serialize_and_prune() {
             hashout2u(smt.root)
         ]
     );
-    assert_eq!(hash_serialize(&trivial_ser), smt.root);
+    assert_eq!(hash_serialize(&v), smt.root);
 }

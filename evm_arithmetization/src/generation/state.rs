@@ -218,12 +218,6 @@ pub(crate) trait State<F: RichField> {
             let registers = self.get_registers();
             let pc = registers.program_counter;
 
-            if pc == KERNEL.global_labels["check_final_state_trie"] {
-                log::debug!(
-                    "final state linked list {:?}",
-                    self.get_generation_state().state_pointers
-                );
-            }
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
             if running && (self.at_halt() || self.at_end_segment(cycle_limit)) {
                 running = false;
