@@ -25,7 +25,8 @@ global handle_precompiles:
     }
     #[cfg(not(feature = eth_mainnet))]
     {
-        %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+        DUP1 %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+        POP
     }
     // TODO: Add support of EIP-7712 for Polygon Pos, https://github.com/0xPolygonZero/zk_evm/issues/265
     // stack: retdest

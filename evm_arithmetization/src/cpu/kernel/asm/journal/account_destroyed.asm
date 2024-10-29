@@ -45,7 +45,7 @@ revert_account_destroyed_contd:
         SWAP1
         // Remove `prev_balance` from `target`'s balance.
         // stack: target, address, prev_balance, retdest
-        %key_balance DUP1 %search_key %mload_trie_data
+        %key_balance DUP1 %search_key
         // stack: target_balance, target_balance_key, address, prev_balance, retdest
         %stack (target_balance, target_balance_key, address, prev_balance) -> (target_balance, prev_balance, target_balance_key, address, prev_balance)
         // stack: target_balance, prev_balance, target_balance_key, address, prev_balance, retdest

@@ -216,17 +216,17 @@ load_code_padded_ctd:
         // Pad with 0s until the length is a multiple of 56
         PUSH 56
         DUP4 %increment
-    global debug_len_p_one:
-        // stack: curr_len, 56, padding_addr, addr, len, retdest
-        PUSH 56 SWAP1 SUB
-        // stack: curr_len - 56, 56, padding_addr, addr, len, retdest
         MOD
-    global debug_to_padd:
+global debug_len_mod_56:
+
+        // curr_len mod 56, padding_addr, addr, len, retdest
+        PUSH 56 SUB
         // stack: padding_len, padding_addr, addr, len, retdest
         SWAP3 DUP4
         // stack: padding_len, len, padding_addr, addr, padding_len, retdest
         ADD
         // stack: last_byte_offset, padding_addr, addr, padding_len, retdest
+        global debug_padding_len:
         %stack (last_byte_offset, padding_addr, addr, padding_len)
             -> (padding_addr, padding_len, after_padding, addr, last_byte_offset)
         %jump(memset)

@@ -231,6 +231,7 @@ insert_accessed_storage_keys_with_original_value:
 after_read:
     %stack (value, addr, key, retdest) -> (addr, key, value, retdest)
     %insert_accessed_storage_keys
+global debug_si_por_aca:
     // stack: cold_access, value_ptr, value, retdest
     SWAP2
     // stack: value, value_ptr, cold_access, retdest

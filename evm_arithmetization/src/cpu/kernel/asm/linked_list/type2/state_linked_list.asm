@@ -458,7 +458,7 @@ not_found:
 
 %macro read_slot_from_addr
     // stack: address, slot
-    %addr_to_state_key
+    // %addr_to_state_key
     %key_storage
     %stack (storage_key) -> (storage_key, %%after)
     // stack: storage_key, %%after
