@@ -46,6 +46,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 zk_evm_common.workspace = true
+lazy-regex = "3.3.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
