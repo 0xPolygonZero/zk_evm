@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install yamllint
-        run: sudo apt-get install yamllint=1.26.3
+        run: sudo apt-get install yamllint=1.26.3-1
       - name: Run yamllint
         run: >
           yamllint
