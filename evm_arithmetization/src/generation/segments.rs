@@ -45,51 +45,6 @@ impl GenerationSegmentData {
 
 /// Builds a new `GenerationSegmentData`.
 #[allow(clippy::unwrap_or_default)]
-#[cfg(feature = "eth_mainnet")]
-fn build_segment_data<F: RichField>(
-    segment_index: usize,
-    registers_before: Option<RegistersState>,
-    registers_after: Option<RegistersState>,
-    memory: Option<MemoryState>,
-    interpreter: &Interpreter<F>,
-) -> GenerationSegmentData {
-    GenerationSegmentData {
-        segment_index,
-        registers_before: registers_before.unwrap_or(RegistersState::new()),
-        registers_after: registers_after.unwrap_or(RegistersState::new()),
-        memory: memory.unwrap_or(MemoryState {
-            preinitialized_segments: interpreter
-                .generation_state
-                .memory
-                .preinitialized_segments
-                .clone(),
-            ..Default::default()
-        }),
-        max_cpu_len_log: interpreter.get_max_cpu_len_log(),
-        extra_data: ExtraSegmentData {
-            bignum_modmul_result_limbs: interpreter
-                .generation_state
-                .bignum_modmul_result_limbs
-                .clone(),
-            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
-            withdrawal_prover_inputs: interpreter
-                .generation_state
-                .withdrawal_prover_inputs
-                .clone(),
-            ger_prover_inputs: interpreter.generation_state.ger_prover_inputs.clone(),
-            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
-            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
-            next_txn_index: interpreter.generation_state.next_txn_index,
-            access_lists_ptrs: interpreter.generation_state.access_lists_ptrs.clone(),
-            state_ptrs: interpreter.generation_state.state_ptrs.clone(),
-        },
-        opcode_counts: interpreter.opcode_count.clone(),
-    }
-}
-
-/// Builds a new `GenerationSegmentData`.
-#[allow(clippy::unwrap_or_default)]
-#[cfg(feature = "cdk_erigon")]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
     registers_before: Option<RegistersState>,
@@ -125,6 +80,7 @@ fn build_segment_data<F: RichField>(
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
             state_ptrs: interpreter.generation_state.state_pointers.clone(),
+            access_lists_ptrs: interpreter.generation_state.access_lists_ptrs.clone(),
         },
         opcode_counts: interpreter.opcode_count.clone(),
     }
@@ -250,6 +206,10 @@ impl<F: RichField> Iterator for SegmentDataIterator<F> {
                 Some(boxed) => {
                     let (data, next_data) = *boxed;
                     self.partial_next_data = next_data;
+                    println!(
+                        "smt in interpreter {:?}",
+                        self.interpreter.generation_state.state_pointers.state
+                    );
                     Some(Ok((self.interpreter.generation_state.inputs.clone(), data)))
                 }
                 // The payload was fully consumed.

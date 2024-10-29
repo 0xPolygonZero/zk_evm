@@ -9,8 +9,9 @@ use std::str::FromStr;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::BigEndianHash;
-use ethereum_types::{Address, H160, H256, U256};
+use ethereum_types::{Address, H256, U256};
+#[cfg(feature = "cdk_erigon")]
+use ethereum_types::{BigEndianHash, H160};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
@@ -24,6 +25,7 @@ use evm_arithmetization::testing_utils::{
 use evm_arithmetization::testing_utils::{
     beacon_roots_contract_from_storage, preinitialized_state_and_storage_tries,
 };
+#[cfg(feature = "cdk_erigon")]
 use evm_arithmetization::util::h2u;
 use evm_arithmetization::{Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
@@ -32,12 +34,16 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
+#[cfg(feature = "cdk_erigon")]
 use plonky2::field::types::PrimeField64;
-use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::{Db, MemoryDb};
-use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-use smt_trie::smt::Smt;
-use smt_trie::utils::hashout2u;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::{
+    code::hash_bytecode_u256,
+    db::{Db, MemoryDb},
+    keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
+    smt::Smt,
+    utils::hashout2u,
+};
 
 type F = GoldilocksField;
 
@@ -119,9 +125,11 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     };
 
     #[cfg(feature = "eth_mainnet")]
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    #[cfg(feature = "eth_mainnet")]
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    #[cfg(feature = "eth_mainnet")]
     {
-        let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
-        let mut beacon_roots_account_storage = storage_tries[0].1.clone();
         state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
         state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
@@ -294,6 +302,7 @@ fn init_logger() {
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
+#[cfg(feature = "cdk_erigon")]
 fn set_account<D: Db>(
     smt: &mut Smt<D>,
     addr: Address,

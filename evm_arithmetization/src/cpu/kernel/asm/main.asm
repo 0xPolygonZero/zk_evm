@@ -267,7 +267,7 @@ global check_final_state_trie:
     
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
 global debug_final_trie_hash:
-    // %assert_eq
+    %assert_eq
     // We don't need the trie data length here.
     POP
 

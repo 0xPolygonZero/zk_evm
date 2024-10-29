@@ -3,9 +3,8 @@ use std::collections::BTreeMap;
 use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 
-use crate::memory::segments::Segment;
-
 pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
+#[cfg(feature = "eth_mainnet")]
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 pub const STATE_LINKED_LIST_NODE_SIZE: usize = 4;
 
@@ -71,6 +70,7 @@ pub(crate) mod testing {
     use anyhow::Result;
 
     use super::*;
+    use crate::memory::segments::Segment;
     use crate::util::u256_to_usize;
     use crate::witness::errors::ProgramError;
     use crate::witness::errors::ProverInputError::InvalidInput;

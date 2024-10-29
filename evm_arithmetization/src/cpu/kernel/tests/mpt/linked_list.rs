@@ -15,12 +15,14 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::linked_list::ACCOUNTS_LINKED_LIST_NODE_SIZE;
 use crate::generation::linked_list::STATE_LINKED_LIST_NODE_SIZE;
+#[cfg(feature = "eth_mainnet")]
 use crate::generation::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::memory::MemorySegmentState;
 
 pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
+#[cfg(feature = "eth_mainnet")]
 pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
 pub(crate) type StateLinkedList<'a> = LinkedList<'a, STATE_LINKED_LIST_NODE_SIZE>;
 
@@ -110,19 +112,24 @@ fn test_list_iterator() -> Result<()> {
         .generation_state
         .memory
         .get_preinit_memory(Segment::StorageLinkedList);
-    let mut storage_list =
-        StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
-    let Some([addr, key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
-        return Err(anyhow::Error::msg("Couldn't get value"));
-    };
+    #[cfg(feature = "eth_mainnet")]
+    {
+        let mut storage_list =
+            StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList)
+                .unwrap();
+        let Some([addr, key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
+            return Err(anyhow::Error::msg("Couldn't get value"));
+        };
+        assert_eq!(key, U256::zero());
+        let Some([addr, _key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
+            return Err(anyhow::Error::msg("Couldn't get value"));
+        };
+    }
+
     assert_eq!(addr, U256::MAX);
-    assert_eq!(key, U256::zero());
     assert_eq!(ptr, U256::zero());
     assert_eq!(ptr_cpy, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
-    let Some([addr, _key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
-        return Err(anyhow::Error::msg("Couldn't get value"));
-    };
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ptr_cpy, U256::zero());
@@ -214,6 +221,7 @@ fn test_insert_account() -> Result<()> {
 }
 
 #[test]
+#[cfg(feature = "eth_mainnet")]
 fn test_insert_storage() -> Result<()> {
     init_logger();
 
@@ -489,6 +497,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 }
 
 #[test]
+#[cfg(feature = "eth_mainnet")]
 fn test_insert_and_delete_storage() -> Result<()> {
     init_logger();
 

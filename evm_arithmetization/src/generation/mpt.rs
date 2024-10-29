@@ -10,6 +10,7 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "eth_mainnet")]
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };

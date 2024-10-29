@@ -117,7 +117,6 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    #[cfg(feature = "eth_mainnet")]
     pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
     pub(crate) state_ptrs: StateLinkedListsPtrs,
     pub(crate) next_txn_index: usize,
@@ -486,9 +485,10 @@ impl<F: RichField> Interpreter<F> {
 
     /// Inserts a preinitialized segment, given as a [Segment],
     /// into the `preinitialized_segments` memory field.
+    #[cfg(feature = "eth_mainnet")]
     fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
         self.generation_state
-            .memory
+            .memorys
             .insert_preinitialized_segment(segment, values);
     }
 

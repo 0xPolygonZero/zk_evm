@@ -5,10 +5,8 @@ use keccak_hash::{keccak, H256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
-use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::MemoryDb;
-use smt_trie::smt::Smt;
-use smt_trie::utils::hashout2u;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::{code::hash_bytecode_u256, db::MemoryDb, smt::Smt, utils::hashout2u};
 
 use crate::cpu::kernel::{aggregator::KERNEL, interpreter::Interpreter};
 use crate::generation::{
@@ -50,12 +48,6 @@ fn test_init_exc_stop() {
         ..Default::default()
     };
 
-    #[cfg(feature = "eth_mainnet")]
-    {
-        let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries().unwrap();
-        let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    }
-
     #[cfg(feature = "cdk_erigon")]
     let state_trie_before = Smt::default();
 
@@ -63,27 +55,30 @@ fn test_init_exc_stop() {
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
     #[cfg(feature = "eth_mainnet")]
-    {
-        let expected_state_trie_after = {
-            update_beacon_roots_account_storage(
-                &mut beacon_roots_account_storage,
-                block_metadata.block_timestamp,
-                block_metadata.parent_beacon_block_root,
+    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries().unwrap();
+    #[cfg(feature = "eth_mainnet")]
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    #[cfg(feature = "eth_mainnet")]
+    let expected_state_trie_after = {
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        )
+        .unwrap();
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+        expected_state_trie_after
+            .insert(
+                beacon_roots_account_nibbles(),
+                rlp::encode(&beacon_roots_account).to_vec(),
             )
             .unwrap();
-            let beacon_roots_account =
-                beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+        expected_state_trie_after
+    };
 
-            let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-            expected_state_trie_after
-                .insert(
-                    beacon_roots_account_nibbles(),
-                    rlp::encode(&beacon_roots_account).to_vec(),
-                )
-                .unwrap();
-            expected_state_trie_after
-        };
-    }
     #[cfg(feature = "cdk_erigon")]
     let expected_state_trie_after: Smt<MemoryDb> = Smt::default();
 

@@ -13,6 +13,7 @@ use mpt_trie::{
 use plonky2::{
     field::goldilocks_field::GoldilocksField, util::serialization::gate_serialization::default,
 };
+#[cfg(feature = "cdk_erigon")]
 use smt_trie::smt::Smt;
 
 pub use crate::cpu::kernel::cancun_constants::*;
@@ -166,6 +167,14 @@ pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp
     AccountRlp {
         storage_root: storage_trie.hash(),
         ..GLOBAL_EXIT_ROOT_ACCOUNT
+    }
+}
+
+#[cfg(feature = "eth_mainnet")]
+pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
+    AccountRlp {
+        storage_root: storage_trie.hash(),
+        ..Default::default()
     }
 }
 

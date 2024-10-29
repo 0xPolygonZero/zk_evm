@@ -201,12 +201,12 @@ pub(crate) trait State<F: RichField> {
         let mut running = true;
         let mut final_clock = 0;
 
-        let mem = self
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::AccountsLinkedList);
         #[cfg(test)]
         {
+            let mem = self
+                .get_generation_state()
+                .memory
+                .get_preinit_memory(Segment::AccountsLinkedList);
             use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
             log::debug!(
                 "initial state linked list = {:?}",
@@ -218,6 +218,12 @@ pub(crate) trait State<F: RichField> {
             let registers = self.get_registers();
             let pc = registers.program_counter;
 
+            if pc == KERNEL.global_labels["check_final_state_trie"] {
+                log::debug!(
+                    "final state linked list {:?}",
+                    self.get_generation_state().state_pointers
+                );
+            }
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
             if running && (self.at_halt() || self.at_end_segment(cycle_limit)) {
                 running = false;
@@ -404,7 +410,6 @@ pub struct GenerationState<F: RichField> {
 
     /// Provides quick access to pointers that reference the location
     /// of either an account or a slot in the respective linked list.
-    #[cfg(feature = "eth_mainnet")]
     pub(crate) state_pointers: StateLinkedListsPtrs,
 }
 
@@ -421,6 +426,7 @@ impl<F: RichField> GenerationState<F> {
             load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
         let receipt_root_ptr =
             load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+        println!("trie data length after init {}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },
@@ -441,6 +447,7 @@ impl<F: RichField> GenerationState<F> {
             trie_inputs,
         )
         .expect("Invalid MPT data for preinitialization");
+        println!("trie data len after linked lists {}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
@@ -695,35 +702,6 @@ impl<F: RichField> GenerationState<F> {
         }
     }
 
-    #[cfg(feature = "eth_mainnet")]
-    pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
-        self.bignum_modmul_result_limbs
-            .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
-        self.rlp_prover_inputs
-            .clone_from(&segment_data.extra_data.rlp_prover_inputs);
-        self.withdrawal_prover_inputs
-            .clone_from(&segment_data.extra_data.withdrawal_prover_inputs);
-        self.ger_prover_inputs
-            .clone_from(&segment_data.extra_data.ger_prover_inputs);
-        self.trie_root_ptrs
-            .clone_from(&segment_data.extra_data.trie_root_ptrs);
-        self.jumpdest_table
-            .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.state_pointers
-            .clone_from(&segment_data.extra_data.state_ptrs);
-        self.access_lists_ptrs
-            .clone_from(&segment_data.extra_data.access_lists_ptrs);
-        self.next_txn_index = segment_data.extra_data.next_txn_index;
-        self.registers = RegistersState {
-            program_counter: self.registers.program_counter,
-            is_kernel: self.registers.is_kernel,
-            is_stack_top_read: false,
-            check_overflow: false,
-            ..segment_data.registers_before
-        };
-    }
-
-    #[cfg(feature = "cdk_erigon")]
     pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
         self.bignum_modmul_result_limbs
             .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);

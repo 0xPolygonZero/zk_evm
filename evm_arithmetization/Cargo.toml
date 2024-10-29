@@ -61,7 +61,7 @@ hex.workspace = true
 ripemd.workspace = true
 
 [features]
-default = ["eth_mainnet"]
+default = ["cdk_erigon"]
 asmtools = ["hex"]
 polygon_pos = []
 cdk_erigon = ["smt_trie"]
