@@ -1,9 +1,9 @@
-* @muursh @Nashtare
-/evm_arithmetization/ @wborgeaud @muursh @Nashtare @LindaGuiga
-/zero/ @muursh @Nashtare @atanmarko
-/smt_trie/ @0xaatif @muursh @Nashtare
-/mpt_trie/ @0xaatif @Nashtare @muursh
-/trace_decoder/ @0xaatif @muursh @Nashtare
-.github/ @0xaatif @atanmarko @muursh @Nashtare
+* @Nashtare @paulgoleary
+/evm_arithmetization/ @wborgeaud @Nashtare @LindaGuiga
+/zero/ @Nashtare @atanmarko @0xaatif
+/smt_trie/ @0xaatif @Nashtare
+/mpt_trie/ @0xaatif @Nashtare
+/trace_decoder/ @0xaatif @Nashtare
+.github/ @0xaatif @atanmarko @Nashtare
 /vscode-extension @0xaatif
 /evm_arithmetization/src/bin/lsp-server.rs @0xaatif
