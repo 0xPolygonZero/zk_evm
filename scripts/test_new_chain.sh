@@ -2,7 +2,6 @@
 
 set -uo pipefail
 
-RPC=${RPC_JERIGON_TESTCHAIN2}
 if [ -z $RPC ]; then
   # You must set an RPC endpoint
   exit 1
