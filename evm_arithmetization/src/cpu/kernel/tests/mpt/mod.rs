@@ -3,7 +3,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use mpt_trie::partial_trie::PartialTrie;
 
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::{AccountRlp, SmtAccountRlp};
 use crate::Node;
 
 #[cfg(feature = "eth_mainnet")]
@@ -56,36 +56,36 @@ pub(crate) fn test_account_1_empty_storage() -> AccountRlp {
 }
 
 #[cfg(feature = "cdk_erigon")]
-pub(crate) fn test_account_1() -> AccountRlp {
-    AccountRlp {
+pub(crate) fn test_account_1() -> Box<dyn AccountRlp> {
+    Box::new(SmtAccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         code_hash: U256::from(4444),
         code_length: 0.into(),
-    }
+    })
 }
 
 #[cfg(feature = "cdk_erigon")]
-pub(crate) fn test_account_1_empty_storage() -> AccountRlp {
-    AccountRlp {
+pub(crate) fn test_account_1_empty_storage() -> Box<dyn AccountRlp> {
+    Box::new(SmtAccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         code_hash: U256::from(4444),
         code_length: 0.into(),
-    }
+    })
 }
 
 pub(crate) fn test_account_1_rlp() -> Vec<u8> {
-    rlp::encode(&test_account_1()).to_vec()
+    test_account_1().rlp_encode().to_vec()
 }
 
 pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
-    rlp::encode(&test_account_1_empty_storage()).to_vec()
+    test_account_1_empty_storage().rlp_encode().to_vec()
 }
 
 #[cfg(feature = "eth_mainnet")]
-pub(crate) fn test_account_2() -> AccountRlp {
-    AccountRlp {
+pub(crate) fn test_account_2() -> Box<dyn AccountRlp> {
+    MptAccountRlp {
         nonce: U256::from(5555),
         balance: U256::from(6666),
         storage_root: H256::from_uint(&U256::from(7777)),
@@ -94,17 +94,19 @@ pub(crate) fn test_account_2() -> AccountRlp {
 }
 
 #[cfg(feature = "cdk_erigon")]
-pub(crate) fn test_account_2() -> AccountRlp {
-    AccountRlp {
+pub(crate) fn test_account_2() -> Box<dyn AccountRlp> {
+    use crate::generation::mpt::SmtAccountRlp;
+
+    Box::new(SmtAccountRlp {
         nonce: U256::from(5555),
         balance: U256::from(6666),
         code_hash: U256::from(8888),
         code_length: 0.into(),
-    }
+    })
 }
 
 pub(crate) fn test_account_2_rlp() -> Vec<u8> {
-    rlp::encode(&test_account_2()).to_vec()
+    test_account_2().rlp_encode().to_vec()
 }
 
 /// A `PartialTrie` where an extension node leads to a leaf node containing an

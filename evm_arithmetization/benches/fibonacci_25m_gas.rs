@@ -4,6 +4,7 @@
 //! Total number of user instructions: 7_136_858.
 //! Total number of loops: 2_378_952.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -14,7 +15,10 @@ use ethereum_types::{Address, H256, U256};
 use ethereum_types::{BigEndianHash, H160};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{
+    get_h256_from_code_hash, get_u256_from_code_hash, AccountRlp, CodeHashType, LegacyReceiptRlp,
+    MptAccountRlp,
+};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
@@ -90,38 +94,58 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     ];
     let code_hash = keccak(code);
     #[cfg(feature = "cdk_erigon")]
-    let code_hash = hash_bytecode_u256(code.to_vec());
+    let code_hash = CodeHashType::Uint(hash_bytecode_u256(code.to_vec()));
 
     let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
 
     #[cfg(feature = "eth_mainnet")]
-    let sender_account_before = AccountRlp {
+    let sender_account_before = Box::new(MptAccountRlp {
         nonce: 169.into(),
         balance: U256::from_dec_str("999999999998417410153631615")?,
         storage_root: empty_trie_root,
         code_hash: keccak(vec![]),
-    };
+    });
     #[cfg(feature = "eth_mainnet")]
-    let to_account_before = AccountRlp {
+    let to_account_before = Box::new(MptAccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
         storage_root: empty_trie_root,
         code_hash,
-    };
+    });
 
     #[cfg(feature = "cdk_erigon")]
-    let sender_account_before = AccountRlp {
-        nonce: 169.into(),
-        balance: U256::from_dec_str("999999999998417410153631615")?,
-        code_hash: hash_bytecode_u256(vec![]),
-        code_length: 0.into(),
+    let sender_account_before: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon") {
+        Box::new(SmtAccountRlp {
+            nonce: 169.into(),
+            balance: U256::from_dec_str("999999999998417410153631615")?,
+            code_hash: hash_bytecode_u256(vec![]),
+            code_length: 0.into(),
+        })
+    } else {
+        Box::new(MptAccountRlp {
+            nonce: 169.into(),
+            balance: U256::from_dec_str("999999999998417410153631615")?,
+            storage_root: empty_trie_root,
+            code_hash: keccak(vec![]),
+        })
     };
     #[cfg(feature = "cdk_erigon")]
-    let to_account_before = AccountRlp {
-        nonce: 1.into(),
-        balance: 0.into(),
-        code_hash,
-        code_length: code.len().into(),
+    let to_account_before: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon") {
+        Box::new(SmtAccountRlp {
+            nonce: 1.into(),
+            balance: 0.into(),
+            code_hash: get_u256_from_code_hash(code_hash.clone())
+                .expect("In cdk_erigon, the code_hash is a U256"),
+            code_length: code.len().into(),
+        })
+    } else {
+        Box::new(MptAccountRlp {
+            nonce: 1.into(),
+            balance: 0.into(),
+            storage_root: empty_trie_root,
+            code_hash: get_h256_from_code_hash(code_hash.clone())
+                .expect("In eth_mainnet, the code_hash is a H256"),
+        })
     };
 
     #[cfg(feature = "eth_mainnet")]
@@ -143,19 +167,28 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         set_account(
             &mut smt_before,
             H160(sender),
-            &sender_account_before,
+            sender_account_before
+                .as_any()
+                .downcast_ref::<SmtAccountRlp>()
+                .expect("The sender account is an SMT."),
             &HashMap::new(),
         );
         set_account(
             &mut smt_before,
             H160(to),
-            &to_account_before,
+            to_account_before
+                .as_any()
+                .downcast_ref::<SmtAccountRlp>()
+                .expect("The sender account is an SMT."),
             &HashMap::new(),
         );
-        let sender_account_after = AccountRlp {
-            nonce: sender_account_before.nonce + 1,
-            balance: sender_account_before.balance,
-            ..sender_account_before
+        let sender_account_after = SmtAccountRlp {
+            nonce: sender_account_before.get_nonce() + 1,
+            balance: sender_account_before.get_balance(),
+            ..*sender_account_before
+                .as_any()
+                .downcast_ref::<SmtAccountRlp>()
+                .expect("The sender account is an SMT.")
         };
     }
 
@@ -198,15 +231,36 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     #[cfg(feature = "cdk_erigon")]
     {
         contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
-        contract_code.insert(code_hash, code.to_vec());
+        contract_code.insert(
+            get_u256_from_code_hash(code_hash).expect("In cdk_erigon, the code_hash is a U256"),
+            code.to_vec(),
+        );
     }
 
-    let sender_account_after = AccountRlp {
-        balance: sender_account_before.balance - value - gas_used * block_metadata.block_base_fee,
-        nonce: sender_account_before.nonce + 1,
-        ..sender_account_before
+    let sender_account_after: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon") {
+        Box::new(SmtAccountRlp {
+            balance: sender_account_before.get_balance()
+                - value
+                - gas_used * block_metadata.block_base_fee,
+            nonce: sender_account_before.get_nonce() + 1,
+            ..*sender_account_before
+                .as_any()
+                .downcast_ref::<SmtAccountRlp>()
+                .expect("The sender account is an SMT.")
+        })
+    } else {
+        Box::new(MptAccountRlp {
+            balance: sender_account_before.get_balance()
+                - value
+                - gas_used * block_metadata.block_base_fee,
+            nonce: sender_account_before.get_nonce() + 1,
+            ..*sender_account_before
+                .as_any()
+                .downcast_ref::<MptAccountRlp>()
+                .expect("The sender account is an SMT.")
+        })
     };
-    let to_account_after = to_account_before;
+    let to_account_after = &to_account_before;
 
     #[cfg(feature = "eth_mainnet")]
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
@@ -235,13 +289,19 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         set_account::<MemoryDb>(
             &mut expected_smt_after,
             H160(sender),
-            &sender_account_after,
+            sender_account_after
+                .as_any()
+                .downcast_ref::<SmtAccountRlp>()
+                .expect("The sender account is an SMT."),
             &HashMap::new(),
         );
         set_account(
             &mut expected_smt_after,
             H160(to),
-            &to_account_after,
+            to_account_before
+                .as_any()
+                .downcast_ref::<SmtAccountRlp>()
+                .expect("The sender account is an SMT."),
             &HashMap::new(),
         );
     }
@@ -302,23 +362,25 @@ fn init_logger() {
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
+use evm_arithmetization::generation::mpt::SmtAccountRlp;
+
 #[cfg(feature = "cdk_erigon")]
 fn set_account<D: Db>(
     smt: &mut Smt<D>,
     addr: Address,
-    account: &AccountRlp,
+    account: &SmtAccountRlp,
     storage: &HashMap<U256, U256>,
 ) {
     let key = key_balance(addr);
     log::debug!(
         "setting {:?} balance to {:?}, the key is {:?}",
         addr,
-        account.balance,
+        account.get_balance(),
         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
     );
-    smt.set(key_balance(addr), account.balance);
-    smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), account.code_hash);
+    smt.set(key_balance(addr), account.get_balance());
+    smt.set(key_nonce(addr), account.get_nonce());
+    smt.set(key_code(addr), account.get_code_hash_u256());
     let key = key_code_length(addr);
     log::debug!(
         "setting {:?} code length, the key is {:?}",

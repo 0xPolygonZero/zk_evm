@@ -18,9 +18,9 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
-use crate::generation::mpt::AccountRlp;
 #[cfg(feature = "eth_mainnet")]
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, load_state_mpt};
+use crate::generation::mpt::{AccountRlp, SmtAccountRlp};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -153,7 +153,7 @@ pub(crate) fn initialize_mpts<F: RichField>(
 pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter: &mut Interpreter<F>,
     address: Address,
-    account: &AccountRlp,
+    account: Box<dyn AccountRlp>,
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
@@ -184,16 +184,13 @@ pub(crate) fn prepare_interpreter<F: RichField>(
         trie_data.push(Some(0.into()));
     }
     let value_ptr = trie_data.len();
-    trie_data.push(Some(account.nonce));
-    trie_data.push(Some(account.balance));
+    trie_data.push(Some(account.get_nonce()));
+    trie_data.push(Some(account.get_balance()));
     // In memory, storage_root gets interpreted as a pointer to a storage trie,
     // so we have to ensure the pointer is valid. It's easiest to set it to 0,
     // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
     trie_data.push(Some(H256::zero().into_uint()));
-    #[cfg(feature = "eth_mainnet")]
-    trie_data.push(Some(account.code_hash.into_uint()));
-    #[cfg(feature = "cdk_erigon")]
-    trie_data.push(Some(account.code_hash));
+    trie_data.push(Some(account.get_code_hash_u256()));
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
     interpreter
@@ -241,7 +238,7 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
     // Now, execute `mpt_hash_state_trie`.
-    state_trie.insert(k, rlp::encode(account).to_vec())?;
+    state_trie.insert(k, account.rlp_encode().to_vec())?;
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
         GlobalMetadata::StateTrieRootDigestAfter,
@@ -272,8 +269,8 @@ pub(crate) fn prepare_interpreter<F: RichField>(
 
 // Test account with a given code hash.
 #[cfg(feature = "eth_mainnet")]
-fn test_account(code: &[u8]) -> AccountRlp {
-    AccountRlp {
+fn test_account(code: &[u8]) -> MptAccountRlp {
+    MptAccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -283,8 +280,8 @@ fn test_account(code: &[u8]) -> AccountRlp {
 
 // Test account with a given code hash.
 #[cfg(feature = "cdk_erigon")]
-fn test_account(code: &[u8]) -> AccountRlp {
-    AccountRlp {
+fn test_account(code: &[u8]) -> SmtAccountRlp {
+    SmtAccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         code_hash: hash_bytecode_u256(code.to_vec()),
@@ -301,12 +298,12 @@ fn random_code() -> Vec<u8> {
 #[test]
 fn test_extcodesize() -> Result<()> {
     let code = random_code();
-    let account = test_account(&code);
+    let account = Box::new(test_account(&code));
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
-    prepare_interpreter(&mut interpreter, address, &account)?;
+    prepare_interpreter(&mut interpreter, address, account)?;
 
     let extcodesize = KERNEL.global_labels["extcodesize"];
 
@@ -345,12 +342,12 @@ fn test_extcodesize() -> Result<()> {
 #[test]
 fn test_extcodecopy() -> Result<()> {
     let code = random_code();
-    let account = test_account(&code);
+    let account = Box::new(test_account(&code));
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
-    prepare_interpreter(&mut interpreter, address, &account)?;
+    prepare_interpreter(&mut interpreter, address, account)?;
 
     let context = interpreter.context();
     interpreter.generation_state.memory.contexts[context].segments

@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, SmtAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -122,7 +122,7 @@ fn test_erc20() -> anyhow::Result<()> {
     let expected_smt_after: Smt<MemoryDb> = {
         let mut smt = Smt::default();
         let sender_account = sender_account();
-        let sender_account_after = AccountRlp {
+        let sender_account_after = SmtAccountRlp {
             nonce: sender_account.nonce + 1,
             balance: sender_account.balance - gas_used * 0xa,
             ..sender_account
@@ -290,10 +290,10 @@ fn scalable_storage_after(block: &BlockMetadata, state_root_before: U256) -> Has
     storage
 }
 
-fn giver_account() -> AccountRlp {
+fn giver_account() -> SmtAccountRlp {
     let code = giver_bytecode();
     let len = code.len();
-    AccountRlp {
+    SmtAccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
         code_hash: hash_bytecode_u256(code),
@@ -301,10 +301,10 @@ fn giver_account() -> AccountRlp {
     }
 }
 
-fn token_account() -> AccountRlp {
+fn token_account() -> SmtAccountRlp {
     let code = token_bytecode();
     let len = code.len();
-    AccountRlp {
+    SmtAccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
         code_hash: hash_bytecode_u256(code),
@@ -312,16 +312,16 @@ fn token_account() -> AccountRlp {
     }
 }
 
-fn sender_account() -> AccountRlp {
-    AccountRlp {
+fn sender_account() -> SmtAccountRlp {
+    SmtAccountRlp {
         nonce: 0.into(),
         balance: sd2u("10000000000000000000000"),
         ..Default::default()
     }
 }
 
-fn scalable_account() -> AccountRlp {
-    AccountRlp {
+fn scalable_account() -> SmtAccountRlp {
+    SmtAccountRlp {
         nonce: 0.into(),
         balance: 0.into(),
         ..Default::default()
@@ -347,7 +347,7 @@ fn bloom() -> [U256; 8] {
 fn set_account<D: Db>(
     smt: &mut Smt<D>,
     addr: Address,
-    account: &AccountRlp,
+    account: &SmtAccountRlp,
     storage: &HashMap<U256, U256>,
 ) {
     let key = key_balance(addr);

@@ -8,6 +8,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::prepare_interpreter;
 use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::SmtAccountRlp;
 use crate::Node;
 
 // Test account with a given code hash.
@@ -23,10 +24,10 @@ fn test_account(balance: U256) -> AccountRlp {
 
 // Test account with a given code hash.
 #[cfg(feature = "cdk_erigon")]
-fn test_account(balance: U256) -> AccountRlp {
+fn test_account(balance: U256) -> SmtAccountRlp {
     use smt_trie::code::hash_bytecode_u256;
 
-    AccountRlp {
+    SmtAccountRlp {
         nonce: U256::from(1111),
         balance,
         code_hash: hash_bytecode_u256(vec![0x01, 0x00]),
@@ -38,12 +39,12 @@ fn test_account(balance: U256) -> AccountRlp {
 fn test_balance() -> Result<()> {
     let mut rng = thread_rng();
     let balance = U256(rng.gen());
-    let account = test_account(balance);
+    let account = Box::new(test_account(balance));
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = rng.gen();
     // Prepare the interpreter by inserting the account in the state trie.
-    prepare_interpreter(&mut interpreter, address, &account)?;
+    prepare_interpreter(&mut interpreter, address, account)?;
 
     // Test `balance`
     interpreter.generation_state.registers.program_counter = KERNEL.global_labels["balance"];

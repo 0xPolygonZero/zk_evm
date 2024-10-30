@@ -1,7 +1,8 @@
 use core::ops::Deref;
+use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
@@ -22,22 +23,105 @@ use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
+#[derive(Clone)]
+pub enum CodeHashType {
+    Hash(H256),
+    Uint(U256),
+}
+
+pub fn get_h256_from_code_hash(code_hash: CodeHashType) -> Option<H256> {
+    match code_hash {
+        CodeHashType::Hash(h) => Some(h),
+        _ => None,
+    }
+}
+
+pub fn get_u256_from_code_hash(code_hash: CodeHashType) -> Option<U256> {
+    match code_hash {
+        CodeHashType::Uint(u) => Some(u),
+        _ => None,
+    }
+}
+
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg(feature = "eth_mainnet")]
-pub struct AccountRlp {
+pub struct MptAccountRlp {
     pub nonce: U256,
     pub balance: U256,
     pub storage_root: H256,
     pub code_hash: H256,
 }
 
+impl AccountRlp for MptAccountRlp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_nonce(&self) -> U256 {
+        self.nonce
+    }
+    fn get_balance(&self) -> U256 {
+        self.balance
+    }
+    fn get_storage_root(&self) -> H256 {
+        self.storage_root
+    }
+    fn get_code_length(&self) -> U256 {
+        panic!("No code length in an MPT's account.")
+    }
+    fn get_code_hash(&self) -> CodeHashType {
+        CodeHashType::Hash(self.code_hash)
+    }
+    fn get_code_hash_u256(&self) -> U256 {
+        self.code_hash.into_uint()
+    }
+    fn rlp_encode(&self) -> BytesMut {
+        rlp::encode(self)
+    }
+}
+
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg(feature = "cdk_erigon")]
-pub struct AccountRlp {
+pub struct SmtAccountRlp {
     pub nonce: U256,
     pub balance: U256,
     pub code_length: U256,
     pub code_hash: U256,
+}
+
+impl AccountRlp for SmtAccountRlp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_nonce(&self) -> U256 {
+        self.nonce
+    }
+    fn get_balance(&self) -> U256 {
+        self.balance
+    }
+    fn get_storage_root(&self) -> H256 {
+        panic!("No storage root in an SMT's account.")
+    }
+    fn get_code_length(&self) -> U256 {
+        self.code_length
+    }
+    fn get_code_hash(&self) -> CodeHashType {
+        CodeHashType::Uint(self.code_hash)
+    }
+    fn get_code_hash_u256(&self) -> U256 {
+        self.code_hash
+    }
+    fn rlp_encode(&self) -> BytesMut {
+        rlp::encode(self)
+    }
+}
+
+pub trait AccountRlp: Any {
+    fn get_nonce(&self) -> U256;
+    fn get_balance(&self) -> U256;
+    fn get_storage_root(&self) -> H256;
+    fn get_code_length(&self) -> U256;
+    fn get_code_hash(&self) -> CodeHashType;
+    fn get_code_hash_u256(&self) -> U256;
+    fn rlp_encode(&self) -> BytesMut;
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -47,8 +131,7 @@ pub struct TrieRootPtrs {
     pub receipt_root_ptr: usize,
 }
 
-impl Default for AccountRlp {
-    #[cfg(feature = "eth_mainnet")]
+impl Default for MptAccountRlp {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
@@ -57,7 +140,9 @@ impl Default for AccountRlp {
             code_hash: keccak([]),
         }
     }
-    #[cfg(feature = "cdk_erigon")]
+}
+
+impl Default for SmtAccountRlp {
     fn default() -> Self {
         use smt_trie::code::hash_bytecode_u256;
 

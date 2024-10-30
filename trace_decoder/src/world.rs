@@ -4,6 +4,7 @@ use alloy_compat::Compat as _;
 use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
+use evm_arithmetization::generation::mpt::AccountRlp;
 use keccak_hash::H256;
 
 use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
@@ -111,7 +112,7 @@ impl Type1World {
                 it
             });
             ensure!(
-                storage.root() == acct.storage_root,
+                storage.root() == acct.get_storage_root(),
                 "inconsistent initial storage for hashed address {haddr}"
             )
         }
@@ -148,6 +149,7 @@ impl Type1World {
 
 impl World for Type1World {
     type SubtriePath = MptKey;
+
     fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
         Ok(self.state.get(keccak_hash::keccak(address)).is_some())
     }
