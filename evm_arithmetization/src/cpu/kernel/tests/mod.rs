@@ -18,7 +18,7 @@ mod init_exc_stop;
 mod kernel_consistency;
 mod log;
 mod mcopy;
-mod mpt;
+pub(crate) mod mpt;
 mod packing;
 mod receipt;
 mod rlp;

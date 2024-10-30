@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
-use log::log_enabled;
+use log::error;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -48,12 +49,35 @@ use crate::witness::util::mem_write_log;
 
 /// Number of cycles to go after having reached the halting state. It is
 /// equal to the number of cycles in `exc_stop` + 1.
-pub const NUM_EXTRA_CYCLES_AFTER: usize = 81;
+pub const NUM_EXTRA_CYCLES_AFTER: usize = 82;
 /// Number of cycles to go before starting the execution: it is the number of
 /// cycles in `init`.
 pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
 /// Memory values used to initialize `MemBefore`.
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ErrorWithTries<E = anyhow::Error> {
+    pub inner: E,
+    pub tries: Option<DebugOutputTries>,
+}
+impl<E: Display> Display for ErrorWithTries<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<E: std::error::Error> std::error::Error for ErrorWithTries<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source()
+    }
+}
+
+impl<E> ErrorWithTries<E> {
+    pub fn new(inner: E, tries: Option<DebugOutputTries>) -> Self {
+        Self { inner, tries }
+    }
+}
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -249,8 +273,7 @@ impl<F: RichField> GenerationInputs<F> {
         #[cfg(feature = "cdk_erigon")]
         {
             let smt_data = self.tries.state_trie.to_vec();
-            state_root =
-                H256::from_uint(&hash_serialize_u256(&smt_data).into());
+            state_root = H256::from_uint(&hash_serialize_u256(&smt_data).into());
         }
 
         TrimmedGenerationInputs {
@@ -273,6 +296,15 @@ impl<F: RichField> GenerationInputs<F> {
             block_hashes: self.block_hashes.clone(),
         }
     }
+}
+
+/// Post transaction execution tries retrieved from the prover's memory.
+/// Used primarily for error debugging in case of a failed execution.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct DebugOutputTries {
+    pub state_trie: HashedPartialTrie,
+    pub transaction_trie: HashedPartialTrie,
+    pub receipt_trie: HashedPartialTrie,
 }
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
@@ -495,7 +527,11 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues<F>);
+pub struct TablesWithPVs<F: RichField> {
+    pub tables: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    pub use_keccak_tables: bool,
+    pub public_values: PublicValues<F>,
+}
 
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -503,7 +539,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
-) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
+) -> anyhow::Result<TablesWithPVs<F>> {
     let mut state = GenerationState::<F>::new_with_segment_data(inputs, segment_data)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
@@ -529,15 +565,11 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let registers_after: RegistersData = RegistersData::from(*registers_after);
     apply_metadata_and_tries_memops(&mut state, inputs, &registers_before, &registers_after);
 
-    let cpu_res = timed!(
+    timed!(
         timing,
         "simulate CPU",
         simulate_cpu(&mut state, *max_cpu_len_log)
-    );
-    if cpu_res.is_err() {
-        output_debug_tries(&state)?;
-        cpu_res?;
-    };
+    )?;
 
     let trace_lengths = state.traces.get_lengths();
 
@@ -592,6 +624,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
+    let use_keccak_tables = !state.traces.keccak_inputs.is_empty();
+
     let tables = timed!(
         timing,
         "convert trace data to tables",
@@ -604,7 +638,12 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
             timing
         )
     );
-    Ok((tables, public_values))
+
+    Ok(TablesWithPVs {
+        tables,
+        use_keccak_tables,
+        public_values,
+    })
 }
 
 fn simulate_cpu<F: RichField>(
@@ -637,60 +676,54 @@ fn simulate_cpu<F: RichField>(
     Ok((final_registers, mem_after))
 }
 
-/// Outputs the tries that have been obtained post transaction execution, as
+/// Collects the tries that have been obtained post transaction execution, as
 /// they are represented in the prover's memory.
-/// This will do nothing if the CPU execution failed outside of the final trie
-/// root checks.
-pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> anyhow::Result<()> {
-    if !log_enabled!(log::Level::Debug) {
-        return Ok(());
-    }
+pub(crate) fn collect_debug_tries<F: RichField>(
+    state: &GenerationState<F>,
+) -> Option<DebugOutputTries> {
+    let state_trie_ptr = u256_to_usize(
+        state
+            .memory
+            .read_global_metadata(GlobalMetadata::StateTrieRoot),
+    )
+    .inspect_err(|e| error!("failed to retrieve state trie pointer: {e:?}"))
+    .ok()?;
 
-    // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
-    // `perform_final_checks`. We will output debugging information on the final
-    // tries only if we got a root mismatch.
-    let previous_pc = state.get_registers().program_counter;
+    #[cfg(feature = "eth_mainnet")]
+    let state_trie = get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
+        .inspect_err(|e| error!("unable to retrieve state trie for debugging purposes: {e:?}"))
+        .ok()?;
 
-    let label = KERNEL.offset_name(previous_pc);
+    #[cfg(feature = "cdk_erigon")]
+    let state_trie = HashedPartialTrie::default();
 
-    if label.contains("check_state_trie")
-        || label.contains("check_txn_trie")
-        || label.contains("check_receipt_trie")
-    {
-        let state_trie_ptr = u256_to_usize(
-            state
-                .memory
-                .read_global_metadata(GlobalMetadata::StateTrieRoot),
-        )
-        .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
-        #[cfg(feature = "eth_mainnet")]
-        log::debug!(
-            "Computed state trie: {:?}",
-            get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
-        );
+    let txn_trie_ptr = u256_to_usize(
+        state
+            .memory
+            .read_global_metadata(GlobalMetadata::TransactionTrieRoot),
+    )
+    .inspect_err(|e| error!("failed to retrieve transactions trie pointer: {e:?}"))
+    .ok()?;
+    let transaction_trie = get_txn_trie::<HashedPartialTrie>(&state.memory, txn_trie_ptr)
+        .inspect_err(|e| {
+            error!("unable to retrieve transaction trie for debugging purposes: {e:?}",)
+        })
+        .ok()?;
 
-        let txn_trie_ptr = u256_to_usize(
-            state
-                .memory
-                .read_global_metadata(GlobalMetadata::TransactionTrieRoot),
-        )
-        .map_err(|_| anyhow!("Transactions trie pointer is too large to fit in a usize."))?;
-        log::debug!(
-            "Computed transactions trie: {:?}",
-            get_txn_trie::<HashedPartialTrie>(&state.memory, txn_trie_ptr)
-        );
+    let receipt_trie_ptr = u256_to_usize(
+        state
+            .memory
+            .read_global_metadata(GlobalMetadata::ReceiptTrieRoot),
+    )
+    .inspect_err(|e| error!("failed to retrieve receipts trie pointer: {e:?}"))
+    .ok()?;
+    let receipt_trie = get_receipt_trie::<HashedPartialTrie>(&state.memory, receipt_trie_ptr)
+        .inspect_err(|e| error!("unable to retrieve receipt trie for debugging purposes: {e:?}"))
+        .ok()?;
 
-        let receipt_trie_ptr = u256_to_usize(
-            state
-                .memory
-                .read_global_metadata(GlobalMetadata::ReceiptTrieRoot),
-        )
-        .map_err(|_| anyhow!("Receipts trie pointer is too large to fit in a usize."))?;
-        log::debug!(
-            "Computed receipts trie: {:?}",
-            get_receipt_trie::<HashedPartialTrie>(&state.memory, receipt_trie_ptr)
-        );
-    }
-
-    Ok(())
+    Some(DebugOutputTries {
+        state_trie,
+        transaction_trie,
+        receipt_trie,
+    })
 }

@@ -6,7 +6,7 @@
 // Pre stack: rlp_start_addr, num_nibbles, packed_nibbles, terminated, retdest
 // Post stack: rlp_end_addr
 global hex_prefix_rlp:
-    DUP2 %assert_lt_const(65)
+    DUP2 %assert_le_const(64)
     
     PUSH 2 DUP3 DIV 
     // Compute the length of the hex-prefix string, in bytes:

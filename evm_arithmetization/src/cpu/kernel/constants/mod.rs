@@ -381,11 +381,14 @@ const PRECOMPILES_GAS: [(&str, u16); 14] = [
 
 const SNARKV_POINTERS: [(&str, u64); 2] = [("SNARKV_INP", 112), ("SNARKV_OUT", 100)];
 
+pub(crate) const MAX_CODE_SIZE: u64 = if cfg!(feature = "polygon_pos") {
+    0x8000 // Polygon PoS value, see PIP-30.
+} else {
+    0x6000 // default Ethereum value
+};
+
 const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
-    #[cfg(not(feature = "polygon_pos"))]
-    ("MAX_CODE_SIZE", 0x6000), // default Ethereum value
-    #[cfg(feature = "polygon_pos")]
-    ("MAX_CODE_SIZE", 0x8000), // Polygon PoS value, see PIP-30.
+    ("MAX_CODE_SIZE", MAX_CODE_SIZE),
     ("MAX_INITCODE_SIZE", 0xc000),
     ("INITCODE_WORD_COST", 2),
 ];
@@ -485,14 +488,6 @@ pub mod cancun_constants {
         code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
     };
 
-    #[cfg(feature = "cdk_erigon")]
-    pub static BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
-        nonce: U256::zero(),
-        balance: U256::zero(),
-        code_length: BEACON_ROOTS_CONTRACT_CODE_LEN_U256,
-        code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
-    };
-
     #[test]
     fn hashed() {
         assert_eq!(
@@ -505,7 +500,7 @@ pub mod cancun_constants {
 pub mod global_exit_root {
     use super::*;
 
-    /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L16.
+    /// Taken from <https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L16>.
     pub const GLOBAL_EXIT_ROOT_MANAGER_L2: (&str, [u8; 20]) = (
         "GLOBAL_EXIT_ROOT_MANAGER_L2",
         GLOBAL_EXIT_ROOT_ADDRESS.to_fixed_bytes(),
@@ -519,7 +514,7 @@ pub mod global_exit_root {
         "GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY",
         GLOBAL_EXIT_ROOT_ADDRESS_HASHED.to_fixed_bytes(),
     );
-    /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/dc3cbcc59a95769626056c7bc70aade501e7741d/core/state/intra_block_state_zkevm.go#L20.
+    /// Taken from <https://github.com/0xPolygonHermez/cdk-erigon/blob/dc3cbcc59a95769626056c7bc70aade501e7741d/core/state/intra_block_state_zkevm.go#L20>.
     pub const ADDRESS_SCALABLE_L2: Address = H160(hex!("000000000000000000000000000000005ca1ab1e"));
 
     pub const ADDRESS_SCALABLE_L2_ADDRESS_HASHED: H256 = H256(hex!(
@@ -530,10 +525,10 @@ pub mod global_exit_root {
         "ADDRESS_SCALABLE_L2_STATE_KEY",
         ADDRESS_SCALABLE_L2_ADDRESS_HASHED.to_fixed_bytes(),
     );
-    /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L17.
+    /// Taken from <https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L17>.
     pub const GLOBAL_EXIT_ROOT_STORAGE_POS: (&str, u64) = ("GLOBAL_EXIT_ROOT_STORAGE_POS", 0);
 
-    /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/dc3cbcc59a95769626056c7bc70aade501e7741d/core/state/intra_block_state_zkevm.go#L16.
+    /// Taken from <https://github.com/0xPolygonHermez/cdk-erigon/blob/dc3cbcc59a95769626056c7bc70aade501e7741d/core/state/intra_block_state_zkevm.go#L16>.
     pub const LAST_BLOCK_STORAGE_POS: (&str, u64) = ("LAST_BLOCK_STORAGE_POS", 0);
     pub const STATE_ROOT_STORAGE_POS: (&str, u64) = ("STATE_ROOT_STORAGE_POS", 1);
     pub const TIMESTAMP_STORAGE_POS: (&str, u64) = ("TIMESTAMP_STORAGE_POS", 2);
@@ -553,13 +548,6 @@ pub mod global_exit_root {
         storage_root: H256(hex!(
             "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
         )),
-        code_hash: H256(GLOBAL_EXIT_ROOT_CONTRACT_CODE_HASH),
-    };
-    #[cfg(feature = "cdk_erigon")]
-    pub static GLOBAL_EXIT_ROOT_ACCOUNT: AccountRlp = AccountRlp {
-        nonce: U256::zero(),
-        balance: U256::zero(),
-        code_length: GLOBAL_EXIT_ROOT_CONTRACT_CODE_LEN_U256,
         code_hash: H256(GLOBAL_EXIT_ROOT_CONTRACT_CODE_HASH),
     };
 

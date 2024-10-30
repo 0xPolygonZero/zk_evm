@@ -128,7 +128,7 @@ global start_txns:
     #[cfg(feature = eth_mainnet)]
     {
         // If txn_idx == 0, update the beacon_root for Ethereum mainnet.
-        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+        DUP4
         ISZERO
         %jumpi(set_beacon_root)
     }
@@ -280,6 +280,7 @@ global debug_final_trie_hash:
 %macro reinitialize_memory_pre_txn
     // Reinitialize accessed addresses and storage keys lists
     %init_access_lists
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_TOUCHED_ADDRESSES_LEN)
 
     // Reinitialize transient storage
     %init_transient_storage_len
@@ -294,6 +295,7 @@ global debug_final_trie_hash:
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_DATA_LEN)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_CREATED_CONTRACTS_LEN)
 
     // Reinitialize `chain_id` for legacy transactions and `to` transaction field
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)

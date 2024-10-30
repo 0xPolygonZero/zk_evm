@@ -8,12 +8,13 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
+use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::linked_list::StateLinkedList;
 use crate::generation::state::State;
 use crate::memory::segments::Segment;
 // TO REMOVE!
@@ -312,16 +313,16 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
-    if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
-        let mem = state
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "state linked list = {:?}",
-            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
-    }
+    // if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
+    //     let mem = state
+    //         .get_generation_state()
+    //         .memory
+    //         .get_preinit_memory(Segment::AccountsLinkedList);
+    //     log::debug!(
+    //         "state linked list = {:?}",
+    //         StateLinkedList::from_mem_and_segment(&mem,
+    // Segment::AccountsLinkedList)     );
+    // }
 
     if KERNEL.offset_name(pc) == "smt_hash_state" || KERNEL.offset_name(pc) == "sys_sstore"{
         let mem = state
@@ -451,6 +452,10 @@ where
             .try_into()
             .map_err(|_| ProgramError::InvalidJumpDestination)?;
 
+        if !self.is_kernel() && dst > MAX_CODE_SIZE as u32 {
+            return Err(ProgramError::InvalidJumpDestination);
+        }
+
         if !self.generate_jumpdest_analysis(dst as usize) {
             row.mem_channels[1].value[0] = F::ONE;
 
@@ -518,6 +523,11 @@ where
             let dst: u32 = dst
                 .try_into()
                 .map_err(|_| ProgramError::InvalidJumpiDestination)?;
+
+            if !self.is_kernel() && dst > MAX_CODE_SIZE as u32 {
+                return Err(ProgramError::InvalidJumpiDestination);
+            }
+
             if !self.generate_jumpdest_analysis(dst as usize) {
                 row.general.jumps_mut().should_jump = F::ONE;
                 let cond_sum_u64 = cond

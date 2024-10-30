@@ -8,11 +8,13 @@ use alloy::transports::Transport;
 use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
+use trace_decoder::observer::DummyObserver;
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero::block_interval::BlockInterval;
 use zero::block_interval::BlockIntervalStream;
 use zero::prover::BlockProverInput;
+use zero::prover::WIRE_DISPOSITION;
 use zero::provider::CachedProvider;
 use zero::rpc;
 
@@ -170,6 +172,8 @@ impl Cli {
                             block_prover_input.block_trace,
                             block_prover_input.other_data,
                             batch_size,
+                            &mut DummyObserver::new(),
+                            WIRE_DISPOSITION,
                         )?;
 
                         if let Some(index) = tx_info.transaction_index {

@@ -13,6 +13,7 @@ pub mod prover_state;
 pub mod provider;
 pub mod rpc;
 pub mod tracing;
+pub mod trie_diff;
 
 /// Size of the channel used to send block prover inputs to the per block
 /// proving task. If the proving task is slow and can not consume inputs fast

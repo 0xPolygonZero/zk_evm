@@ -138,7 +138,7 @@ global mpt_read_leaf:
     %stack (num_nibbles_match, node_payload_ptr, node_key, key)
         -> (key, node_key, num_nibbles_match, node_payload_ptr)
     EQ
-    AND
+    MUL // AND
     // stack: keys_match && num_nibbles_match, node_payload_ptr, retdest
     %jumpi(mpt_read_leaf_found)
 global mpt_read_leaf_not_found:

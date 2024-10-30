@@ -56,9 +56,9 @@ global extcodehash:
 #[cfg(feature = eth_mainnet)]
 {
     %macro ext_code_empty
-    %extcodehash
-    %eq_const(@EMPTY_STRING_HASH)
-%endmacro
+        %extcodehash
+        %eq_const(@EMPTY_STRING_HASH)
+    %endmacro
 }
 #[cfg(feature = cdk_erigon)]
 {

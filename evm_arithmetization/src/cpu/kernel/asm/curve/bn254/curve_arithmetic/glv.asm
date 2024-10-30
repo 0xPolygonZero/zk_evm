@@ -76,7 +76,7 @@ global bn_glv_decompose:
     // along with a flag `underflow` set to 1 if there is an underflow, 0 otherwise.
     ADD %bn_sub_check_underflow
     // stack: k2, underflow, N, k, retdest
-    DUP1 %ge_const(0x80000000000000000000000000000000) %jumpi(negate)
+    DUP1 %gt_const(0x7fffffffffffffffffffffffffffffff) %jumpi(negate)
     %jump(contd)
 negate:
     // stack: k2, underflow, N, k, retdest

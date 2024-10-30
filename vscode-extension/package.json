@@ -1,0 +1,55 @@
+{
+    "name": "evm-assembly",
+    "version": "0.0.0",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^9.0.1"
+    },
+    "devDependencies": {
+        "@types/node": "^18.14.6",
+        "@types/vscode": "^1.75.1",
+        "@typescript-eslint/eslint-plugin": "^7.1.0",
+        "@typescript-eslint/parser": "^7.1.0",
+        "@vscode/vsce": "^3.1.1",
+        "eslint": "^8.57.0",
+        "typescript": "^5.3.3"
+    },
+    "activationEvents": [
+        "onLanguage:EVM Assembly"
+    ],
+    "main": "./out/extension",
+    "contributes": {
+        "configuration": {
+            "type": "object",
+            "properties": {
+                "evmAssembly.trace.server": {
+                    "scope": "window",
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VS Code and the language server."
+                }
+            }
+        },
+        "languages": [
+            {
+                "id": "EVM Assembly",
+                "extensions": [
+                    ".asm"
+                ]
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -b && cargo build --manifest-path $PWD/../Cargo.toml --package evm_arithmetization --bin lsp-server -Z unstable-options --artifact-dir $PWD",
+        "lint": "eslint --ext .ts,.tsx",
+        "vsix": "vsce package --allow-missing-repository --skip-license"
+    }
+}

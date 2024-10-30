@@ -4,15 +4,19 @@ use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
-use ethereum_types::{BigEndianHash, H256, U256, U512};
+#[cfg(feature = "eth_mainnet")]
+use ethereum_types::{BigEndianHash, H256};
+use ethereum_types::{U256, U512};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
-use super::linked_list::{
-    LinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
-};
+#[cfg(test)]
+use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
+#[cfg(feature = "eth_mainnet")]
+use super::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
+use super::linked_list::{AccessLinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD};
 #[cfg(feature = "eth_mainnet")]
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -44,9 +48,6 @@ use crate::witness::util::{current_context_peek, stack_peek};
 /// `ProverInputFn([ff, bn254_base, inverse])`.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct ProverInputFn(Vec<String>);
-
-pub const ADDRESSES_ACCESS_LIST_LEN: usize = 2;
-pub const STORAGE_KEYS_ACCESS_LIST_LEN: usize = 4;
 
 impl From<Vec<String>> for ProverInputFn {
     fn from(v: Vec<String>) -> Self {
@@ -144,19 +145,35 @@ impl<F: RichField> GenerationState<F> {
                 .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
-            "trie_data_size" => Ok(self
-                .memory
-                .preinitialized_segments
-                .get(&Segment::TrieData)
-                .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
-                .content
-                .len()
-                .max(
-                    self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+            "trie_data_size" => {
+                println!(
+                    "length {}",
+                    self.memory
+                        .preinitialized_segments
+                        .get(&Segment::TrieData)
+                        .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
                         .content
-                        .len(),
-                )
-                .into()),
+                        .len()
+                        .max(
+                            self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                                .content
+                                .len(),
+                        )
+                );
+                Ok(self
+                    .memory
+                    .preinitialized_segments
+                    .get(&Segment::TrieData)
+                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
+                    .content
+                    .len()
+                    .max(
+                        self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                            .content
+                            .len(),
+                    )
+                    .into())
+            }
 
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
@@ -387,6 +404,7 @@ impl<F: RichField> GenerationState<F> {
             "storage_insert" => self.run_next_storage_insert(),
             "address_remove" => self.run_next_addresses_remove(),
             "storage_remove" => self.run_next_storage_remove(),
+            "reset" => self.run_reset(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -410,14 +428,22 @@ impl<F: RichField> GenerationState<F> {
     /// jump address.
     #[cfg(feature = "cdk_erigon")]
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        use crate::generation::linked_list::StateLinkedList;
-        let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "state ll = {:?}",
-            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
-        log::debug!("state btree = {:#?}", self.state_pointers);
-        log::debug!("input state popopo = {}", self.inputs.trimmed_tries.state_trie);
+        #[cfg(test)]
+        {
+            use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+
+            let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
+
+            log::debug!(
+                "state ll = {:?}",
+                StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+            );
+            log::debug!("state btree = {:#?}", self.inputs.trimmed_tries.state_trie);
+            log::debug!(
+                "input state popopo = {}",
+                self.inputs.trimmed_tries.state_trie
+            );
+        }
 
         match input_fn.0[1].as_str() {
             "insert_state" | "search_state" => self.run_next_insert_state(input_fn),
@@ -492,77 +518,95 @@ impl<F: RichField> GenerationState<F> {
 
     /// Returns a pointer to an element in the list whose value is such that
     /// `value <= addr < next_value` and `addr` is the top of the stack.
-    fn run_next_addresses_insert(&self) -> Result<U256, ProgramError> {
+    fn run_next_addresses_insert(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some((([_, ptr], _), _)) = self
-            .get_addresses_access_list()?
-            .zip(self.get_addresses_access_list()?.skip(1))
-            .zip(self.get_addresses_access_list()?.skip(2))
-            .find(|&((_, [prev_addr, _]), [next_addr, _])| {
-                (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
-            })
-        {
-            Ok(ptr / U256::from(2))
-        } else {
-            Ok((Segment::AccessedAddresses as usize).into())
+
+        let (&pred_addr, &ptr) = self
+            .access_lists_ptrs
+            .accounts_pointers
+            .range(..=addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
+
+        if pred_addr != addr {
+            self.access_lists_ptrs.accounts_pointers.insert(
+                addr,
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::AccessedAddressesLen),
+                )?,
+            );
         }
+        Ok(U256::from(ptr / 2))
     }
 
     /// Returns a pointer to an element in the list whose value is such that
     /// `value < addr == next_value` and addr is the top of the stack.
     /// If the element is not in the list, it loops forever
-    fn run_next_addresses_remove(&self) -> Result<U256, ProgramError> {
+    fn run_next_addresses_remove(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some(([_, ptr], _)) = self
-            .get_addresses_access_list()?
-            .zip(self.get_addresses_access_list()?.skip(2))
-            .find(|&(_, [next_addr, _])| next_addr == addr)
-        {
-            Ok(ptr / U256::from(2))
-        } else {
-            Ok((Segment::AccessedAddresses as usize).into())
-        }
+
+        let (_, &ptr) = self
+            .access_lists_ptrs
+            .accounts_pointers
+            .range(..addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
+        self.access_lists_ptrs
+            .accounts_pointers
+            .remove(&addr)
+            .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+
+        Ok(U256::from(ptr / 2))
     }
 
     /// Returns a pointer to the predecessor of the top of the stack in the
     /// accessed storage keys list.
-    fn run_next_storage_insert(&self) -> Result<U256, ProgramError> {
+    fn run_next_storage_insert(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some((([.., ptr], _), _)) = self
-            .get_storage_keys_access_list()?
-            .zip(self.get_storage_keys_access_list()?.skip(1))
-            .zip(self.get_storage_keys_access_list()?.skip(2))
-            .find(
-                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
-                        || (prev_addr == addr && prev_key <= key);
-                    let next_is_strictly_larger =
-                        next_addr > addr || (next_addr == addr && next_key > key);
-                    prev_is_less_or_equal && next_is_strictly_larger
-                },
-            )
-        {
-            Ok(ptr / U256::from(4))
-        } else {
-            Ok((Segment::AccessedStorageKeys as usize).into())
+
+        let (&(pred_addr, pred_slot_key), &ptr) = self
+            .access_lists_ptrs
+            .storage_pointers
+            .range(..=(addr, key))
+            .next_back()
+            .unwrap_or((&DUMMYHEAD, &(Segment::AccessedStorageKeys as usize)));
+        if pred_addr != addr || pred_slot_key != key {
+            self.access_lists_ptrs.storage_pointers.insert(
+                (addr, key),
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::AccessedStorageKeysLen),
+                )?,
+            );
         }
+        Ok(U256::from(ptr / 4))
     }
 
     /// Returns a pointer to the predecessor of the top of the stack in the
     /// accessed storage keys list.
-    fn run_next_storage_remove(&self) -> Result<U256, ProgramError> {
+    fn run_next_storage_remove(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some(([.., ptr], _)) = self
-            .get_storage_keys_access_list()?
-            .zip(self.get_storage_keys_access_list()?.skip(2))
-            .find(|&(_, [next_addr, next_key, ..])| (next_addr == addr && next_key == key))
-        {
-            Ok(ptr / U256::from(4))
-        } else {
-            Ok((Segment::AccessedStorageKeys as usize).into())
-        }
+
+        let (_, &ptr) = self
+            .access_lists_ptrs
+            .storage_pointers
+            .range(..(addr, key))
+            .next_back()
+            .unwrap_or((&DUMMYHEAD, &(Segment::AccessedStorageKeys as usize)));
+        self.access_lists_ptrs
+            .storage_pointers
+            .remove(&(addr, key))
+            .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+
+        Ok(U256::from(ptr / 4))
+    }
+
+    fn run_reset(&mut self) -> Result<U256, ProgramError> {
+        self.access_lists_ptrs = AccessLinkedListsPtrs::default();
+        Ok(U256::zero())
     }
 
     /// Returns a pointer to a node in the list such that
@@ -571,13 +615,14 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_insert_account(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let (&pred_addr, &pred_ptr) = self
+            .state_pointers
             .accounts_pointers
             .range(..=addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
-            self.accounts_pointers.insert(
+            self.state_pointers.accounts_pointers.insert(
                 addr,
                 u256_to_usize(
                     self.memory
@@ -595,12 +640,13 @@ impl<F: RichField> GenerationState<F> {
         let key = stack_peek(self, 0)?;
         let (&pred_key, &pred_ptr) = self
             .state_pointers
+            .state
             .range(..=key)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_key != key && input_fn.0[1].as_str() == "insert_state" {
-            self.state_pointers.insert(
+            self.state_pointers.state.insert(
                 key,
                 u256_to_usize(
                     self.memory
@@ -621,15 +667,13 @@ impl<F: RichField> GenerationState<F> {
         let key = stack_peek(self, 1)?;
 
         let (&(pred_addr, pred_slot_key), &pred_ptr) = self
+            .state_pointers
             .storage_pointers
             .range(..=(addr, key))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
-            self.storage_pointers.insert(
+            self.state_pointers.storage_pointers.insert(
                 (addr, key),
                 u256_to_usize(
                     self.memory
@@ -650,11 +694,13 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &ptr) = self
+            .state_pointers
             .accounts_pointers
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        self.accounts_pointers
+        self.state_pointers
+            .accounts_pointers
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -670,15 +716,17 @@ impl<F: RichField> GenerationState<F> {
 
         log::debug!(
             "los que viene antes: = {:?}",
-            self.state_pointers.range(..addr).next_back()
+            self.state_pointers.state.range(..addr).next_back()
         );
 
         let (_, &ptr) = self
             .state_pointers
+            .state
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
         self.state_pointers
+            .state
             .remove(&addr);
 
         Ok(U256::from(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
@@ -694,14 +742,13 @@ impl<F: RichField> GenerationState<F> {
         let key = stack_peek(self, 1)?;
 
         let (_, &ptr) = self
+            .state_pointers
             .storage_pointers
             .range(..(addr, key))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
-            ));
-        self.storage_pointers
+            .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
+        self.state_pointers
+            .storage_pointers
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -719,13 +766,11 @@ impl<F: RichField> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &pred_ptr) = self
+            .state_pointers
             .storage_pointers
             .range(..(addr, U256::zero()))
             .next_back()
-            .unwrap_or((
-                &(U256::MAX, U256::zero()),
-                &(Segment::StorageLinkedList as usize),
-            ));
+            .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
 
         Ok(U256::from(
             (pred_ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE,
@@ -733,6 +778,19 @@ impl<F: RichField> GenerationState<F> {
     }
     // TODO: We're missing a cdk_erigon counterpart for
     // `run_next_remove_address_slots`
+
+    #[cfg(test)]
+    pub(crate) fn get_addresses_access_list(
+        &self,
+    ) -> Result<LinkedList<ADDRESSES_ACCESS_LIST_LEN>, ProgramError> {
+        // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
+        // virtual address in the segment. In order to get the length we need
+        // to substract `Segment::AccessedAddresses` as usize.
+        LinkedList::from_mem_and_segment(
+            &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
+            Segment::AccessedAddresses,
+        )
+    }
 
     /// Returns the first part of the KZG precompile output.
     fn run_kzg_point_eval(&mut self) -> Result<U256, ProgramError> {
@@ -951,30 +1009,6 @@ impl<F: RichField> GenerationState<F> {
                 );
             }
         }
-    }
-
-    pub(crate) fn get_addresses_access_list(
-        &self,
-    ) -> Result<LinkedList<ADDRESSES_ACCESS_LIST_LEN>, ProgramError> {
-        // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
-        // virtual address in the segment. In order to get the length we need
-        // to substract `Segment::AccessedAddresses` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
-            Segment::AccessedAddresses,
-        )
-    }
-
-    pub(crate) fn get_storage_keys_access_list(
-        &self,
-    ) -> Result<LinkedList<STORAGE_KEYS_ACCESS_LIST_LEN>, ProgramError> {
-        // GlobalMetadata::AccessedStorageKeysLen stores the value of the next available
-        // virtual address in the segment. In order to get the length we need
-        // to substract `Segment::AccessedStorageKeys` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content,
-            Segment::AccessedStorageKeys,
-        )
     }
 }
 

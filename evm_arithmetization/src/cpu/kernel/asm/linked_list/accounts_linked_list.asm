@@ -386,11 +386,11 @@ remove_all_slots_end:
     // stack: account_ptr
 %endmacro
 
-%macro nonce_from_ptr:
+%macro nonce_from_ptr
     %mload_trie_data
 %endmacro
 
-%macro balance_from_ptr:
+%macro balance_from_ptr
     %increment
     %mload_trie_data
 %endmacro

@@ -10,6 +10,7 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "eth_mainnet")]
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
@@ -36,7 +37,7 @@ pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,
     pub code_length: U256,
-    pub code_hash: H256,
+    pub code_hash: U256,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -58,11 +59,13 @@ impl Default for AccountRlp {
     }
     #[cfg(feature = "cdk_erigon")]
     fn default() -> Self {
+        use smt_trie::code::hash_bytecode_u256;
+
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
+            code_hash: hash_bytecode_u256(vec![]),
             code_length: U256::zero(),
-            code_hash: keccak([]),
         }
     }
 }
@@ -437,7 +440,8 @@ fn get_state_and_storage_leaves(
             state_leaves.push(Some(addr_key));
             // Set `value_ptr_ptr`.
             state_leaves.push(Some(trie_data.len().into()));
-            // Push something on the original `value_ptr_ptr` (to be set later in the kernel).
+            // Push something on the original `value_ptr_ptr` (to be set later in the
+            // kernel).
             state_leaves.push(Some(0.into()));
             // Set the next node as the initial node.
             state_leaves.push(Some((Segment::AccountsLinkedList as usize).into()));
@@ -561,9 +565,11 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     trie_inputs: &TrieInputs,
 ) -> Result<LinkedListsAndTrieData, ProgramError> {
     let mut state_leaves =
-        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList as usize).to_vec();
+        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList as usize)
+            .to_vec();
     let mut storage_leaves =
-        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList as usize).to_vec();
+        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList as usize)
+            .to_vec();
     let mut trie_data = vec![Some(U256::zero())];
     let storage_tries_by_state_key = trie_inputs
         .storage_tries

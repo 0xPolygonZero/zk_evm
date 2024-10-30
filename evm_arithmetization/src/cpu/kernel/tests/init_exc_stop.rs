@@ -1,18 +1,22 @@
 use std::collections::HashMap;
 
-use ethereum_types::U256;
+use ethereum_types::{BigEndianHash, U256};
 use keccak_hash::{keccak, H256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::{code::hash_bytecode_u256, db::MemoryDb, smt::Smt, utils::hashout2u};
 
 use crate::cpu::kernel::{aggregator::KERNEL, interpreter::Interpreter};
 use crate::generation::{
     state::State, TrieInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
 };
 use crate::memory::segments::Segment;
+use crate::testing_utils::init_logger;
+#[cfg(feature = "eth_mainnet")]
 use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use crate::witness::{memory::MemoryAddress, state::RegistersState};
@@ -44,11 +48,17 @@ fn test_init_exc_stop() {
         ..Default::default()
     };
 
-    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries().unwrap();
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    #[cfg(feature = "cdk_erigon")]
+    let state_trie_before = Smt::default();
+
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
+    #[cfg(feature = "eth_mainnet")]
+    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries().unwrap();
+    #[cfg(feature = "eth_mainnet")]
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    #[cfg(feature = "eth_mainnet")]
     let expected_state_trie_after = {
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
@@ -69,10 +79,19 @@ fn test_init_exc_stop() {
         expected_state_trie_after
     };
 
+    #[cfg(feature = "cdk_erigon")]
+    let expected_state_trie_after: Smt<MemoryDb> = Smt::default();
+
     let mut contract_code = HashMap::new();
+    #[cfg(feature = "eth_mainnet")]
     contract_code.insert(keccak(vec![]), vec![]);
+    #[cfg(feature = "cdk_erigon")]
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
 
     let trie_roots_after = TrieRoots {
+        #[cfg(feature = "cdk_erigon")]
+        state_root: H256::from_uint(&hashout2u(expected_state_trie_after.root)),
+        #[cfg(feature = "eth_mainnet")]
         state_root: expected_state_trie_after.hash(),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
@@ -86,6 +105,7 @@ fn test_init_exc_stop() {
             state_trie: state_trie_before,
             transactions_trie,
             receipts_trie,
+            #[cfg(feature = "eth_mainnet")]
             storage_tries,
         },
         trie_roots_after,

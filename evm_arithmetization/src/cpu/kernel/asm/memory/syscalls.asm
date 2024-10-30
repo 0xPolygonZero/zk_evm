@@ -132,7 +132,6 @@ global debug_codecopy_withing_bounds:
     %jump(memcpy_bytes)
 
 wcopy_within_bounds:
-global debug_wcopy_within_bounds:
     // stack: base_addr, kexit_info, dest_offset, offset, size
     GET_CONTEXT
     %stack (context, base_addr, kexit_info, dest_offset, offset, size) ->
@@ -297,8 +296,8 @@ global sys_mcopy:
     PUSH @SEGMENT_MAIN_MEMORY
     %build_address_no_offset
 
-    DUP5 DUP5 LT
-    // stack: dest_offset < offset, kexit_info, dest_offset, offset, size
+    DUP4 DUP4 LT
+    // stack: dest_offset < offset, base_addr, kexit_info, dest_offset, offset, size
     %jumpi(wcopy_within_bounds)
 
     // stack: base_addr, kexit_info, dest_offset, offset, size

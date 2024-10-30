@@ -14,30 +14,28 @@ global precompile_bn_mul:
 
     %charge_gas_const(@BN_MUL_GAS)
 
+    GET_CONTEXT
+    PUSH @SEGMENT_CALLDATA
+    %build_address_no_offset
+    // stack: base_addr, kexit_info
+
     // Load x, y, n from the call data using `MLOAD_32BYTES`.
     PUSH bn_mul_return
-    // stack: bn_mul_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 64, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 64, 32, bn_mul_return, kexit_info
-    %build_address
+    // stack: bn_mul_return, base_addr, kexit_info
+    %stack (bn_mul_return, base_addr) -> (base_addr, 64, 32, bn_mul_return, base_addr)
+    ADD // base_addr + offset
     MLOAD_32BYTES
-    // stack: n, bn_mul_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 32, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 32, 32, n, bn_mul_return, kexit_info
-    %build_address
+    // stack: n, bn_mul_return, base_addr, kexit_info
+    %stack (n, bn_mul_return, base_addr) -> (base_addr, 32, 32, n, bn_mul_return, base_addr)
+    ADD // base_addr + offset
     MLOAD_32BYTES
-    // stack: y, n, bn_mul_return, kexit_info
-    %stack () -> (@SEGMENT_CALLDATA, 32)
-    GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 32, y, n, bn_mul_return, kexit_info
-    %build_address_no_offset
+    // stack: y, n, bn_mul_return, base_addr, kexit_info
+    %stack (y, n, bn_mul_return, base_addr) -> (base_addr, 32, y, n, bn_mul_return, base_addr)
     MLOAD_32BYTES
-    // stack: x, y, n, bn_mul_return, kexit_info
+    // stack: x, y, n, bn_mul_return, base_addr, kexit_info
     %jump(bn_mul)
 bn_mul_return:
-    // stack: Px, Py, kexit_info
+    // stack: Px, Py, base_addr, kexit_info
     DUP2 %eq_const(@U256_MAX) // bn_mul returns (U256_MAX, U256_MAX) on bad input.
     DUP2 %eq_const(@U256_MAX) // bn_mul returns (U256_MAX, U256_MAX) on bad input.
     MUL // Cheaper than AND
@@ -55,4 +53,6 @@ bn_mul_contd6:
     %stack (parent_ctx, Py) -> (parent_ctx, @SEGMENT_RETURNDATA, 32, Py)
     %build_address
     MSTORE_32BYTES_32
+    // stack: addr, base_addr, kexit_info
+    POP
     %jump(pop_and_return_success)

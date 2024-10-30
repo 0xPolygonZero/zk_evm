@@ -457,7 +457,7 @@ fn push_target_size(target: &PushTarget) -> u8 {
     match target {
         PushTarget::Literal(n) => u256_to_trimmed_be_bytes(n).len() as u8,
         PushTarget::Label(_) => BYTES_PER_OFFSET,
-        PushTarget::MacroLabel(v) => BYTES_PER_OFFSET,
+        PushTarget::MacroLabel(_) => BYTES_PER_OFFSET,
         PushTarget::MacroVar(v) => panic!("Variable not in a macro: {v}"),
         PushTarget::Constant(c) => panic!("Constant wasn't inlined: {c}"),
     }

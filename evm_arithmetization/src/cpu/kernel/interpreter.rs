@@ -5,7 +5,7 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
@@ -21,6 +21,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
 use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -56,8 +57,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// halt_context
     pub(crate) halt_context: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
-    #[allow(unused)]
-    pub(crate) opcode_count: [usize; 0x100],
+    pub(crate) opcode_count: HashMap<Operation, usize>,
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
@@ -117,12 +117,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    #[cfg(feature = "eth_mainnet")]
-    pub(crate) accounts: BTreeMap<U256, usize>,
-    #[cfg(feature = "eth_mainnet")]
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
-    #[cfg(feature = "cdk_erigon")]
-    pub(crate) state: BTreeMap<U256, usize>,
+    pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
+    pub(crate) state_ptrs: StateLinkedListsPtrs,
     pub(crate) next_txn_index: usize,
 }
 
@@ -184,7 +180,7 @@ impl<F: RichField> Interpreter<F> {
             // while the label `halt` is the halting label in the kernel.
             halt_offsets: vec![DEFAULT_HALT_OFFSET, KERNEL.global_labels["halt_final"]],
             halt_context: None,
-            opcode_count: [0; 256],
+            opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
@@ -215,7 +211,7 @@ impl<F: RichField> Interpreter<F> {
             generation_state: state.soft_clone(),
             halt_offsets: vec![halt_offset],
             halt_context: Some(halt_context),
-            opcode_count: [0; 256],
+            opcode_count: HashMap::new(),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
             clock: 0,
@@ -418,6 +414,10 @@ impl<F: RichField> Interpreter<F> {
         self.max_cpu_len_log
     }
 
+    pub(crate) fn reset_opcode_counts(&mut self) {
+        self.opcode_count = HashMap::new();
+    }
+
     pub(crate) fn code(&self) -> &MemorySegmentState {
         // The context is 0 if we are in kernel mode.
         &self.generation_state.memory.contexts[(1 - self.is_kernel() as usize) * self.context()]
@@ -485,9 +485,10 @@ impl<F: RichField> Interpreter<F> {
 
     /// Inserts a preinitialized segment, given as a [Segment],
     /// into the `preinitialized_segments` memory field.
+    #[cfg(feature = "eth_mainnet")]
     fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
         self.generation_state
-            .memory
+            .memorys
             .insert_preinitialized_segment(segment, values);
     }
 
@@ -516,6 +517,10 @@ impl<F: RichField> State<F> for Interpreter<F> {
 
     fn incr_pc(&mut self, n: usize) {
         self.generation_state.incr_pc(n);
+    }
+
+    fn is_kernel(&self) -> bool {
+        self.is_kernel()
     }
 
     fn get_registers(&self) -> RegistersState {
@@ -650,6 +655,9 @@ impl<F: RichField> State<F> for Interpreter<F> {
         let (mut row, opcode) = self.base_row();
 
         let op = decode(registers, opcode)?;
+
+        // Increment the opcode count
+        *self.opcode_count.entry(op).or_insert(0) += 1;
 
         fill_op_flag(op, &mut row);
 
