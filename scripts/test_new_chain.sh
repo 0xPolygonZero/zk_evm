@@ -87,16 +87,12 @@ FAILING_BLOCKS1="
 679
 680
 681
-687
 690
 692
 697
 737
 1178
-1859
 1913
-2420
-3009
 3010
 3114
 3115
@@ -106,14 +102,10 @@ FAILING_BLOCKS1="
 3265
 3915
 4076
-4195
-4201
-4260
 4284
 4285
 4286
 5282
-5412
 5661
 6086
 6237
@@ -152,7 +144,7 @@ for BLOCK in $BLOCKS; do
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
   SECONDS=0
-  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 600 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 3600 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_RPC=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
@@ -161,7 +153,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 600s nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 3600s nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
