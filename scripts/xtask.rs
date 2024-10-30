@@ -10,7 +10,11 @@ use serde::Deserialize;
 enum Args {
     /// Run `cargo-outdated`, printing warnings compatible with GitHub's CI.
     ///
-    /// Note that we only warn on our _direct_ dependencies.
+    /// If a direct dependency listed in our Cargo.lock is behind the latest
+    /// available on crates-io, a warning will be emitted.
+    ///
+    /// Note that we only warn on our _direct_ dependencies,
+    /// not the entire supply chain.
     Outdated,
 }
 
