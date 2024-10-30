@@ -217,10 +217,14 @@ load_code_padded_ctd:
         PUSH 56
         DUP4 %increment
         MOD
+        DUP1 %jumpi(non_zero_padding)
+        %jump(padd)
+non_zero_padding:
 global debug_len_mod_56:
 
         // curr_len mod 56, padding_addr, addr, len, retdest
         PUSH 56 SUB
+padd:
         // stack: padding_len, padding_addr, addr, len, retdest
         SWAP3 DUP4
         // stack: padding_len, len, padding_addr, addr, padding_len, retdest

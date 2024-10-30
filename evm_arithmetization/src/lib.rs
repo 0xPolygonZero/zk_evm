@@ -252,6 +252,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::field_reassign_with_default)]
 #![feature(let_chains)]
+#![feature(const_mut_refs)]
 
 zk_evm_common::check_chain_features!();
 
