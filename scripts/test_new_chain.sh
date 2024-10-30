@@ -3,12 +3,13 @@
 set -uo pipefail
 
 if [ -z $RPC ]; then
-  # You must set an RPC endpoint
+  echo You must set an RPC endpoint
   exit 1
 fi
 
 git diff --quiet --exit-code HEAD
 if [ $? -ne 0  ]; then
+  echo Uncommited changes, please commit to make githash consistent
   exit 1
 fi
 
@@ -42,6 +43,7 @@ function statistics()
   FOURS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "4")
   FIVES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "5")
   SIXES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "6")
+  TIMEOUTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "134")
   echo "Zeroes: " $ZEROES
   echo "Ones: " $ONES
   echo "Twos: " $TWOS
@@ -49,6 +51,7 @@ function statistics()
   echo "Fours: " $FOURS
   echo "Fives: " $FIVES
   echo "Sixes: " $SIXES
+  echo "Timeouts: " $TIMEOUTS
   echo "good bye"
   exit 0
 }
@@ -79,8 +82,50 @@ nice -19 cargo build --release --bin leader
 
 echo "Testing against jerigon testnet 2, current revision: $GITHASH."
 
+FAILING_BLOCKS1="
+678
+679
+680
+681
+687
+690
+692
+697
+737
+1178
+1859
+1913
+2420
+3009
+3010
+3114
+3115
+3205
+3206
+3215
+3265
+3915
+4076
+4195
+4201
+4260
+4284
+4285
+4286
+5282
+5412
+5661
+6086
+6237
+6321
+6494
+6495
+"
+
+
 #BLOCKS="$(seq $STATICTIP)"
-BLOCKS="$(seq 6555)"
+#BLOCKS="$(seq 6555)"
+BLOCKS=$FAILING_BLOCKS1
 #BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 echo "Testing:  $BLOCKS"
@@ -89,10 +134,12 @@ echo "Testing:  $BLOCKS"
 
 printf "\n\nr\n" | tee -a $RESULTS
 echo "0 is success" | tee -a $RESULTS
-echo "5 [defect] is non-matching jumpdest tables" | tee -a $RESULTS
 echo "1 [unexpected] is other errors" | tee -a $RESULTS
+echo "2 [unexpected] unknown error" | tee -a $RESULTS
 echo "4 [expected] is Attempted to collapse an extension node" | tee -a $RESULTS
+echo "5 [defect] is non-matching jumpdest tables" | tee -a $RESULTS
 echo "6 [expected] is empty witness. Usually due to Error: Failed to get proof for account" | tee -a $RESULTS
+echo "134 [undecided] is timeout.  Try increasing the timeouts." | tee -a $RESULTS
 echo "Report started: $(date)" | tee -a $RESULTS
 printf "\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a $RESULTS
 echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
@@ -105,7 +152,7 @@ for BLOCK in $BLOCKS; do
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
   SECONDS=0
-  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 120 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 600 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_RPC=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
@@ -114,7 +161,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 2m nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 600s nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
