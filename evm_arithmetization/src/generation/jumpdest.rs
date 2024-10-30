@@ -95,6 +95,10 @@ impl JumpDestTableWitness {
         jdts.into_iter()
             .fold((Default::default(), 0), |(acc, cnt), t| acc.extend(t, cnt))
     }
+
+    pub(crate) fn get_all_contexts(&self) -> Vec<usize> {
+        todo!()
+    }
 }
 
 // The following Display instances are added to make it easier to read diffs.

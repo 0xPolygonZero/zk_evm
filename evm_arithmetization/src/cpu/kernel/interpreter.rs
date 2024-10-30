@@ -170,15 +170,15 @@ pub(crate) fn set_registers_and_run<F: RichField>(
 pub(crate) fn get_jumpdest_analysis_inputs_rpc(
     jumpdest_table_rpc: &JumpDestTableWitness,
     code_map: &HashMap<H256, Vec<u8>>,
+    ctx_codes: &HashMap<usize, Option<Vec<u8>>>,
 ) -> JumpDestTableProcessed {
-    let ctx_proofs = (*jumpdest_table_rpc)
+    let ctx_proofs = jumpdest_table_rpc
         .iter()
         .flat_map(|(code_addr, ctx_jumpdests)| {
-            let code = if code_map.contains_key(code_addr) {
-                &code_map[code_addr]
-            } else {
-                &vec![]
-            };
+            let code = &code_map
+                .get(code_addr)
+                .map(|x| x.clone())
+                .unwrap_or_default();
             trace!(
                 "code: {:?}, code_addr: {:?}, {:?} <============",
                 &code,
@@ -204,8 +204,7 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
 /// Returns a [`HashMap`] from `ctx` to [`Vec`] of proofs. Each proofs ia a
 /// pair.
 fn prove_context_jumpdests(code: &[u8], ctx: &Context) -> HashMap<usize, Vec<usize>> {
-    ctx.0
-        .iter()
+    ctx.iter()
         .map(|(&ctx, jumpdests)| {
             let proofs = jumpdests.last().map_or(Vec::default(), |&largest_address| {
                 get_proofs_and_jumpdests(code, largest_address, jumpdests.clone())

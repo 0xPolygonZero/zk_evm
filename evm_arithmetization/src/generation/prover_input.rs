@@ -360,10 +360,13 @@ impl<F: RichField> GenerationState<F> {
 
     /// Returns the next used jump address.
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
+        // QUESTION: Is there a reason we do not use `self.registers.context` here?
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
         // TODO(einar-polygon) <make issue>
         // get_code from self.memory
+        let code = self.get_code(context)?;
+        let current_code = self.get_current_code()?;
 
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
@@ -805,9 +808,15 @@ impl<F: RichField> GenerationState<F> {
             self.inputs.block_metadata.block_number, self.inputs.txn_hashes
         );
         let rpcw = self.inputs.jumpdest_table.clone();
-        let rpcp: Option<JumpDestTableProcessed> = rpcw
-            .as_ref()
-            .map(|jdt| get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+        let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
+            let all_contexts: Vec<usize> = jdt.get_all_contexts();
+            let ctx_codes: HashMap<usize, Option<Vec<u8>>> = all_contexts
+                .into_iter()
+                .map(|ctx| (ctx, self.get_code(ctx).ok()))
+                .collect();
+
+            get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, &ctx_codes)
+        });
         info!("Generating JUMPDEST tables: Running SIM");
 
         self.inputs.jumpdest_table = None;
