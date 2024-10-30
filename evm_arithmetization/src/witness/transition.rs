@@ -10,6 +10,8 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
+#[cfg(test)]
+use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
@@ -323,17 +325,16 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
     // Segment::AccountsLinkedList)     );
     // }
 
-    if KERNEL.offset_name(pc) == "smt_hash_state" {
-        // let mem = state
-        //     .get_generation_state()
-        //     .memory
-        //     .get_preinit_memory(Segment::AccountsLinkedList);
-
-        // log::debug!(
-        //     "state linked list = {:?}",
-        //     StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        // );
-
+    if KERNEL.offset_name(pc) == "smt_hash_state" || KERNEL.offset_name(pc) == "sys_sstore" {
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        #[cfg(test)]
+        log::debug!(
+            "state linked list = {:?}",
+            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
         let root_ptr = u256_to_usize(
             state
                 .get_generation_state()

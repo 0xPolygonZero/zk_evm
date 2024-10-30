@@ -5,8 +5,7 @@
     // stack: address
     DUP1 %insert_touched_addresses
     DUP1 %append_created_contracts
-    POP
-    %read_code ISZERO %jumpi(%%add_account)
+    DUP1 %read_code ISZERO %jumpi(%%add_account)
     // Check that the nonce is 0.
     // stack: address
     DUP1 %nonce
@@ -41,13 +40,13 @@
         PUSH 0 // success
         %jump(%%end)
     
-// If the nonce is nonzero or the code is non-empty, that means a contract has already been deployed to this address.
-// (This should be impossible with contract creation transactions or CREATE, but possible with CREATE2.)
-// So we return 1 to indicate an error.
-%%error_collision:
-            %stack (address) -> (1)
-%%end:
-            // stack: status
+    // If the nonce is nonzero or the code is non-empty, that means a contract has already been deployed to this address.
+    // (This should be impossible with contract creation transactions or CREATE, but possible with CREATE2.)
+    // So we return 1 to indicate an error.
+    %%error_collision:
+                %stack (address) -> (1)
+    %%end:
+                // stack: status
 %endmacro
 
 %macro append_created_contracts

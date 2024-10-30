@@ -179,6 +179,7 @@ store_initial_state_end:
 /// or modifies the vealue if it was already present.
 global insert_key:
     // stack: key, value, retdest
+    DUP2 ISZERO %jumpi(insert_zero)
     PROVER_INPUT(linked_list::insert_state)
     // stack: pred_ptr/4, key, value, retdest
     %get_valid_state_ptr
@@ -208,6 +209,12 @@ global insert_key:
     %jump_neq_const(@U256_MAX, key_found_with_overwrite)
     // The key is not in the list.
     PANIC
+
+insert_zero:
+    // stack: key, value, retdest
+    %remove_key
+    POP
+    JUMP
 
 key_found_with_overwrite:
     // The key was already in the list
@@ -380,35 +387,54 @@ global debug_o_margot:
 %endmacro
 
 /// Removes the key and its value from the state linked list.
-/// Panics if the key is not in the list.
 global remove_key:
     // stack: key, retdest
     PROVER_INPUT(linked_list::remove_state)
     // stack: pred_ptr/4, key, retdest
     %get_valid_state_ptr
     // stack: pred_ptr, key, retdest
+    DUP1
     %add_const(@STATE_NEXT_NODE_PTR)
-    // stack: next_ptr_ptr, key, retdest
+    // stack: next_ptr_ptr, pred_ptr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_ptr, next_ptr_ptr,  key, retdest
+    // stack: next_ptr, next_ptr_ptr,  pred_ptr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_key, next_ptr, next_ptr_ptr, key, retdest
-    DUP4
-    %assert_eq
-    // stack: next_ptr, next_ptr_ptr, key, retdest
+    // stack: next_key, next_ptr, next_ptr_ptr, pred_ptr, key, retdest
+    DUP5
+    DUP2
+    %assert_eq(not_found)
+    POP
+    // stack: next_ptr, next_ptr_ptr, pred_ptr, key, retdest
     %add_const(@STATE_NEXT_NODE_PTR)
-    // stack: next_next_ptr_ptr, next_ptr_ptr, key, retdest
+    // stack: next_next_ptr_ptr, next_ptr_ptr, pred_ptr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, key, retdest
+    // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, pred_ptr, key, retdest
     SWAP1
     %mstore_u256_max
-    // stack: next_next_ptr, next_ptr_ptr, key, retdest
+    // stack: next_next_ptr, next_ptr_ptr, pred_ptr, key, retdest
     MSTORE_GENERAL
-    POP
+    %pop2
     JUMP
+not_found:
+     // stack: next_key, next_ptr, next_ptr_ptr, pred_ptr, key, retdest
+     DUP5
+     %assert_lt
+     // stack: next_ptr, next_ptr_ptr, pred_ptr, key, retdest
+     %pop2
+     MLOAD_GENERAL
+     // stack: prev_key, key, retdest
+     SWAP1
+     DUP2
+     LT
+     // prev_key < key, prev_key, retdest
+     SWAP1
+     %eq_const(@U256_MAX)
+     ADD
+     %assert_nonzero
+     JUMP
 
 %macro read_slot_from_current_addr
     // stack: slot
@@ -432,7 +458,7 @@ global remove_key:
 
 %macro read_slot_from_addr
     // stack: address, slot
-    %addr_to_state_key
+    // %addr_to_state_key
     %key_storage
     %stack (storage_key) -> (storage_key, %%after)
     // stack: storage_key, %%after
