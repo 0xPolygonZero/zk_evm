@@ -132,7 +132,6 @@ global debug_codecopy_withing_bounds:
     %jump(memcpy_bytes)
 
 wcopy_within_bounds:
-global debug_wcopy_within_bounds:
     // stack: base_addr, kexit_info, dest_offset, offset, size
     GET_CONTEXT
     %stack (context, base_addr, kexit_info, dest_offset, offset, size) ->
