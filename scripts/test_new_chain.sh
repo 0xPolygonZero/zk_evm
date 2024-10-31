@@ -31,10 +31,6 @@ function statistics()
   SUMOK=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f8  |  paste -s -d+ - | bc)
   SUMFAIL=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f9  |  paste -s -d+ - | bc)
   SUMTOTAL=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f10 |  paste -s -d+ - | bc)
-  echo "Total transactions: " $SUMTOTAL | tee -a $RESULTS
-  echo "Transactions without prefetched JUMPDEST table: "$SUMFAIL | tee -a $RESULTS
-  echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%") | tee -a $RESULTS
-  echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%") | tee -a $RESULTS
 
   ZEROES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "0")
   ONES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "1")
@@ -45,7 +41,16 @@ function statistics()
   SIXES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "6")
   SEVENS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "7")
   EIGHTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "8")
+  NINES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "9")
   TIMEOUTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "134")
+
+  printf "\n\nStatistics\n" | tee -a $RESULTS
+  echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
+  echo "Total blocks: " $BLOCKS_TESTED | tee -a $RESULTS
+  echo "Total transactions: " $SUMTOTAL | tee -a $RESULTS
+  echo "Transactions without prefetched JUMPDEST table: "$SUMFAIL | tee -a $RESULTS
+  echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%") | tee -a $RESULTS
+  echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%") | tee -a $RESULTS
   echo "Zeroes: " $ZEROES | tee -a $RESULTS
   echo "Ones: " $ONES | tee -a $RESULTS
   echo "Twos: " $TWOS | tee -a $RESULTS
@@ -55,14 +60,12 @@ function statistics()
   echo "Sixes: " $SIXES | tee -a $RESULTS
   echo "Sevens: " $SEVENS | tee -a $RESULTS
   echo "Eights: " $EIGHTS | tee -a $RESULTS
+  echo "Nines: " $NINES | tee -a $RESULTS
   echo "Timeouts: " $TIMEOUTS | tee -a $RESULTS
-  echo "good bye"
+  echo "End of statistics" | tee -a $RESULTS
   exit 0
 }
-trap statistics INT EXIT QUIT HUP TERM
-
-#statistics
-#exit 0
+trap statistics INT EXIT QUIT # HUP TERM
 
 # Must match the values in prove_stdio.sh or build is dirty.
 #export RAYON_NUM_THREADS=1
@@ -133,27 +136,29 @@ FAILING_BLOCKS2="
 
 #BLOCKS="$(seq $STATICTIP)"
 #BLOCKS="$(seq 6555)"
-BLOCKS=$FAILING_BLOCKS2
+BLOCKS=$FAILING_BLOCKS1
 #BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 echo "Testing:  $BLOCKS"
 
 
 
-printf "\n\nr\n" | tee -a $RESULTS
+printf "\n\nReport started: $(date)" | tee -a $RESULTS
+printf "\n\nTable of exit codes\n" | tee -a $RESULTS
+echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
 echo "0 is success" | tee -a $RESULTS
 echo "1 [unexpected] is other errors" | tee -a $RESULTS
-echo "2 [unexpected] unknown error" | tee -a $RESULTS
+echo "2 [unexpected] is undecided" | tee -a $RESULTS
 echo "4 [expected] is Attempted to collapse an extension node" | tee -a $RESULTS
-echo "5 [defect] is non-matching jumpdest tables" | tee -a $RESULTS
+echo "5 [unexpected] is non-matching jumpdest tables" | tee -a $RESULTS
 echo "6 [expected] is empty witness. Possibly due to Error: Failed to get proof for account" | tee -a $RESULTS
 echo "7 [expected] is Found a Hash node during an insert in a PartialTrie" | tee -a $RESULTS
 echo "8 [expected] is Attempted to delete a value that ended up inside a hash node" | tee -a $RESULTS
+echo "9 [expected] is Memory allocation failed.  Increase RAM" | tee -a $RESULTS
 echo "134 [undecided] is timeout.  Try increasing the proving timeout." | tee -a $RESULTS
-echo "Report started: $(date)" | tee -a $RESULTS
+
 printf "\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a $RESULTS
 echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
-
 
 for BLOCK in $BLOCKS; do
   TOTALTIME=0
@@ -186,11 +191,12 @@ for BLOCK in $BLOCKS; do
   printf "%s %10i %s %3i  %8s   %8s   %8s    %3i     %3i      %3i \n" $GITHASH $BLOCK $VERDICT $EXITCODE $DURATION_RPC $DURATION_PRV $TOTALTIME $TXOK $TXNONE $TXALL | tee -a $RESULTS
   ((BLOCKS_TESTED+=1))
 
-
-  ### Clean up
+  ### Clean up except when unknown error or undecided
   TEST_OUT_PATH="${REPO_ROOT}/$BLOCK.test.out"
-  rm $TEST_OUT_PATH
-  rm $WITNESS
+  if [ $EXITCODE -ne 1 ] && [ $EXITCODE -ne 2 ]; then
+    rm $TEST_OUT_PATH
+    rm $WITNESS
+  fi
 
 done
 
