@@ -115,6 +115,12 @@ if [[ $TEST_ONLY == "test_only" ]]; then
     elif grep -q 'SIMW == RPCW ? false' $TEST_OUT_PATH; then
         echo "ERROR: SIMW == RPCW ? false. See $TEST_OUT_PATH for more details."
         exit 5
+    elif grep -q 'Found a `Hash` node during an insert in a `PartialTrie`!'; then
+        echo 'ERROR: Found a `Hash` node during an insert in a `PartialTrie`!'
+        exit 7
+    elif grep -q 'Attempted to delete a value that ended up inside a hash node!'; then
+        echo 'ERROR: Attempted to delete a value that ended up inside a hash node!'
+        exit 8
     elif grep -q 'Proving task finished with error' $TEST_OUT_PATH; then
         # Some error occurred, display the logs and exit.
         echo "ERROR: Proving task finished with error. See $TEST_OUT_PATH for more details."

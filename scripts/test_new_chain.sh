@@ -31,27 +31,31 @@ function statistics()
   SUMOK=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f8  |  paste -s -d+ - | bc)
   SUMFAIL=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f9  |  paste -s -d+ - | bc)
   SUMTOTAL=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f10 |  paste -s -d+ - | bc)
-  echo "Total transactions: " $SUMTOTAL
-  echo "Transactions without prefetched JUMPDEST table: "$SUMFAIL
-  echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%")
-  echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%")
+  echo "Total transactions: " $SUMTOTAL | tee -a $RESULTS
+  echo "Transactions without prefetched JUMPDEST table: "$SUMFAIL | tee -a $RESULTS
+  echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%") | tee -a $RESULTS
+  echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%") | tee -a $RESULTS
 
   ZEROES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "0")
-  ONES=$(  cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "1")
-  TWOS=$(  cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "2")
+  ONES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "1")
+  TWOS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "2")
   THREES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "3")
   FOURS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "4")
   FIVES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "5")
   SIXES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "6")
+  SEVENS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "7")
+  EIGHTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "8")
   TIMEOUTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "134")
-  echo "Zeroes: " $ZEROES
-  echo "Ones: " $ONES
-  echo "Twos: " $TWOS
-  echo "Threes: " $THREES
-  echo "Fours: " $FOURS
-  echo "Fives: " $FIVES
-  echo "Sixes: " $SIXES
-  echo "Timeouts: " $TIMEOUTS
+  echo "Zeroes: " $ZEROES | tee -a $RESULTS
+  echo "Ones: " $ONES | tee -a $RESULTS
+  echo "Twos: " $TWOS | tee -a $RESULTS
+  echo "Threes: " $THREES | tee -a $RESULTS
+  echo "Fours: " $FOURS | tee -a $RESULTS
+  echo "Fives: " $FIVES | tee -a $RESULTS
+  echo "Sixes: " $SIXES | tee -a $RESULTS
+  echo "Sevens: " $SEVENS | tee -a $RESULTS
+  echo "Eights: " $EIGHTS | tee -a $RESULTS
+  echo "Timeouts: " $TIMEOUTS | tee -a $RESULTS
   echo "good bye"
   exit 0
 }
@@ -142,8 +146,10 @@ echo "1 [unexpected] is other errors" | tee -a $RESULTS
 echo "2 [unexpected] unknown error" | tee -a $RESULTS
 echo "4 [expected] is Attempted to collapse an extension node" | tee -a $RESULTS
 echo "5 [defect] is non-matching jumpdest tables" | tee -a $RESULTS
-echo "6 [expected] is empty witness. Usually due to Error: Failed to get proof for account" | tee -a $RESULTS
-echo "134 [undecided] is timeout.  Try increasing the timeouts." | tee -a $RESULTS
+echo "6 [expected] is empty witness. Possibly due to Error: Failed to get proof for account" | tee -a $RESULTS
+echo "7 [expected] is Found a Hash node during an insert in a PartialTrie" | tee -a $RESULTS
+echo "8 [expected] is Attempted to delete a value that ended up inside a hash node" | tee -a $RESULTS
+echo "134 [undecided] is timeout.  Try increasing the proving timeout." | tee -a $RESULTS
 echo "Report started: $(date)" | tee -a $RESULTS
 printf "\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a $RESULTS
 echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
