@@ -11,8 +11,6 @@ mkdir -p "$PROOF_OUTPUT_DIR"
 chmod 777 "$PROOF_OUTPUT_DIR"
 
 export DOCKER_CIRCUITS_CACHE_DIR="./docker_circuit_cache"
-mkdir -p --mode=777 "$DOCKER_CIRCUITS_CACHE_DIR"
-mkdir -p --mode=777 "$DOCKER_CIRCUITS_CACHE_DIR/worker1"
-mkdir -p --mode=777 "$DOCKER_CIRCUITS_CACHE_DIR/worker2"
+mkdir -p --mode=777 "$DOCKER_CIRCUITS_CACHE_DIR/worker"
 
 docker compose up
