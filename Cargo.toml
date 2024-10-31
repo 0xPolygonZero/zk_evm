@@ -5,6 +5,7 @@ members = [
   "evm_arithmetization",
   "mpt_trie",
   "proc_macro",
+  "scripts",
   "smt_trie",
   "trace_decoder",
   "zero",
