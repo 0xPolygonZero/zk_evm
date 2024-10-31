@@ -16,7 +16,7 @@ services:
       - ${PROOF_OUTPUT_DIR}:/proofs/:rw
       - ${LEADER_INPUT_JSON_FILE}:/witness:ro
 
-  worker-1:
+  worker:
     build:
       context: ../
       dockerfile: Dockerfile
@@ -29,22 +29,10 @@ services:
       - ZK_EVM_CACHE_DIR=/zk_evm_circuit_cache
     command: worker
     volumes:
-      - ${DOCKER_CIRCUITS_CACHE_DIR}/worker1:/zk_evm_circuit_cache:rw
-
-  worker-2:
-    build:
-      context: ../
-      dockerfile: Dockerfile
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RUST_LOG=info
-      - AMQP_URI=amqp://rabbitmq:5672
-      - ZK_EVM_CACHE_DIR=/zk_evm_circuit_cache
-    command: worker
-    volumes:
-      - ${DOCKER_CIRCUITS_CACHE_DIR}/worker2:/zk_evm_circuit_cache:rw
+      - ${DOCKER_CIRCUITS_CACHE_DIR}/worker:/zk_evm_circuit_cache:rw
+    deploy:
+      mode: replicated
+      replicas: 2
 
   rabbitmq:
     image: rabbitmq:3-management
