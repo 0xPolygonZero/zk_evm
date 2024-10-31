@@ -4,11 +4,31 @@ use alloy_compat::Compat as _;
 use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
 use keccak_hash::H256;
+use mpt_trie::partial_trie::HashedPartialTrie;
+use serde::{Deserialize, Serialize};
 
-use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
+use crate::generation::mpt::AccountRlp;
+use crate::world::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct StateWorld {
+    pub(crate) state: Either<Type1World, Type2World>,
+}
+
+impl Default for StateWorld {
+    fn default() -> Self {
+        if cfg!(feature = "cdk_erigon") {
+            StateWorld {
+                state: Either::Left(Type1World::default()),
+            }
+        } else {
+            StateWorld {
+                state: Either::Right(Type2World::default()),
+            }
+        }
+    }
+}
 /// The [core](crate::core) of this crate is agnostic over state and storage
 /// representations.
 ///
@@ -93,7 +113,7 @@ pub(crate) trait World {
     fn root(&mut self) -> H256;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Type1World {
     state: StateMpt,
     /// Writes to storage should be reconciled with
@@ -125,10 +145,20 @@ impl Type1World {
         let Self { state, storage } = self;
         (state, storage)
     }
-    fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
+    pub(crate) fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
         self.storage
             .get_mut(&keccak_hash::keccak(address))
             .context("no such storage")
+    }
+    pub(crate) fn get_storage(&mut self) -> Vec<(H256, HashedPartialTrie)> {
+        self.storage
+            .iter()
+            .map(|(key, value)| (*key, *value.as_hashed_partial_trie().clone()))
+            .collect::<Vec<_>>()
+        // .self
+        // .storage
+        // .get_mut(&keccak_hash::keccak(address))
+        // .context("no such storage")
     }
     fn on_storage<T>(
         &mut self,
@@ -347,7 +377,7 @@ impl World for Type2World {
 // but without the distinction,
 // the wire tests fail.
 // This may be a bug in the SMT library.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Type2Entry {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
@@ -357,7 +387,7 @@ pub struct Type2Entry {
 }
 
 // This is a buffered version
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Type2World {
     accounts: BTreeMap<Address, Type2Entry>,
     hashed_out: BTreeMap<SmtKey, H256>,

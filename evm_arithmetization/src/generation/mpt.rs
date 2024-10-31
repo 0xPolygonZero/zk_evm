@@ -3,6 +3,7 @@ use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 
 use bytes::{Bytes, BytesMut};
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
@@ -680,20 +681,32 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     Ok((state_leaves, storage_leaves, trie_data))
 }
 
-#[cfg(feature = "eth_mainnet")]
+// #[cfg(feature = "eth_mainnet")]
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,
 ) -> Result<usize, ProgramError> {
-    let storage_tries_by_state_key = trie_inputs
-        .storage_tries
-        .iter()
-        .map(|(hashed_address, storage_trie)| {
-            let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
-                .expect("An H256 is 32 bytes long");
-            (key, storage_trie)
-        })
-        .collect();
+    let storage_tries_by_state_key = match &trie_inputs.state_trie.state {
+        Either::Left(mpt) => mpt
+
+            .get_storage_mut().expect("There's a storage trie.")
+            .iter()
+            .map(|(hashed_address, storage_trie)| {
+                let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
+                    .expect("An H256 is 32 bytes long");
+                (key, storage_trie)
+            })
+            .collect(),
+        Either::Right(_) => panic!("eth_mainnet expects an MPT."),
+    }
+    // .storage_tries
+    // .iter()
+    // .map(|(hashed_address, storage_trie)| {
+    //     let key =
+    //         Nibbles::from_bytes_be(hashed_address.as_bytes()).expect("An H256 is 32 bytes long");
+    //     (key, storage_trie)
+    // })
+    // .collect();
 
     load_state_trie(
         &trie_inputs.state_trie,

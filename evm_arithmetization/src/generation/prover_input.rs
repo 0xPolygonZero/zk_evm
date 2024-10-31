@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
-#[cfg(feature = "eth_mainnet")]
+use either::Either;
 use ethereum_types::{BigEndianHash, H256};
 use ethereum_types::{U256, U512};
 use itertools::Itertools;
@@ -17,7 +17,7 @@ use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
 #[cfg(feature = "eth_mainnet")]
 use super::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use super::linked_list::{AccessLinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD};
-#[cfg(feature = "eth_mainnet")]
+// #[cfg(feature = "eth_mainnet")]
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
@@ -104,40 +104,48 @@ impl<F: RichField> GenerationState<F> {
                         let mut n = Err(ProgramError::ProverInputError(
                             ProverInputError::InvalidInput,
                         ));
-                        #[cfg(feature = "eth_mainnet")]
-                        {
-                            n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content);
+                        // #[cfg(feature = "eth_mainnet")]
+                        // {
+                        //     n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content);
 
-                            self.memory.insert_preinitialized_segment(
-                                Segment::TrieData,
-                                crate::witness::memory::MemorySegmentState {
-                                    content: new_content,
-                                },
-                            );
-                        }
-                        #[cfg(feature = "cdk_erigon")]
-                        {
-                            n = Ok(new_content.len());
-                            let mut smt_data = self
-                                .inputs
-                                .trimmed_tries
-                                .state_trie
-                                .to_vec_skip_empty_node_and_add_offset(new_content.len());
-                            log::debug!("smt bef = {:?}", smt_data);
-                            if smt_data.len() == 2 {
-                                smt_data.extend([U256::zero(); 2]);
+                        //     self.memory.insert_preinitialized_segment(
+                        //         Segment::TrieData,
+                        //         crate::witness::memory::MemorySegmentState {
+                        //             content: new_content,
+                        //         },
+                        //     );
+                        // }
+                        // #[cfg(feature = "cdk_erigon")]
+                        // {
+                        n = if cfg!(feature = "cdk_erigon") {
+                            Ok(new_content.len())
+                        } else {
+                            load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)
+                        };
+                        match &self.inputs.trimmed_tries.state_trie.state {
+                            Either::Left(_) => (),
+                            Either::Right(type2trie) => {
+                                let mut smt_data = type2trie
+                                    .as_smt()
+                                    .to_vec_skip_empty_node_and_add_offset(new_content.len());
+                                log::debug!("smt bef = {:?}", smt_data);
+                                if smt_data.len() == 2 {
+                                    smt_data.extend([U256::zero(); 2]);
+                                }
+                                log::debug!("initial smt = {:?}", smt_data);
+                                log::debug!("smt len = {:?}", smt_data.len());
+                                let smt_data = smt_data.into_iter().map(|x| Some(x));
+                                new_content.extend(smt_data);
                             }
-                            log::debug!("initial smt = {:?}", smt_data);
-                            log::debug!("smt len = {:?}", smt_data.len());
-                            let smt_data = smt_data.into_iter().map(|x| Some(x));
-                            new_content.extend(smt_data);
-                            self.memory.insert_preinitialized_segment(
-                                Segment::TrieData,
-                                crate::witness::memory::MemorySegmentState {
-                                    content: new_content,
-                                },
-                            );
-                        }
+                        };
+
+                        self.memory.insert_preinitialized_segment(
+                            Segment::TrieData,
+                            crate::witness::memory::MemorySegmentState {
+                                content: new_content,
+                            },
+                        );
+                        // }
                         n
                     },
                     Ok,
@@ -258,28 +266,34 @@ impl<F: RichField> GenerationState<F> {
     /// Initializes the code segment of the given context with the code
     /// corresponding to the provided hash.
     /// Returns the length of the code.
-    #[cfg(feature = "eth_mainnet")]
+    // #[cfg(feature = "eth_mainnet")]
+    // fn run_account_code(&mut self) -> Result<U256, ProgramError> {
+    //     // stack: codehash, ctx, ...
+    //     let codehash = stack_peek(self, 0)?;
+    //     let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
+    //     let context = u256_to_usize(context)?;
+    //     let mut address = MemoryAddress::new(context, Segment::Code, 0);
+    //     let code = self
+    //         .inputs
+    //         .contract_code
+    //         .get(&H256::from_uint(&codehash))
+    //         .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
+    //     for &byte in code {
+    //         self.memory.set(address, byte.into());
+    //         address.increment();
+    //     }
+    //     Ok(code.len().into())
+    // }
+    // #[cfg(feature = "cdk_erigon")]
     fn run_account_code(&mut self) -> Result<U256, ProgramError> {
         // stack: codehash, ctx, ...
+
         let codehash = stack_peek(self, 0)?;
-        let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
-        let context = u256_to_usize(context)?;
-        let mut address = MemoryAddress::new(context, Segment::Code, 0);
-        let code = self
-            .inputs
-            .contract_code
-            .get(&H256::from_uint(&codehash))
-            .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
-        for &byte in code {
-            self.memory.set(address, byte.into());
-            address.increment();
-        }
-        Ok(code.len().into())
-    }
-    #[cfg(feature = "cdk_erigon")]
-    fn run_account_code(&mut self) -> Result<U256, ProgramError> {
-        // stack: codehash, ctx, ...
-        let codehash = stack_peek(self, 0)?;
+        let codehash = if cfg!(feature = "cdk_erigon") {
+            Either::Right(codehash)
+        } else {
+            Either::Left(H256::from_uint(&codehash))
+        };
         let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
         let context = u256_to_usize(context)?;
         let mut address = MemoryAddress::new(context, Segment::Code, 0);
@@ -440,8 +454,8 @@ impl<F: RichField> GenerationState<F> {
             );
             log::debug!("state btree = {:#?}", self.inputs.trimmed_tries.state_trie);
             log::debug!(
-                "input state popopo = {}",
-                self.inputs.trimmed_tries.state_trie
+                "input state popopo = {:?}",
+                self.inputs.trimmed_tries.state_trie.state
             );
         }
 

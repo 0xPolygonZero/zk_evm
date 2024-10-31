@@ -3,6 +3,7 @@ use std::fmt::Display;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use itertools::Either;
 use keccak_hash::keccak;
 use log::error;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -37,6 +38,7 @@ use crate::proof::{
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
+use crate::world::world::{StateWorld, Type1World, Type2World};
 
 pub(crate) mod linked_list;
 pub mod mpt;
@@ -121,10 +123,10 @@ pub struct GenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    #[cfg(feature = "eth_mainnet")]
-    pub contract_code: HashMap<H256, Vec<u8>>,
-    #[cfg(feature = "cdk_erigon")]
-    pub contract_code: HashMap<U256, Vec<u8>>,
+    // #[cfg(feature = "eth_mainnet")]
+    // pub contract_code: HashMap<H256, Vec<u8>>,
+    // #[cfg(feature = "cdk_erigon")]
+    pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -179,7 +181,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     #[cfg(feature = "eth_mainnet")]
     pub contract_code: HashMap<H256, Vec<u8>>,
     #[cfg(feature = "cdk_erigon")]
-    pub contract_code: HashMap<U256, Vec<u8>>,
+    pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -196,15 +198,16 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 #[cfg(feature = "cdk_erigon")]
 type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
 
+trait StateTrie {}
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    #[cfg(feature = "eth_mainnet")]
-    pub state_trie: HashedPartialTrie,
-    #[cfg(feature = "cdk_erigon")]
-    pub state_trie: SmtTrie,
+    // #[cfg(feature = "eth_mainnet")]
+    // pub state_trie: HashedPartialTrie,
+    // #[cfg(feature = "cdk_erigon")]
+    pub state_trie: StateWorld,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -228,15 +231,15 @@ pub struct TrimmedTrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    #[cfg(feature = "eth_mainnet")]
-    pub state_trie: HashedPartialTrie,
-    #[cfg(feature = "cdk_erigon")]
-    pub state_trie: SmtTrie,
-    /// A partial version of each storage trie prior to these transactions. It
-    /// should include all storage tries, and nodes therein, that will be
-    /// accessed by these transactions.
-    #[cfg(feature = "eth_mainnet")]
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    // #[cfg(feature = "eth_mainnet")]
+    // pub state_trie: HashedPartialTrie,
+    // #[cfg(feature = "cdk_erigon")]
+    pub state_trie: StateWorld,
+    // /// A partial version of each storage trie prior to these transactions. It
+    // /// should include all storage tries, and nodes therein, that will be
+    // /// accessed by these transactions.
+    // #[cfg(feature = "eth_mainnet")]
+    // pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
 impl TrieInputs {
@@ -273,8 +276,13 @@ impl<F: RichField> GenerationInputs<F> {
         }
         #[cfg(feature = "cdk_erigon")]
         {
-            let smt_data = self.tries.state_trie.to_vec();
-            state_root = H256::from_uint(&hash_serialize_u256(&smt_data).into());
+            state_root = match &self.tries.state_trie.state {
+                Either::Left(trie) => trie.state_trie().hash(),
+                Either::Right(trie) => {
+                    let smt_data = trie.as_smt().to_vec();
+                    H256::from_uint(&hash_serialize_u256(&smt_data).into())
+                }
+            }
         }
 
         TrimmedGenerationInputs {

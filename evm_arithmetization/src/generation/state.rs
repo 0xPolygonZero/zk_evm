@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
@@ -478,6 +479,10 @@ impl<F: RichField> GenerationState<F> {
                 .to_vec();
         trie_inputs
             .state_trie
+            .state
+            .clone()
+            .expect_right("cdk_erigon requires SMTs.")
+            .as_smt()
             .load_linked_list_data::<{ Segment::AccountsLinkedList as usize }>(
                 &mut state_linked_list_data,
                 &mut self.state_pointers.state,
@@ -599,13 +604,19 @@ impl<F: RichField> GenerationState<F> {
             self.observe_address(tip_h160);
         } else if dst == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(self, 0)?;
-            #[cfg(feature = "eth_mainnet")]
-            {
-                let tip_h256 = H256::from_uint(&tip_u256);
-                self.observe_contract(tip_h256)?;
-            }
-            #[cfg(feature = "cdk_erigon")]
-            self.observe_contract(tip_u256)?;
+            let tip_either = if cfg!(feature = "cdk_erigon") {
+                Either::Right(tip_u256)
+            } else {
+                Either::Left(H256::from_uint(&tip_u256))
+            };
+            self.observe_contract(tip_either)?;
+            // #[cfg(feature = "eth_mainnet")]
+            // {
+            //     let tip_h256 = H256::from_uint(&tip_u256);
+            //     self.observe_contract(tip_h256)?;
+            // }
+            // #[cfg(feature = "cdk_erigon")]
+            // self.observe_contract(tip_u256)?;
         }
 
         Ok(())
@@ -645,7 +656,10 @@ impl<F: RichField> GenerationState<F> {
         Ok(())
     }
     #[cfg(feature = "cdk_erigon")]
-    pub(crate) fn observe_contract(&mut self, codehash: U256) -> Result<(), ProgramError> {
+    pub(crate) fn observe_contract(
+        &mut self,
+        codehash: either::Either<H256, U256>,
+    ) -> Result<(), ProgramError> {
         if self.inputs.contract_code.contains_key(&codehash) {
             return Ok(()); // Return early if the code hash has already been
                            // observed.
@@ -661,7 +675,12 @@ impl<F: RichField> GenerationState<F> {
             .iter()
             .map(|x| x.unwrap_or_default().low_u32() as u8)
             .collect::<Vec<_>>();
-        debug_assert_eq!(hash_bytecode_u256(code.clone()), codehash);
+        let hash = if cfg!(feature = "cdk_erigon") {
+            Either::Left(keccak(&code))
+        } else {
+            Either::Right(hash_bytecode_u256(code.clone()))
+        };
+        debug_assert_eq!(hash, codehash);
 
         self.inputs.contract_code.insert(codehash, code);
 

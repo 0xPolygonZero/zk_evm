@@ -7,9 +7,11 @@ use anyhow::ensure;
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, MptAccountRlp};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
+use serde::{Deserialize, Serialize};
 use u4::{AsNibbles, U4};
+
+use crate::generation::mpt::MptAccountRlp;
 
 /// Bounded sequence of [`U4`],
 /// used as a key for [MPT](HashedPartialTrie) types in this module.
@@ -96,7 +98,7 @@ fn mpt_key_into_hash() {
 /// used as a key for SMT tries.
 ///
 /// Semantically equivalent to [`smt_trie::bits::Bits`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct SmtKey {
     bits: bitvec::array::BitArray<[u8; 32]>,
     len: usize,
@@ -273,7 +275,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
 /// Global, [`Address`] `->` [`AccountRlp`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMpt {
     /// Values are always [`rlp`]-encoded [`AccountRlp`],
     /// inserted at [256 bits](MptKey::from_hash).
@@ -357,7 +359,7 @@ impl From<StateMpt> for HashedPartialTrie {
 /// Global, per-account.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }

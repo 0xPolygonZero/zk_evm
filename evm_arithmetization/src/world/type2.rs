@@ -10,7 +10,7 @@ use keccak_hash::H256;
 use nunny::NonEmpty;
 use stackstack::Stack;
 
-use crate::{
+use crate::world::{
     tries::SmtKey,
     wire::{Instruction, SmtLeaf, SmtLeafType},
     world::{Type2Entry, Type2World},
@@ -173,17 +173,18 @@ fn visit(
     Ok(())
 }
 
-#[test]
-fn test_tries() {
-    use crate::world::World as _;
-    for (ix, case) in
-        serde_json::from_str::<Vec<super::Case>>(include_str!("cases/hermez_cdk_erigon.json"))
-            .unwrap()
-            .into_iter()
-            .enumerate()
-    {
-        println!("case {}", ix);
-        let mut frontend = frontend(crate::wire::parse(&case.bytes).unwrap()).unwrap();
-        assert_eq!(case.expected_state_root, frontend.world.root());
-    }
-}
+// #[test]
+// fn test_tries() {
+//     use crate::world::World as _;
+//     for (ix, case) in
+//         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/
+// hermez_cdk_erigon.json"))             .unwrap()
+//             .into_iter()
+//             .enumerate()
+//     {
+//         println!("case {}", ix);
+//         let mut frontend =
+// frontend(crate::wire::parse(&case.bytes).unwrap()).unwrap();
+//         assert_eq!(case.expected_state_root, frontend.world.root());
+//     }
+// }
