@@ -2,7 +2,7 @@
 
 export LEADER_INPUT_JSON_FILE=$1
 
-export  LEADER_BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
+export LEADER_BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
