@@ -221,15 +221,16 @@ impl ProverStateManager {
             input,
             segment_data,
             &mut TimingTree::default(),
-            abort_signal,
+            abort_signal.clone(),
         )?;
 
         let table_circuits = self.load_table_circuits(config, &all_proof)?;
 
-        let proof_with_pvs =
-            p_state()
-                .state
-                .prove_segment_after_initial_stark(all_proof, &table_circuits, None)?;
+        let proof_with_pvs = p_state().state.prove_segment_after_initial_stark(
+            all_proof,
+            &table_circuits,
+            abort_signal,
+        )?;
 
         Ok(proof_with_pvs)
     }
