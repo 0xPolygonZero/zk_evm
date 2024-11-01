@@ -222,7 +222,7 @@ create_collision:
 // stack: new_ctx, leftover_gas, success, address, kexit_info
 create_first_byte_ef:
     %revert_checkpoint
-     %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
+    %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
 // stack: code_size, new_ctx, leftover_gas, success, address, kexit_info
