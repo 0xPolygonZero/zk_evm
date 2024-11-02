@@ -272,6 +272,10 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 };
                 let size: usize = size.to();
 
+                /// Structure of Etheruem memory
+                type Word = [u8; 32];
+                const WORDSIZE: usize = std::mem::size_of::<Word>();
+
                 let memory_size = entry.memory.as_ref().unwrap().len() * WORDSIZE;
 
                 if entry.memory.is_none() || offset + size > memory_size {
@@ -297,7 +301,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 let memory: Vec<u8> = mem_res.unwrap().concat();
 
                 let init_code = &memory[offset..offset + size];
-                code_db.insert(init_code.to_vec());
+                //code_db.insert(init_code.to_vec());
                 let init_code_hash = keccak(init_code);
                 call_stack.push((init_code_hash, next_ctx_available));
 
