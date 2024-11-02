@@ -227,8 +227,11 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 if let Some((_next_step, next_entry)) = stuctlog_iter.peek() {
                     let next_depth: usize = next_entry.depth.try_into().unwrap();
                     if next_depth < curr_depth {
-                        // The call caused an exception.  Skip over incrementing
-                        // `next_ctx_available`.
+                        // The call caused an exception. Skip over incrementing
+                        // `next_ctx_available`. Note that calling an invalid
+                        // contract address should still increment
+                        // `next_ctx_available`, although we stay in the current
+                        // context.
                         continue;
                     }
                 }
@@ -303,7 +306,24 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 let init_code = &memory[offset..offset + size];
                 //code_db.insert(init_code.to_vec());
                 let init_code_hash = keccak(init_code);
+                let mut init_code_hash;
+
                 call_stack.push((init_code_hash, next_ctx_available));
+
+                if let Some((_next_step, next_entry)) = stuctlog_iter.peek() {
+                    let next_depth: usize = next_entry.depth.try_into().unwrap();
+                    if next_depth < curr_depth {
+                        // The call caused an exception.  Skip over incrementing
+                        // `next_ctx_available`.
+                        continue;
+                    }
+                    else {
+                      init_code_hash = next_entry.co.try_into().unwrap();
+                    }
+                }
+
+
+
 
                 next_ctx_available += 1;
             }
