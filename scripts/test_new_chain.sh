@@ -194,8 +194,8 @@ for BLOCK in $BLOCKS; do
   ### Clean up except when unknown error or undecided
   TEST_OUT_PATH="${REPO_ROOT}/$BLOCK.test.out"
   if [ $EXITCODE -ne 1 ] && [ $EXITCODE -ne 2 ]; then
-    rm $TEST_OUT_PATH
-    rm $WITNESS
+    #rm $TEST_OUT_PATH
+    #rm $WITNESS
   fi
 
 done
