@@ -167,29 +167,37 @@ pub(crate) fn set_registers_and_run<F: RichField>(
 /// # Output
 ///
 /// Returns a [`JumpDestTableProccessed`].
-pub(crate) fn get_jumpdest_analysis_inputs_rpc(
+pub(crate) fn get_jumpdest_analysis_inputs_rpc_progressive<F: RichField>(
     jumpdest_table_rpc: &JumpDestTableWitness,
-    code_map: &HashMap<H256, Vec<u8>>,
-    ctx_codes: &HashMap<usize, Option<Vec<u8>>>,
+    generation_state: &GenerationState<F>,
 ) -> JumpDestTableProcessed {
-    let ctx_proofs = jumpdest_table_rpc
-        .iter()
-        .flat_map(|(code_addr, ctx_jumpdests)| {
-            let code = &code_map
-                .get(code_addr)
-                .map(|x| x.clone())
-                .unwrap_or_default();
-            trace!(
-                "code: {:?}, code_addr: {:?}, {:?} <============",
-                &code,
-                &code_addr,
-                code_map.contains_key(code_addr),
-            );
-            trace!("code_map: {:?}", &code_map);
-            prove_context_jumpdests(code, ctx_jumpdests)
-        })
-        .collect();
-    JumpDestTableProcessed::new(ctx_proofs)
+    let current_ctx = generation_state.registers.context;
+    let current_code = generation_state.get_current_code().unwrap();
+    let current_code_hash = generation_state.get_current_code_hash().unwrap();
+    let code_map: &HashMap<H256, Vec<u8>> = &generation_state.inputs.contract_code;
+
+    trace!(
+        "current_code: {:?}, current_code_hash: {:?}, {:?} <============",
+        &current_code,
+        &current_code_hash,
+        code_map.contains_key(&current_code_hash),
+    );
+    trace!("code_map: {:?}", &code_map);
+    dbg!(current_ctx, current_code_hash, jumpdest_table_rpc.clone());
+    let mut ctx_proof = HashMap::<usize, Vec<_>>::new();
+    if jumpdest_table_rpc.contains_key(&current_code_hash) {
+        let cc = &(*jumpdest_table_rpc)[&current_code_hash].0;
+        if cc.contains_key(&current_ctx) {
+            let current_offsets = cc[&current_ctx].clone();
+            //let ctx_proof = prove_context_jumpdests(&current_code, &offsets);
+            let largest_address = current_offsets.last().unwrap().clone();
+            let offset_proofs =
+                get_proofs_and_jumpdests(&current_code, largest_address, current_offsets);
+            ctx_proof.insert(current_ctx, offset_proofs);
+        }
+    }
+
+    JumpDestTableProcessed::new(ctx_proof)
 }
 
 /// Orchestrates the proving of all contexts in a specific bytecode.

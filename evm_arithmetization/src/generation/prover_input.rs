@@ -26,7 +26,7 @@ use crate::cpu::kernel::constants::cancun_constants::{
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::{
-    get_jumpdest_analysis_inputs_rpc, simulate_cpu_and_get_user_jumps,
+    get_jumpdest_analysis_inputs_rpc_progressive, simulate_cpu_and_get_user_jumps,
 };
 use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
 use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
@@ -369,7 +369,21 @@ impl<F: RichField> GenerationState<F> {
         let current_code = self.get_current_code()?;
 
         if self.jumpdest_table.is_none() {
-            self.generate_jumpdest_table()?;
+            self.jumpdest_table = Some(JumpDestTableProcessed::default());
+        }
+
+        if self.jumpdest_table.is_some()
+            && self
+                .jumpdest_table
+                .as_ref()
+                .unwrap()
+                .get(&context)
+                .is_none()
+        {
+            let ctx_table = self.generate_jumpdest_table()?;
+            self.jumpdest_table = Some(JumpDestTableProcessed::merge(
+                [self.jumpdest_table.clone().unwrap(), ctx_table].iter(),
+            ));
         }
 
         let Some(jumpdest_table) = &mut self.jumpdest_table else {
@@ -797,10 +811,8 @@ impl<F: RichField> GenerationState<F> {
 impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
-    fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        // Simulate the user's code and (unnecessarily) part of the kernel code,
-        // skipping the validate table call
-
+    fn generate_jumpdest_table(&mut self) -> Result<JumpDestTableProcessed, ProgramError> {
+        dbg!(&self.inputs.jumpdest_table);
         // REVIEW: This will be rewritten to only run simulation when
         // `self.inputs.jumpdest_table` is `None`.
         info!(
@@ -808,19 +820,18 @@ impl<F: RichField> GenerationState<F> {
             self.inputs.block_metadata.block_number, self.inputs.txn_hashes
         );
         let rpcw = self.inputs.jumpdest_table.clone();
-        let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
-            let all_contexts: Vec<usize> = jdt.get_all_contexts();
-            let ctx_codes: HashMap<usize, Option<Vec<u8>>> = all_contexts
-                .into_iter()
-                .map(|ctx| (ctx, self.get_code(ctx).ok()))
-                .collect();
+        let rpcp: Option<JumpDestTableProcessed> = rpcw
+            .as_ref()
+            .map(|jdt| get_jumpdest_analysis_inputs_rpc_progressive(jdt, &self));
+        if rpcp.is_some() {
+            return Ok(rpcp.unwrap());
+        }
 
-            get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, &ctx_codes)
-        });
         info!("Generating JUMPDEST tables: Running SIM");
 
         self.inputs.jumpdest_table = None;
         let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
+        //.ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
 
         let (simp, ref simw): (Option<JumpDestTableProcessed>, Option<JumpDestTableWitness>) =
             sims.map_or_else(|| (None, None), |(sim, simw)| (Some(sim), Some(simw)));
@@ -851,9 +862,9 @@ impl<F: RichField> GenerationState<F> {
             info!("JUMPDEST tables are equal.");
         }
 
-        self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
+        // self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
 
-        Ok(())
+        Ok(simp.unwrap())
     }
 
     /// Given a HashMap containing the contexts and the jumpdest addresses,
@@ -885,6 +896,10 @@ impl<F: RichField> GenerationState<F> {
 
     pub(crate) fn get_current_code(&self) -> Result<Vec<u8>, ProgramError> {
         self.get_code(self.registers.context)
+    }
+
+    pub(crate) fn get_current_code_hash(&self) -> Result<H256, ProgramError> {
+        Ok(keccak(self.get_code(self.registers.context)?))
     }
 
     fn get_code(&self, context: usize) -> Result<Vec<u8>, ProgramError> {

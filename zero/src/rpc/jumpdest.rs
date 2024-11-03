@@ -306,7 +306,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 let init_code = &memory[offset..offset + size];
                 //code_db.insert(init_code.to_vec());
                 let init_code_hash = keccak(init_code);
-                let mut init_code_hash;
+                // let mut init_code_hash;
 
                 call_stack.push((init_code_hash, next_ctx_available));
 
@@ -316,14 +316,11 @@ pub(crate) fn generate_jumpdest_table<'a>(
                         // The call caused an exception.  Skip over incrementing
                         // `next_ctx_available`.
                         continue;
-                    }
-                    else {
-                      init_code_hash = next_entry.co.try_into().unwrap();
+                    } else {
+                        // init_code_hash =
+                        // next_entry.code_hash.try_into().unwrap();
                     }
                 }
-
-
-
 
                 next_ctx_available += 1;
             }
