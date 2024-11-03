@@ -1,3 +1,5 @@
+---   # Rust lint related checks
+
 name: lint
 
 on:

@@ -1,3 +1,5 @@
+---   # Rust lint related checks
+
 name: PR check
 
 on:
@@ -14,7 +16,10 @@ jobs:
     steps:
       - name: Set up keywords
         id: setup_keywords
-        run: echo "RESTRICTED_KEYWORDS=$(echo '${{ secrets.RESTRICTED_KEYWORDS }}' | jq -r '.[]' | tr '\n' ' ')" >> $GITHUB_ENV
+        run: >
+          echo "RESTRICTED_KEYWORDS=$(echo '${{ secrets.RESTRICTED_KEYWORDS }}'
+          | jq -r '.[]'
+          | tr '\n' ' ')" >> $GITHUB_ENV
 
       - name: Check for spam PR
         id: check
@@ -22,7 +27,6 @@ jobs:
           # Initialize variables to track spam presence
           title_is_spam=false
           description_is_spam=false
-          
           # Check title for spam
           for keyword in $RESTRICTED_KEYWORDS; do
             if echo "${{ github.event.pull_request.title }}" | grep -i -q "$keyword"; then
