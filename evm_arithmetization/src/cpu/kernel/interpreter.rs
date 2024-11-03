@@ -108,12 +108,12 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
                 clock
             );
 
-            if let Some(cc) = interpreter.generation_state.jumpdest_table {
-                interpreter.generation_state.jumpdest_table =
-                    Some(JumpDestTableProcessed::merge([&cc, &jdtp]));
-            } else {
-                interpreter.generation_state.jumpdest_table = Some(jdtp.clone());
-            }
+            // if let Some(cc) = interpreter.generation_state.jumpdest_table {
+            //     interpreter.generation_state.jumpdest_table =
+            //         Some(JumpDestTableProcessed::merge([&cc, &jdtp]));
+            // } else {
+            //     interpreter.generation_state.jumpdest_table = Some(jdtp.clone());
+            // }
             Some((jdtp, jdtw))
         }
     }
