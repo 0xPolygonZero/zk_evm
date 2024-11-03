@@ -19,7 +19,6 @@ jobs:
     name: Zero tracer proof generation
     runs-on: zero-ci
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
