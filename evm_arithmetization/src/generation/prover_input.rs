@@ -830,42 +830,46 @@ impl<F: RichField> GenerationState<F> {
         info!("Generating JUMPDEST tables: Running SIM");
 
         self.inputs.jumpdest_table = None;
-        let sims = simulate_cpu_and_get_user_jumps("terminate_common", self)
-            .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
+        let sims = simulate_cpu_and_get_user_jumps("terminate_common", self);
+        // .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
 
-        // let (simp, ref simw): (Option<JumpDestTableProcessed>,
-        // Option<JumpDestTableWitness>) =     sims.map_or_else(|| (None, None),
-        // |(sim, simw)| (Some(sim), Some(simw)));
+        let (simp, ref simw): (Option<JumpDestTableProcessed>, Option<JumpDestTableWitness>) = sims
+            .clone()
+            .map_or_else(|| (None, None), |(sim, simw)| (Some(sim), Some(simw)));
 
-        // info!("Generating JUMPDEST tables: finished");
+        info!("Generating JUMPDEST tables: finished");
 
-        // if rpcw.is_some() && simw != &rpcw {
-        //     if let Some(s) = simw {
-        //         info!("SIMW {}", s);
-        //     }
-        //     if let Some(r) = rpcw.as_ref() {
-        //         info!("RPCW {}", r);
-        //     }
-        //     info!("SIMW == RPCW ? {}", simw == &rpcw);
-        //     info!("tx: {:?}", self.inputs.txn_hashes);
-        //     // let is_equal = simw == &rpcw;
-        //     // let block_num = self.inputs.block_metadata.block_number;
-        //     // tracing::error!(
-        //     //     block_num,
-        //     //     tables_match = is_equal,
-        //     //     tx = self.inputs.txn_hashes
-        //     // )
-        //     // panic!();
-        //     // info!("SIMP {:?}", &simp);
-        //     // info!("RPCP {:?}", &rpcp);
-        //     // info!("SIMP == RPCP ? {}", &simp == &rpcp);
-        // } else {
-        //     info!("JUMPDEST tables are equal.");
-        // }
+        if rpcw.is_some() && simw != &rpcw {
+            if let Some(s) = simw {
+                info!("SIMW {}", s);
+            }
+            if let Some(r) = rpcw.as_ref() {
+                info!("RPCW {}", r);
+            }
+            info!("SIMW == RPCW ? {}", simw == &rpcw);
+            info!("tx: {:?}", self.inputs.txn_hashes);
+            // let is_equal = simw == &rpcw;
+            // let block_num = self.inputs.block_metadata.block_number;
+            // tracing::error!(
+            //     block_num,
+            //     tables_match = is_equal,
+            //     tx = self.inputs.txn_hashes
+            // )
+            // panic!();
+            // info!("SIMP {:?}", &simp);
+            // info!("RPCP {:?}", &rpcp);
+            // info!("SIMP == RPCP ? {}", &simp == &rpcp);
+        } else {
+            info!("JUMPDEST tables are equal.");
+        }
 
-        // // self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
+        // self.jumpdest_table = if rpcp.is_some() { rpcp } else { simp };
 
-        Ok(sims.0)
+        if sims.as_ref().is_none() {
+            return Ok(Default::default());
+        }
+
+        Ok(sims.unwrap().0)
     }
 
     /// Given a HashMap containing the contexts and the jumpdest addresses,
