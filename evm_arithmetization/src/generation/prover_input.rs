@@ -362,8 +362,8 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         // QUESTION: Is there a reason we do not use `self.registers.context` here?
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
+        assert_eq!(context, self.registers.context);
 
-        // TODO(einar-polygon) <make issue>
         if self.jumpdest_table.is_none() {
             self.jumpdest_table = Some(JumpDestTableProcessed::default());
         }
