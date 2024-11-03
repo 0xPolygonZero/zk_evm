@@ -196,6 +196,7 @@ for BLOCK in $BLOCKS; do
   if [ $EXITCODE -ne 1 ] && [ $EXITCODE -ne 2 ]; then
     #rm $TEST_OUT_PATH
     #rm $WITNESS
+    echo
   fi
 
 done
