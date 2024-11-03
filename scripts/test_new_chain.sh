@@ -135,7 +135,7 @@ FAILING_BLOCKS2="
 
 
 #BLOCKS="$(seq $STATICTIP)"
-BLOCKS="$(seq 105 110)"
+BLOCKS="$(seq 106 107)"
 #BLOCKS=$FAILING_BLOCKS1
 #BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
