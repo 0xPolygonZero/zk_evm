@@ -65,7 +65,7 @@ function statistics()
   echo "End of statistics" | tee -a $RESULTS
   exit 0
 }
-trap statistics INT EXIT # QUIT # HUP TERM
+trap statistics EXIT # INT QUIT # HUP TERM
 
 # Must match the values in prove_stdio.sh or build is dirty.
 #export RAYON_NUM_THREADS=1
@@ -135,7 +135,7 @@ FAILING_BLOCKS2="
 
 
 #BLOCKS="$(seq $STATICTIP)"
-BLOCKS="$(seq 18 6555)"
+BLOCKS="$(seq 105 6555)"
 #BLOCKS=$FAILING_BLOCKS1
 #BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
