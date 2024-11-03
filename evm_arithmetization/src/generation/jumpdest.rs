@@ -65,7 +65,7 @@ impl JumpDestTableProcessed {
     pub fn merge<'a>(jdts: impl IntoIterator<Item = &'a Self>) -> Self {
         jdts.into_iter().fold(Default::default(), |acc, next| {
             let mut inner = acc.0.clone();
-            let b = next.iter().map(|(a,b)| (a.clone(), b.clone()));
+            let b = next.iter().map(|(a, b)| (a.clone(), b.clone()));
             inner.extend(b);
             JumpDestTableProcessed(inner)
         })
@@ -105,10 +105,6 @@ impl JumpDestTableWitness {
             .fold((Default::default(), 0), |(acc, cnt), next| {
                 acc.extend(next, cnt)
             })
-    }
-
-    pub(crate) fn get_all_contexts(&self) -> Vec<usize> {
-        todo!()
     }
 }
 

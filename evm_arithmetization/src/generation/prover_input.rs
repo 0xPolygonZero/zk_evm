@@ -364,10 +364,6 @@ impl<F: RichField> GenerationState<F> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
         // TODO(einar-polygon) <make issue>
-        // get_code from self.memory
-        let code = self.get_code(context)?;
-        let current_code = self.get_current_code()?;
-
         if self.jumpdest_table.is_none() {
             self.jumpdest_table = Some(JumpDestTableProcessed::default());
         }
@@ -869,7 +865,7 @@ impl<F: RichField> GenerationState<F> {
             return Ok(Default::default());
         }
 
-        Ok(sims.unwrap().0)
+        Ok(simp.unwrap())
     }
 
     /// Given a HashMap containing the contexts and the jumpdest addresses,
