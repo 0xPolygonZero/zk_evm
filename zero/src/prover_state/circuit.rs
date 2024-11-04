@@ -166,6 +166,7 @@ impl From<usize> for Circuit {
 #[derive(Debug, Clone)]
 pub struct CircuitConfig {
     circuits: [Range<usize>; NUM_TABLES],
+    pub use_test_config: bool,
 }
 
 impl std::ops::Index<usize> for CircuitConfig {
@@ -200,6 +201,7 @@ impl Default for CircuitConfig {
                 #[cfg(feature = "cdk_erigon")]
                 Circuit::Poseidon.default_size(),
             ],
+            use_test_config: false,
         }
     }
 }
@@ -245,11 +247,19 @@ impl CircuitConfig {
 
     /// Build the circuits from the current config.
     pub fn as_all_recursive_circuits(&self) -> AllRecursiveCircuits {
-        AllRecursiveCircuits::new(
-            &AllStark::default(),
-            self.as_degree_bits_ranges(),
-            RecursionConfig::default(),
-        )
+        if self.use_test_config {
+            AllRecursiveCircuits::new(
+                &AllStark::default(),
+                self.as_degree_bits_ranges(),
+                RecursionConfig::test_config(),
+            )
+        } else {
+            AllRecursiveCircuits::new(
+                &AllStark::default(),
+                self.as_degree_bits_ranges(),
+                RecursionConfig::default(),
+            )
+        }
     }
 }
 
