@@ -65,7 +65,7 @@ function statistics()
   echo "End of statistics" | tee -a $RESULTS
   exit 0
 }
-trap statistics INT EXIT QUIT # HUP TERM
+trap statistics EXIT # INT QUIT # HUP TERM
 
 # Must match the values in prove_stdio.sh or build is dirty.
 #export RAYON_NUM_THREADS=1
@@ -167,7 +167,7 @@ for BLOCK in $BLOCKS; do
   echo "Fetching block $BLOCK"
   export RUST_LOG=rpc=trace
   SECONDS=0
-  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 120 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
+  nice -19 -- "${REPO_ROOT}/target/release/rpc" --backoff 3000 --max-retries 100 --rpc-url $RPC --rpc-type jerigon --jumpdest-src client-fetched-structlogs --timeout 600 fetch --start-block $BLOCK --end-block $BLOCK 1> $WITNESS
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_RPC=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
   TXALL=`grep '"jumpdest_table":' $WITNESS | wc -l`
@@ -176,8 +176,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  #timeout 600s
-  nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 5h nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
