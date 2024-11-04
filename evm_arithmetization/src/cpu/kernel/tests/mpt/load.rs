@@ -27,7 +27,6 @@ fn load_all_mpts_empty() -> Result<()> {
         state_trie: Default::default(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -67,7 +66,6 @@ fn load_all_mpts_leaf() -> Result<()> {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -130,7 +128,6 @@ fn load_all_mpts_hash() -> Result<()> {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -178,7 +175,6 @@ fn load_all_mpts_empty_branch() -> Result<()> {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -230,7 +226,6 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
         state_trie: get_state_world_no_storage(extension_to_leaf(test_account_1_rlp())),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -282,7 +277,6 @@ fn load_mpt_txn_trie() -> Result<()> {
             value: txn.clone(),
         }),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];

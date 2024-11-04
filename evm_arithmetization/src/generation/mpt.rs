@@ -53,9 +53,6 @@ pub struct MptAccountRlp {
 }
 
 impl AccountRlp for MptAccountRlp {
-    // fn as_any(&self) -> &dyn Any {
-    //     self
-    // }
     fn get_nonce(&self) -> U256 {
         self.nonce
     }
@@ -88,9 +85,6 @@ pub struct SmtAccountRlp {
 }
 
 impl AccountRlp for SmtAccountRlp {
-    // fn as_any(&self) -> &dyn Any {
-    //     self
-    // }
     fn get_nonce(&self) -> U256 {
         self.nonce
     }
@@ -122,7 +116,6 @@ pub trait AccountRlp: Any {
     fn get_code_hash(&self) -> CodeHashType;
     fn get_code_hash_u256(&self) -> U256;
     fn rlp_encode(&self) -> BytesMut;
-    // fn as_any(&self) -> &dyn Any;
 }
 
 pub struct EitherRlp {
@@ -416,7 +409,6 @@ where
     }
 }
 
-// #[cfg(feature = "eth_mainnet")]
 fn load_state_trie(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -772,7 +764,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     Ok((state_leaves, storage_leaves, trie_data))
 }
 
-// #[cfg(feature = "eth_mainnet")]
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,

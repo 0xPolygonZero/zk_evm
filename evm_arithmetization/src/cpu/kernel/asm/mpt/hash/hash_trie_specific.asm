@@ -150,7 +150,6 @@ global encode_txn:
     %build_kernel_address
     SWAP1
     // stack: DST, SRC, txn_rlp_len, txn_rlp_len, rlp_addr, new_len, retdest
-global debug_por_aca_se_copian_lost_bits:
     %memcpy_bytes
     ADD
     // stack new_rlp_addr, new_len, retdest

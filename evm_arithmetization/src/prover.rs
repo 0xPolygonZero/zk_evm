@@ -356,7 +356,6 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) {
     if !cfg!(feature = "eth_mainnet") {
         assert!(inputs.block_metadata.parent_beacon_block_root.is_zero());
-        println!("block blob gas used = {:?}", inputs.block_metadata.block_blob_gas_used);
         assert!(inputs.block_metadata.block_blob_gas_used.is_zero());
         assert!(inputs.block_metadata.block_excess_blob_gas.is_zero());
     }

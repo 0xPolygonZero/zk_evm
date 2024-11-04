@@ -248,8 +248,6 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
         len: input.len(),
     });
 
-    log::debug!("pushign poseding op = {:?}", poseidon_op);
-
     let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
 
     push_no_write(generation_state, hash);

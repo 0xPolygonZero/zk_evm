@@ -318,13 +318,6 @@ impl<F: RichField> Interpreter<F> {
                         .as_smt()
                         .to_vec(),
                 ),
-                /* match &tries.state_trie.state {
-                 *     Either::Left(mpt) =>
-                 * h2u(mpt.state_trie().hash()),
-                 *     Either::Right(smt) =>
-                 * hash_serialize_u256(&smt.
-                 * as_smt().to_vec()),
-                 * }, */
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,

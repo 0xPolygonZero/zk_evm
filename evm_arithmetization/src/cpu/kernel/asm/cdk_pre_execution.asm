@@ -15,21 +15,17 @@ global pre_block_execution:
 global update_scalable_block_number:
     // stack: retdest
     %blocknumber
-global debug_blocknumber:
     PUSH @LAST_BLOCK_STORAGE_POS
     // stack: last_block_slot, block_number, retdest
     %write_scalable_storage
     // stack: retdest
-global debug_wtf_is_happening_with_retdest:
     // Check timestamp
     PUSH @TIMESTAMP_STORAGE_POS
     PUSH @ADDRESS_SCALABLE_L2
     %read_slot_from_addr_key
     // stack: old_timestamp, retdest
     %timestamp
-global debug_el_timestamp:
     GT 
-global debug_before_jumpi:
     %jumpi(update_scalable_timestamp)
 
 global update_scalable_prev_block_root_hash:
@@ -91,7 +87,6 @@ skip_and_exit:
 global update_scalable_timestamp:
     // stack: retdest
     %timestamp
-global debug_le_timestamp:
     PUSH @TIMESTAMP_STORAGE_POS
     // stack: timestamp_slot, timestamp, retdest
     %write_scalable_storage
@@ -107,7 +102,6 @@ global create_scalable_l2_account:
     // stack: retdest
     PUSH @EMPTY_STRING_POSEIDON_HASH
     PUSH @ADDRESS_SCALABLE_L2
-global debug_setting_scalable_code:
     %set_code // code hash
 
     // stack: retdest

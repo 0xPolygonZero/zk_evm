@@ -187,7 +187,6 @@ fn test_state_trie(
         state_trie: state_trie_inputs,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        // storage_tries: vec![],
     };
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];

@@ -314,16 +314,6 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
-    // if KERNEL.offset_name(pc) == "insert_all_initial_nodes" {
-    //     let mem = state
-    //         .get_generation_state()
-    //         .memory
-    //         .get_preinit_memory(Segment::AccountsLinkedList);
-    //     log::debug!(
-    //         "state linked list = {:?}",
-    //         StateLinkedList::from_mem_and_segment(&mem,
-    // Segment::AccountsLinkedList)     );
-    // }
 
     #[cfg(test)]
     if KERNEL.offset_name(pc) == "smt_hash_state" || KERNEL.offset_name(pc) == "sys_sstore" {
@@ -355,27 +345,6 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
                 .collect::<Vec<U256>>()
         );
     }
-    // state.log(
-    //     level,
-    //     format!(
-    //         "state memory = {:?}",
-    //         state
-    //             .get_generation_state()
-    //             .memory
-    //             .get_preinit_memory(Segment::AccountsLinkedList),
-    //     ),
-    // );
-    // state.log(
-    //     level,
-    //     format!(
-    //         "smt = {}",
-    //         state
-    //             .get_generation_state()
-    //             .inputs
-    //             .trimmed_tries
-    //             .state_trie
-    //     ),
-    // );
 
     assert!(
         pc < KERNEL.code.len(),

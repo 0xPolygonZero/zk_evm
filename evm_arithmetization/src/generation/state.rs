@@ -8,7 +8,6 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
-// #[cfg(feature = "cdk_erigon")]
 use smt_trie::code::hash_bytecode_u256;
 
 use super::mpt::TrieRootPtrs;
@@ -426,7 +425,6 @@ impl<F: RichField> GenerationState<F> {
             load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
         let receipt_root_ptr =
             load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
-        // println!("trie data length after init {}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },
@@ -606,13 +604,6 @@ impl<F: RichField> GenerationState<F> {
                 Either::Left(H256::from_uint(&tip_u256))
             };
             self.observe_contract(tip_either)?;
-            // #[cfg(feature = "eth_mainnet")]
-            // {
-            //     let tip_h256 = H256::from_uint(&tip_u256);
-            //     self.observe_contract(tip_h256)?;
-            // }
-            // #[cfg(feature = "cdk_erigon")]
-            // self.observe_contract(tip_u256)?;
         }
 
         Ok(())
@@ -628,35 +619,6 @@ impl<F: RichField> GenerationState<F> {
     /// Observe the given code hash and store the associated code.
     /// When called, the code corresponding to `codehash` should be stored in
     /// the return data.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub(crate) fn observe_contract(
-    //     &mut self,
-    //     codehash: Either<H256, U256>,
-    // ) -> Result<(), ProgramError> {
-    //     if self.inputs.contract_code.contains_key(&codehash) {
-    //         return Ok(()); // Return early if the code hash has already been
-    //                        // observed.
-    //     }
-
-    //     let ctx = self.registers.context;
-    //     let returndata_offset = ContextMetadata::ReturndataSize.unscale();
-    //     let returndata_size_addr =
-    //         MemoryAddress::new(ctx, Segment::ContextMetadata, returndata_offset);
-    //     let returndata_size =
-    // u256_to_usize(self.memory.get_with_init(returndata_size_addr))?;
-    //     let code =
-    // self.memory.contexts[ctx].segments[Segment::Returndata.unscale()].content
-    //         [..returndata_size]
-    //         .iter()
-    //         .map(|x| x.unwrap_or_default().low_u32() as u8)
-    //         .collect::<Vec<_>>();
-    //     debug_assert_eq!(keccak(&code), codehash);
-
-    //     self.inputs.contract_code.insert(codehash, code);
-
-    //     Ok(())
-    // }
-    // #[cfg(feature = "cdk_erigon")]
     pub(crate) fn observe_contract(
         &mut self,
         codehash: Either<H256, U256>,

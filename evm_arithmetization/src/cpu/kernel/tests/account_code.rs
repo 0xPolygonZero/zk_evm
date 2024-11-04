@@ -11,7 +11,6 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
-// #[cfg(feature = "cdk_erigon")]
 use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -162,14 +161,9 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
     let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
     let trie_inputs = TrieInputs {
-        // #[cfg(feature = "eth_mainnet")]
-        // state_trie: HashedPartialTrie::from(Node::Empty),
-        // #[cfg(feature = "cdk_erigon")]
         state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        // #[cfg(feature = "eth_mainnet")]
-        // storage_tries: vec![],
     };
 
     initialize_mpts(interpreter, &trie_inputs);
@@ -270,19 +264,7 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     Ok(())
 }
 
-// // Test account with a given code hash.
-// #[cfg(feature = "eth_mainnet")]
-// fn test_account(code: &[u8]) -> MptAccountRlp {
-//     MptAccountRlp {
-//         nonce: U256::from(1111),
-//         balance: U256::from(2222),
-//         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-//         code_hash: keccak(code),
-//     }
-// }
-
 // Test account with a given code hash.
-// #[cfg(feature = "eth_mainnet")]
 fn test_account(code: &[u8]) -> EitherRlp {
     if cfg!(feature = "eth_mainnet") {
         EitherRlp {
@@ -304,17 +286,6 @@ fn test_account(code: &[u8]) -> EitherRlp {
         }
     }
 }
-
-// // Test account with a given code hash.
-// #[cfg(feature = "cdk_erigon")]
-// fn test_account(code: &[u8]) -> SmtAccountRlp {
-//     SmtAccountRlp {
-//         nonce: U256::from(1111),
-//         balance: U256::from(2222),
-//         code_hash: hash_bytecode_u256(code.to_vec()),
-//         code_length: code.len().into(),
-//     }
-// }
 
 fn random_code() -> Vec<u8> {
     let mut rng = thread_rng();
@@ -353,16 +324,6 @@ fn test_extcodesize() -> Result<()> {
             code.clone(),
         )])
     };
-    // #[cfg(feature = "eth_mainnet")]
-    // {
-    //     interpreter.generation_state.inputs.contract_code =
-    //         HashMap::from([(keccak(&code), code.clone())]);
-    // }
-    // #[cfg(feature = "cdk_erigon")]
-    // {
-    //     interpreter.generation_state.inputs.contract_code =
-    //         HashMap::from([(hash_bytecode_u256(code.clone()), code.clone())]);
-    // }
 
     interpreter.run()?;
 
@@ -444,16 +405,6 @@ fn test_extcodecopy() -> Result<()> {
             code.clone(),
         )])
     };
-    // #[cfg(feature = "eth_mainnet")]
-    // {
-    //     interpreter.generation_state.inputs.contract_code =
-    //         HashMap::from([(keccak(&code), code.clone())]);
-    // }
-    // #[cfg(feature = "cdk_erigon")]
-    // {
-    //     interpreter.generation_state.inputs.contract_code =
-    //         HashMap::from([(hash_bytecode_u256(code.clone()), code.clone())]);
-    // }
 
     interpreter.run()?;
 
@@ -581,7 +532,6 @@ fn sstore() -> Result<()> {
         state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        // storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -701,7 +651,6 @@ fn sload() -> Result<()> {
         state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        // storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];

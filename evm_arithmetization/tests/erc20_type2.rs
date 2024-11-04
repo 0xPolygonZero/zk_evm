@@ -366,35 +366,6 @@ fn bloom() -> [U256; 8] {
     bloom.try_into().unwrap()
 }
 
-// fn set_account<D: Db>(
-//     smt: &mut Smt<D>,
-//     addr: Address,
-//     account: &SmtAccountRlp,
-//     storage: &HashMap<U256, U256>,
-// ) {
-//     let key = key_balance(addr);
-//     log::debug!(
-//         "setting {:?} balance to {:?}, the key is {:?}",
-//         addr,
-//         account.balance,
-//         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
-//     );
-//     smt.set(key_balance(addr), account.balance);
-//     smt.set(key_nonce(addr), account.nonce);
-//     log::debug!("account code {:?}", account.code_hash);
-//     smt.set(key_code(addr), account.code_hash);
-//     let key = key_code_length(addr);
-//     log::debug!(
-//         "setting {:?} code length, the key is {:?}",
-//         addr,
-//         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
-//     );
-//     smt.set(key_code_length(addr), account.code_length);
-//     for (&k, &v) in storage {
-//         smt.set(key_storage(addr, k), v);
-//     }
-// }
-
 fn set_account(
     world: &mut StateWorld,
     addr: Address,

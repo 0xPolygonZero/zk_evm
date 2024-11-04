@@ -122,9 +122,6 @@ pub struct GenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub contract_code: HashMap<H256, Vec<u8>>,
-    // #[cfg(feature = "cdk_erigon")]
     pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
 
     /// Information contained in the block header.
@@ -177,9 +174,6 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub contract_code: HashMap<H256, Vec<u8>>,
-    // #[cfg(feature = "cdk_erigon")]
     pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
 
     /// Information contained in the block header.
@@ -201,10 +195,11 @@ type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
+    /// transactions. In "eth_mainnet", it also contains the storage trie prior
+    /// to these transactions (including all storage tries, and nodes therein,
+    /// that will be accessed by these transactions). In "eth_mainnet", it also
+    /// includes a partial version of each storage trie prior to these
     /// transactions.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub state_trie: HashedPartialTrie,
-    // #[cfg(feature = "cdk_erigon")]
     pub state_trie: StateWorld,
 
     /// A partial version of the transaction trie prior to these transactions.
@@ -216,38 +211,18 @@ pub struct TrieInputs {
     /// should include all nodes that will be accessed by these
     /// transactions.
     pub receipts_trie: HashedPartialTrie,
-    // /// A partial version of each storage trie prior to these transactions. It
-    // /// should include all storage tries, and nodes therein, that will be
-    // /// accessed by these transactions.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrimmedTrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
-    /// transactions.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub state_trie: HashedPartialTrie,
-    // #[cfg(feature = "cdk_erigon")]
+    /// transactions. In "eth_mainnet", it also contains the storage trie prior
+    /// to these transactions.
     pub state_trie: StateWorld,
-    // /// A partial version of each storage trie prior to these transactions. It
-    // /// should include all storage tries, and nodes therein, that will be
-    // /// accessed by these transactions.
-    // #[cfg(feature = "eth_mainnet")]
-    // pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
 impl TrieInputs {
-    // #[cfg(feature = "eth_mainnet")]
-    // pub(crate) fn trim(&self) -> TrimmedTrieInputs {
-    //     TrimmedTrieInputs {
-    //         state_trie: self.state_trie.clone(),
-    //         // storage_tries: self.storage_tries.clone(),
-    //     }
-    // }
-    // #[cfg(feature = "cdk_erigon")]
     pub(crate) fn trim(&self) -> TrimmedTrieInputs {
         TrimmedTrieInputs {
             state_trie: self.state_trie.clone(),
@@ -266,13 +241,6 @@ impl<F: RichField> GenerationInputs<F> {
             .map(|tx_bytes| keccak(&tx_bytes[..]))
             .collect();
 
-        // let mut state_root = H256::zero();
-        // #[cfg(feature = "eth_mainnet")]
-        // {
-        //     state_root = self.tries.state_trie.hash();
-        // }
-        // #[cfg(feature = "cdk_erigon")]
-        // {
         let state_root = match &self.tries.state_trie.state {
             Either::Left(trie) => trie.state_trie().hash(),
             Either::Right(trie) => {
@@ -280,7 +248,6 @@ impl<F: RichField> GenerationInputs<F> {
                 H256::from_uint(&hash_serialize_u256(&smt_data).into())
             }
         };
-        // }
 
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),

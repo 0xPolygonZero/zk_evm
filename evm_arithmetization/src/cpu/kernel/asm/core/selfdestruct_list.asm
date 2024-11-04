@@ -73,7 +73,6 @@ bingo:
 delete_all_selfdestructed_addresses_done:
     // stack: i, len, retdest
     %pop2 
-global debug_jump_from_delete_all:
     JUMP
 
 %macro delete_all_selfdestructed_addresses

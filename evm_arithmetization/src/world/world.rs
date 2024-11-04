@@ -162,10 +162,6 @@ impl Type1World {
             .iter()
             .map(|(key, value)| (*key, value.as_hashed_partial_trie()))
             .collect::<Vec<_>>()
-        // .self
-        // .storage
-        // .get_mut(&keccak_hash::keccak(address))
-        // .context("no such storage")
     }
     fn on_storage<T>(
         &mut self,
