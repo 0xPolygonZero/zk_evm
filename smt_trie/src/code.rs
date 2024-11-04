@@ -11,7 +11,8 @@ pub fn hash_contract_bytecode(mut code: Vec<u8>) -> HashOut {
     poseidon_pad_byte_vec(&mut code);
 
     // println!("code bytes = {:?}", code);
-    // println!("hash = {:?}", hashout2u(poseidon_hash_padded_byte_vec(code.clone())));
+    // println!("hash = {:?}",
+    // hashout2u(poseidon_hash_padded_byte_vec(code.clone())));
     poseidon_hash_padded_byte_vec(code)
 }
 

@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
 use ethereum_types::{H256, U256};
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
@@ -17,7 +18,6 @@ use crate::db::{Db, MemoryDb};
 use crate::utils::{
     f2limbs, get_unique_sibling, hash0, hash_key_hash, hashout2u, key2u, limbs2f, u2h, u2k,
 };
-use mpt_trie::partial_trie::HashedPartialTrie;
 
 pub(crate) const HASH_TYPE: u8 = 0;
 pub(crate) const INTERNAL_TYPE: u8 = 1;
@@ -521,7 +521,8 @@ fn serialize<D: Db>(
         let index = v.len();
         v.push(HASH_TYPE.into());
         v.push(key2u(key));
-        if index == 0 { // Empty hash node is at the beggining of the segment
+        if index == 0 {
+            // Empty hash node is at the beggining of the segment
             index
         } else {
             index + offset
@@ -558,7 +559,7 @@ fn serialize<D: Db>(
                 keys_to_include,
                 offset,
             )
-                .into();
+            .into();
             v[index + 1] = i_left;
             let i_right = serialize(
                 smt,
@@ -568,7 +569,7 @@ fn serialize<D: Db>(
                 keys_to_include,
                 offset,
             )
-                .into();
+            .into();
             v[index + 2] = i_right;
             index + offset
         }
