@@ -62,6 +62,9 @@ macro_rules! gen_prover_state_config {
             pub persistence: CircuitPersistence,
             #[clap(long, help_heading = HEADING, default_value_t = TableLoadStrategy::OnDemand)]
             pub load_strategy: TableLoadStrategy,
+            /// Run with a low-security but fast STARK configuration. Enable this only for testing.
+            #[arg(long)]
+            pub use_test_config: bool,
 
             $(
                 #[clap(
@@ -108,6 +111,7 @@ impl CliProverStateConfig {
         .filter_map(|(circuit, range)| range.map(|range| (circuit, range)))
         .for_each(|(circuit, range)| config.set_circuit_size(circuit, range));
 
+        config.use_test_config = self.use_test_config;
         config
     }
 
