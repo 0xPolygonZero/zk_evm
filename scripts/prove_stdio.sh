@@ -37,7 +37,7 @@ export TOKIO_WORKER_THREADS=$num_procs
 
 #export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=full
-export RUST_LOG=debug
+export RUST_LOG=trace
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Z linker-features=-lld'
