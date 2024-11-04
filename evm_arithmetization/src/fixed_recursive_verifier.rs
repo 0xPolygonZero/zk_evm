@@ -1,5 +1,6 @@
 use core::mem::{self, MaybeUninit};
 use core::ops::Range;
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
-use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
 use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
@@ -57,6 +57,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
+use crate::testing_utils::TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS;
 use crate::util::h256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
@@ -786,9 +787,18 @@ where
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
         stark_config: &StarkConfig,
+        shrinking_circuit_config: Option<&CircuitConfig>,
+        recursion_circuit_config: Option<&CircuitConfig>,
+        threshold_degree_bits: Option<usize>,
     ) -> Self {
         // Sanity check on the provided config
         assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
+
+        let shrinking_config = shrinking_config();
+        let shrinking_circuit_config = shrinking_circuit_config.unwrap_or(&shrinking_config);
+        let circuit_config = CircuitConfig::standard_recursion_config();
+        let recursion_circuit_config = recursion_circuit_config.unwrap_or(&circuit_config);
+        let threshold_degree_bits = threshold_degree_bits.unwrap_or(THRESHOLD_DEGREE_BITS);
 
         macro_rules! create_recursive_circuit {
             ($table_enum:expr, $stark_field:ident) => {
@@ -798,6 +808,8 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
+                    shrinking_circuit_config,
+                    threshold_degree_bits,
                 )
             };
         }
@@ -829,7 +841,7 @@ where
             poseidon,
         ];
 
-        let root = Self::create_segment_circuit(&by_table, stark_config);
+        let root = Self::create_segment_circuit(&by_table, stark_config, recursion_circuit_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let batch_aggregation =
             Self::create_batch_aggregation_circuit(&segment_aggregation, stark_config);
@@ -897,11 +909,12 @@ where
     fn create_segment_circuit(
         by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         stark_config: &StarkConfig,
+        circuit_config: &CircuitConfig,
     ) -> RootCircuitData<F, C, D> {
         let inner_common_data: [_; NUM_TABLES] =
             core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
 
-        let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::new(circuit_config.clone());
 
         let table_in_use: [BoolTarget; NUM_TABLES] =
             core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
@@ -1481,18 +1494,9 @@ where
     fn create_block_circuit(
         agg: &BatchAggregationCircuitData<F, C, D>,
     ) -> BlockCircuitData<F, C, D> {
-        // Here, we have two block proofs and we aggregate them together.
-        // The block circuit is similar to the agg circuit; both verify two inner
-        // proofs.
-        let expected_common_data = CommonCircuitData {
-            fri_params: FriParams {
-                degree_bits: 14,
-                ..agg.circuit.common.fri_params.clone()
-            },
-            ..agg.circuit.common.clone()
-        };
+        let expected_common_data = agg.circuit.common.clone();
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::<F, D>::new(agg.circuit.common.config.clone());
         let public_values = add_virtual_public_values_public_input(&mut builder);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
@@ -1566,6 +1570,10 @@ where
 
         let agg_verifier_data = builder.constant_verifier_data(&agg.circuit.verifier_only);
         builder.verify_proof::<C>(&agg_root_proof, &agg_verifier_data, &agg.circuit.common);
+
+        while log2_ceil(builder.num_gates()) < agg.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
         BlockCircuitData {
@@ -1739,7 +1747,17 @@ where
         // Pad to match the (non-existing yet!) 2-to-1 circuit's degree.
         // We use the block circuit's degree as target reference here, as they end up
         // having same degree.
-        while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
+        let degree_bits_to_be_padded = block.circuit.common.degree_bits();
+
+        // When using test configurations, the block circuit's degree is less than the
+        // 2-to-1 circuit's degree. Therefore, we also need to ensure its size meets
+        // the 2-to-1 circuit's recursion threshold degree bits.
+        let degree_bits_to_be_padded = max(
+            degree_bits_to_be_padded,
+            TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS,
+        );
+
+        while log2_ceil(builder.num_gates()) < degree_bits_to_be_padded {
             builder.add_gate(NoopGate, vec![]);
         }
 
@@ -1825,6 +1843,11 @@ where
         let mix_hash_virtual = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
         builder.connect_hashes(mix_hash, mix_hash_virtual);
+
+        // Pad to match the block circuit's degree.
+        while log2_ceil(builder.num_gates()) < block_wrapper_circuit.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {
@@ -2900,6 +2923,8 @@ where
         degree_bits_range: Range<usize>,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        shrinking_circuit_config: &CircuitConfig,
+        threshold_degree_bits: usize,
     ) -> Self {
         let by_stark_size = degree_bits_range
             .map(|degree_bits| {
@@ -2911,6 +2936,8 @@ where
                         degree_bits,
                         all_ctls,
                         stark_config,
+                        shrinking_circuit_config,
+                        threshold_degree_bits,
                     ),
                 )
             })
@@ -3023,6 +3050,8 @@ where
         degree_bits: usize,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        shrinking_config: &CircuitConfig,
+        threshold_degree_bits: usize,
     ) -> Self {
         let initial_wrapper = recursive_stark_circuit(
             table,
@@ -3030,8 +3059,8 @@ where
             degree_bits,
             all_ctls,
             stark_config,
-            &shrinking_config(),
-            THRESHOLD_DEGREE_BITS,
+            shrinking_config,
+            threshold_degree_bits,
         );
         let mut shrinking_wrappers = vec![];
 
@@ -3042,12 +3071,12 @@ where
                 .map(|wrapper: &PlonkWrapperCircuit<F, C, D>| &wrapper.circuit)
                 .unwrap_or(&initial_wrapper.circuit);
             let last_degree_bits = last.common.degree_bits();
-            assert!(last_degree_bits >= THRESHOLD_DEGREE_BITS);
-            if last_degree_bits == THRESHOLD_DEGREE_BITS {
+            assert!(last_degree_bits >= threshold_degree_bits);
+            if last_degree_bits == threshold_degree_bits {
                 break;
             }
 
-            let mut builder = CircuitBuilder::new(shrinking_config());
+            let mut builder = CircuitBuilder::new(shrinking_config.clone());
             let proof_with_pis_target = builder.add_virtual_proof_with_pis(&last.common);
             let last_vk = builder.constant_verifier_data(&last.verifier_only);
             builder.verify_proof::<C>(&proof_with_pis_target, &last_vk, &last.common);
@@ -3058,7 +3087,7 @@ where
             assert!(
                 circuit.common.degree_bits() < last_degree_bits,
                 "Couldn't shrink to expected recursion threshold of 2^{}; stalled at 2^{}",
-                THRESHOLD_DEGREE_BITS,
+                threshold_degree_bits,
                 circuit.common.degree_bits()
             );
             shrinking_wrappers.push(PlonkWrapperCircuit {
