@@ -624,32 +624,32 @@ pub struct RecursionConfig {
     /// The configuration to be used for the STARK table prover.
     pub stark_config: StarkConfig,
     /// Optional configuration for the shrinking circuit.
-    pub shrinking_circuit_config: Option<CircuitConfig>,
+    pub shrinking_circuit_config: CircuitConfig,
     /// Optional configuration for the recursion circuits.
-    pub recursion_circuit_config: Option<CircuitConfig>,
+    pub recursion_circuit_config: CircuitConfig,
     /// Optional recursion threshold in degree bits.
-    pub threshold_degree_bits: Option<usize>,
+    pub threshold_degree_bits: usize,
 }
 
 impl Default for RecursionConfig {
     fn default() -> Self {
         RecursionConfig {
             stark_config: StarkConfig::standard_fast_config(),
-            shrinking_circuit_config: None,
-            recursion_circuit_config: None,
-            threshold_degree_bits: None,
+            shrinking_circuit_config: shrinking_config(),
+            recursion_circuit_config: CircuitConfig::standard_recursion_config(),
+            threshold_degree_bits: THRESHOLD_DEGREE_BITS,
         }
     }
 }
 
 impl RecursionConfig {
-    /// Returns a test configuration for `RecursionParams`.
+    /// Returns a test configuration for `RecursionConfig`.
     pub fn test_config() -> Self {
         RecursionConfig {
             stark_config: TEST_STARK_CONFIG,
-            shrinking_circuit_config: Some(TEST_RECURSION_CONFIG),
-            recursion_circuit_config: Some(TEST_RECURSION_CONFIG),
-            threshold_degree_bits: Some(TEST_THRESHOLD_DEGREE_BITS),
+            shrinking_circuit_config: TEST_RECURSION_CONFIG,
+            recursion_circuit_config: TEST_RECURSION_CONFIG,
+            threshold_degree_bits: TEST_THRESHOLD_DEGREE_BITS,
         }
     }
 }
@@ -834,13 +834,9 @@ where
         );
 
         let stark_config = &config.stark_config;
-        let shrinking_config = shrinking_config();
-        let shrinking_circuit_config = &config.shrinking_circuit_config.unwrap_or(shrinking_config);
-        let circuit_config = CircuitConfig::standard_recursion_config();
-        let recursion_circuit_config = &config.recursion_circuit_config.unwrap_or(circuit_config);
-        let threshold_degree_bits = config
-            .threshold_degree_bits
-            .unwrap_or(THRESHOLD_DEGREE_BITS);
+        let shrinking_circuit_config = &config.shrinking_circuit_config;
+        let recursion_circuit_config = &config.recursion_circuit_config;
+        let threshold_degree_bits = config.threshold_degree_bits;
 
         macro_rules! create_recursive_circuit {
             ($table_enum:expr, $stark_field:ident) => {
