@@ -109,8 +109,8 @@ if [[ $TEST_ONLY == "test_only" ]]; then
         exit
     else
         # Some error occurred, display the logs and exit.
-        cat "$OUT_LOG_PATH"
-        echo "Failed to create proof witnesses. See $OUT_LOG_PATH for more details."
+        cat "$TEST_OUT_PATH"
+        echo "Failed to create proof witnesses. See $TEST_OUT_PATH for more details."
         exit 1
     fi
 fi
