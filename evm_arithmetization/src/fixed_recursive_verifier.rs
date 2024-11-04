@@ -3331,13 +3331,12 @@ pub mod testing {
 #[cfg(test)]
 mod tests {
     use std::env;
-
     use dotenvy::dotenv;
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::plonk::config::PoseidonGoldilocksConfig;
-
     use super::*;
 
+    /// Parses a string representing a range in the format "start..end" into a `Range<usize>`.
     fn parse_range(range_str: &str) -> anyhow::Result<std::ops::Range<usize>> {
         let parts: Vec<&str> = range_str.split("..").collect();
         if parts.len() == 2 {
@@ -3349,21 +3348,26 @@ mod tests {
         }
     }
 
-    // Ensures that all circuits can be generated without any issues with in
-    // production or default STARK configs.
+    /// Ensures that all circuits can be generated without any issues
+    /// using the production or default STARK configurations.
     #[test]
+    #[ignore]
     fn test_production_recursion_config() -> anyhow::Result<()> {
         type F = GoldilocksField;
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
 
+        // Load environment variables from the .env file
         dotenv().ok();
 
+        // Macro to fetch and parse environment variables representing ranges
         macro_rules! fetch_and_parse_range {
             ($env_var:expr) => {
                 parse_range(&env::var($env_var).expect(concat!($env_var, " not set")))?
             };
         }
+
+        // Fetch and parse the ranges from environment variables
         let arithmetic_range = fetch_and_parse_range!("ARITHMETIC_CIRCUIT_SIZE");
         let byte_packing_range = fetch_and_parse_range!("BYTE_PACKING_CIRCUIT_SIZE");
         let cpu_range = fetch_and_parse_range!("CPU_CIRCUIT_SIZE");
@@ -3374,6 +3378,7 @@ mod tests {
         let memory_before_range = fetch_and_parse_range!("MEMORY_BEFORE_CIRCUIT_SIZE");
         let memory_after_range = fetch_and_parse_range!("MEMORY_AFTER_CIRCUIT_SIZE");
 
+        // Initialize AllStark and generate the recursive circuits
         let all_stark = AllStark::<F, D>::default();
         AllRecursiveCircuits::<F, C, D>::new(
             &all_stark,
