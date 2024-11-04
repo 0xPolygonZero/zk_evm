@@ -888,6 +888,7 @@ pub(crate) fn generate_mload_general<F: RichField, T: Transition<F>>(
 
     state.push_memory(log_read);
     state.push_cpu(row);
+
     Ok(())
 }
 

@@ -402,7 +402,9 @@ impl<F: RichField> Interpreter<F> {
                         self.generation_state.memory.set(address, value);
                     }
                 }
-                MemoryOpKind::Write => self.generation_state.memory.set(address, value),
+                MemoryOpKind::Write => {
+                    self.generation_state.memory.set(address, value)
+                }
             }
         }
 
