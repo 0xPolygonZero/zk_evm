@@ -54,7 +54,6 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_id: BlockId,
     checkpoint_block_number: u64,
-    rpc_type: RpcType,
     jumpdest_src: JumpdestSrc,
     fetch_timeout: Duration,
 ) -> Result<BlockProverInput, anyhow::Error>
@@ -62,7 +61,7 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    match rpc_type {
+    match cached_provider.rpc_type {
         RpcType::Jerigon => {
             jerigon::block_prover_input(
                 cached_provider,
@@ -130,8 +129,8 @@ where
                 async move {
                     let block = cached_provider
                         .get_block((block_num as u64).into(), BlockTransactionsKind::Hashes)
-                        .await
-                        .context("couldn't get block")?;
+                        .await?
+                        .ok_or(anyhow!("block not found {block_num}"))?;
                     anyhow::Ok([
                         (block.header.hash, Some(block_num)),
                         (block.header.parent_hash, previous_block_number),
@@ -237,8 +236,8 @@ where
 {
     let target_block = cached_provider
         .get_block(target_block_id, BlockTransactionsKind::Hashes)
-        .await?;
-    let target_block_number = target_block.header.number;
+        .await?
+        .ok_or(anyhow!("target block not found {}", target_block_id))?;
     let chain_id = cached_provider.get_provider().await?.get_chain_id().await?;
 
     // Grab interval checkpoint block state trie
@@ -248,11 +247,15 @@ where
             BlockTransactionsKind::Hashes,
         )
         .await?
+        .ok_or(anyhow!(
+            "checkpoint block not found {}",
+            checkpoint_block_number
+        ))?
         .header
         .state_root;
 
     let prev_hashes =
-        fetch_previous_block_hashes(cached_provider.clone(), target_block_number).await?;
+        fetch_previous_block_hashes(cached_provider.clone(), target_block.header.number).await?;
     let checkpoint_prev_hashes =
         fetch_previous_block_hashes(cached_provider, checkpoint_block_number + 1) // include the checkpoint block
             .await?
@@ -263,7 +266,7 @@ where
             b_meta: BlockMetadata {
                 block_beneficiary: target_block.header.miner.compat(),
                 block_timestamp: target_block.header.timestamp.into(),
-                block_number: target_block_number.into(),
+                block_number: target_block.header.number.into(),
                 block_difficulty: target_block.header.difficulty.into(),
                 block_random: target_block
                     .header

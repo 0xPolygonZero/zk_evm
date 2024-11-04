@@ -103,21 +103,30 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    nice -19 cargo run --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR --batch-size $BATCH_SIZE --save-inputs-on-error stdio < $INPUT_FILE |& tee &> $TEST_OUT_PATH
-    if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
+    nice -19 cargo run --quiet --release --package zero --bin leader -- \
+      --test-only \
+      --runtime in-memory \
+      --load-strategy on-demand \
+      --block-batch-size "$BLOCK_BATCH_SIZE" \
+      --proof-output-dir "$PROOF_OUTPUT_DIR" \
+      --batch-size "$BATCH_SIZE" \
+      --save-inputs-on-error stdio
+      stdio < "$INPUT_FILE" |& tee &> "$TEST_OUT_PATH"
+
+    if grep -q 'All proof witnesses have been generated successfully.' "$TEST_OUT_PATH"; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         #rm $TEST_OUT_PATH
         exit 0
-    elif grep -q 'Attempted to collapse an extension node' $TEST_OUT_PATH; then
-        echo "ERROR: Attempted to collapse an extension node. See $TEST_OUT_PATH for more details."
-        rm $TEST_OUT_PATH
+    elif grep -q 'Attempted to collapse an extension node' "$TEST_OUT_PATH"; then
+        echo "ERROR: Attempted to collapse an extension node. See "$TEST_OUT_PATH" for more details."
+        rm "$TEST_OUT_PATH"
         exit 4
-    elif grep -q 'SIMW == RPCW ? false' $TEST_OUT_PATH; then
-        echo "ERROR: SIMW == RPCW ? false. See $TEST_OUT_PATH for more details."
+    elif grep -q 'SIMW == RPCW ? false' "$TEST_OUT_PATH"; then
+        echo "ERROR: SIMW == RPCW ? false. See "$TEST_OUT_PATH" for more details."
         exit 5
-    elif grep -q 'Proving task finished with error' $TEST_OUT_PATH; then
+    elif grep -q 'Proving task finished with error' "$TEST_OUT_PATH"; then
         # Some error occurred, display the logs and exit.
-        echo "ERROR: Proving task finished with error. See $TEST_OUT_PATH for more details."
+        echo "ERROR: Proving task finished with error. See "$TEST_OUT_PATH" for more details."
         exit 1
     else
         echo -e "\n\nUndecided.  Proving process has stopped but verdict is undecided. See $TEST_OUT_PATH for more details."
@@ -129,45 +138,43 @@ cargo build --release --jobs "$num_procs"
 
 
 start_time=$(date +%s%N)
-nice -19 "${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand -n 1 --block-batch-size $BLOCK_BATCH_SIZE \
- --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE |& tee $OUTPUT_LOG
+nice -19 "${REPO_ROOT}/target/release/leader" --runtime in-memory \
+    --load-strategy on-demand -n 1 \
+    --block-batch-size "$BLOCK_BATCH_SIZE" \
+    --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" |& tee "$OUTPUT_LOG"
 end_time=$(date +%s%N)
 
-cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+grep "Successfully wrote to disk proof file " "$OUTPUT_LOG" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
   # Some error occurred, display the logs and exit.
-  cat $OUTPUT_LOG
+  cat "$OUTPUT_LOG"
   echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
   exit 1
 fi
 
-cat $PROOFS_FILE_LIST | while read proof_file;
+while read -r proof_file;
 do
   echo "Verifying proof file $proof_file"
   verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  nice -19 "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee $verify_file
+  nice -19 "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee "$verify_file"
   if grep -q 'All proofs verified successfully!' $verify_file; then
       echo "Proof verification for file $proof_file successful";
-      rm $verify_file # we keep the generated proof for potential reuse
+      rm "$verify_file" # we keep the generated proof for potential reuse
   else
       # Some error occurred with verification, display the logs and exit.
-      cat $verify_file
+      cat "$verify_file"
       echo "There was an issue with proof verification. See $verify_file for more details.";
       exit 1
   fi
-done
+done < "$PROOFS_FILE_LIST"
 
 duration_ns=$((end_time - start_time))
 duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
 
 echo "Success!"
-echo "Proving duration:" $duration_sec " seconds"
+echo "Proving duration: $duration_sec seconds"
 echo "Note, this duration is inclusive of circuit handling and overall process initialization";
 
 # Clean up in case of success
-rm $OUTPUT_LOG
-
-
-
-
+rm "$OUTPUT_LOG"
 
