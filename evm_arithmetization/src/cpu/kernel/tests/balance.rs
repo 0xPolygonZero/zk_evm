@@ -1,4 +1,5 @@
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
@@ -7,44 +8,58 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::prepare_interpreter;
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::EitherRlp;
+use crate::generation::mpt::MptAccountRlp;
 use crate::generation::mpt::SmtAccountRlp;
 use crate::Node;
 
 // Test account with a given code hash.
-#[cfg(feature = "eth_mainnet")]
-fn test_account(balance: U256) -> AccountRlp {
-    AccountRlp {
-        nonce: U256::from(1111),
-        balance,
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: H256::from_uint(&U256::from(8888)),
+// #[cfg(feature = "eth_mainnet")]
+fn test_account(balance: U256) -> EitherRlp {
+    if cfg!(feature = "eth_mainnet") {
+        EitherRlp {
+            account_rlp: Either::Left(MptAccountRlp {
+                nonce: U256::from(1111),
+                balance,
+                storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+                code_hash: H256::from_uint(&U256::from(8888)),
+            }),
+        }
+    } else {
+        EitherRlp {
+            account_rlp: Either::Right(SmtAccountRlp {
+                nonce: U256::from(1111),
+                balance,
+                code_hash: U256::from(8888),
+                code_length: 0.into(),
+            }),
+        }
     }
 }
 
-// Test account with a given code hash.
-#[cfg(feature = "cdk_erigon")]
-fn test_account(balance: U256) -> SmtAccountRlp {
-    use smt_trie::code::hash_bytecode_u256;
+// // Test account with a given code hash.
+// #[cfg(feature = "cdk_erigon")]
+// fn test_account(balance: U256) -> SmtAccountRlp {
+//     use smt_trie::code::hash_bytecode_u256;
 
-    SmtAccountRlp {
-        nonce: U256::from(1111),
-        balance,
-        code_hash: hash_bytecode_u256(vec![0x01, 0x00]),
-        code_length: 2.into(),
-    }
-}
+//     SmtAccountRlp {
+//         nonce: U256::from(1111),
+//         balance,
+//         code_hash: hash_bytecode_u256(vec![0x01, 0x00]),
+//         code_length: 2.into(),
+//     }
+// }
 
 #[test]
 fn test_balance() -> Result<()> {
     let mut rng = thread_rng();
     let balance = U256(rng.gen());
-    let account = Box::new(test_account(balance));
+    let account = test_account(balance);
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = rng.gen();
     // Prepare the interpreter by inserting the account in the state trie.
-    prepare_interpreter(&mut interpreter, address, account)?;
+    prepare_interpreter(&mut interpreter, address, &account)?;
 
     // Test `balance`
     interpreter.generation_state.registers.program_counter = KERNEL.global_labels["balance"];

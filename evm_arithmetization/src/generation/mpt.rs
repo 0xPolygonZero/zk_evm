@@ -53,9 +53,9 @@ pub struct MptAccountRlp {
 }
 
 impl AccountRlp for MptAccountRlp {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    // fn as_any(&self) -> &dyn Any {
+    //     self
+    // }
     fn get_nonce(&self) -> U256 {
         self.nonce
     }
@@ -88,9 +88,9 @@ pub struct SmtAccountRlp {
 }
 
 impl AccountRlp for SmtAccountRlp {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    // fn as_any(&self) -> &dyn Any {
+    //     self
+    // }
     fn get_nonce(&self) -> U256 {
         self.nonce
     }
@@ -122,7 +122,7 @@ pub trait AccountRlp: Any {
     fn get_code_hash(&self) -> CodeHashType;
     fn get_code_hash_u256(&self) -> U256;
     fn rlp_encode(&self) -> BytesMut;
-    fn as_any(&self) -> &dyn Any;
+    // fn as_any(&self) -> &dyn Any;
 }
 
 pub struct EitherRlp {
@@ -130,6 +130,7 @@ pub struct EitherRlp {
 }
 
 impl EitherRlp {
+    #[cfg(test)]
     pub(crate) fn rlp_encode(&self) -> BytesMut {
         match &self.account_rlp {
             Either::Left(mpt_acct) => mpt_acct.rlp_encode(),
@@ -148,6 +149,51 @@ impl EitherRlp {
         match &self.account_rlp {
             Either::Left(mpt_account_rlp) => mpt_account_rlp,
             Either::Right(_smt_account_rlp) => panic!("eth_main expects MPTs"),
+        }
+    }
+}
+
+impl AccountRlp for EitherRlp {
+    fn get_nonce(&self) -> U256 {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.get_nonce(),
+            Either::Right(smt_rlp) => smt_rlp.get_nonce(),
+        }
+    }
+    fn get_balance(&self) -> U256 {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.get_balance(),
+            Either::Right(smt_rlp) => smt_rlp.get_balance(),
+        }
+    }
+    fn get_storage_root(&self) -> H256 {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.get_storage_root(),
+            Either::Right(smt_rlp) => smt_rlp.get_storage_root(),
+        }
+    }
+    fn get_code_length(&self) -> U256 {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.get_code_length(),
+            Either::Right(smt_rlp) => smt_rlp.get_code_length(),
+        }
+    }
+    fn get_code_hash(&self) -> CodeHashType {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.get_code_hash(),
+            Either::Right(smt_rlp) => smt_rlp.get_code_hash(),
+        }
+    }
+    fn get_code_hash_u256(&self) -> U256 {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.get_code_hash_u256(),
+            Either::Right(smt_rlp) => smt_rlp.get_code_hash_u256(),
+        }
+    }
+    fn rlp_encode(&self) -> BytesMut {
+        match self.account_rlp {
+            Either::Left(mpt_rlp) => mpt_rlp.rlp_encode(),
+            Either::Right(smt_rlp) => smt_rlp.rlp_encode(),
         }
     }
 }

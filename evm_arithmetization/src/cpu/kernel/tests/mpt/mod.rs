@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use either::Either;
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::Nibbles;
@@ -7,6 +9,9 @@ use mpt_trie::partial_trie::PartialTrie;
 use crate::generation::mpt::EitherRlp;
 use crate::generation::mpt::MptAccountRlp;
 use crate::generation::mpt::{AccountRlp, SmtAccountRlp};
+use crate::world::tries::StateMpt;
+use crate::world::world::StateWorld;
+use crate::world::world::Type1World;
 use crate::Node;
 
 #[cfg(feature = "eth_mainnet")]
@@ -61,27 +66,26 @@ pub(crate) fn test_account_1_empty_storage() -> EitherRlp {
     }
 }
 
-// #[cfg(feature = "eth_mainnet")]
-pub(crate) fn test_account_1() -> EitherRlp {
-    if cfg!(feature = "cdk_erigon") {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: U256::from(1111),
-                balance: U256::from(2222),
-                code_hash: U256::from(4444),
-                code_length: 0.into(),
-            }),
-        }
-    } else {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: U256::from(1111),
-                balance: U256::from(2222),
-                storage_root: H256::from_uint(&U256::from(3333)),
-                code_hash: H256::from_uint(&U256::from(4444)),
-            }),
-        }
+#[cfg(feature = "eth_mainnet")]
+pub(crate) fn test_account_1() -> MptAccountRlp {
+    // if cfg!(feature = "cdk_erigon") {
+    //     EitherRlp {
+    //         account_rlp: Either::Right(SmtAccountRlp {
+    //             nonce: U256::from(1111),
+    //             balance: U256::from(2222),
+    //             code_hash: U256::from(4444),
+    //             code_length: 0.into(),
+    //         }),
+    //     }
+    // } else {
+    MptAccountRlp {
+        nonce: U256::from(1111),
+        balance: U256::from(2222),
+        storage_root: H256::from_uint(&U256::from(3333)),
+        code_hash: H256::from_uint(&U256::from(4444)),
     }
+
+    // }
 }
 // #[cfg(feature = "cdk_erigon")]
 // pub(crate) fn test_account_1() -> Box<dyn AccountRlp> {
@@ -111,28 +115,26 @@ pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
     test_account_1_empty_storage().rlp_encode().to_vec()
 }
 
-// #[cfg(feature = "eth_mainnet")]
-pub(crate) fn test_account_2() -> EitherRlp {
-    if cfg!(feature = "cdk_erigon") {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: U256::from(5555),
-                balance: U256::from(6666),
-                code_hash: U256::from(8888),
-                code_length: 0.into(),
-            }),
-        }
-    } else {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: U256::from(5555),
-                balance: U256::from(6666),
-                storage_root: H256::from_uint(&U256::from(7777)),
-                code_hash: H256::from_uint(&U256::from(8888)),
-            }),
-        }
+#[cfg(feature = "eth_mainnet")]
+pub(crate) fn test_account_2() -> MptAccountRlp {
+    // if cfg!(feature = "cdk_erigon") {
+    //     EitherRlp {
+    //         account_rlp: Either::Right(SmtAccountRlp {
+    //             nonce: U256::from(5555),
+    //             balance: U256::from(6666),
+    //             code_hash: U256::from(8888),
+    //             code_length: 0.into(),
+    //         }),
+    //     }
+    // } else {
+    MptAccountRlp {
+        nonce: U256::from(5555),
+        balance: U256::from(6666),
+        storage_root: H256::from_uint(&U256::from(7777)),
+        code_hash: H256::from_uint(&U256::from(8888)),
     }
 }
+// }
 
 // #[cfg(feature = "cdk_erigon")]
 // pub(crate) fn test_account_2() -> Box<dyn AccountRlp> {
@@ -165,4 +167,13 @@ pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
         .into(),
     }
     .into()
+}
+
+#[cfg(feature = "eth_mainnet")]
+pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> StateWorld {
+    StateWorld {
+        state: Either::Left(
+            Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
+        ),
+    }
 }

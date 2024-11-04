@@ -1,4 +1,5 @@
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{Address, U256};
 use hex_literal::hex;
 use keccak_hash::H256;
@@ -10,17 +11,19 @@ use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::prepare_interpreter;
 use crate::cpu::kernel::tests::transaction_parsing::prepare_interpreter_for_txn_parsing;
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::{EitherRlp, MptAccountRlp};
 use crate::testing_utils::EMPTY_NODE_HASH;
 
 #[test]
 fn process_type_3_txn() -> Result<()> {
     let sender_address = Address::from_slice(&hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"));
-    let sender_account = AccountRlp {
-        nonce: 1.into(),
-        balance: 0x1000000.into(),
-        storage_root: EMPTY_NODE_HASH,
-        code_hash: H256::default(),
+    let sender_account = EitherRlp {
+        account_rlp: Either::Left(MptAccountRlp {
+            nonce: 1.into(),
+            balance: 0x1000000.into(),
+            storage_root: EMPTY_NODE_HASH,
+            code_hash: H256::default(),
+        }),
     };
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
@@ -107,11 +110,13 @@ fn process_type_3_txn() -> Result<()> {
 #[test]
 fn process_type_3_txn_invalid_sig() -> Result<()> {
     let sender_address = Address::from_slice(&hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"));
-    let sender_account = AccountRlp {
-        nonce: 1.into(),
-        balance: 0x1000000.into(),
-        storage_root: EMPTY_NODE_HASH,
-        code_hash: H256::default(),
+    let sender_account = EitherRlp {
+        account_rlp: Either::Left(MptAccountRlp {
+            nonce: 1.into(),
+            balance: 0x1000000.into(),
+            storage_root: EMPTY_NODE_HASH,
+            code_hash: H256::default(),
+        }),
     };
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);

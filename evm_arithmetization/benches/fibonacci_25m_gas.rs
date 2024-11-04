@@ -10,14 +10,12 @@ use std::str::FromStr;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use either::Either;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, H256, U256};
-#[cfg(feature = "cdk_erigon")]
-use ethereum_types::{BigEndianHash, H160};
+use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
 use evm_arithmetization::generation::mpt::{
-    get_h256_from_code_hash, get_u256_from_code_hash, AccountRlp, CodeHashType, LegacyReceiptRlp,
-    MptAccountRlp,
+    get_h256_from_code_hash, get_u256_from_code_hash, AccountRlp, CodeHashType, EitherRlp,
+    LegacyReceiptRlp, MptAccountRlp,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
@@ -39,9 +37,10 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 #[cfg(feature = "cdk_erigon")]
 use plonky2::field::types::PrimeField64;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 #[cfg(feature = "cdk_erigon")]
 use smt_trie::{
-    code::hash_bytecode_u256,
     keys::{key_balance, key_code_length},
     utils::hashout2u,
 };
@@ -133,21 +132,25 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     };
 
     let to_account_before = if cfg!(feature = "cdk_erigon") {
-        Either::Right(SmtAccountRlp {
-            nonce: 1.into(),
-            balance: 0.into(),
-            code_hash: get_u256_from_code_hash(code_hash.clone())
-                .expect("In cdk_erigon, the code_hash is a U256"),
-            code_length: code.len().into(),
-        })
+        EitherRlp {
+            account_rlp: Either::Right(SmtAccountRlp {
+                nonce: 1.into(),
+                balance: 0.into(),
+                code_hash: get_u256_from_code_hash(code_hash.clone())
+                    .expect("In cdk_erigon, the code_hash is a U256"),
+                code_length: code.len().into(),
+            }),
+        }
     } else {
-        Either::Left(MptAccountRlp {
-            nonce: 1.into(),
-            balance: 0.into(),
-            storage_root: empty_trie_root,
-            code_hash: get_h256_from_code_hash(code_hash.clone())
-                .expect("In eth_mainnet, the code_hash is a H256"),
-        })
+        EitherRlp {
+            account_rlp: Either::Left(MptAccountRlp {
+                nonce: 1.into(),
+                balance: 0.into(),
+                storage_root: empty_trie_root,
+                code_hash: get_h256_from_code_hash(code_hash.clone())
+                    .expect("In eth_mainnet, the code_hash is a H256"),
+            }),
+        }
     };
 
     // #[cfg(feature = "cdk_erigon")]
@@ -187,21 +190,24 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
 
     let mut state_trie_before = StateWorld::default();
     #[cfg(feature = "eth_mainnet")]
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let (mut state_trie_before_hashed, mut storage_tries) =
+        preinitialized_state_and_storage_tries()?;
     #[cfg(feature = "eth_mainnet")]
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     #[cfg(feature = "eth_mainnet")]
     {
         let sender_account_before_mpt =
             sender_account_before.expect_left("The sender account is an MPT.");
-        state_trie_before.insert(
+        state_trie_before_hashed.insert(
             sender_nibbles,
-            rlp::encode(&sender_account_before_mpy).to_vec(),
+            rlp::encode(&sender_account_before_mpt).to_vec(),
         )?;
-        state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
+        state_trie_before_hashed.insert(to_nibbles, to_account_before.rlp_encode().to_vec())?;
 
         storage_tries.push((sender_state_key, Node::Empty.into()));
         storage_tries.push((to_state_key, Node::Empty.into()));
+        state_trie_before =
+            get_state_world_from_trie_and_storage(state_trie_before_hashed, storage_tries);
     }
 
     #[cfg(feature = "cdk_erigon")]
@@ -282,34 +288,39 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let sender_account_after = if cfg!(feature = "cdk_erigon") {
         let sender_account_before_smt =
             sender_account_before.expect_right("cdk_erigon expects SMTs.");
-        Either::Right(SmtAccountRlp {
-            balance: sender_account_before_smt.get_balance()
-                - value
-                - gas_used * block_metadata.block_base_fee,
-            nonce: sender_account_before_smt.get_nonce() + 1,
-            ..sender_account_before_smt
-        })
+        EitherRlp {
+            account_rlp: Either::Right(SmtAccountRlp {
+                balance: sender_account_before_smt.get_balance()
+                    - value
+                    - gas_used * block_metadata.block_base_fee,
+                nonce: sender_account_before_smt.get_nonce() + 1,
+                ..sender_account_before_smt
+            }),
+        }
     } else {
         let sender_account_before_mpt =
             sender_account_before.expect_left("eth_mainnet expects MPTs.");
-        Either::Left(MptAccountRlp {
-            balance: sender_account_before_mpt.get_balance()
-                - value
-                - gas_used * block_metadata.block_base_fee,
-            nonce: sender_account_before_mpt.get_nonce() + 1,
-            ..sender_account_before_mpt
-        })
+        EitherRlp {
+            account_rlp: Either::Left(MptAccountRlp {
+                balance: sender_account_before_mpt.get_balance()
+                    - value
+                    - gas_used * block_metadata.block_base_fee,
+                nonce: sender_account_before_mpt.get_nonce() + 1,
+                ..sender_account_before_mpt
+            }),
+        }
     };
     let to_account_after = &to_account_before;
 
     let mut expected_state_trie_after = StateWorld::default();
     #[cfg(feature = "eth_mainnet")]
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+    let mut expected_state_trie_after_hashed = HashedPartialTrie::from(Node::Empty);
     #[cfg(feature = "eth_mainnet")]
     {
-        expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
+        expected_state_trie_after_hashed
+            .insert(sender_nibbles, sender_account_after.rlp_encode().to_vec())?;
+        expected_state_trie_after_hashed
+            .insert(to_nibbles, to_account_after.rlp_encode().to_vec())?;
 
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
@@ -318,10 +329,12 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         )?;
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
-        expected_state_trie_after.insert(
+        expected_state_trie_after_hashed.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
         )?;
+        expected_state_trie_after =
+            get_state_world_from_trie_and_storage(expected_state_trie_after_hashed, vec![]);
     }
 
     #[cfg(feature = "cdk_erigon")]
@@ -444,4 +457,26 @@ fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccountRlp, c
     // for (&k, &v) in storage {
     //     smt.set(key_storage(addr, k), v);
     // }
+}
+use std::collections::BTreeMap;
+
+use evm_arithmetization::world::tries::StateMpt;
+use evm_arithmetization::world::world::Type1World;
+#[cfg(feature = "eth_mainnet")]
+fn get_state_world_from_trie_and_storage(
+    state_trie: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    use evm_arithmetization::world::tries::StorageTrie;
+
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }

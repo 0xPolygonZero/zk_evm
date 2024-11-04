@@ -101,9 +101,9 @@ impl<F: RichField> GenerationState<F> {
                 .map_or_else(
                     || {
                         let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
-                        let mut n = Err(ProgramError::ProverInputError(
-                            ProverInputError::InvalidInput,
-                        ));
+                        // let mut n = Err(ProgramError::ProverInputError(
+                        //     ProverInputError::InvalidInput,
+                        // ));
                         // #[cfg(feature = "eth_mainnet")]
                         // {
                         //     n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content);
@@ -117,7 +117,7 @@ impl<F: RichField> GenerationState<F> {
                         // }
                         // #[cfg(feature = "cdk_erigon")]
                         // {
-                        n = if cfg!(feature = "cdk_erigon") {
+                        let n = if cfg!(feature = "cdk_erigon") {
                             Ok(new_content.len())
                         } else {
                             load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)

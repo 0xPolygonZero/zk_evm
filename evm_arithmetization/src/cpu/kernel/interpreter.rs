@@ -8,7 +8,6 @@
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
-use either::Either;
 use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
