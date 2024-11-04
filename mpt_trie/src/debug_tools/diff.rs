@@ -9,7 +9,7 @@
 use std::fmt::{self, Debug};
 use std::{fmt::Display, ops::Deref};
 
-use ethereum_types::H256;
+use alloy::primitives::B256;
 use log::warn;
 
 use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
@@ -126,7 +126,7 @@ pub struct NodeInfo {
     /// Type of this node.
     pub node_type: TrieNodeType,
     /// Node hash.
-    pub hash: H256,
+    pub hash: B256,
 }
 
 impl Display for NodeInfo {
@@ -423,8 +423,8 @@ fn create_diff_detection_state_based_from_hash_and_gen_hashes(
 }
 
 fn create_diff_detection_state_based_from_hashes(
-    a_hash: &H256,
-    b_hash: &H256,
+    a_hash: &B256,
+    b_hash: &B256,
     state: &DepthDiffPerCallState,
     depth_state: &mut DepthNodeDiffState,
 ) -> DiffDetectionState {
@@ -450,7 +450,6 @@ const fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
 mod tests {
     use std::str::FromStr;
 
-    use ethereum_types::BigEndianHash;
     use rlp_derive::{RlpDecodable, RlpEncodable};
 
     use super::create_full_diff_between_tries;
@@ -702,63 +701,63 @@ mod tests {
     #[test]
     /// Do one real world test where we change the values of the accounts.
     fn multi_node_multi_diff_works_accounts() -> Result<(), Box<dyn std::error::Error>> {
-        use ethereum_types::{H256, U256};
-        use keccak_hash::keccak;
+        use alloy::primitives::{keccak256, B256, U256};
+        use alloy_rlp::{RlpDecodable, RlpEncodable};
         #[derive(
             RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord,
         )]
         pub struct TestAccountRlp {
             pub nonce: U256,
             pub balance: U256,
-            pub storage_root: H256,
-            pub code_hash: H256,
+            pub storage_root: B256,
+            pub code_hash: B256,
         }
 
         let mut data = vec![
             (
-                keccak(hex::decode("f0d4c12a5768d806021f80a262b4d39d26c58b8d").unwrap()),
+                keccak256(hex::decode("f0d4c12a5768d806021f80a262b4d39d26c58b8d").unwrap()),
                 TestAccountRlp {
                     nonce: U256::from(1),
                     balance: U256::from(2),
-                    storage_root: H256::from_uint(&1312378.into()),
-                    code_hash: H256::from_uint(&943221.into()),
+                    storage_root: B256::from(1312378.into()),
+                    code_hash: B256::from(943221.into()),
                 },
             ),
             (
-                keccak(hex::decode("95222290dd7278aa3ddd389cc1e1d165cc4bafe5").unwrap()),
+                keccak256(hex::decode("95222290dd7278aa3ddd389cc1e1d165cc4bafe5").unwrap()),
                 TestAccountRlp {
                     nonce: U256::from(2),
                     balance: U256::from(3),
-                    storage_root: H256::from_uint(&1123178.into()),
-                    code_hash: H256::from_uint(&8133221.into()),
+                    storage_root: B256::from(1123178.into()),
+                    code_hash: B256::from(8133221.into()),
                 },
             ),
             (
-                keccak(hex::decode("43682bcf1ce452a70b72c109551084076c6377e0").unwrap()),
+                keccak256(hex::decode("43682bcf1ce452a70b72c109551084076c6377e0").unwrap()),
                 TestAccountRlp {
                     nonce: U256::from(100),
                     balance: U256::from(101),
-                    storage_root: H256::from_uint(&12345678.into()),
-                    code_hash: H256::from_uint(&94321.into()),
+                    storage_root: B256::from(12345678.into()),
+                    code_hash: B256::from(94321.into()),
                 },
             ),
             (
-                keccak(hex::decode("97a9a15168c22b3c137e6381037e1499c8ad0978").unwrap()),
+                keccak256(hex::decode("97a9a15168c22b3c137e6381037e1499c8ad0978").unwrap()),
                 TestAccountRlp {
                     nonce: U256::from(3000),
                     balance: U256::from(3002),
-                    storage_root: H256::from_uint(&123456781.into()),
-                    code_hash: H256::from_uint(&943214141.into()),
+                    storage_root: B256::from(123456781.into()),
+                    code_hash: B256::from(943214141.into()),
                 },
             ),
         ];
 
-        let create_trie_with_data = |trie: &Vec<(H256, TestAccountRlp)>| -> Result<HashedPartialTrie, Box<dyn std::error::Error>> {
+        let create_trie_with_data = |trie: &Vec<(B256, TestAccountRlp)>| -> Result<HashedPartialTrie, Box<dyn std::error::Error>> {
             let mut tr = HashedPartialTrie::default();
-            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[0].0.as_bytes()))?, rlp::encode(&trie[0].1).as_ref())?;
-            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[1].0.as_bytes()))?, rlp::encode(&trie[1].1).as_ref())?;
-            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[2].0.as_bytes()))?, rlp::encode(&trie[2].1).as_ref())?;
-            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[3].0.as_bytes()))?, rlp::encode(&trie[3].1).as_ref())?;
+            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[0].0))?, alloy_rlp::encode(&trie[0].1).as_ref())?;
+            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[1].0))?, alloy_rlp::encode(&trie[1].1).as_ref())?;
+            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[2].0))?, alloy_rlp::encode(&trie[2].1).as_ref())?;
+            tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[3].0))?, alloy_rlp::encode(&trie[3].1).as_ref())?;
             Ok(tr)
         };
 
@@ -767,7 +766,7 @@ mod tests {
         // Change data on multiple accounts
         data[1].1.balance += U256::from(1);
         data[3].1.nonce += U256::from(2);
-        data[3].1.storage_root = H256::from_uint(&4445556.into());
+        data[3].1.storage_root = B256::from(4445556.into());
         let b = create_trie_with_data(&data)?;
 
         let diff = create_full_diff_between_tries(&a, &b);

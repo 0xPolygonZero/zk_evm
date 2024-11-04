@@ -14,7 +14,8 @@ exclude = ["test_data/*"]
 [dependencies]
 bytes.workspace = true
 enum-as-inner.workspace = true
-ethereum-types.workspace = true
+alloy.workspace = true
+alloy-rlp.workspace = true
 hex.workspace = true
 impl-codec.workspace = true
 impl-num-traits.workspace = true

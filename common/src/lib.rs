@@ -1,15 +1,15 @@
-use ethereum_types::{H256, U256};
+use alloy::primitives::{B256, U256};
 
 /// The hash value of an account empty EVM code.
 /// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-pub const EMPTY_CODE_HASH: H256 = H256([
+pub const EMPTY_CODE_HASH: B256 = B256::new([
     197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
     130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
 ]);
 
 /// The hash of an empty Merkle Patricia trie.
 /// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-pub const EMPTY_TRIE_HASH: H256 = H256([
+pub const EMPTY_TRIE_HASH: B256 = B256::new([
     86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
@@ -36,32 +36,38 @@ macro_rules! check_chain_features {
 /// Converts an amount in `ETH` to `wei` units.
 pub fn eth_to_wei(eth: U256) -> U256 {
     // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
+    eth * U256::from(10).pow(U256::from(18))
 }
 
 /// Converts an amount in `gwei` to `wei` units.
 /// This also works for converting `ETH` to `gwei`.
 pub fn gwei_to_wei(eth: U256) -> U256 {
     // 1 ether = 10^9 gwei = 10^18 wei.
-    eth * U256::from(10).pow(9.into())
+    eth * U256::from(10).pow(U256::from(9))
 }
 
-#[test]
-fn test_eth_conversion() {
-    assert_eq!(
-        eth_to_wei(U256::one()),
-        gwei_to_wei(gwei_to_wei(U256::one()))
-    );
-}
-#[test]
-fn test_empty_code_hash() {
-    assert_eq!(EMPTY_CODE_HASH, keccak_hash::keccak([]));
-}
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::keccak256;
 
-#[test]
-fn test_empty_trie_hash() {
-    assert_eq!(
-        EMPTY_TRIE_HASH,
-        keccak_hash::keccak(bytes::Bytes::from_static(&rlp::NULL_RLP))
-    );
+    use super::*;
+    #[test]
+    fn test_eth_conversion() {
+        assert_eq!(
+            eth_to_wei(U256::from(1)),
+            gwei_to_wei(gwei_to_wei(U256::from(1)))
+        );
+    }
+    #[test]
+    fn test_empty_code_hash() {
+        assert_eq!(EMPTY_CODE_HASH, keccak256([]));
+    }
+
+    #[test]
+    fn test_empty_trie_hash() {
+        assert_eq!(
+            EMPTY_TRIE_HASH,
+            keccak256(bytes::Bytes::from_static(&rlp::NULL_RLP))
+        );
+    }
 }

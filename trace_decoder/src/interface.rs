@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use ethereum_types::{Address, U256};
+use alloy::primitives::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::ConsolidatedHash;
 use keccak_hash::H256;

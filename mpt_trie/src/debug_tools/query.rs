@@ -3,7 +3,7 @@
 
 use std::fmt::{self, Display};
 
-use ethereum_types::H256;
+use alloy::primitives::B256;
 
 use crate::{
     nibbles::Nibbles,
@@ -112,7 +112,7 @@ impl From<Nibbles> for DebugQuery {
 /// `include_node_specific_values` is `true`.
 #[derive(Clone, Debug, Hash)]
 enum ExtraNodeSegmentInfo {
-    Hash(H256),
+    Hash(B256),
     Branch { child_mask: u16 },
     Leaf { value: Vec<u8> },
 }
