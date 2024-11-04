@@ -97,6 +97,7 @@ fi
 if [[ $TEST_ONLY == "test_only" ]]; then
     cargo run --quiet --release --package zero --bin leader -- \
       --test-only \
+      --use-test-config \
       --runtime in-memory \
       --load-strategy on-demand \
       --block-batch-size "$BLOCK_BATCH_SIZE" \
@@ -121,6 +122,7 @@ cargo build --release --jobs "$num_procs"
 start_time=$(date +%s%N)
 "${REPO_ROOT}/target/release/leader" --runtime in-memory \
     --load-strategy on-demand -n 1 \
+    --use-test-config \
     --block-batch-size "$BLOCK_BATCH_SIZE" \
     --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" &> "$OUTPUT_LOG"
 end_time=$(date +%s%N)

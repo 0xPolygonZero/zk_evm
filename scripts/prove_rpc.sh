@@ -97,6 +97,7 @@ if [[ $8 == "test_only" ]]; then
     echo "Proving blocks from ($START_BLOCK) to ($END_BLOCK)"
     command="cargo r --release --package zero --bin leader -- \
 --test-only \
+--use-test-config \
 --runtime in-memory \
 --load-strategy on-demand \
 --proof-output-dir $PROOF_OUTPUT_DIR \
@@ -134,6 +135,7 @@ else
     echo "Proving blocks from ($START_BLOCK) to ($END_BLOCK)"
     command="cargo r --release --package zero --bin leader -- \
 --runtime in-memory \
+--use-test-config \
 --load-strategy on-demand \
 --proof-output-dir $PROOF_OUTPUT_DIR \
 --block-batch-size $BLOCK_BATCH_SIZE \
