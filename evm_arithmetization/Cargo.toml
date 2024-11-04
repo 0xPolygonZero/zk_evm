@@ -59,7 +59,6 @@ zk_evm_proc_macro.workspace = true
 criterion.workspace = true
 hex.workspace = true
 ripemd.workspace = true
-dotenvy.workspace = true
 
 [features]
 default = ["eth_mainnet"]
