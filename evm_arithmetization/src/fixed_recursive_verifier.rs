@@ -827,16 +827,10 @@ where
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
         config: RecursionConfig,
     ) -> Self {
-        // Sanity check on the provided config
-        assert_eq!(
-            DEFAULT_CAP_LEN,
-            1 << config.stark_config.fri_config.cap_height
-        );
-
         let stark_config = &config.stark_config;
-        let shrinking_circuit_config = &config.shrinking_circuit_config;
-        let recursion_circuit_config = &config.recursion_circuit_config;
-        let threshold_degree_bits = config.threshold_degree_bits;
+
+        // Sanity check on the provided config
+        assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
 
         macro_rules! create_recursive_circuit {
             ($table_enum:expr, $stark_field:ident) => {
@@ -846,8 +840,8 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
-                    shrinking_circuit_config,
-                    threshold_degree_bits,
+                    &config.shrinking_circuit_config,
+                    config.threshold_degree_bits,
                 )
             };
         }
@@ -879,7 +873,8 @@ where
             poseidon,
         ];
 
-        let root = Self::create_segment_circuit(&by_table, stark_config, recursion_circuit_config);
+        let root =
+            Self::create_segment_circuit(&by_table, stark_config, &config.recursion_circuit_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let batch_aggregation =
             Self::create_batch_aggregation_circuit(&segment_aggregation, stark_config);
@@ -3330,5 +3325,72 @@ pub mod testing {
                 &self.batch_aggregation.circuit.common,
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use dotenvy::dotenv;
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::plonk::config::PoseidonGoldilocksConfig;
+
+    use super::*;
+
+    fn parse_range(range_str: &str) -> anyhow::Result<std::ops::Range<usize>> {
+        let parts: Vec<&str> = range_str.split("..").collect();
+        if parts.len() == 2 {
+            let start = parts[0].parse::<usize>()?;
+            let end = parts[1].parse::<usize>()?;
+            Ok(start..end)
+        } else {
+            Err(anyhow::anyhow!("Invalid range format"))
+        }
+    }
+
+    // Ensures that all circuits can be generated without any issues with in
+    // production or default STARK configs.
+    #[test]
+    fn test_production_recursion_config() -> anyhow::Result<()> {
+        type F = GoldilocksField;
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+
+        dotenv().ok();
+
+        macro_rules! fetch_and_parse_range {
+            ($env_var:expr) => {
+                parse_range(&env::var($env_var).expect(concat!($env_var, " not set")))?
+            };
+        }
+        let arithmetic_range = fetch_and_parse_range!("ARITHMETIC_CIRCUIT_SIZE");
+        let byte_packing_range = fetch_and_parse_range!("BYTE_PACKING_CIRCUIT_SIZE");
+        let cpu_range = fetch_and_parse_range!("CPU_CIRCUIT_SIZE");
+        let keccak_range = fetch_and_parse_range!("KECCAK_CIRCUIT_SIZE");
+        let keccak_sponge_range = fetch_and_parse_range!("KECCAK_SPONGE_CIRCUIT_SIZE");
+        let logic_range = fetch_and_parse_range!("LOGIC_CIRCUIT_SIZE");
+        let memory_range = fetch_and_parse_range!("MEMORY_CIRCUIT_SIZE");
+        let memory_before_range = fetch_and_parse_range!("MEMORY_BEFORE_CIRCUIT_SIZE");
+        let memory_after_range = fetch_and_parse_range!("MEMORY_AFTER_CIRCUIT_SIZE");
+
+        let all_stark = AllStark::<F, D>::default();
+        AllRecursiveCircuits::<F, C, D>::new(
+            &all_stark,
+            &[
+                arithmetic_range,
+                byte_packing_range,
+                cpu_range,
+                keccak_range,
+                keccak_sponge_range,
+                logic_range,
+                memory_range,
+                memory_before_range,
+                memory_after_range,
+            ],
+            RecursionConfig::default(),
+        );
+
+        Ok(())
     }
 }
