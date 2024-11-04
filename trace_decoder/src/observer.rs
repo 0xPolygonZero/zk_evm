@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 
 use ethereum_types::U256;
+use evm_arithmetization::world::tries::{ReceiptTrie, TransactionTrie};
 
 use crate::core::IntraBlockTries;
-use crate::tries::{ReceiptTrie, TransactionTrie};
 
 /// Observer API for the trace decoder.
 /// Observer is used to collect various debugging and metadata info

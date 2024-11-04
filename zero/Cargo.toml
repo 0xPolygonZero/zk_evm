@@ -60,7 +60,7 @@ mockall = "0.13.0"
 
 
 [features]
-default = ["cdk_erigon"]
+default = ["eth_mainnet"]
 eth_mainnet = ["evm_arithmetization/eth_mainnet", "trace_decoder/eth_mainnet"]
 cdk_erigon = ["evm_arithmetization/cdk_erigon", "trace_decoder/cdk_erigon"]
 polygon_pos = ["evm_arithmetization/polygon_pos", "trace_decoder/polygon_pos"]

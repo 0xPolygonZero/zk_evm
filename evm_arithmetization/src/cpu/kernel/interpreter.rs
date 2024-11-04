@@ -8,6 +8,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
+use either::Either;
 use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
@@ -301,9 +302,22 @@ impl<F: RichField> Interpreter<F> {
                 GlobalMetadata::StateTrieRootDigestBefore,
                 // TODO: We should reuse the serilized trie in memory.
                 #[cfg(feature = "eth_mainnet")]
-                h2u(tries.state_trie.hash()),
+                h2u(tries
+                    .state_trie
+                    .state
+                    .clone()
+                    .expect_left("eth_mainnet expects MPTs.")
+                    .state_trie()
+                    .hash()),
                 #[cfg(feature = "cdk_erigon")]
-                hash_serialize_u256(&tries.state_trie.to_vec()),
+                hash_serialize_u256(&smt.as_smt().to_vec()),
+                /* match &tries.state_trie.state {
+                 *     Either::Left(mpt) =>
+                 * h2u(mpt.state_trie().hash()),
+                 *     Either::Right(smt) =>
+                 * hash_serialize_u256(&smt.
+                 * as_smt().to_vec()),
+                 * }, */
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,
@@ -495,7 +509,7 @@ impl<F: RichField> Interpreter<F> {
     #[cfg(feature = "eth_mainnet")]
     fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
         self.generation_state
-            .memorys
+            .memory
             .insert_preinitialized_segment(segment, values);
     }
 

@@ -19,7 +19,7 @@ fn mpt_hash_empty() -> Result<()> {
         state_trie: Default::default(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     test_state_trie(trie_inputs)
@@ -37,7 +37,7 @@ fn mpt_hash_empty_branch() -> Result<()> {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
     test_state_trie(trie_inputs)
 }

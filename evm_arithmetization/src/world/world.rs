@@ -4,17 +4,39 @@ use alloy_compat::Compat as _;
 use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
 use keccak_hash::H256;
+use mpt_trie::partial_trie::HashedPartialTrie;
+use serde::{Deserialize, Serialize};
+use smt_trie::code::hash_bytecode_u256;
 
-use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
+use crate::generation::mpt::AccountRlp;
+use crate::world::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct StateWorld {
+    pub state: Either<Type1World, Type2World>,
+}
+
+impl Default for StateWorld {
+    fn default() -> Self {
+        if cfg!(feature = "cdk_erigon") {
+            StateWorld {
+                state: Either::Right(Type2World::default()),
+            }
+        } else {
+            StateWorld {
+                state: Either::Left(Type1World::default()),
+            }
+        }
+    }
+}
 
 /// The [core](crate::core) of this crate is agnostic over state and storage
 /// representations.
 ///
 /// This is the common interface to those data structures.
 /// See also [crate::_DEVELOPER_DOCS].
-pub(crate) trait World {
+pub trait World {
     /// (State) subtries may be _hashed out.
     /// This type is a key which may identify a subtrie.
     type SubtriePath;
@@ -44,6 +66,8 @@ pub(crate) trait World {
     ///
     /// Creates a new account at `address` if it does not exist.
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
+
+    fn set_code_hash(&mut self, address: Address, code: &[u8]) -> anyhow::Result<()>;
 
     /// The [core](crate::core) of this crate tracks required subtries for
     /// proving.
@@ -93,7 +117,7 @@ pub(crate) trait World {
     fn root(&mut self) -> H256;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Type1World {
     state: StateMpt,
     /// Writes to storage should be reconciled with
@@ -121,14 +145,27 @@ impl Type1World {
     pub fn state_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.state.as_hashed_partial_trie()
     }
+    pub fn set_storage(&mut self, storage: BTreeMap<H256, StorageTrie>) {
+        self.storage = storage;
+    }
     pub fn into_state_and_storage(self) -> (StateMpt, BTreeMap<H256, StorageTrie>) {
         let Self { state, storage } = self;
         (state, storage)
     }
-    fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
+    pub(crate) fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
         self.storage
             .get_mut(&keccak_hash::keccak(address))
             .context("no such storage")
+    }
+    pub(crate) fn get_storage(&self) -> Vec<(H256, &HashedPartialTrie)> {
+        self.storage
+            .iter()
+            .map(|(key, value)| (*key, value.as_hashed_partial_trie()))
+            .collect::<Vec<_>>()
+        // .self
+        // .storage
+        // .get_mut(&keccak_hash::keccak(address))
+        // .context("no such storage")
     }
     fn on_storage<T>(
         &mut self,
@@ -173,6 +210,13 @@ impl World for Type1World {
         let key = keccak_hash::keccak(address);
         let mut acct = self.state.get(key).unwrap_or_default();
         acct.code_hash = code.right_or_else(keccak_hash::keccak);
+        self.state.insert(key, acct)
+    }
+    fn set_code_hash(&mut self, address: Address, code: &[u8]) -> anyhow::Result<()> {
+        let key = keccak_hash::keccak(address);
+        let mut acct = self.state.get(key).unwrap_or_default();
+
+        acct.code_hash = keccak_hash::keccak(code);
         self.state.insert(key, acct)
     }
     fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
@@ -278,6 +322,13 @@ impl World for Type2World {
         };
         Ok(())
     }
+    fn set_code_hash(&mut self, address: Address, code: &[u8]) -> anyhow::Result<()> {
+        let acct = self.accounts.entry(address).or_default();
+
+        acct.code = Some(hash_bytecode_u256(code.to_vec()));
+        acct.code_length = Some(U256::from(code.len()));
+        Ok(())
+    }
     fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
         self.accounts.remove(&address);
         Ok(None)
@@ -347,7 +398,7 @@ impl World for Type2World {
 // but without the distinction,
 // the wire tests fail.
 // This may be a bug in the SMT library.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Type2Entry {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
@@ -357,7 +408,7 @@ pub struct Type2Entry {
 }
 
 // This is a buffered version
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Type2World {
     accounts: BTreeMap<Address, Type2Entry>,
     hashed_out: BTreeMap<SmtKey, H256>,

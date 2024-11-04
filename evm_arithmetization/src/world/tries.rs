@@ -7,9 +7,11 @@ use anyhow::ensure;
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, MptAccountRlp};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
+use serde::{Deserialize, Serialize};
 use u4::{AsNibbles, U4};
+
+use crate::generation::mpt::MptAccountRlp;
 
 /// Bounded sequence of [`U4`],
 /// used as a key for [MPT](HashedPartialTrie) types in this module.
@@ -96,7 +98,7 @@ fn mpt_key_into_hash() {
 /// used as a key for SMT tries.
 ///
 /// Semantically equivalent to [`smt_trie::bits::Bits`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct SmtKey {
     bits: bitvec::array::BitArray<[u8; 32]>,
     len: usize,
@@ -273,7 +275,7 @@ impl From<ReceiptTrie> for HashedPartialTrie {
 /// Global, [`Address`] `->` [`AccountRlp`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMpt {
     /// Values are always [`rlp`]-encoded [`AccountRlp`],
     /// inserted at [256 bits](MptKey::from_hash).
@@ -302,8 +304,14 @@ impl StateMpt {
             ),
         }
     }
+    pub fn new_with_inner(inner: HashedPartialTrie) -> Self {
+        Self { inner }
+    }
     pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
+    }
+    pub fn as_mut_hashed_partial_trie(&mut self) -> &mut HashedPartialTrie {
+        &mut self.inner
     }
     /// Insert a _hashed out_ part of the trie
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
@@ -357,7 +365,7 @@ impl From<StateMpt> for HashedPartialTrie {
 /// Global, per-account.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }
@@ -366,6 +374,9 @@ impl StorageTrie {
         Self {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
+    }
+    pub fn new_with_trie(untyped: HashedPartialTrie) -> Self {
+        Self { untyped }
     }
     pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
         self.untyped.get(key.into_nibbles())

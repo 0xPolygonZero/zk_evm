@@ -4,11 +4,11 @@
 //! Total number of user instructions: 7_136_858.
 //! Total number of loops: 2_378_952.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::str::FromStr;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use either::Either;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, H256, U256};
 #[cfg(feature = "cdk_erigon")]
@@ -22,15 +22,14 @@ use evm_arithmetization::generation::mpt::{
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, update_beacon_roots_account_storage,
-};
 #[cfg(feature = "eth_mainnet")]
 use evm_arithmetization::testing_utils::{
-    beacon_roots_contract_from_storage, preinitialized_state_and_storage_tries,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
-#[cfg(feature = "cdk_erigon")]
-use evm_arithmetization::util::h2u;
+// #[cfg(feature = "cdk_erigon")]
+// use evm_arithmetization::util::h2u;
+use evm_arithmetization::world::world::StateWorld;
 use evm_arithmetization::{Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -43,9 +42,7 @@ use plonky2::field::types::PrimeField64;
 #[cfg(feature = "cdk_erigon")]
 use smt_trie::{
     code::hash_bytecode_u256,
-    db::{Db, MemoryDb},
-    keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
-    smt::Smt,
+    keys::{key_balance, key_code_length},
     utils::hashout2u,
 };
 
@@ -92,46 +89,51 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let code = [
         push1, 1, push1, 1, jumpdest, dup2, add, swap1, push4, 0, 0, 0, 4, jump,
     ];
-    let code_hash = keccak(code);
-    #[cfg(feature = "cdk_erigon")]
-    let code_hash = CodeHashType::Uint(hash_bytecode_u256(code.to_vec()));
+
+    let code_hash = if cfg!(feature = "cdk_erigon") {
+        CodeHashType::Uint(hash_bytecode_u256(code.to_vec()))
+    } else {
+        CodeHashType::Hash(keccak(code))
+    };
+    // let code_hash = keccak(code);
+    // #[cfg(feature = "cdk_erigon")]
+    // let code_hash = CodeHashType::Uint(hash_bytecode_u256(code.to_vec()));
 
     let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
 
-    #[cfg(feature = "eth_mainnet")]
-    let sender_account_before = Box::new(MptAccountRlp {
-        nonce: 169.into(),
-        balance: U256::from_dec_str("999999999998417410153631615")?,
-        storage_root: empty_trie_root,
-        code_hash: keccak(vec![]),
-    });
-    #[cfg(feature = "eth_mainnet")]
-    let to_account_before = Box::new(MptAccountRlp {
-        nonce: 1.into(),
-        balance: 0.into(),
-        storage_root: empty_trie_root,
-        code_hash,
-    });
+    // #[cfg(feature = "eth_mainnet")]
+    // let sender_account_before = Box::new(MptAccountRlp {
+    //     nonce: 169.into(),
+    //     balance: U256::from_dec_str("999999999998417410153631615")?,
+    //     storage_root: empty_trie_root,
+    //     code_hash: keccak(vec![]),
+    // });
+    // #[cfg(feature = "eth_mainnet")]
+    // let to_account_before = Box::new(MptAccountRlp {
+    //     nonce: 1.into(),
+    //     balance: 0.into(),
+    //     storage_root: empty_trie_root,
+    //     code_hash,
+    // });
 
-    #[cfg(feature = "cdk_erigon")]
-    let sender_account_before: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon") {
-        Box::new(SmtAccountRlp {
+    let sender_account_before = if cfg!(feature = "cdk_erigon") {
+        Either::Right(SmtAccountRlp {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
             code_hash: hash_bytecode_u256(vec![]),
             code_length: 0.into(),
         })
     } else {
-        Box::new(MptAccountRlp {
+        Either::Left(MptAccountRlp {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
             storage_root: empty_trie_root,
             code_hash: keccak(vec![]),
         })
     };
-    #[cfg(feature = "cdk_erigon")]
-    let to_account_before: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon") {
-        Box::new(SmtAccountRlp {
+
+    let to_account_before = if cfg!(feature = "cdk_erigon") {
+        Either::Right(SmtAccountRlp {
             nonce: 1.into(),
             balance: 0.into(),
             code_hash: get_u256_from_code_hash(code_hash.clone())
@@ -139,7 +141,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
             code_length: code.len().into(),
         })
     } else {
-        Box::new(MptAccountRlp {
+        Either::Left(MptAccountRlp {
             nonce: 1.into(),
             balance: 0.into(),
             storage_root: empty_trie_root,
@@ -148,59 +150,88 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         })
     };
 
+    // #[cfg(feature = "cdk_erigon")]
+    // let sender_account_before: Box<dyn AccountRlp> = if cfg!(feature =
+    // "cdk_erigon") {     Box::new(SmtAccountRlp {
+    //         nonce: 169.into(),
+    //         balance: U256::from_dec_str("999999999998417410153631615")?,
+    //         code_hash: hash_bytecode_u256(vec![]),
+    //         code_length: 0.into(),
+    //     })
+    // } else {
+    //     Box::new(MptAccountRlp {
+    //         nonce: 169.into(),
+    //         balance: U256::from_dec_str("999999999998417410153631615")?,
+    //         storage_root: empty_trie_root,
+    //         code_hash: keccak(vec![]),
+    //     })
+    // };
+    // #[cfg(feature = "cdk_erigon")]
+    // let to_account_before: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon")
+    // {     Box::new(SmtAccountRlp {
+    //         nonce: 1.into(),
+    //         balance: 0.into(),
+    //         code_hash: get_u256_from_code_hash(code_hash.clone())
+    //             .expect("In cdk_erigon, the code_hash is a U256"),
+    //         code_length: code.len().into(),
+    //     })
+    // } else {
+    //     Box::new(MptAccountRlp {
+    //         nonce: 1.into(),
+    //         balance: 0.into(),
+    //         storage_root: empty_trie_root,
+    //         code_hash: get_h256_from_code_hash(code_hash.clone())
+    //             .expect("In eth_mainnet, the code_hash is a H256"),
+    //     })
+    // };
+
+    let mut state_trie_before = StateWorld::default();
     #[cfg(feature = "eth_mainnet")]
     let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
     #[cfg(feature = "eth_mainnet")]
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     #[cfg(feature = "eth_mainnet")]
     {
-        state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+        let sender_account_before_mpt =
+            sender_account_before.expect_left("The sender account is an MPT.");
+        state_trie_before.insert(
+            sender_nibbles,
+            rlp::encode(&sender_account_before_mpy).to_vec(),
+        )?;
         state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
         storage_tries.push((sender_state_key, Node::Empty.into()));
         storage_tries.push((to_state_key, Node::Empty.into()));
     }
-    #[cfg(feature = "cdk_erigon")]
-    let mut smt_before: Smt<MemoryDb> = Smt::default();
+
     #[cfg(feature = "cdk_erigon")]
     {
+        let sender_account_before_smt =
+            sender_account_before.expect_right("The sender account is an SMT.");
+        let to_account_before_smt = to_account_before.expect_right("The sender account is an SMT.");
         set_account(
-            &mut smt_before,
+            &mut state_trie_before,
             H160(sender),
-            sender_account_before
-                .as_any()
-                .downcast_ref::<SmtAccountRlp>()
-                .expect("The sender account is an SMT."),
-            &HashMap::new(),
+            &sender_account_before_smt,
+            &vec![],
         );
         set_account(
-            &mut smt_before,
+            &mut state_trie_before,
             H160(to),
-            to_account_before
-                .as_any()
-                .downcast_ref::<SmtAccountRlp>()
-                .expect("The sender account is an SMT."),
-            &HashMap::new(),
+            &to_account_before_smt,
+            &code,
         );
-        let sender_account_after = SmtAccountRlp {
-            nonce: sender_account_before.get_nonce() + 1,
-            balance: sender_account_before.get_balance(),
-            ..*sender_account_before
-                .as_any()
-                .downcast_ref::<SmtAccountRlp>()
-                .expect("The sender account is an SMT.")
-        };
     }
 
     let tries_before = TrieInputs {
-        #[cfg(feature = "eth_mainnet")]
+        // #[cfg(feature = "eth_mainnet")]
+        // state_trie: state_trie_before,
+        // #[cfg(feature = "cdk_erigon")]
         state_trie: state_trie_before,
-        #[cfg(feature = "cdk_erigon")]
-        state_trie: smt_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        #[cfg(feature = "eth_mainnet")]
-        storage_tries,
+        // #[cfg(feature = "eth_mainnet")]
+        // storage_tries,
     };
 
     let gas_used = U256::from(0x17d7840_u32);
@@ -223,45 +254,55 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     };
 
     let mut contract_code = HashMap::new();
-    #[cfg(feature = "eth_mainnet")]
-    {
-        contract_code.insert(keccak(vec![]), vec![]);
+    if cfg!(feature = "eth_mainnet") {
+        let empty_code_hash = Either::Left(keccak(vec![]));
+        let code_hash = Either::Left(keccak(code));
+        contract_code.insert(empty_code_hash, vec![]);
+        contract_code.insert(code_hash, code.to_vec());
+    } else {
+        let empty_code_hash = Either::Right(hash_bytecode_u256(vec![]));
+        let code_hash = Either::Right(hash_bytecode_u256(code.to_vec()));
+        contract_code.insert(empty_code_hash, vec![]);
         contract_code.insert(code_hash, code.to_vec());
     }
-    #[cfg(feature = "cdk_erigon")]
-    {
-        contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
-        contract_code.insert(
-            get_u256_from_code_hash(code_hash).expect("In cdk_erigon, the code_hash is a U256"),
-            code.to_vec(),
-        );
-    }
+    // #[cfg(feature = "eth_mainnet")]
+    // {
+    //     contract_code.insert(keccak(vec![]), vec![]);
+    //     contract_code.insert(code_hash, code.to_vec());
+    // }
+    // #[cfg(feature = "cdk_erigon")]
+    // {
+    //     contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
+    //     contract_code.insert(
+    //         get_u256_from_code_hash(code_hash).expect("In cdk_erigon, the
+    // code_hash is a U256"),         code.to_vec(),
+    //     );
+    // }
 
-    let sender_account_after: Box<dyn AccountRlp> = if cfg!(feature = "cdk_erigon") {
-        Box::new(SmtAccountRlp {
-            balance: sender_account_before.get_balance()
+    let sender_account_after = if cfg!(feature = "cdk_erigon") {
+        let sender_account_before_smt =
+            sender_account_before.expect_right("cdk_erigon expects SMTs.");
+        Either::Right(SmtAccountRlp {
+            balance: sender_account_before_smt.get_balance()
                 - value
                 - gas_used * block_metadata.block_base_fee,
-            nonce: sender_account_before.get_nonce() + 1,
-            ..*sender_account_before
-                .as_any()
-                .downcast_ref::<SmtAccountRlp>()
-                .expect("The sender account is an SMT.")
+            nonce: sender_account_before_smt.get_nonce() + 1,
+            ..sender_account_before_smt
         })
     } else {
-        Box::new(MptAccountRlp {
-            balance: sender_account_before.get_balance()
+        let sender_account_before_mpt =
+            sender_account_before.expect_left("eth_mainnet expects MPTs.");
+        Either::Left(MptAccountRlp {
+            balance: sender_account_before_mpt.get_balance()
                 - value
                 - gas_used * block_metadata.block_base_fee,
-            nonce: sender_account_before.get_nonce() + 1,
-            ..*sender_account_before
-                .as_any()
-                .downcast_ref::<MptAccountRlp>()
-                .expect("The sender account is an SMT.")
+            nonce: sender_account_before_mpt.get_nonce() + 1,
+            ..sender_account_before_mpt
         })
     };
     let to_account_after = &to_account_before;
 
+    let mut expected_state_trie_after = StateWorld::default();
     #[cfg(feature = "eth_mainnet")]
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
     #[cfg(feature = "eth_mainnet")]
@@ -282,27 +323,23 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
             rlp::encode(&beacon_roots_account).to_vec(),
         )?;
     }
-    #[cfg(feature = "cdk_erigon")]
-    let mut expected_smt_after: Smt<_> = Smt::default();
+
     #[cfg(feature = "cdk_erigon")]
     {
-        set_account::<MemoryDb>(
-            &mut expected_smt_after,
+        let sender_account_after_smt =
+            sender_account_after.expect_right("cdk_erigon expects an SMT.");
+        let to_account_after_smt = to_account_after.expect_right("cdk_erigon expects an SMT.");
+        set_account(
+            &mut expected_state_trie_after,
             H160(sender),
-            sender_account_after
-                .as_any()
-                .downcast_ref::<SmtAccountRlp>()
-                .expect("The sender account is an SMT."),
-            &HashMap::new(),
+            &sender_account_after_smt,
+            &vec![],
         );
         set_account(
-            &mut expected_smt_after,
+            &mut expected_state_trie_after,
             H160(to),
-            to_account_before
-                .as_any()
-                .downcast_ref::<SmtAccountRlp>()
-                .expect("The sender account is an SMT."),
-            &HashMap::new(),
+            &to_account_after_smt,
+            &code,
         );
     }
 
@@ -323,11 +360,27 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     }
     .into();
 
+    let state_root = if cfg!(feature = "eth_mainnet") {
+        expected_state_trie_after
+            .state
+            .expect_left("eth_mainnet expects MPTs.")
+            .state_trie()
+            .hash()
+    } else {
+        H256::from_uint(&hashout2u(
+            expected_state_trie_after
+                .state
+                .expect_right("cdk_erigon expects SMTs.")
+                .as_smt()
+                .root,
+        ))
+    };
     let trie_roots_after = TrieRoots {
-        #[cfg(feature = "eth_mainnet")]
-        state_root: expected_state_trie_after.hash(),
-        #[cfg(feature = "cdk_erigon")]
-        state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
+        // #[cfg(feature = "eth_mainnet")]
+        // state_root: expected_state_trie_after.hash(),
+        // #[cfg(feature = "cdk_erigon")]
+        // state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
+        state_root,
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -365,12 +418,9 @@ criterion_main!(benches);
 use evm_arithmetization::generation::mpt::SmtAccountRlp;
 
 #[cfg(feature = "cdk_erigon")]
-fn set_account<D: Db>(
-    smt: &mut Smt<D>,
-    addr: Address,
-    account: &SmtAccountRlp,
-    storage: &HashMap<U256, U256>,
-) {
+fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccountRlp, code: &[u8]) {
+    use evm_arithmetization::world::world::World;
+
     let key = key_balance(addr);
     log::debug!(
         "setting {:?} balance to {:?}, the key is {:?}",
@@ -378,17 +428,20 @@ fn set_account<D: Db>(
         account.get_balance(),
         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
     );
-    smt.set(key_balance(addr), account.get_balance());
-    smt.set(key_nonce(addr), account.get_nonce());
-    smt.set(key_code(addr), account.get_code_hash_u256());
-    let key = key_code_length(addr);
-    log::debug!(
-        "setting {:?} code length, the key is {:?}",
-        addr,
-        U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
-    );
-    smt.set(key_code_length(addr), account.code_length);
-    for (&k, &v) in storage {
-        smt.set(key_storage(addr, k), v);
+    if let Either::Right(ref mut smt_state) = world.state {
+        smt_state.update_balance(addr, |b| *b = account.get_balance());
+        smt_state.update_nonce(addr, |n| *n = account.get_nonce());
+        smt_state.set_code_hash(addr, code);
+        let key = key_code_length(addr);
+        log::debug!(
+            "setting {:?} code length, the key is {:?}",
+            addr,
+            U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+        );
     }
+
+    // smt.set(key_code_length(addr), account.code_length);
+    // for (&k, &v) in storage {
+    //     smt.set(key_storage(addr, k), v);
+    // }
 }

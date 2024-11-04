@@ -15,10 +15,18 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
+alloy.workspace = true
+alloy-compat = "0.1.0"
 anyhow.workspace = true
+bitvec.workspace = true
+bitflags.workspace = true
 bytes.workspace = true
+ciborium.workspace = true
+ciborium-io.workspace = true
+copyvec = "0.2.0"
 env_logger.workspace = true
 ethereum-types.workspace = true
+either.workspace = true
 hashbrown.workspace = true
 hex = { workspace = true, optional = true }
 hex-literal.workspace = true
@@ -29,6 +37,7 @@ log.workspace = true
 mpt_trie.workspace = true
 num.workspace = true
 num-bigint.workspace = true
+nunny = "0.2.1"
 once_cell.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
@@ -43,15 +52,18 @@ serde = { workspace = true, features = ["derive"] }
 serde-big-array.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-smt_trie = { workspace = true, optional = true }
+smt_trie = { workspace = true }
 starky = { workspace = true, features = ["parallel"] }
 static_assertions.workspace = true
+stackstack = "0.3.0"
 thiserror.workspace = true
 tiny-keccak.workspace = true
 tokio.workspace = true
 tower-lsp = "0.20.0"
 tracing.workspace = true
+u4 = "0.1.0"
 url.workspace = true
+winnow.workspace = true
 zk_evm_common.workspace = true
 zk_evm_proc_macro.workspace = true
 
@@ -61,10 +73,10 @@ hex.workspace = true
 ripemd.workspace = true
 
 [features]
-default = ["cdk_erigon"]
+default = ["eth_mainnet"]
 asmtools = ["hex"]
 polygon_pos = []
-cdk_erigon = ["smt_trie"]
+cdk_erigon = []
 eth_mainnet = []
 
 [[bin]]

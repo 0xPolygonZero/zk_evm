@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -26,6 +27,7 @@ use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
+use crate::world::world::StateWorld;
 
 pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
@@ -159,14 +161,14 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
     let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
     let trie_inputs = TrieInputs {
-        #[cfg(feature = "eth_mainnet")]
-        state_trie: HashedPartialTrie::from(Node::Empty),
-        #[cfg(feature = "cdk_erigon")]
-        state_trie: Smt::default(),
+        // #[cfg(feature = "eth_mainnet")]
+        // state_trie: HashedPartialTrie::from(Node::Empty),
+        // #[cfg(feature = "cdk_erigon")]
+        state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        #[cfg(feature = "eth_mainnet")]
-        storage_tries: vec![],
+        // #[cfg(feature = "eth_mainnet")]
+        // storage_tries: vec![],
     };
 
     initialize_mpts(interpreter, &trie_inputs);
@@ -318,16 +320,24 @@ fn test_extcodesize() -> Result<()> {
     interpreter
         .push(U256::from_big_endian(address.as_bytes()))
         .expect("The stack should not overflow");
-    #[cfg(feature = "eth_mainnet")]
-    {
-        interpreter.generation_state.inputs.contract_code =
-            HashMap::from([(keccak(&code), code.clone())]);
-    }
-    #[cfg(feature = "cdk_erigon")]
-    {
-        interpreter.generation_state.inputs.contract_code =
-            HashMap::from([(hash_bytecode_u256(code.clone()), code.clone())]);
-    }
+    interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
+        HashMap::from([(Either::Left(keccak(&code)), code.clone())])
+    } else {
+        HashMap::from([(
+            Either::Right(hash_bytecode_u256(code.clone())),
+            code.clone(),
+        )])
+    };
+    // #[cfg(feature = "eth_mainnet")]
+    // {
+    //     interpreter.generation_state.inputs.contract_code =
+    //         HashMap::from([(keccak(&code), code.clone())]);
+    // }
+    // #[cfg(feature = "cdk_erigon")]
+    // {
+    //     interpreter.generation_state.inputs.contract_code =
+    //         HashMap::from([(hash_bytecode_u256(code.clone()), code.clone())]);
+    // }
 
     interpreter.run()?;
 
@@ -401,16 +411,24 @@ fn test_extcodecopy() -> Result<()> {
     interpreter
         .push((0xDEADBEEFu64 + (1 << 32)).into())
         .expect("The stack should not overflow"); // kexit_info
-    #[cfg(feature = "eth_mainnet")]
-    {
-        interpreter.generation_state.inputs.contract_code =
-            HashMap::from([(keccak(&code), code.clone())]);
-    }
-    #[cfg(feature = "cdk_erigon")]
-    {
-        interpreter.generation_state.inputs.contract_code =
-            HashMap::from([(hash_bytecode_u256(code.clone()), code.clone())]);
-    }
+    interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
+        HashMap::from([(Either::Left(keccak(&code)), code.clone())])
+    } else {
+        HashMap::from([(
+            Either::Right(hash_bytecode_u256(code.clone())),
+            code.clone(),
+        )])
+    };
+    // #[cfg(feature = "eth_mainnet")]
+    // {
+    //     interpreter.generation_state.inputs.contract_code =
+    //         HashMap::from([(keccak(&code), code.clone())]);
+    // }
+    // #[cfg(feature = "cdk_erigon")]
+    // {
+    //     interpreter.generation_state.inputs.contract_code =
+    //         HashMap::from([(hash_bytecode_u256(code.clone()), code.clone())]);
+    // }
 
     interpreter.run()?;
 

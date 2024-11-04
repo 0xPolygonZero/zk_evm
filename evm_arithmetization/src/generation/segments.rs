@@ -218,10 +218,6 @@ impl<F: RichField> Iterator for SegmentDataIterator<F> {
                 Some(boxed) => {
                     let (data, next_data) = *boxed;
                     self.partial_next_data = next_data;
-                    // println!(
-                    //     "smt in interpreter {:?}",
-                    //     self.interpreter.generation_state.state_pointers.state
-                    // );
                     Some(Ok((self.interpreter.generation_state.inputs.clone(), data)))
                 }
                 // The payload was fully consumed.

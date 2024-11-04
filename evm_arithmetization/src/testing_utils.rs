@@ -18,13 +18,16 @@ use smt_trie::smt::Smt;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::generation::{TrieInputs, TrimmedGenerationInputs};
+use crate::generation::mpt::MptAccountRlp;
 use crate::proof::TrieRoots;
 #[cfg(test)]
 use crate::witness::operation::Operation;
 use crate::{
-    generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
-    GenerationSegmentData, SegmentDataIterator,
+    generation::{TrieInputs, TrimmedGenerationInputs},
+    world::world::StateWorld,
+};
+use crate::{
+    proof::BlockMetadata, util::h2u, GenerationInputs, GenerationSegmentData, SegmentDataIterator,
 };
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
@@ -86,8 +89,8 @@ pub fn update_beacon_roots_account_storage(
 
 /// Returns the beacon roots contract account from its provided storage trie.
 #[cfg(feature = "eth_mainnet")]
-pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
+    MptAccountRlp {
         storage_root: storage_trie.hash(),
         ..BEACON_ROOTS_ACCOUNT
     }
@@ -164,16 +167,16 @@ pub fn update_scalable_account_storage(
 }
 
 #[cfg(feature = "eth_mainnet")]
-pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
+    MptAccountRlp {
         storage_root: storage_trie.hash(),
         ..GLOBAL_EXIT_ROOT_ACCOUNT
     }
 }
 
 #[cfg(feature = "eth_mainnet")]
-pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
+    MptAccountRlp {
         storage_root: storage_trie.hash(),
         ..Default::default()
     }
@@ -195,22 +198,22 @@ fn empty_payload() -> Result<GenerationInputs> {
 
     // Initialize an empty state trie and storage tries
     let state_trie_before = HashedPartialTrie::from(crate::Node::Empty);
-    #[cfg(feature = "eth_mainnet")]
-    let storage_tries = Vec::new();
+    // #[cfg(feature = "eth_mainnet")]
+    // let storage_tries = Vec::new();
     let checkpoint_state_trie_root = state_trie_before.hash();
 
     // Prepare the tries without any transactions or receipts
-    #[cfg(feature = "eth_mainnet")]
-    let tries_before = TrieInputs {
-        state_trie: state_trie_before.clone(),
-        storage_tries: storage_tries.clone(),
-        transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
-        receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
-    };
+    // #[cfg(feature = "eth_mainnet")]
+    // let tries_before = TrieInputs {
+    //     state_trie: state_trie_before.clone(),
+    //     storage_tries: storage_tries.clone(),
+    //     transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
+    //     receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
+    // };
 
-    #[cfg(feature = "cdk_erigon")]
+    // #[cfg(feature = "cdk_erigon")]
     let tries_before = TrieInputs {
-        state_trie: Smt::default(),
+        state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
         receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
     };

@@ -10,21 +10,22 @@ use ethereum_types::{Address, BigEndianHash as _, U256};
 use evm_arithmetization::{
     generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
+    world::{
+        tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
+        type1, type2,
+        world::{StateWorld, Type1World, Type2World, World},
+    },
     GenerationInputs,
 };
 use itertools::Itertools as _;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
+use smt_trie::code::hash_bytecode_u256;
 use zk_evm_common::gwei_to_wei;
 
+use crate::observer::{DummyObserver, Observer};
 use crate::{
-    observer::{DummyObserver, Observer},
-    world::Type2World,
-};
-use crate::{
-    tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
-    world::{Type1World, World},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,
@@ -133,9 +134,17 @@ pub fn entrypoint(
                  after,
                  withdrawals,
              }| {
-                let (state, storage) = world
-                    .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
-                    .into_state_and_storage();
+                let contract_code_hash = |it: &[u8]| {
+                    if let Either::Right(_type2world) = &world {
+                        Either::Right(hash_bytecode_u256(it.to_vec()))
+                    } else {
+                        Either::Left(keccak_hash::keccak(&it))
+                    }
+                };
+                let contract_code = contract_code
+                    .into_iter()
+                    .map(|it| (contract_code_hash(&it), it))
+                    .collect();
                 GenerationInputs {
                     txn_number_before: first_txn_ix.into(),
                     gas_used_before: running_gas_used.into(),
@@ -147,18 +156,14 @@ pub fn entrypoint(
                     withdrawals,
                     ger_data,
                     tries: TrieInputs {
-                        state_trie: state.into(),
+                        state_trie: StateWorld { state: world },
                         transactions_trie: transaction.into(),
                         receipts_trie: receipt.into(),
-                        storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
                     },
                     trie_roots_after: after,
                     checkpoint_state_trie_root,
                     checkpoint_consolidated_hash,
-                    contract_code: contract_code
-                        .into_iter()
-                        .map(|it| (keccak_hash::keccak(&it), it))
-                        .collect(),
+                    contract_code,
                     block_metadata: b_meta.clone(),
                     block_hashes: b_hashes.clone(),
                     burn_addr,
@@ -230,23 +235,22 @@ fn start(
             )
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
-            let instructions = crate::wire::parse(&compact)
+            let instructions = evm_arithmetization::world::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
             match wire_disposition {
                 WireDisposition::Type1 => {
-                    let crate::type1::Frontend {
+                    let type1::Frontend {
                         state,
                         storage,
                         code,
-                    } = crate::type1::frontend(instructions)?;
+                    } = type1::frontend(instructions)?;
                     (
                         Either::Left(Type1World::new(state, storage)?),
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
                     )
                 }
                 WireDisposition::Type2 => {
-                    let crate::type2::Frontend { world: trie, code } =
-                        crate::type2::frontend(instructions)?;
+                    let type2::Frontend { world: trie, code } = type2::frontend(instructions)?;
                     (
                         Either::Right(trie),
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
