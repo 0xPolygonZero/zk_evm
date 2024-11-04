@@ -154,20 +154,20 @@ impl<F: RichField> GenerationState<F> {
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => {
-                println!(
-                    "length {}",
-                    self.memory
-                        .preinitialized_segments
-                        .get(&Segment::TrieData)
-                        .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
-                        .content
-                        .len()
-                        .max(
-                            self.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                                .content
-                                .len(),
-                        )
-                );
+                // println!(
+                //     "length {}",
+                //     self.memory
+                //         .preinitialized_segments
+                //         .get(&Segment::TrieData)
+                //         .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
+                //         .content
+                //         .len()
+                //         .max(
+                //             self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                //                 .content
+                //                 .len(),
+                //         )
+                // );
                 Ok(self
                     .memory
                     .preinitialized_segments

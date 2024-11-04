@@ -263,7 +263,6 @@ pub(crate) trait State<F: RichField> {
                     return Ok((final_registers, final_mem));
                 }
             }
-
             self.transition()?;
         }
     }
@@ -282,13 +281,11 @@ pub(crate) trait State<F: RichField> {
             ProgramError::StackOverflow => 5,
             _ => bail!("TODO: figure out what to do with this..."),
         };
-
         let checkpoint = self.checkpoint();
 
         let (row, _) = self.base_row();
         generate_exception(exc_code, self, row)
             .map_err(|e| anyhow!("Exception handling failed with error: {:?}", e))?;
-
         self.apply_ops(checkpoint);
 
         Ok(())
@@ -309,7 +306,6 @@ pub(crate) trait State<F: RichField> {
                 if might_overflow_op(op) {
                     self.get_mut_registers().check_overflow = true;
                 }
-
                 Ok(())
             }
             Err(e) => {
@@ -430,7 +426,7 @@ impl<F: RichField> GenerationState<F> {
             load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
         let receipt_root_ptr =
             load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
-        println!("trie data length after init {}", trie_data.len());
+        // println!("trie data length after init {}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },

@@ -325,6 +325,7 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
     // Segment::AccountsLinkedList)     );
     // }
 
+    #[cfg(test)]
     if KERNEL.offset_name(pc) == "smt_hash_state" || KERNEL.offset_name(pc) == "sys_sstore" {
         let mem = state
             .get_generation_state()
