@@ -56,7 +56,7 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     checkpoint_block_number: u64,
     jumpdest_src: JumpdestSrc,
     fetch_timeout: Duration,
-) -> anyhow::Result<BlockProverInput>
+) -> Result<BlockProverInput, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,

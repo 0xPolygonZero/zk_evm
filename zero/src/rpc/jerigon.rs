@@ -63,7 +63,7 @@ where
     let block: Block = cached_provider
         .get_block(target_block_id, BlockTransactionsKind::Full)
         .await?
-        .context("No block")?;
+        .context("no block")?;
 
     let block_jumpdest_table_witnesses: Vec<Option<JumpDestTableWitness>> = match jumpdest_src {
         JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],
