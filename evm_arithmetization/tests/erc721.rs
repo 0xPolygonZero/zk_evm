@@ -1,10 +1,12 @@
 #![cfg(feature = "eth_mainnet")]
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -14,6 +16,8 @@ use evm_arithmetization::testing_utils::{
     update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
+use evm_arithmetization::world::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -75,11 +79,12 @@ fn test_erc721() -> anyhow::Result<()> {
 
     storage_tries.push((contract_state_key, contract_storage()?));
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        // storage_tries,
     };
 
     let txn = signed_tx();
@@ -87,7 +92,7 @@ fn test_erc721() -> anyhow::Result<()> {
     let gas_used = 58_418.into();
 
     let contract_code = [contract_bytecode(), vec![]]
-        .map(|v| (keccak(v.clone()), v))
+        .map(|v| (Either::Left(keccak(v.clone())), v))
         .into();
 
     let logs = vec![LogRlp {
@@ -139,13 +144,13 @@ fn test_erc721() -> anyhow::Result<()> {
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let owner_account = owner_account();
-        let owner_account_after = AccountRlp {
+        let owner_account_after = MptAccountRlp {
             nonce: owner_account.nonce + 1,
             balance: owner_account.balance - gas_used * 0xa,
             ..owner_account
         };
         state_trie_after.insert(owner_nibbles, rlp::encode(&owner_account_after).to_vec())?;
-        let contract_account_after = AccountRlp {
+        let contract_account_after = MptAccountRlp {
             storage_root: contract_storage_after()?.hash(),
             ..contract_account()?
         };
@@ -272,8 +277,8 @@ fn contract_storage_after() -> anyhow::Result<HashedPartialTrie> {
     ])
 }
 
-fn owner_account() -> AccountRlp {
-    AccountRlp {
+fn owner_account() -> MptAccountRlp {
+    MptAccountRlp {
         nonce: 2.into(),
         balance: 0x1000000.into(),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -281,8 +286,8 @@ fn owner_account() -> AccountRlp {
     }
 }
 
-fn contract_account() -> anyhow::Result<AccountRlp> {
-    Ok(AccountRlp {
+fn contract_account() -> anyhow::Result<MptAccountRlp> {
+    Ok(MptAccountRlp {
         nonce: 0.into(),
         balance: 0.into(),
         storage_root: contract_storage()?.hash(),
@@ -312,5 +317,21 @@ fn add_to_bloom(bloom: &mut [u8; 256], bloom_entry: &[u8]) {
         let byte_index = bit_to_set / 8;
         let bit_value = 1 << (7 - bit_to_set % 8);
         bloom[byte_index as usize] |= bit_value;
+    }
+}
+
+fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
     }
 }

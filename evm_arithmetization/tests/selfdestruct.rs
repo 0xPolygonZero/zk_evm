@@ -1,10 +1,12 @@
 #![cfg(feature = "eth_mainnet")]
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -13,6 +15,8 @@ use evm_arithmetization::testing_utils::{
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
+use evm_arithmetization::world::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -46,7 +50,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
 
-    let sender_account_before = AccountRlp {
+    let sender_account_before = MptAccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -56,7 +60,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         0x32, // ORIGIN
         0xFF, // SELFDESTRUCT
     ];
-    let to_account_before = AccountRlp {
+    let to_account_before = MptAccountRlp {
         nonce: 12.into(),
         balance: eth_to_wei(10_000.into()),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -68,11 +72,12 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        // storage_tries,
     };
 
     // Generated using a little py-evm script.
@@ -91,7 +96,11 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let contract_code = [(keccak(&code), code.clone()), (keccak([]), vec![])].into();
+    let contract_code = [
+        (Either::Left(keccak(&code)), code.clone()),
+        (Either::Left(keccak([])), vec![]),
+    ]
+    .into();
 
     let expected_state_trie_after: HashedPartialTrie = {
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
@@ -104,7 +113,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let sender_account_after = AccountRlp {
+        let sender_account_after = MptAccountRlp {
             nonce: 6.into(),
             balance: eth_to_wei(110_000.into()) - 26_002 * 0xa,
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -114,7 +123,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
 
         // EIP-6780: The account won't be deleted because it wasn't created during this
         // transaction.
-        let to_account_before = AccountRlp {
+        let to_account_before = MptAccountRlp {
             nonce: 12.into(),
             balance: 0.into(),
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -187,4 +196,20 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_all_proofs(&all_stark, &proofs, &config)
+}
+
+fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }

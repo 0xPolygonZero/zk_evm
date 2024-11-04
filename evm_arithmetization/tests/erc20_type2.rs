@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, SmtAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -17,6 +18,7 @@ use evm_arithmetization::testing_utils::STATE_ROOT_STORAGE_POS;
 use evm_arithmetization::testing_utils::TIMESTAMP_STORAGE_POS;
 use evm_arithmetization::testing_utils::{init_logger, sd2u};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::world::{StateWorld, Type2World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -69,27 +71,37 @@ fn test_erc20() -> anyhow::Result<()> {
     let giver = hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
     let token = hex!("5FbDB2315678afecb367f032d93F642f64180aa3");
 
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    // let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = StateWorld::default();
+    println!("state_smt {:?}", state_smt_before);
     set_account(
         &mut state_smt_before,
         H160(sender),
         &sender_account(),
         &HashMap::new(),
+        &vec![],
     );
     set_account(
         &mut state_smt_before,
         H160(giver),
         &giver_account(),
         &giver_storage(),
+        &giver_bytecode(),
     );
     set_account(
         &mut state_smt_before,
         H160(token),
         &token_account(),
         &token_storage(),
+        &token_bytecode(),
     );
 
-    let state_smt_before_root = state_smt_before.root;
+    let state_smt_before_root = state_smt_before
+        .state
+        .clone()
+        .expect_right("cdk_erigon expects SMTs.")
+        .as_smt()
+        .root;
 
     let tries_before = TrieInputs {
         state_trie: state_smt_before,
@@ -116,11 +128,11 @@ fn test_erc20() -> anyhow::Result<()> {
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]
-        .map(|v| (hash_bytecode_u256(v.clone()), v))
+        .map(|v| (Either::Right(hash_bytecode_u256(v.clone())), v))
         .into();
 
-    let expected_smt_after: Smt<MemoryDb> = {
-        let mut smt = Smt::default();
+    let expected_smt_after: StateWorld = {
+        let mut smt = StateWorld::default();
         let sender_account = sender_account();
         let sender_account_after = SmtAccountRlp {
             nonce: sender_account.nonce + 1,
@@ -132,13 +144,21 @@ fn test_erc20() -> anyhow::Result<()> {
             H160(sender),
             &sender_account_after,
             &HashMap::new(),
+            &vec![],
         );
-        set_account(&mut smt, H160(giver), &giver_account(), &giver_storage());
+        set_account(
+            &mut smt,
+            H160(giver),
+            &giver_account(),
+            &giver_storage(),
+            &giver_bytecode(),
+        );
         set_account(
             &mut smt,
             H160(token),
             &token_account(),
             &token_storage_after(),
+            &token_bytecode(),
         );
 
         set_account(
@@ -146,6 +166,7 @@ fn test_erc20() -> anyhow::Result<()> {
             ADDRESS_SCALABLE_L2,
             &scalable_account(),
             &scalable_storage_after(&block_metadata, hashout2u(state_smt_before_root)),
+            &vec![],
         );
 
         smt
@@ -185,18 +206,19 @@ fn test_erc20() -> anyhow::Result<()> {
     .into();
 
     let kb = key_code_length(ADDRESS_SCALABLE_L2);
+    let expected_smt_after_as_smt = expected_smt_after
+        .state
+        .expect_right("cdk_erigon expects SMTs.")
+        .as_smt();
     log::debug!(
         "scalable code length key = {:?}",
         U256(std::array::from_fn(|i| kb.0[i].to_canonical_u64()))
     );
-    log::debug!("expected smt after = {}", expected_smt_after);
-    log::debug!(
-        "expected smt data after = {:?}",
-        expected_smt_after.to_vec()
-    );
+    log::debug!("expected smt after = {:?}", expected_smt_after_as_smt);
+    log::debug!("expected smt data after = {:?}", expected_smt_after_as_smt);
 
     let trie_roots_after = TrieRoots {
-        state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
+        state_root: H256::from_uint(&hashout2u(expected_smt_after_as_smt.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -344,31 +366,63 @@ fn bloom() -> [U256; 8] {
     bloom.try_into().unwrap()
 }
 
-fn set_account<D: Db>(
-    smt: &mut Smt<D>,
+// fn set_account<D: Db>(
+//     smt: &mut Smt<D>,
+//     addr: Address,
+//     account: &SmtAccountRlp,
+//     storage: &HashMap<U256, U256>,
+// ) {
+//     let key = key_balance(addr);
+//     log::debug!(
+//         "setting {:?} balance to {:?}, the key is {:?}",
+//         addr,
+//         account.balance,
+//         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+//     );
+//     smt.set(key_balance(addr), account.balance);
+//     smt.set(key_nonce(addr), account.nonce);
+//     log::debug!("account code {:?}", account.code_hash);
+//     smt.set(key_code(addr), account.code_hash);
+//     let key = key_code_length(addr);
+//     log::debug!(
+//         "setting {:?} code length, the key is {:?}",
+//         addr,
+//         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+//     );
+//     smt.set(key_code_length(addr), account.code_length);
+//     for (&k, &v) in storage {
+//         smt.set(key_storage(addr, k), v);
+//     }
+// }
+
+fn set_account(
+    world: &mut StateWorld,
     addr: Address,
     account: &SmtAccountRlp,
     storage: &HashMap<U256, U256>,
+    code: &[u8],
 ) {
+    use evm_arithmetization::world::world::World;
+
     let key = key_balance(addr);
     log::debug!(
         "setting {:?} balance to {:?}, the key is {:?}",
         addr,
-        account.balance,
+        account.get_balance(),
         U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
     );
-    smt.set(key_balance(addr), account.balance);
-    smt.set(key_nonce(addr), account.nonce);
-    log::debug!("account code {:?}", account.code_hash);
-    smt.set(key_code(addr), account.code_hash);
-    let key = key_code_length(addr);
-    log::debug!(
-        "setting {:?} code length, the key is {:?}",
-        addr,
-        U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
-    );
-    smt.set(key_code_length(addr), account.code_length);
-    for (&k, &v) in storage {
-        smt.set(key_storage(addr, k), v);
+    if let Either::Right(ref mut smt_state) = world.state {
+        smt_state.update_balance(addr, |b| *b = account.get_balance());
+        smt_state.update_nonce(addr, |n| *n = account.get_nonce());
+        smt_state.set_code_hash(addr, code);
+        let key = key_code_length(addr);
+        log::debug!(
+            "setting {:?} code length, the key is {:?}",
+            addr,
+            U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+        );
+        for (&k, &v) in storage {
+            smt_state.store_int(addr, k, v);
+        }
     }
 }

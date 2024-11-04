@@ -5,7 +5,7 @@ pub mod wire;
 pub mod world;
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
-mod hex {
+pub mod hex {
     use alloy::hex;
     use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};
 

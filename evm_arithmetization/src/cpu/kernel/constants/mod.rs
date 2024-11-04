@@ -431,6 +431,7 @@ const LINKED_LISTS_CONSTANTS: [(&str, u16); 8] = [
 pub mod cancun_constants {
 
     use super::*;
+    use crate::generation::mpt::MptAccountRlp;
 
     pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
 
@@ -477,8 +478,8 @@ pub mod cancun_constants {
     pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
         hex!("f57acd40259872606d76197ef052f3d35588dadf919ee1f0e3cb9b62d3f4b02c");
 
-    #[cfg(feature = "eth_mainnet")]
-    pub const BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
+    // #[cfg(feature = "eth_mainnet")]
+    pub const BEACON_ROOTS_ACCOUNT: MptAccountRlp = MptAccountRlp {
         nonce: U256::zero(),
         balance: U256::zero(),
         // Storage root for this account at genesis.
@@ -499,6 +500,7 @@ pub mod cancun_constants {
 
 pub mod global_exit_root {
     use super::*;
+    use crate::generation::mpt::MptAccountRlp;
 
     /// Taken from <https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L16>.
     pub const GLOBAL_EXIT_ROOT_MANAGER_L2: (&str, [u8; 20]) = (
@@ -540,8 +542,8 @@ pub mod global_exit_root {
     pub const GLOBAL_EXIT_ROOT_CONTRACT_CODE_HASH: [u8; 32] =
         hex!("6bec2bf64f7e824109f6ed55f77dd7665801d6195e461666ad6a5342a9f6daf5");
 
-    #[cfg(feature = "eth_mainnet")]
-    pub const GLOBAL_EXIT_ROOT_ACCOUNT: AccountRlp = AccountRlp {
+    // #[cfg(feature = "eth_mainnet")]
+    pub const GLOBAL_EXIT_ROOT_ACCOUNT: MptAccountRlp = MptAccountRlp {
         nonce: U256::zero(),
         balance: U256::zero(),
         // Empty storage root

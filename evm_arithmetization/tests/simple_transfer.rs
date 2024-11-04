@@ -1,11 +1,12 @@
 #![cfg(feature = "eth_mainnet")]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -14,6 +15,8 @@ use evm_arithmetization::testing_utils::{
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
+use evm_arithmetization::world::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -47,23 +50,24 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
 
-    let sender_account_before = AccountRlp {
+    let sender_account_before = MptAccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
         code_hash: keccak([]),
     };
-    let to_account_before = AccountRlp::default();
+    let to_account_before = MptAccountRlp::default();
 
     let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        // storage_tries,
     };
 
     // Generated using a little py-evm script.
@@ -84,7 +88,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
 
     let expected_state_trie_after: HashedPartialTrie = {
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
@@ -100,12 +104,12 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let sender_account_after = AccountRlp {
+        let sender_account_after = MptAccountRlp {
             balance: sender_account_before.balance - value - gas_used * 10,
             nonce: sender_account_before.nonce + 1,
             ..sender_account_before
         };
-        let to_account_after = AccountRlp {
+        let to_account_after = MptAccountRlp {
             balance: value,
             ..to_account_before
         };
@@ -179,4 +183,20 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_all_proofs(&all_stark, &proofs, &config)
+}
+
+fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }

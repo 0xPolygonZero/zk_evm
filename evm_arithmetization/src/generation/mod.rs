@@ -14,6 +14,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
+use smt_trie::smt::hash_serialize_u256;
 #[cfg(feature = "cdk_erigon")]
 use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
@@ -178,9 +179,9 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    #[cfg(feature = "eth_mainnet")]
-    pub contract_code: HashMap<H256, Vec<u8>>,
-    #[cfg(feature = "cdk_erigon")]
+    // #[cfg(feature = "eth_mainnet")]
+    // pub contract_code: HashMap<H256, Vec<u8>>,
+    // #[cfg(feature = "cdk_erigon")]
     pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
 
     /// Information contained in the block header.
@@ -218,12 +219,11 @@ pub struct TrieInputs {
     /// should include all nodes that will be accessed by these
     /// transactions.
     pub receipts_trie: HashedPartialTrie,
-
-    /// A partial version of each storage trie prior to these transactions. It
-    /// should include all storage tries, and nodes therein, that will be
-    /// accessed by these transactions.
-    #[cfg(feature = "eth_mainnet")]
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    // /// A partial version of each storage trie prior to these transactions. It
+    // /// should include all storage tries, and nodes therein, that will be
+    // /// accessed by these transactions.
+    // #[cfg(feature = "eth_mainnet")]
+    // pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -243,14 +243,14 @@ pub struct TrimmedTrieInputs {
 }
 
 impl TrieInputs {
-    #[cfg(feature = "eth_mainnet")]
-    pub(crate) fn trim(&self) -> TrimmedTrieInputs {
-        TrimmedTrieInputs {
-            state_trie: self.state_trie.clone(),
-            storage_tries: self.storage_tries.clone(),
-        }
-    }
-    #[cfg(feature = "cdk_erigon")]
+    // #[cfg(feature = "eth_mainnet")]
+    // pub(crate) fn trim(&self) -> TrimmedTrieInputs {
+    //     TrimmedTrieInputs {
+    //         state_trie: self.state_trie.clone(),
+    //         // storage_tries: self.storage_tries.clone(),
+    //     }
+    // }
+    // #[cfg(feature = "cdk_erigon")]
     pub(crate) fn trim(&self) -> TrimmedTrieInputs {
         TrimmedTrieInputs {
             state_trie: self.state_trie.clone(),
@@ -269,21 +269,21 @@ impl<F: RichField> GenerationInputs<F> {
             .map(|tx_bytes| keccak(&tx_bytes[..]))
             .collect();
 
-        let mut state_root = H256::zero();
-        #[cfg(feature = "eth_mainnet")]
-        {
-            state_root = self.tries.state_trie.hash();
-        }
-        #[cfg(feature = "cdk_erigon")]
-        {
-            state_root = match &self.tries.state_trie.state {
-                Either::Left(trie) => trie.state_trie().hash(),
-                Either::Right(trie) => {
-                    let smt_data = trie.as_smt().to_vec();
-                    H256::from_uint(&hash_serialize_u256(&smt_data).into())
-                }
+        // let mut state_root = H256::zero();
+        // #[cfg(feature = "eth_mainnet")]
+        // {
+        //     state_root = self.tries.state_trie.hash();
+        // }
+        // #[cfg(feature = "cdk_erigon")]
+        // {
+        let state_root = match &self.tries.state_trie.state {
+            Either::Left(trie) => trie.state_trie().hash(),
+            Either::Right(trie) => {
+                let smt_data = trie.as_smt().to_vec();
+                H256::from_uint(&hash_serialize_u256(&smt_data).into())
             }
-        }
+        };
+        // }
 
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),
@@ -489,7 +489,16 @@ pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
     );
     log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
     #[cfg(feature = "eth_mainnet")]
-    log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
+    log::debug!(
+        "Input storage_tries: {:?}",
+        &inputs
+            .tries
+            .state_trie
+            .state
+            .clone()
+            .expect_left("eth_mainnet expects MPTs")
+            .get_storage()
+    );
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 

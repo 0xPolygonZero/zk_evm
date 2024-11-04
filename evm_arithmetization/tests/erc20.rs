@@ -1,10 +1,12 @@
 #![cfg(feature = "eth_mainnet")]
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -13,6 +15,8 @@ use evm_arithmetization::testing_utils::{
     init_logger, preinitialized_state_and_storage_tries, sd2u, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
+use evm_arithmetization::world::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -78,11 +82,12 @@ fn test_erc20() -> anyhow::Result<()> {
         (token_state_key, token_storage()?),
     ]);
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        // storage_tries,
     };
 
     let txn = signed_tx();
@@ -104,7 +109,7 @@ fn test_erc20() -> anyhow::Result<()> {
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]
-        .map(|v| (keccak(v.clone()), v))
+        .map(|v| (Either::Left(keccak(v.clone())), v))
         .into();
 
     let expected_state_trie_after: HashedPartialTrie = {
@@ -118,14 +123,14 @@ fn test_erc20() -> anyhow::Result<()> {
 
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
         let sender_account = sender_account();
-        let sender_account_after = AccountRlp {
+        let sender_account_after = MptAccountRlp {
             nonce: sender_account.nonce + 1,
             balance: sender_account.balance - gas_used * 0xa,
             ..sender_account
         };
         state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
         state_trie_after.insert(giver_nibbles, rlp::encode(&giver_account()?).to_vec())?;
-        let token_account_after = AccountRlp {
+        let token_account_after = MptAccountRlp {
             storage_root: token_storage_after()?.hash(),
             ..token_account()?
         };
@@ -249,8 +254,8 @@ fn token_storage_after() -> anyhow::Result<HashedPartialTrie> {
     ])
 }
 
-fn giver_account() -> anyhow::Result<AccountRlp> {
-    Ok(AccountRlp {
+fn giver_account() -> anyhow::Result<MptAccountRlp> {
+    Ok(MptAccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
         storage_root: giver_storage()?.hash(),
@@ -258,8 +263,8 @@ fn giver_account() -> anyhow::Result<AccountRlp> {
     })
 }
 
-fn token_account() -> anyhow::Result<AccountRlp> {
-    Ok(AccountRlp {
+fn token_account() -> anyhow::Result<MptAccountRlp> {
+    Ok(MptAccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
         storage_root: token_storage()?.hash(),
@@ -267,8 +272,8 @@ fn token_account() -> anyhow::Result<AccountRlp> {
     })
 }
 
-fn sender_account() -> AccountRlp {
-    AccountRlp {
+fn sender_account() -> MptAccountRlp {
+    MptAccountRlp {
         nonce: 0.into(),
         balance: sd2u("10000000000000000000000"),
         storage_root: Default::default(),
@@ -290,4 +295,20 @@ fn bloom() -> [U256; 8] {
         .map(U256::from_big_endian)
         .collect::<Vec<_>>();
     bloom.try_into().unwrap()
+}
+
+fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }

@@ -1,10 +1,11 @@
 #![cfg(feature = "eth_mainnet")]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{H160, H256, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::generation::mpt::{AccountRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -13,6 +14,8 @@ use evm_arithmetization::testing_utils::{
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
+use evm_arithmetization::world::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
@@ -46,7 +49,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
 
     // Just one withdrawal.
     let withdrawals = vec![(H160(random()), U256(random()))];
@@ -63,9 +66,9 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
         let addr_state_key = keccak(withdrawals[0].0);
         let addr_nibbles = Nibbles::from_bytes_be(addr_state_key.as_bytes()).unwrap();
-        let account = AccountRlp {
+        let account = MptAccountRlp {
             balance: withdrawals[0].1,
-            ..AccountRlp::default()
+            ..MptAccountRlp::default()
         };
         trie.insert(addr_nibbles, rlp::encode(&account).to_vec())?;
         trie.insert(
@@ -82,6 +85,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
         receipts_root: receipts_trie.hash(),
     };
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let inputs = GenerationInputs::<F> {
         signed_txns: vec![],
         burn_addr: None,
@@ -91,7 +95,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
             state_trie: state_trie_before,
             transactions_trie,
             receipts_trie,
-            storage_tries,
+            // storage_tries,
         },
         trie_roots_after,
         contract_code,
@@ -122,4 +126,20 @@ fn test_withdrawals() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_all_proofs(&all_stark, &proofs, &config)
+}
+
+fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }

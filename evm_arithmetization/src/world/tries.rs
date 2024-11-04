@@ -304,8 +304,14 @@ impl StateMpt {
             ),
         }
     }
+    pub fn new_with_inner(inner: HashedPartialTrie) -> Self {
+        Self { inner }
+    }
     pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
+    }
+    pub fn as_mut_hashed_partial_trie(&mut self) -> &mut HashedPartialTrie {
+        &mut self.inner
     }
     /// Insert a _hashed out_ part of the trie
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
@@ -368,6 +374,9 @@ impl StorageTrie {
         Self {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
+    }
+    pub fn new_with_trie(untyped: HashedPartialTrie) -> Self {
+        Self { untyped }
     }
     pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
         self.untyped.get(key.into_nibbles())

@@ -52,7 +52,7 @@ serde = { workspace = true, features = ["derive"] }
 serde-big-array.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-smt_trie = { workspace = true, optional = true }
+smt_trie = { workspace = true }
 starky = { workspace = true, features = ["parallel"] }
 static_assertions.workspace = true
 stackstack = "0.3.0"
@@ -73,10 +73,10 @@ hex.workspace = true
 ripemd.workspace = true
 
 [features]
-default = ["cdk_erigon"]
+default = ["eth_mainnet"]
 asmtools = ["hex"]
 polygon_pos = []
-cdk_erigon = ["smt_trie"]
+cdk_erigon = []
 eth_mainnet = []
 
 [[bin]]
