@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use either::Either;
 use ethereum_types::{H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::MptAccountRlp;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;

@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{BigEndianHash, H256, U256};
 use hex_literal::hex;
 use mpt_trie::nibbles::Nibbles;
@@ -11,8 +13,12 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
-use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
+use crate::cpu::kernel::tests::mpt::{
+    extension_to_leaf, get_state_world_no_storage, test_account_1, test_account_1_rlp,
+};
 use crate::generation::TrieInputs;
+use crate::world::tries::StateMpt;
+use crate::world::world::{StateWorld, Type1World};
 use crate::Node;
 
 #[test]
@@ -21,7 +27,7 @@ fn load_all_mpts_empty() -> Result<()> {
         state_trie: Default::default(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -50,15 +56,18 @@ fn load_all_mpts_empty() -> Result<()> {
 
 #[test]
 fn load_all_mpts_leaf() -> Result<()> {
-    let trie_inputs = TrieInputs {
-        state_trie: Node::Leaf {
+    let state_trie = get_state_world_no_storage(
+        Node::Leaf {
             nibbles: 0xABC_u64.into(),
             value: test_account_1_rlp(),
         }
         .into(),
+    );
+    let trie_inputs = TrieInputs {
+        state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -106,11 +115,22 @@ fn load_all_mpts_leaf() -> Result<()> {
 #[test]
 fn load_all_mpts_hash() -> Result<()> {
     let hash = H256::random();
+
+    let state_trie = StateWorld {
+        state: Either::Left(
+            Type1World::new(
+                StateMpt::new_with_inner(Node::Hash(hash).into()),
+                BTreeMap::default(),
+            )
+            .unwrap(),
+        ),
+    };
+
     let trie_inputs = TrieInputs {
-        state_trie: Node::Hash(hash).into(),
+        state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -139,16 +159,26 @@ fn load_all_mpts_hash() -> Result<()> {
 #[test]
 fn load_all_mpts_empty_branch() -> Result<()> {
     let children = core::array::from_fn(|_| Node::Empty.into());
-    let state_trie = Node::Branch {
-        children,
-        value: vec![],
-    }
-    .into();
+    let state_trie = StateWorld {
+        state: Either::Left(
+            Type1World::new(
+                StateMpt::new_with_inner(
+                    Node::Branch {
+                        children,
+                        value: vec![],
+                    }
+                    .into(),
+                ),
+                BTreeMap::default(),
+            )
+            .unwrap(),
+        ),
+    };
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -197,10 +227,10 @@ fn load_all_mpts_empty_branch() -> Result<()> {
 #[test]
 fn load_all_mpts_ext_to_leaf() -> Result<()> {
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_trie: get_state_world_no_storage(extension_to_leaf(test_account_1_rlp())),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -252,7 +282,7 @@ fn load_mpt_txn_trie() -> Result<()> {
             value: txn.clone(),
         }),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let initial_stack = vec![];

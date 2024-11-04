@@ -7,7 +7,7 @@ use std::time::Duration;
 use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::{
-    AccountRlp, EitherRlp, LegacyReceiptRlp, MptAccountRlp, SmtAccountRlp,
+    AccountRlp, EitherRlp, LegacyReceiptRlp, MptAccountRlp,
 };
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};

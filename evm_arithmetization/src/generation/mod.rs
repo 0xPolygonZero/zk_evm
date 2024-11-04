@@ -39,7 +39,7 @@ use crate::proof::{
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
-use crate::world::world::{StateWorld, Type1World, Type2World};
+use crate::world::world::StateWorld;
 
 pub(crate) mod linked_list;
 pub mod mpt;
@@ -199,7 +199,6 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 #[cfg(feature = "cdk_erigon")]
 type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
 
-trait StateTrie {}
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It

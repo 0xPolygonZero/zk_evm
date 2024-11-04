@@ -10,7 +10,7 @@ use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;

@@ -18,9 +18,9 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
-use crate::generation::linked_list::{
-    empty_list_mem, AccessLinkedListsPtrs, StateLinkedListsPtrs, STATE_LINKED_LIST_NODE_SIZE,
-};
+#[cfg(feature = "cdk_erigon")]
+use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
+use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
 #[cfg(feature = "eth_mainnet")]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};

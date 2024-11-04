@@ -9,7 +9,6 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::journal_entry::JournalEntry;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
-use crate::generation::mpt::AccountRlp;
 use crate::memory::segments::Segment;
 
 pub(crate) mod context_metadata;

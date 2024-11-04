@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, MptAccountRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;

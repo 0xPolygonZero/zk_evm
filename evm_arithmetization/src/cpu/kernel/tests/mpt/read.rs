@@ -6,16 +6,18 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
-use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
+use crate::cpu::kernel::tests::mpt::{
+    extension_to_leaf, get_state_world_no_storage, test_account_1, test_account_1_rlp,
+};
 use crate::generation::TrieInputs;
 
 #[test]
 fn mpt_read() -> Result<()> {
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_trie: get_state_world_no_storage(extension_to_leaf(test_account_1_rlp())),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
+        // storage_tries: vec![],
     };
 
     let mpt_read = KERNEL.global_labels["mpt_read"];

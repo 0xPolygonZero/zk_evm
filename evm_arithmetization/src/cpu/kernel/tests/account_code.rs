@@ -10,8 +10,8 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
-#[cfg(feature = "cdk_erigon")]
-use smt_trie::{code::hash_bytecode_u256, smt::Smt, utils::hashout2u};
+// #[cfg(feature = "cdk_erigon")]
+use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
@@ -20,8 +20,8 @@ use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
 #[cfg(feature = "eth_mainnet")]
-use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, load_state_mpt};
-use crate::generation::mpt::{AccountRlp, SmtAccountRlp};
+use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
+use crate::generation::mpt::{AccountRlp, EitherRlp, MptAccountRlp, SmtAccountRlp};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -142,11 +142,11 @@ pub(crate) fn initialize_mpts<F: RichField>(
         (initial_storage_len_addr, storage_len.into()),
     ]);
 
-    let state_addr =
+    let _state_addr =
         MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
-    let txn_addr =
+    let _txn_addr =
         MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into()).unwrap();
-    let receipts_addr =
+    let _receipts_addr =
         MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
 }
 
@@ -155,7 +155,7 @@ pub(crate) fn initialize_mpts<F: RichField>(
 pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter: &mut Interpreter<F>,
     address: Address,
-    account: Box<dyn AccountRlp>,
+    account: &EitherRlp,
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
@@ -269,27 +269,51 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     Ok(())
 }
 
+// // Test account with a given code hash.
+// #[cfg(feature = "eth_mainnet")]
+// fn test_account(code: &[u8]) -> MptAccountRlp {
+//     MptAccountRlp {
+//         nonce: U256::from(1111),
+//         balance: U256::from(2222),
+//         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+//         code_hash: keccak(code),
+//     }
+// }
+
 // Test account with a given code hash.
-#[cfg(feature = "eth_mainnet")]
-fn test_account(code: &[u8]) -> MptAccountRlp {
-    MptAccountRlp {
-        nonce: U256::from(1111),
-        balance: U256::from(2222),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: keccak(code),
+// #[cfg(feature = "eth_mainnet")]
+fn test_account(code: &[u8]) -> EitherRlp {
+    if cfg!(feature = "eth_mainnet") {
+        EitherRlp {
+            account_rlp: Either::Left(MptAccountRlp {
+                nonce: U256::from(1111),
+                balance: U256::from(2222),
+                storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+                code_hash: keccak(code),
+            }),
+        }
+    } else {
+        EitherRlp {
+            account_rlp: Either::Right(SmtAccountRlp {
+                nonce: U256::from(1111),
+                balance: U256::from(2222),
+                code_hash: hash_bytecode_u256(code.to_vec()),
+                code_length: code.len().into(),
+            }),
+        }
     }
 }
 
-// Test account with a given code hash.
-#[cfg(feature = "cdk_erigon")]
-fn test_account(code: &[u8]) -> SmtAccountRlp {
-    SmtAccountRlp {
-        nonce: U256::from(1111),
-        balance: U256::from(2222),
-        code_hash: hash_bytecode_u256(code.to_vec()),
-        code_length: code.len().into(),
-    }
-}
+// // Test account with a given code hash.
+// #[cfg(feature = "cdk_erigon")]
+// fn test_account(code: &[u8]) -> SmtAccountRlp {
+//     SmtAccountRlp {
+//         nonce: U256::from(1111),
+//         balance: U256::from(2222),
+//         code_hash: hash_bytecode_u256(code.to_vec()),
+//         code_length: code.len().into(),
+//     }
+// }
 
 fn random_code() -> Vec<u8> {
     let mut rng = thread_rng();
@@ -300,12 +324,12 @@ fn random_code() -> Vec<u8> {
 #[test]
 fn test_extcodesize() -> Result<()> {
     let code = random_code();
-    let account = Box::new(test_account(&code));
+    let account = test_account(&code);
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
-    prepare_interpreter(&mut interpreter, address, account)?;
+    prepare_interpreter(&mut interpreter, address, &account)?;
 
     let extcodesize = KERNEL.global_labels["extcodesize"];
 
@@ -352,12 +376,12 @@ fn test_extcodesize() -> Result<()> {
 #[test]
 fn test_extcodecopy() -> Result<()> {
     let code = random_code();
-    let account = Box::new(test_account(&code));
+    let account = test_account(&code);
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
-    prepare_interpreter(&mut interpreter, address, account)?;
+    prepare_interpreter(&mut interpreter, address, &account)?;
 
     let context = interpreter.context();
     interpreter.generation_state.memory.contexts[context].segments
@@ -538,21 +562,24 @@ fn sstore() -> Result<()> {
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
     let code_hash = keccak(code);
 
-    let account_before = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        code_hash,
-        ..AccountRlp::default()
+    let account_before = EitherRlp {
+        account_rlp: Either::Left(MptAccountRlp {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash,
+            ..MptAccountRlp::default()
+        }),
     };
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
+    state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
+    let state_trie = get_state_world_no_storage(state_trie_before);
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
+        state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
+        // storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -578,19 +605,21 @@ fn sstore() -> Result<()> {
 
     // The code should have added an element to the storage of `to_account`. We run
     // `mpt_hash_state_trie` to check that.
-    let account_after = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        code_hash,
-        storage_root: HashedPartialTrie::from(Node::Leaf {
-            nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-            value: vec![2],
-        })
-        .hash(),
-        ..AccountRlp::default()
+    let account_after = EitherRlp {
+        account_rlp: Either::Left(MptAccountRlp {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash,
+            storage_root: HashedPartialTrie::from(Node::Leaf {
+                nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+                value: vec![2],
+            })
+            .hash(),
+            ..MptAccountRlp::default()
+        }),
     };
 
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec())?;
+    expected_state_trie_after.insert(addr_nibbles, account_after.rlp_encode().to_vec())?;
 
     let expected_state_trie_hash = expected_state_trie_after.hash();
 
@@ -619,6 +648,13 @@ fn sstore() -> Result<()> {
 #[test]
 #[cfg(feature = "eth_mainnet")]
 fn sload() -> Result<()> {
+    use std::collections::BTreeMap;
+
+    use crate::world::{
+        tries::{StateMpt, StorageTrie},
+        world::Type1World,
+    };
+
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
     let addr_hashed = keccak(addr);
@@ -633,21 +669,37 @@ fn sload() -> Result<()> {
     ];
     let code_hash = keccak(code);
 
-    let account_before = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        code_hash,
-        ..AccountRlp::default()
+    let account_before = EitherRlp {
+        account_rlp: Either::Left(MptAccountRlp {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash,
+            ..MptAccountRlp::default()
+        }),
     };
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
+    state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
 
+    let mut type1world = Type1World::new(
+        StateMpt::new_with_inner(state_trie_before.clone()),
+        BTreeMap::default(),
+    )
+    .unwrap();
+    let storage_tries = vec![(addr_hashed, Node::Empty.into())];
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    let state_trie = StateWorld {
+        state: Either::Left(type1world),
+    };
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
+        state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
+        // storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -713,4 +765,17 @@ fn sload() -> Result<()> {
     let expected_state_trie_hash = state_trie_before.hash();
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
+}
+
+#[cfg(feature = "eth_mainnet")]
+pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> StateWorld {
+    use std::collections::BTreeMap;
+
+    use crate::world::{tries::StateMpt, world::Type1World};
+
+    StateWorld {
+        state: Either::Left(
+            Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
+        ),
+    }
 }
