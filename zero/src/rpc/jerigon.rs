@@ -60,9 +60,10 @@ where
         .raw_request::<_, String>("eth_getWitness".into(), vec![target_block_id])
         .await?;
 
-    let block = cached_provider
+    let block: Block = cached_provider
         .get_block(target_block_id, BlockTransactionsKind::Full)
-        .await?;
+        .await?
+        .context("No block")?;
 
     let block_jumpdest_table_witnesses: Vec<Option<JumpDestTableWitness>> = match jumpdest_src {
         JumpdestSrc::ProverSimulation => vec![None; tx_results.len()],

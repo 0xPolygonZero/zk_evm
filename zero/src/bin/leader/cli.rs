@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use alloy::eips::BlockId;
 use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueEnum, ValueHint};
 use zero::parsing::parse_duration;
@@ -47,6 +48,7 @@ pub enum WorkerRunMode {
     Default,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Deletes all the previously cached circuits.
@@ -73,12 +75,17 @@ pub(crate) enum Command {
             required = false
         )]
         jumpdest_src: JumpdestSrc,
-        /// The block interval for which to generate a proof.
-        #[arg(long, short = 'i')]
-        block_interval: String,
-        /// The checkpoint block number.
-        #[arg(short, long, default_value_t = 0)]
-        checkpoint_block_number: u64,
+        /// The start of the block range to prove (inclusive).
+        #[arg(long, short = 's')]
+        start_block: BlockId,
+        /// The end of the block range to prove (inclusive).
+        /// If not provided, leader will work in dynamic mode from `start_block`
+        /// following head of the blockchain.
+        #[arg(long, short = 'e')]
+        end_block: Option<BlockId>,
+        /// The checkpoint block.
+        #[arg(short, long, default_value = "0")]
+        checkpoint_block: BlockId,
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,

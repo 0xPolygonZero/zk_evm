@@ -28,7 +28,6 @@ struct FetchParams {
     pub start_block: u64,
     pub end_block: u64,
     pub checkpoint_block_number: Option<u64>,
-    pub rpc_type: RpcType,
     pub jumpdest_src: JumpdestSrc,
     pub timeout: Duration,
 }
@@ -118,7 +117,6 @@ where
             cached_provider.clone(),
             block_id,
             checkpoint_block_number,
-            params.rpc_type,
             params.jumpdest_src,
             params.timeout,
         )
@@ -132,11 +130,12 @@ where
 impl Cli {
     /// Execute the cli command.
     pub async fn execute(self) -> anyhow::Result<()> {
-        let cached_provider = Arc::new(CachedProvider::new(build_http_retry_provider(
+        let retry_provider = build_http_retry_provider(
             self.config.rpc_url.clone(),
             self.config.backoff,
             self.config.max_retries,
-        )?));
+        )?;
+        let cached_provider = Arc::new(CachedProvider::new(retry_provider, self.config.rpc_type));
 
         match self.command {
             Command::Fetch {
@@ -148,7 +147,6 @@ impl Cli {
                     start_block,
                     end_block,
                     checkpoint_block_number,
-                    rpc_type: self.config.rpc_type,
                     jumpdest_src: self.config.jumpdest_src,
                     timeout: self.config.timeout,
                 };
@@ -176,7 +174,6 @@ impl Cli {
                             start_block: block_number,
                             end_block: block_number,
                             checkpoint_block_number: None,
-                            rpc_type: self.config.rpc_type,
                             jumpdest_src: self.config.jumpdest_src,
                             timeout: self.config.timeout,
                         };
