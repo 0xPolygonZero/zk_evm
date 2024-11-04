@@ -2,11 +2,10 @@
 
 use std::time::Duration;
 
-use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
+use evm_arithmetization::fixed_recursive_verifier::{AllRecursiveCircuits, RecursionConfig};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    init_logger, segment_with_empty_tables, TEST_RECURSION_CONFIG, TEST_STARK_CONFIG,
-    TEST_THRESHOLD_DEGREE_BITS,
+    init_logger, segment_with_empty_tables, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
@@ -60,10 +59,7 @@ fn empty_tables() -> anyhow::Result<()> {
         AllRecursiveCircuits::<F, C, D>::new(
             &all_stark,
             &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
-            &config,
-            Some(&TEST_RECURSION_CONFIG),
-            Some(&TEST_RECURSION_CONFIG),
-            Some(TEST_THRESHOLD_DEGREE_BITS),
+            RecursionConfig::test_config(),
         )
     );
 

@@ -5,8 +5,9 @@ use std::{
     str::FromStr,
 };
 
+use evm_arithmetization::fixed_recursive_verifier::RecursionConfig;
 pub use evm_arithmetization::NUM_TABLES;
-use evm_arithmetization::{AllRecursiveCircuits, AllStark, StarkConfig};
+use evm_arithmetization::{AllRecursiveCircuits, AllStark};
 
 use crate::parsing::{parse_range_exclusive, RangeParseError};
 
@@ -247,10 +248,7 @@ impl CircuitConfig {
         AllRecursiveCircuits::new(
             &AllStark::default(),
             self.as_degree_bits_ranges(),
-            &StarkConfig::standard_fast_config(),
-            None,
-            None,
-            None,
+            RecursionConfig::default(),
         )
     }
 }

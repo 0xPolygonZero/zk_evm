@@ -2,7 +2,7 @@
 
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
-    extract_block_final_public_values, extract_two_to_one_block_hash,
+    extract_block_final_public_values, extract_two_to_one_block_hash, RecursionConfig,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{
@@ -10,8 +10,7 @@ use evm_arithmetization::proof::{
 };
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    TEST_RECURSION_CONFIG, TEST_STARK_CONFIG, TEST_THRESHOLD_DEGREE_BITS,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -173,10 +172,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
         &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 16..17, 7..8],
-        &config,
-        Some(&TEST_RECURSION_CONFIG),
-        Some(&TEST_RECURSION_CONFIG),
-        Some(TEST_THRESHOLD_DEGREE_BITS),
+        RecursionConfig::test_config(),
     );
 
     let bp = some_timestamps
