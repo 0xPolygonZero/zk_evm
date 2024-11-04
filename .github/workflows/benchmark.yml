@@ -11,13 +11,13 @@ on:
       - "**"
 
 env:
-  BENCHMARK_WITNESS: artifacts/witness_b19807080.json
+  BENCHMARK_WITNESS: artifacts/witness_b1000_b1019.json
 
 jobs:
   benchmark_proving:
     name: Benchmark proving for representative blocks
     runs-on: zero-reg
-    timeout-minutes: 200 # Timeout TBD
+    timeout-minutes: 900 # Timeout TBD
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
