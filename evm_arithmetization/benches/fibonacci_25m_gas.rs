@@ -10,6 +10,8 @@ use std::str::FromStr;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use either::Either;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
+#[cfg(feature = "cdk_erigon")]
+use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
@@ -38,12 +40,9 @@ use plonky2::field::types::Field;
 #[cfg(feature = "cdk_erigon")]
 use plonky2::field::types::PrimeField64;
 use smt_trie::code::hash_bytecode_u256;
-use smt_trie::utils::hashout2u;
 #[cfg(feature = "cdk_erigon")]
-use smt_trie::{
-    keys::{key_balance, key_code_length},
-    utils::hashout2u,
-};
+use smt_trie::keys::{key_balance, key_code_length};
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 
@@ -214,7 +213,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     {
         let sender_account_before_smt =
             sender_account_before.expect_right("The sender account is an SMT.");
-        let to_account_before_smt = to_account_before.expect_right("The sender account is an SMT.");
+        let to_account_before_smt = to_account_before.as_smt_account_rlp();
         set_account(
             &mut state_trie_before,
             H160(sender),
@@ -339,9 +338,8 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
 
     #[cfg(feature = "cdk_erigon")]
     {
-        let sender_account_after_smt =
-            sender_account_after.expect_right("cdk_erigon expects an SMT.");
-        let to_account_after_smt = to_account_after.expect_right("cdk_erigon expects an SMT.");
+        let sender_account_after_smt = sender_account_after.as_smt_account_rlp();
+        let to_account_after_smt = to_account_after.as_smt_account_rlp();
         set_account(
             &mut expected_state_trie_after,
             H160(sender),
@@ -458,10 +456,11 @@ fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccountRlp, c
     //     smt.set(key_storage(addr, k), v);
     // }
 }
+#[cfg(feature = "eth_mainnet")]
 use std::collections::BTreeMap;
 
-use evm_arithmetization::world::tries::StateMpt;
-use evm_arithmetization::world::world::Type1World;
+#[cfg(feature = "eth_mainnet")]
+use evm_arithmetization::world::{tries::StateMpt, world::Type1World};
 #[cfg(feature = "eth_mainnet")]
 fn get_state_world_from_trie_and_storage(
     state_trie: HashedPartialTrie,

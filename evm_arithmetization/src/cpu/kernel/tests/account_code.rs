@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use either::Either;
+use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -552,6 +553,7 @@ fn prepare_interpreter_all_accounts<F: RichField>(
 #[test]
 #[cfg(feature = "eth_mainnet")]
 fn sstore() -> Result<()> {
+    init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
@@ -778,4 +780,8 @@ pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> State
             Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
         ),
     }
+}
+
+fn init_logger() {
+    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

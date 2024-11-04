@@ -218,7 +218,14 @@ process_contract_creation_txn_after_ef_check:
     GET_CONTEXT
     %build_address_no_offset
     // stack: addr, len, leftover_gas, new_ctx, address, retdest, success
-    %poseidon_hash_code_unpadded
+    #[cfg(feature = cdk_erigon)]
+    {
+        %poseidon_hash_code_unpadded
+    }
+    #[cfg(feature = eth_mainnet)]
+    {
+        KECCAK_GENERAL
+    }
     // stack: codehash, leftover_gas, new_ctx, address, retdest, success
     %observe_new_contract
     DUP4

@@ -15,8 +15,6 @@ use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
 use smt_trie::smt::hash_serialize_u256;
-#[cfg(feature = "cdk_erigon")]
-use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,

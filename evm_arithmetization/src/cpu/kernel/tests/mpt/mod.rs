@@ -107,6 +107,7 @@ pub(crate) fn test_account_1() -> MptAccountRlp {
 //     })
 // }
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_1_rlp() -> Vec<u8> {
     test_account_1().rlp_encode().to_vec()
 }
@@ -148,6 +149,7 @@ pub(crate) fn test_account_2() -> MptAccountRlp {
 //     })
 // }
 
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_2_rlp() -> Vec<u8> {
     test_account_2().rlp_encode().to_vec()
 }

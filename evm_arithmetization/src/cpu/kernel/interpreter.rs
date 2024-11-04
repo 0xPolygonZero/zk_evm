@@ -309,7 +309,15 @@ impl<F: RichField> Interpreter<F> {
                     .state_trie()
                     .hash()),
                 #[cfg(feature = "cdk_erigon")]
-                hash_serialize_u256(&smt.as_smt().to_vec()),
+                hash_serialize_u256(
+                    &tries
+                        .state_trie
+                        .state
+                        .clone()
+                        .expect_right("cdk_erigon expects SMTs.")
+                        .as_smt()
+                        .to_vec(),
+                ),
                 /* match &tries.state_trie.state {
                  *     Either::Left(mpt) =>
                  * h2u(mpt.state_trie().hash()),
@@ -415,9 +423,7 @@ impl<F: RichField> Interpreter<F> {
                         self.generation_state.memory.set(address, value);
                     }
                 }
-                MemoryOpKind::Write => {
-                    self.generation_state.memory.set(address, value)
-                }
+                MemoryOpKind::Write => self.generation_state.memory.set(address, value),
             }
         }
 
