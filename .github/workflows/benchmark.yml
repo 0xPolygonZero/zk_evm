@@ -1,8 +1,10 @@
+---   # Proof generation benchmarking workflow
+
 name: Benchmark proving
 
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: "0 4 * * *"
   workflow_dispatch:
     branches:
       - "**"
@@ -17,7 +19,7 @@ jobs:
   benchmark_proving:
     name: Benchmark proving for representative blocks
     runs-on: zero-reg
-    timeout-minutes: 900 # Timeout TBD
+    timeout-minutes: 900  # Timeout TBD
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -28,7 +30,6 @@ jobs:
         run: |
           RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
           sudo sysctl kernel.perf_event_paranoid=0
-#          printf 'TIME OF TEST          RUN ID           WALL CLOCK TIME(s)          PERF WALL TIME(s)       PERF USER TIME(s)       PERF SYS TIME(s)        WITNESS FILE\n' > proving_benchmark_results.txt
 
       - name: Download previous results
         uses: dawidd6/action-download-artifact@v6
@@ -41,23 +42,24 @@ jobs:
 
       - name: Run the script
         # TODO - run the benchmark with 20 blocks file
-        run: |  
+        run: |
           echo "Benchmarking proving with $BENCHMARK_WITNESS"
           ./scripts/benchmark_input.sh $BENCHMARK_WITNESS | tee benchmark_output.log
           MEASURED_PROVING_TIME_SEC=`cat benchmark_output.log | grep 'Proving duration:' | tail -1 | awk '{ print $3}'`
           PERF_TIME=`cat output.log | grep "seconds time elapsed" |  tail -1 | awk '{ print ($1)}'`
           PERF_USER_TIME=`cat output.log | grep "seconds user" |  tail -1 | awk '{ print ($1)}'`
           PERF_SYS_TIME=`cat output.log | grep "seconds sys" |  tail -1 | awk '{ print ($1)}'`
-          printf '%12s     %-12s     %-24s    %-20s    %-20s    %-20s    %-s\n' `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} \
-               $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME $PERF_SYS_TIME $BENCHMARK_WITNESS >> proving_benchmark_results.txt
+          printf '%12s     %-12s     %-24s    %-20s    %-20s    %-20s    %-s\n' \
+            `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} \
+            $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME \
+            $PERF_SYS_TIME $BENCHMARK_WITNESS >> proving_benchmark_results.txt
 
       - name: Upload new results
         uses: actions/upload-artifact@v4
         with:
           name: proving_benchmark
-          path: | 
+          path: |
             ./proving_benchmark_results.txt
             ./output.log
           retention-days: 90
           overwrite: true
-
