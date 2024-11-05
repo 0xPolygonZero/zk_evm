@@ -55,10 +55,15 @@ where
         .get_block(target_block_id, BlockTransactionsKind::Full)
         .await?;
 
-    let struct_logs = if get_struct_logs {
-        Some(process_txns(&block, cached_provider.get_provider().await?.deref()).await?)
-    } else {
-        None
+    let struct_logs = match block {
+        Some(b) => {
+            if get_struct_logs {
+                Some(process_txns(&b, cached_provider.get_provider().await?.deref()).await?)
+            } else {
+                None
+            }
+        }
+        None => None,
     };
     let other_data =
         fetch_other_block_data(cached_provider, target_block_id, checkpoint_block_number).await?;

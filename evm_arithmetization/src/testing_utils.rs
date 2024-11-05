@@ -10,16 +10,64 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
 };
+use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::fri::reduction_strategies::FriReductionStrategy;
+use plonky2::fri::FriConfig;
+use plonky2::plonk::circuit_data::CircuitConfig;
+use starky::config::StarkConfig;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::generation::TrieInputs;
+use crate::generation::{TrieInputs, TrimmedGenerationInputs};
 use crate::proof::TrieRoots;
-use crate::{generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs};
+#[cfg(test)]
+use crate::witness::operation::Operation;
+use crate::{
+    generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
+    GenerationSegmentData, SegmentDataIterator,
+};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 ));
+
+/// The recursion threshold when using test configurations
+pub const TEST_THRESHOLD_DEGREE_BITS: usize = 10;
+
+/// The recursion threshold for 2-to-1 block circuit.
+pub const TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS: usize = 13;
+
+/// A fast STARK config for testing purposes only.
+pub const TEST_STARK_CONFIG: StarkConfig = StarkConfig {
+    security_bits: 1,
+    num_challenges: 1,
+    fri_config: FriConfig {
+        rate_bits: 1,
+        cap_height: 4,
+        proof_of_work_bits: 1,
+        reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
+        num_query_rounds: 1,
+    },
+};
+
+/// A fast Circuit config for testing purposes only.
+pub const TEST_RECURSION_CONFIG: CircuitConfig = CircuitConfig {
+    num_wires: 135,
+    num_routed_wires: 80,
+    num_constants: 2,
+    use_base_arithmetic_gate: true,
+    security_bits: 1,
+    num_challenges: 1,
+    zero_knowledge: false,
+    max_quotient_degree_factor: 8,
+    fri_config: FriConfig {
+        rate_bits: 3,
+        cap_height: 4,
+        proof_of_work_bits: 1,
+        reduction_strategy: FriReductionStrategy::ConstantArityBits(4, 5),
+        num_query_rounds: 1,
+    },
+};
 
 pub fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
@@ -165,7 +213,7 @@ pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> Accou
     }
 }
 
-pub fn empty_payload() -> Result<GenerationInputs> {
+fn empty_payload() -> Result<GenerationInputs> {
     // Set up default block metadata
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::zero(),
@@ -212,4 +260,37 @@ pub fn empty_payload() -> Result<GenerationInputs> {
     };
 
     Ok(inputs)
+}
+
+pub fn segment_with_empty_tables() -> Result<(
+    TrimmedGenerationInputs<GoldilocksField>,
+    GenerationSegmentData,
+)> {
+    let payload = empty_payload()?;
+    let max_cpu_len_log = Some(7);
+    let mut segment_iterator =
+        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log, &None);
+    let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
+
+    Ok((trimmed_inputs, segment_data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::logic;
+
+    // Ensures that there are no Keccak and Logic ops in the segment.
+    #[test]
+    fn test_segment_with_empty_tables() -> Result<()> {
+        let (_, segment_data) = segment_with_empty_tables()?;
+
+        let opcode_counts = &segment_data.opcode_counts;
+        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
+        assert!(!opcode_counts.contains_key(&Operation::BinaryLogic(logic::Op::And)));
+        assert!(!opcode_counts.contains_key(&Operation::BinaryLogic(logic::Op::Or)));
+        assert!(!opcode_counts.contains_key(&Operation::BinaryLogic(logic::Op::Xor)));
+
+        Ok(())
+    }
 }

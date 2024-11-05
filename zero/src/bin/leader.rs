@@ -5,11 +5,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
-use client::RpcParams;
+use paladin::config::Config;
 use paladin::runtime::Runtime;
 use tracing::info;
 use zero::env::load_dotenvy_vars_if_present;
-use zero::prover::ProverConfig;
+use zero::prover::{ProofRuntime, ProverConfig};
+use zero::rpc::retry::build_http_retry_provider;
 use zero::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
@@ -24,6 +25,10 @@ mod leader {
     pub mod stdio;
 }
 
+const HEAVY_PROOF_ROUTING_KEY: &str = "heavy-proof";
+const LIGHT_PROOF_ROUTING_KEY: &str = "light-proof";
+const DEFAULT_ROUTING_KEY: &str = paladin::runtime::DEFAULT_ROUTING_KEY;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
@@ -36,7 +41,33 @@ async fn main() -> Result<()> {
         return zero::prover_state::persistence::delete_all();
     }
 
-    let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
+    let mut light_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    let mut heavy_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    if args.worker_run_mode == cli::WorkerRunMode::Affinity {
+        // If we're running in affinity mode, we need to set the routing key for the
+        // heavy proof and light proof.
+        info!("Workers running in affinity mode");
+        light_proof_routing_key = LIGHT_PROOF_ROUTING_KEY.to_string();
+        heavy_proof_routing_key = HEAVY_PROOF_ROUTING_KEY.to_string();
+    }
+
+    let light_proof_paladin_args = Config {
+        task_bus_routing_key: Some(light_proof_routing_key),
+        ..args.paladin.clone()
+    };
+
+    let heavy_proof_paladin_args = Config {
+        task_bus_routing_key: Some(heavy_proof_routing_key),
+        ..args.paladin
+    };
+
+    let light_proof = Runtime::from_config(&light_proof_paladin_args, register()).await?;
+    let heavy_proof = Runtime::from_config(&heavy_proof_paladin_args, register()).await?;
+
+    let proof_runtime = Arc::new(ProofRuntime {
+        light_proof,
+        heavy_proof,
+    });
     let prover_config: ProverConfig = args.prover_config.into();
     if prover_config.block_pool_size == 0 {
         panic!("block-pool-size must be greater than 0");
@@ -55,7 +86,7 @@ async fn main() -> Result<()> {
     match args.command {
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof, Arc::new(prover_config)).await?;
+            stdio::stdio_main(proof_runtime, previous_proof, Arc::new(prover_config)).await?;
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
@@ -67,31 +98,41 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir, Arc::new(prover_config)).await?;
+            http::http_main(proof_runtime, port, output_dir, Arc::new(prover_config)).await?;
         }
         Command::Rpc {
             rpc_url,
             rpc_type,
-            block_interval,
-            checkpoint_block_number,
+            checkpoint_block,
             previous_proof,
             block_time,
+            start_block,
+            end_block,
             backoff,
             max_retries,
         } => {
+            // Construct the provider.
             let previous_proof = get_previous_proof(previous_proof)?;
-            let block_interval = BlockInterval::new(&block_interval)?;
+            let retry_provider = build_http_retry_provider(rpc_url.clone(), backoff, max_retries)?;
+            let cached_provider = Arc::new(zero::provider::CachedProvider::new(
+                retry_provider,
+                rpc_type,
+            ));
 
+            // Construct the block interval.
+            let block_interval =
+                BlockInterval::new(cached_provider.clone(), start_block, end_block).await?;
+
+            // Convert the checkpoint block to a block number.
+            let checkpoint_block_number =
+                BlockInterval::block_to_num(cached_provider.clone(), checkpoint_block).await?;
+
+            // Prove the block interval.
             info!("Proving interval {block_interval}");
             client_main(
-                runtime,
-                RpcParams {
-                    rpc_url,
-                    rpc_type,
-                    backoff,
-                    max_retries,
-                    block_time,
-                },
+                proof_runtime,
+                cached_provider,
+                block_time,
                 block_interval,
                 LeaderConfig {
                     checkpoint_block_number,

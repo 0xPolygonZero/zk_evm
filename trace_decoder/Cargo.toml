@@ -33,6 +33,7 @@ nunny = { workspace = true, features = ["serde"] }
 plonky2.workspace = true
 rlp.workspace = true
 serde.workspace = true
+smt_trie.workspace = true
 stackstack = "0.3.0"
 strum = { version = "0.26.3", features = ["derive"] }
 thiserror.workspace = true
@@ -52,7 +53,6 @@ libtest-mimic = "0.7.3"
 plonky2_maybe_rayon.workspace = true
 serde_json.workspace = true
 serde_path_to_error.workspace = true
-smt_trie.workspace = true
 zero.workspace = true
 
 [features]

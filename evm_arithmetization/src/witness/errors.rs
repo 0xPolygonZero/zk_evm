@@ -17,6 +17,13 @@ pub enum ProgramError {
     ProverInputError(ProverInputError),
     UnknownContractCode,
     StructLogDebuggerError,
+    Other(String),
+}
+
+impl From<anyhow::Error> for ProgramError {
+    fn from(e: anyhow::Error) -> Self {
+        ProgramError::Other(e.to_string())
+    }
 }
 
 #[allow(clippy::enum_variant_names)]

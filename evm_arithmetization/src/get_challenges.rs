@@ -247,14 +247,14 @@ pub(crate) fn observe_public_values_target<
 
 pub mod testing {
     use plonky2::field::extension::Extendable;
-    use plonky2::hash::hash_types::RichField;
+    use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
     use plonky2::iop::challenger::Challenger;
     use plonky2::plonk::config::GenericConfig;
     use starky::config::StarkConfig;
     use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet};
     use starky::proof::StarkProofChallenges;
 
-    use crate::all_stark::KECCAK_TABLES_INDICES;
+    use crate::all_stark::OPTIONAL_TABLE_INDICES;
     use crate::get_challenges::observe_public_values;
     use crate::proof::*;
     use crate::witness::errors::ProgramError;
@@ -278,19 +278,14 @@ pub mod testing {
 
             let stark_proofs = &self.multi_proof.stark_proofs;
 
-            for (i, proof) in stark_proofs.iter().enumerate() {
-                if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
-                    // Observe zero merkle caps when skipping Keccak tables.
-                    let zero_merkle_cap = proof
-                        .proof
-                        .trace_cap
-                        .flatten()
-                        .iter()
-                        .map(|_| F::ZERO)
-                        .collect::<Vec<F>>();
-                    challenger.observe_elements(&zero_merkle_cap);
+            for (i, stark_proof) in stark_proofs.iter().enumerate() {
+                if let Some(stark_proof) = stark_proof {
+                    challenger.observe_cap(&stark_proof.proof.trace_cap);
                 } else {
-                    challenger.observe_cap(&proof.proof.trace_cap);
+                    assert!(OPTIONAL_TABLE_INDICES.contains(&i) && !self.table_in_use[i]);
+                    let zero_cap =
+                        vec![F::ZERO; config.fri_config.num_cap_elements() * NUM_HASH_OUT_ELTS];
+                    challenger.observe_elements(&zero_cap);
                 }
             }
 
@@ -301,16 +296,16 @@ pub mod testing {
 
             Ok(AllProofChallenges {
                 stark_challenges: core::array::from_fn(|i| {
-                    if KECCAK_TABLES_INDICES.contains(&i) && !self.use_keccak_tables {
-                        None
-                    } else {
+                    if let Some(stark_proof) = &stark_proofs[i] {
                         challenger.compact();
-                        Some(stark_proofs[i].proof.get_challenges(
+                        Some(stark_proof.proof.get_challenges(
                             &mut challenger,
                             Some(&ctl_challenges),
                             true,
                             config,
                         ))
+                    } else {
+                        None
                     }
                 }),
                 ctl_challenges,

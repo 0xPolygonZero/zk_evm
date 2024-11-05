@@ -220,6 +220,15 @@ pub(crate) trait State<F: RichField> {
     {
         let halt_offsets = self.get_halt_offsets();
 
+        if let Some(max_len_log) = max_cpu_len_log {
+            assert!(
+                (1 << max_len_log) >= NUM_EXTRA_CYCLES_AFTER,
+                "Target length (2^{}) is less than NUM_EXTRA_CYCLES_AFTER ({})",
+                max_len_log,
+                NUM_EXTRA_CYCLES_AFTER
+            );
+        }
+
         let cycle_limit =
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 

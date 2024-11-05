@@ -1,5 +1,6 @@
 use core::mem::{self, MaybeUninit};
 use core::ops::Range;
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
-use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
 use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
@@ -37,7 +37,8 @@ use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
 use crate::all_stark::{
-    all_cross_table_lookups, AllStark, Table, KECCAK_TABLES_INDICES, NUM_TABLES,
+    all_cross_table_lookups, AllStark, Table, MEMORY_CTL_IDX, NUM_CTLS, NUM_TABLES,
+    OPTIONAL_TABLE_INDICES,
 };
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
@@ -57,6 +58,7 @@ use crate::recursive_verifier::{
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
 use crate::structlog::TxZeroStructLogs;
+use crate::testing_utils::TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS;
 use crate::util::h256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
@@ -132,6 +134,8 @@ where
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+    /// Dummy proofs of each table for the root circuit.
+    pub table_dummy_proofs: [Option<ShrunkProofData<F, C, D>>; NUM_TABLES],
 }
 
 /// Data for the EVM root circuit, which is used to combine each STARK's shrunk
@@ -154,8 +158,8 @@ where
     /// for EVM root proofs; the circuit has them just to match the
     /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
-    /// We can skip verifying Keccak tables when they are not in use.
-    use_keccak_tables: BoolTarget,
+    /// We can skip verifying tables when they are not in use.
+    table_in_use: [BoolTarget; NUM_TABLES],
 }
 
 impl<F, C, const D: usize> RootCircuitData<F, C, D>
@@ -178,7 +182,9 @@ where
         }
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
-        buffer.write_target_bool(self.use_keccak_tables)?;
+        for table_in_use in self.table_in_use {
+            buffer.write_target_bool(table_in_use)?;
+        }
         Ok(())
     }
 
@@ -198,7 +204,10 @@ where
         }
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
-        let use_keccak_tables = buffer.read_target_bool()?;
+        let mut table_in_use = Vec::with_capacity(NUM_TABLES);
+        for _ in 0..NUM_TABLES {
+            table_in_use.push(buffer.read_target_bool()?);
+        }
 
         Ok(Self {
             circuit,
@@ -206,7 +215,7 @@ where
             index_verifier_data: index_verifier_data.try_into().unwrap(),
             public_values,
             cyclic_vk,
-            use_keccak_tables,
+            table_in_use: table_in_use.try_into().unwrap(),
         })
     }
 }
@@ -570,6 +579,43 @@ where
     }
 }
 
+/// A struct that encapsulates both the init degree and the shrunk proof.
+#[derive(Eq, PartialEq, Debug)]
+pub struct ShrunkProofData<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
+{
+    /// The [`CommonCircuitData`] of the last shrinking circuit.
+    pub common_circuit_data: CommonCircuitData<F, D>,
+
+    /// The proof after applying shrinking recursion.
+    pub proof: ProofWithPublicInputs<F, C, D>,
+}
+
+impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
+    ShrunkProofData<F, C, D>
+{
+    fn to_buffer(
+        &self,
+        buffer: &mut Vec<u8>,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<()> {
+        buffer.write_common_circuit_data(&self.common_circuit_data, gate_serializer)?;
+        buffer.write_proof_with_public_inputs(&self.proof)?;
+        Ok(())
+    }
+
+    fn from_buffer(
+        buffer: &mut Buffer,
+        gate_serializer: &dyn GateSerializer<F, D>,
+    ) -> IoResult<Self> {
+        let common_circuit_data = buffer.read_common_circuit_data(gate_serializer)?;
+        let proof = buffer.read_proof_with_public_inputs(&common_circuit_data)?;
+        Ok(Self {
+            common_circuit_data,
+            proof,
+        })
+    }
+}
+
 impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
 where
     F: RichField + Extendable<D>,
@@ -611,6 +657,15 @@ where
         if !skip_tables {
             for table in &self.by_table {
                 table.to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+            }
+        }
+        for table in &self.table_dummy_proofs {
+            match table {
+                Some(dummy_proof_data) => {
+                    buffer.write_bool(true)?;
+                    dummy_proof_data.to_buffer(&mut buffer, gate_serializer)?
+                }
+                None => buffer.write_bool(false)?,
             }
         }
         Ok(buffer)
@@ -691,6 +746,14 @@ where
             }
         };
 
+        let table_dummy_proofs = core::array::from_fn(|_| {
+            if buffer.read_bool().ok()? {
+                Some(ShrunkProofData::from_buffer(&mut buffer, gate_serializer).ok()?)
+            } else {
+                None
+            }
+        });
+
         Ok(Self {
             root,
             segment_aggregation,
@@ -699,6 +762,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            table_dummy_proofs,
         })
     }
 
@@ -724,9 +788,18 @@ where
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
         stark_config: &StarkConfig,
+        shrinking_circuit_config: Option<&CircuitConfig>,
+        recursion_circuit_config: Option<&CircuitConfig>,
+        threshold_degree_bits: Option<usize>,
     ) -> Self {
         // Sanity check on the provided config
         assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
+
+        let shrinking_config = shrinking_config();
+        let shrinking_circuit_config = shrinking_circuit_config.unwrap_or(&shrinking_config);
+        let circuit_config = CircuitConfig::standard_recursion_config();
+        let recursion_circuit_config = recursion_circuit_config.unwrap_or(&circuit_config);
+        let threshold_degree_bits = threshold_degree_bits.unwrap_or(THRESHOLD_DEGREE_BITS);
 
         macro_rules! create_recursive_circuit {
             ($table_enum:expr, $stark_field:ident) => {
@@ -736,6 +809,8 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
+                    shrinking_circuit_config,
+                    threshold_degree_bits,
                 )
             };
         }
@@ -767,13 +842,38 @@ where
             poseidon,
         ];
 
-        let root = Self::create_segment_circuit(&by_table, stark_config);
+        let root = Self::create_segment_circuit(&by_table, stark_config, recursion_circuit_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let batch_aggregation =
             Self::create_batch_aggregation_circuit(&segment_aggregation, stark_config);
         let block = Self::create_block_circuit(&batch_aggregation);
         let block_wrapper = Self::create_block_wrapper_circuit(&block);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block_wrapper);
+
+        let table_dummy_proofs = core::array::from_fn(|i| {
+            if OPTIONAL_TABLE_INDICES.contains(&i) {
+                let init_degree = degree_bits_ranges[i].start;
+                let chain = by_table[i]
+                    .by_stark_size
+                    .get(&init_degree)
+                    .expect("Unable to get the shrinking circuits");
+                let common_circuit_data = chain
+                    .shrinking_wrappers
+                    .last()
+                    .map(|wrapper| &wrapper.circuit.common)
+                    .unwrap_or(&chain.initial_wrapper.circuit.common);
+                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_circuit_data);
+                let dummy_pis = HashMap::new();
+                let proof = dummy_proof(&dummy_circuit, dummy_pis)
+                    .expect("Unable to generate dummy proofs");
+                Some(ShrunkProofData {
+                    common_circuit_data: common_circuit_data.clone(),
+                    proof,
+                })
+            } else {
+                None
+            }
+        });
 
         Self {
             root,
@@ -783,6 +883,7 @@ where
             block_wrapper,
             two_to_one_block,
             by_table,
+            table_dummy_proofs,
         }
     }
 
@@ -809,14 +910,17 @@ where
     fn create_segment_circuit(
         by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         stark_config: &StarkConfig,
+        circuit_config: &CircuitConfig,
     ) -> RootCircuitData<F, C, D> {
         let inner_common_data: [_; NUM_TABLES] =
             core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
 
-        let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::new(circuit_config.clone());
 
-        let use_keccak_tables = builder.add_virtual_bool_target_safe();
-        let skip_keccak_tables = builder.not(use_keccak_tables);
+        let table_in_use: [BoolTarget; NUM_TABLES] =
+            core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+        let table_not_in_use: [BoolTarget; NUM_TABLES] =
+            core::array::from_fn(|i| builder.not(table_in_use[i]));
         let public_values = add_virtual_public_values_public_input(&mut builder);
 
         let recursive_proofs =
@@ -836,11 +940,17 @@ where
             }
         }
 
+        for (i, table) in table_in_use.iter().enumerate() {
+            if !OPTIONAL_TABLE_INDICES.contains(&i) {
+                builder.assert_one(table.target);
+            }
+        }
+
         // Ensures that the trace cap is set to 0 when skipping Keccak tables.
-        for i in KECCAK_TABLES_INDICES {
+        for i in OPTIONAL_TABLE_INDICES {
             for h in &pis[i].trace_cap {
                 for t in h {
-                    let trace_cap_check = builder.mul(skip_keccak_tables.target, *t);
+                    let trace_cap_check = builder.mul(table_not_in_use[i].target, *t);
                     builder.assert_zero(trace_cap_check);
                 }
             }
@@ -856,16 +966,16 @@ where
         // Check that the correct CTL challenges are used in every proof.
         for (i, pi) in pis.iter().enumerate() {
             for j in 0..stark_config.num_challenges {
-                if KECCAK_TABLES_INDICES.contains(&i) {
-                    // Ensures that the correct CTL challenges are used in Keccak tables when
-                    // `enable_keccak_tables` is true.
+                if OPTIONAL_TABLE_INDICES.contains(&i) {
+                    // Ensures that the correct CTL challenges are used when an optional table
+                    // is in use.
                     builder.conditional_assert_eq(
-                        use_keccak_tables.target,
+                        table_in_use[i].target,
                         ctl_challenges.challenges[j].beta,
                         pi.ctl_challenges.challenges[j].beta,
                     );
                     builder.conditional_assert_eq(
-                        use_keccak_tables.target,
+                        table_in_use[i].target,
                         ctl_challenges.challenges[j].gamma,
                         pi.ctl_challenges.challenges[j].gamma,
                     );
@@ -893,18 +1003,18 @@ where
             let current_state_before = pis[i].challenger_state_before.as_ref();
             let current_state_after = pis[i].challenger_state_after.as_ref();
             for j in 0..state_len {
-                if KECCAK_TABLES_INDICES.contains(&i) {
+                if OPTIONAL_TABLE_INDICES.contains(&i) {
                     // Ensure the challenger state:
-                    // 1) prev == current_before when using Keccak
+                    // 1) prev == current_before when using this table
                     builder.conditional_assert_eq(
-                        use_keccak_tables.target,
+                        table_in_use[i].target,
                         prev_state[j],
                         current_state_before[j],
                     );
-                    // 2) Update prev <- current_after when using Keccak
-                    // 3) Keep prev <- prev when skipping Keccak
+                    // 2) Update prev <- current_after when using this table
+                    // 3) Keep prev <- prev when skipping this table
                     prev_state[j] =
-                        builder.select(use_keccak_tables, current_state_after[j], prev_state[j]);
+                        builder.select(table_in_use[i], current_state_after[j], prev_state[j]);
                 } else {
                     builder.connect(prev_state[j], current_state_before[j]);
                     prev_state[j] = current_state_after[j];
@@ -914,25 +1024,28 @@ where
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums =
-            vec![vec![builder.zero(); stark_config.num_challenges]; NUM_TABLES];
+        let mut extra_looking_sums = HashMap::from_iter(
+            (0..NUM_CTLS).map(|i| (i, vec![builder.zero(); stark_config.num_challenges])),
+        );
 
         // Memory
-        extra_looking_sums[*Table::Memory] = (0..stark_config.num_challenges)
-            .map(|c| {
-                get_memory_extra_looking_sum_circuit(
-                    &mut builder,
-                    &public_values,
-                    ctl_challenges.challenges[c],
-                )
-            })
-            .collect_vec();
+        extra_looking_sums.insert(
+            MEMORY_CTL_IDX,
+            (0..stark_config.num_challenges)
+                .map(|c| {
+                    get_memory_extra_looking_sum_circuit(
+                        &mut builder,
+                        &public_values,
+                        ctl_challenges.challenges[c],
+                    )
+                })
+                .collect_vec(),
+        );
 
-        // Ensure that when Keccak tables are skipped, the Keccak tables' ctl_zs_first
-        // are all zeros.
-        for &i in KECCAK_TABLES_INDICES.iter() {
+        // Ensure that when a table is skipped, the table's ctl_zs_first are all zeros.
+        for &i in OPTIONAL_TABLE_INDICES.iter() {
             for &t in pis[i].ctl_zs_first.iter() {
-                let ctl_check = builder.mul(skip_keccak_tables.target, t);
+                let ctl_check = builder.mul(table_not_in_use[i].target, t);
                 builder.assert_zero(ctl_check);
             }
         }
@@ -942,7 +1055,7 @@ where
             &mut builder,
             all_cross_table_lookups(),
             pis.map(|p| p.ctl_zs_first),
-            Some(&extra_looking_sums),
+            &extra_looking_sums,
             stark_config,
         );
 
@@ -966,10 +1079,10 @@ where
             let inner_verifier_data =
                 builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
 
-            if KECCAK_TABLES_INDICES.contains(&i) {
+            if OPTIONAL_TABLE_INDICES.contains(&i) {
                 builder
                     .conditionally_verify_proof_or_dummy::<C>(
-                        use_keccak_tables,
+                        table_in_use[i],
                         &recursive_proofs[i],
                         &inner_verifier_data,
                         inner_common_data[i],
@@ -1012,7 +1125,7 @@ where
             index_verifier_data,
             public_values,
             cyclic_vk,
-            use_keccak_tables,
+            table_in_use,
         }
     }
 
@@ -1382,18 +1495,9 @@ where
     fn create_block_circuit(
         agg: &BatchAggregationCircuitData<F, C, D>,
     ) -> BlockCircuitData<F, C, D> {
-        // Here, we have two block proofs and we aggregate them together.
-        // The block circuit is similar to the agg circuit; both verify two inner
-        // proofs.
-        let expected_common_data = CommonCircuitData {
-            fri_params: FriParams {
-                degree_bits: 14,
-                ..agg.circuit.common.fri_params.clone()
-            },
-            ..agg.circuit.common.clone()
-        };
+        let expected_common_data = agg.circuit.common.clone();
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let mut builder = CircuitBuilder::<F, D>::new(agg.circuit.common.config.clone());
         let public_values = add_virtual_public_values_public_input(&mut builder);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
@@ -1467,6 +1571,10 @@ where
 
         let agg_verifier_data = builder.constant_verifier_data(&agg.circuit.verifier_only);
         builder.verify_proof::<C>(&agg_root_proof, &agg_verifier_data, &agg.circuit.common);
+
+        while log2_ceil(builder.num_gates()) < agg.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
         BlockCircuitData {
@@ -1640,7 +1748,17 @@ where
         // Pad to match the (non-existing yet!) 2-to-1 circuit's degree.
         // We use the block circuit's degree as target reference here, as they end up
         // having same degree.
-        while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
+        let degree_bits_to_be_padded = block.circuit.common.degree_bits();
+
+        // When using test configurations, the block circuit's degree is less than the
+        // 2-to-1 circuit's degree. Therefore, we also need to ensure its size meets
+        // the 2-to-1 circuit's recursion threshold degree bits.
+        let degree_bits_to_be_padded = max(
+            degree_bits_to_be_padded,
+            TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS,
+        );
+
+        while log2_ceil(builder.num_gates()) < degree_bits_to_be_padded {
             builder.add_gate(NoopGate, vec![]);
         }
 
@@ -1726,6 +1844,11 @@ where
         let mix_hash_virtual = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
         builder.connect_hashes(mix_hash, mix_hash_virtual);
+
+        // Pad to match the block circuit's degree.
+        while log2_ceil(builder.num_gates()) < block_wrapper_circuit.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {
@@ -1904,7 +2027,6 @@ where
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         features_check(&generation_inputs);
-
         let all_proof = prove::<F, C, D>(
             all_stark,
             config,
@@ -1913,37 +2035,23 @@ where
             timing,
             abort_signal.clone(),
         )?;
+        self.prove_segment_with_all_proofs(&all_proof, config, abort_signal.clone())
+    }
 
+    pub fn prove_segment_with_all_proofs(
+        &self,
+        all_proof: &AllProof<F, C, D>,
+        config: &StarkConfig,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
             let table_circuits = &self.by_table[table];
-            if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
-                // generate and set a dummy `index_verifier_data` and `proof_with_pis`
-                let index_verifier_data =
-                    table_circuits.by_stark_size.keys().min().ok_or_else(|| {
-                        anyhow::format_err!("No valid size in shrinking circuits")
-                    })?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(*index_verifier_data),
-                );
-                let table_circuit = table_circuits
-                    .by_stark_size
-                    .get(index_verifier_data)
-                    .ok_or_else(|| anyhow::format_err!("No valid size in shrinking circuits"))?
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?;
-                let dummy_circuit: CircuitData<F, C, D> =
-                    dummy_circuit(&table_circuit.circuit.common);
-                let dummy_pis = HashMap::new();
-                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .expect("Unable to generate dummy proofs");
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
-            } else {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+            if all_proof.table_in_use[table] {
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
                 let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
                 let shrunk_proof = table_circuits
                     .by_stark_size
@@ -1964,9 +2072,19 @@ where
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_usize(index_verifier_data),
-                );
+                )?;
                 root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof)?;
+            } else {
+                assert!(OPTIONAL_TABLE_INDICES.contains(&table));
+                let dummy_proof_data = self.table_dummy_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO)?;
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof_data.proof,
+                )?;
             }
 
             check_abort_signal(abort_signal.clone())?;
@@ -1975,7 +2093,7 @@ where
         root_inputs.set_verifier_data_target(
             &self.root.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         set_public_value_targets(
             &mut root_inputs,
@@ -1986,7 +2104,11 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
+        self.root
+            .table_in_use
+            .iter()
+            .zip(all_proof.table_in_use.iter())
+            .try_for_each(|(target, value)| root_inputs.set_bool_target(*target, *value))?;
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -1994,7 +2116,7 @@ where
             is_agg: false,
             is_dummy: false,
             proof_with_pvs: ProofWithPublicValues {
-                public_values: all_proof.public_values,
+                public_values: all_proof.public_values.clone(),
                 intern: root_proof,
             },
         })
@@ -2053,42 +2175,37 @@ where
     pub fn prove_segment_after_initial_stark(
         &self,
         all_proof: AllProof<F, C, D>,
-        table_circuits: &[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES],
+        table_circuits: &[Option<(RecursiveCircuitsForTableSize<F, C, D>, u8)>; NUM_TABLES],
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
 
         for table in 0..NUM_TABLES {
-            let (table_circuit, index_verifier_data) = &table_circuits[table];
-            if KECCAK_TABLES_INDICES.contains(&table) && !all_proof.use_keccak_tables {
+            if all_proof.table_in_use[table] {
+                let (table_circuit, index_verifier_data) = &table_circuits[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get circuits"))?;
                 root_inputs.set_target(
                     self.root.index_verifier_data[table],
                     F::from_canonical_u8(*index_verifier_data),
-                );
-                // generate and set a dummy `proof_with_pis`
-                let common_data = &table_circuit
-                    .shrinking_wrappers
-                    .last()
-                    .ok_or_else(|| anyhow::format_err!("No shrinking circuits"))?
-                    .circuit
-                    .common;
-                let dummy_circuit: CircuitData<F, C, D> = dummy_circuit(common_data);
-                let dummy_pis = HashMap::new();
-                let dummy_proof = dummy_proof(&dummy_circuit, dummy_pis)
-                    .expect("Unable to generate dummy proofs");
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &dummy_proof);
-            } else {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-
+                )?;
+                let stark_proof = all_proof.multi_proof.stark_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
                 let shrunk_proof =
                     table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_u8(*index_verifier_data),
-                );
                 root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof)?;
+            } else {
+                assert!(OPTIONAL_TABLE_INDICES.contains(&table));
+                let dummy_proof = self.table_dummy_proofs[table]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
+                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO)?;
+                root_inputs.set_proof_with_pis_target(
+                    &self.root.proof_with_pis[table],
+                    &dummy_proof.proof,
+                )?;
             }
 
             check_abort_signal(abort_signal.clone())?;
@@ -2097,7 +2214,7 @@ where
         root_inputs.set_verifier_data_target(
             &self.root.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         set_public_value_targets(
             &mut root_inputs,
@@ -2108,7 +2225,11 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
-        root_inputs.set_bool_target(self.root.use_keccak_tables, all_proof.use_keccak_tables);
+        self.root
+            .table_in_use
+            .iter()
+            .zip(all_proof.table_in_use.iter())
+            .try_for_each(|(target, value)| root_inputs.set_bool_target(*target, *value))?;
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
@@ -2157,7 +2278,7 @@ where
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
             lhs_proof,
-        );
+        )?;
 
         // If rhs is dummy, the rhs proof is also set to be the lhs.
         let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
@@ -2169,12 +2290,12 @@ where
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
             real_rhs_proof,
-        );
+        )?;
 
         agg_inputs.set_verifier_data_target(
             &self.segment_aggregation.cyclic_vk,
             &self.segment_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         // Aggregates both `PublicValues` from the provided proofs into a single one.
         let lhs_public_values = &lhs.proof_with_pvs.public_values;
@@ -2267,7 +2388,7 @@ where
             &self.batch_aggregation.circuit,
             &mut batch_inputs,
             &lhs.intern,
-        );
+        )?;
 
         Self::set_dummy_if_necessary(
             &self.batch_aggregation.rhs,
@@ -2275,12 +2396,12 @@ where
             &self.batch_aggregation.circuit,
             &mut batch_inputs,
             &rhs.intern,
-        );
+        )?;
 
         batch_inputs.set_verifier_data_target(
             &self.batch_aggregation.cyclic_vk,
             &self.batch_aggregation.circuit.verifier_only,
-        );
+        )?;
 
         let lhs_pvs = &lhs.public_values;
         let batch_public_values = PublicValues {
@@ -2321,20 +2442,20 @@ where
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
         proof: &ProofWithPublicInputs<F, C, D>,
-    ) {
-        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
-        agg_inputs.set_bool_target(agg_child.is_dummy, is_dummy);
+    ) -> anyhow::Result<()> {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg)?;
+        agg_inputs.set_bool_target(agg_child.is_dummy, is_dummy)?;
         if is_agg {
-            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof)?;
         } else {
             Self::set_dummy_proof_with_cyclic_vk_pis(
                 circuit,
                 agg_inputs,
                 &agg_child.agg_proof,
                 proof,
-            );
+            )?;
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof)
     }
 
     /// Create a final block proof, once all transactions of a given block have
@@ -2366,10 +2487,10 @@ where
         block_inputs.set_bool_target(
             self.block.has_parent_block,
             opt_parent_block_proof.is_some(),
-        );
+        )?;
         if let Some(parent_block_proof) = opt_parent_block_proof {
             block_inputs
-                .set_proof_with_pis_target(&self.block.parent_block_proof, parent_block_proof);
+                .set_proof_with_pis_target(&self.block.parent_block_proof, parent_block_proof)?;
         } else {
             if agg_root_proof.public_values.trie_roots_before.state_root
                 != agg_root_proof
@@ -2512,13 +2633,14 @@ where
                     &self.block.circuit.verifier_only,
                     nonzero_pis,
                 ),
-            );
+            )?;
         }
 
-        block_inputs.set_proof_with_pis_target(&self.block.agg_root_proof, &agg_root_proof.intern);
+        block_inputs
+            .set_proof_with_pis_target(&self.block.agg_root_proof, &agg_root_proof.intern)?;
 
         block_inputs
-            .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only);
+            .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only)?;
 
         // This is basically identical to this block public values, apart from the
         // `trie_roots_before` that may come from the previous proof, if any.
@@ -2577,13 +2699,15 @@ where
     )> {
         let mut block_wrapper_inputs = PartialWitness::new();
 
-        block_wrapper_inputs
-            .set_proof_with_pis_target(&self.block_wrapper.parent_block_proof, &block_proof.intern);
+        block_wrapper_inputs.set_proof_with_pis_target(
+            &self.block_wrapper.parent_block_proof,
+            &block_proof.intern,
+        )?;
 
         block_wrapper_inputs.set_verifier_data_target(
             &self.block_wrapper.cyclic_vk, // dummy
             &self.block_wrapper.circuit.verifier_only,
-        );
+        )?;
 
         let final_pvs = block_proof.public_values.clone().into();
         set_final_public_value_targets(
@@ -2637,7 +2761,7 @@ where
             &self.two_to_one_block.circuit,
             &mut witness,
             lhs,
-        );
+        )?;
 
         Self::set_dummy_if_necessary(
             &self.two_to_one_block.rhs,
@@ -2645,15 +2769,14 @@ where
             &self.two_to_one_block.circuit,
             &mut witness,
             rhs,
-        );
+        )?;
 
         witness.set_verifier_data_target(
             &self.two_to_one_block.cyclic_vk,
             &self.two_to_one_block.circuit.verifier_only,
-        );
+        )?;
 
-        let proof = self.two_to_one_block.circuit.prove(witness)?;
-        Ok(proof)
+        self.two_to_one_block.circuit.prove(witness)
     }
 
     /// Verifies an existing block aggregation proof.
@@ -2684,7 +2807,7 @@ where
         witness: &mut PartialWitness<F>,
         agg_proof_with_pis: &ProofWithPublicInputsTarget<D>,
         base_proof_with_pis: &ProofWithPublicInputs<F, C, D>,
-    ) {
+    ) -> anyhow::Result<()> {
         let ProofWithPublicInputs {
             proof: base_proof,
             public_inputs: _,
@@ -2695,7 +2818,7 @@ where
         } = agg_proof_with_pis;
 
         // The proof remains the same.
-        witness.set_proof_target(agg_proof_targets, base_proof);
+        witness.set_proof_target(agg_proof_targets, base_proof)?;
 
         let cyclic_verifying_data = &circuit_agg.verifier_only;
         let mut cyclic_vk = cyclic_verifying_data.circuit_digest.to_vec();
@@ -2706,8 +2829,10 @@ where
 
         // Set dummy public inputs.
         for (&pi_t, pi) in agg_pi_targets.iter().zip_eq(dummy_pis) {
-            witness.set_target(pi_t, pi);
+            witness.set_target(pi_t, pi)?;
         }
+
+        Ok(())
     }
 
     /// If the [`AggregationChild`] is a base proof and not an aggregation
@@ -2722,21 +2847,22 @@ where
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
         proof: &ProofWithPublicInputs<F, C, D>,
-    ) {
-        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
+    ) -> anyhow::Result<()> {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg)?;
         if is_agg {
-            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof)?;
         } else {
             Self::set_dummy_proof_with_cyclic_vk_pis(
                 circuit,
                 agg_inputs,
                 &agg_child.agg_proof,
                 proof,
-            );
+            )?;
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof)
     }
 }
+
 /// A map between initial degree sizes and their associated shrinking recursion
 /// circuits.
 #[derive(Eq, PartialEq, Debug)]
@@ -2768,6 +2894,7 @@ where
             buffer.write_usize(size)?;
             table.to_buffer(buffer, gate_serializer, generator_serializer)?;
         }
+
         Ok(())
     }
 
@@ -2787,6 +2914,7 @@ where
             )?;
             by_stark_size.insert(key, table);
         }
+
         Ok(Self { by_stark_size })
     }
 
@@ -2796,6 +2924,8 @@ where
         degree_bits_range: Range<usize>,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        shrinking_circuit_config: &CircuitConfig,
+        threshold_degree_bits: usize,
     ) -> Self {
         let by_stark_size = degree_bits_range
             .map(|degree_bits| {
@@ -2807,10 +2937,13 @@ where
                         degree_bits,
                         all_ctls,
                         stark_config,
+                        shrinking_circuit_config,
+                        threshold_degree_bits,
                     ),
                 )
             })
             .collect();
+
         Self { by_stark_size }
     }
 
@@ -2918,6 +3051,8 @@ where
         degree_bits: usize,
         all_ctls: &[CrossTableLookup<F>],
         stark_config: &StarkConfig,
+        shrinking_config: &CircuitConfig,
+        threshold_degree_bits: usize,
     ) -> Self {
         let initial_wrapper = recursive_stark_circuit(
             table,
@@ -2925,10 +3060,32 @@ where
             degree_bits,
             all_ctls,
             stark_config,
-            &shrinking_config(),
-            THRESHOLD_DEGREE_BITS,
+            shrinking_config,
+            threshold_degree_bits,
         );
         let mut shrinking_wrappers = vec![];
+
+        // When using test configurations, the initial wrapper is so simple that the
+        // circuit's common data cannot match the shrinking wrapper circuit's
+        // data. Therefore, we always add at least one shrinking wrapper here.
+        if threshold_degree_bits < THRESHOLD_DEGREE_BITS {
+            let mut builder = CircuitBuilder::new(shrinking_config.clone());
+            let proof_with_pis_target =
+                builder.add_virtual_proof_with_pis(&initial_wrapper.circuit.common);
+            let last_vk = builder.constant_verifier_data(&initial_wrapper.circuit.verifier_only);
+            builder.verify_proof::<C>(
+                &proof_with_pis_target,
+                &last_vk,
+                &initial_wrapper.circuit.common,
+            );
+            builder.register_public_inputs(&proof_with_pis_target.public_inputs);
+            add_common_recursion_gates(&mut builder);
+            let circuit = builder.build::<C>();
+            shrinking_wrappers.push(PlonkWrapperCircuit {
+                circuit,
+                proof_with_pis_target,
+            });
+        }
 
         // Shrinking recursion loop.
         loop {
@@ -2937,12 +3094,12 @@ where
                 .map(|wrapper: &PlonkWrapperCircuit<F, C, D>| &wrapper.circuit)
                 .unwrap_or(&initial_wrapper.circuit);
             let last_degree_bits = last.common.degree_bits();
-            assert!(last_degree_bits >= THRESHOLD_DEGREE_BITS);
-            if last_degree_bits == THRESHOLD_DEGREE_BITS {
+            assert!(last_degree_bits >= threshold_degree_bits);
+            if last_degree_bits == threshold_degree_bits {
                 break;
             }
 
-            let mut builder = CircuitBuilder::new(shrinking_config());
+            let mut builder = CircuitBuilder::new(shrinking_config.clone());
             let proof_with_pis_target = builder.add_virtual_proof_with_pis(&last.common);
             let last_vk = builder.constant_verifier_data(&last.verifier_only);
             builder.verify_proof::<C>(&proof_with_pis_target, &last_vk, &last.common);
@@ -2953,7 +3110,7 @@ where
             assert!(
                 circuit.common.degree_bits() < last_degree_bits,
                 "Couldn't shrink to expected recursion threshold of 2^{}; stalled at 2^{}",
-                THRESHOLD_DEGREE_BITS,
+                threshold_degree_bits,
                 circuit.common.degree_bits()
             );
             shrinking_wrappers.push(PlonkWrapperCircuit {
@@ -2962,6 +3119,12 @@ where
             });
         }
 
+        log::debug!(
+            "Table: {:?}, degree: {}, shrinking_wrappers_len: {}",
+            table,
+            degree_bits,
+            shrinking_wrappers.len()
+        );
         Self {
             initial_wrapper,
             shrinking_wrappers,
@@ -3134,81 +3297,5 @@ pub mod testing {
                 &self.batch_aggregation.circuit.common,
             )
         }
-    }
-}
-
-#[cfg(test)]
-#[cfg(not(feature = "cdk_erigon"))]
-mod tests {
-    use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
-    use plonky2::timed;
-
-    use super::*;
-    use crate::testing_utils::{empty_payload, init_logger};
-    use crate::witness::operation::Operation;
-
-    type F = GoldilocksField;
-    const D: usize = 2;
-    type C = PoseidonGoldilocksConfig;
-
-    #[test]
-    fn test_segment_proof_generation_without_keccak() -> anyhow::Result<()> {
-        init_logger();
-
-        let all_stark = AllStark::<F, D>::default();
-        let config = StarkConfig::standard_fast_config();
-
-        // Generate a dummy payload for testing
-        let payload = empty_payload()?;
-        let max_cpu_len_log = Some(7);
-        let mut segment_iterator = SegmentDataIterator::<F>::new(&payload, max_cpu_len_log, &None);
-        let (_, mut segment_data) = segment_iterator.next().unwrap()?;
-
-        let opcode_counts = &segment_data.opcode_counts;
-        assert!(!opcode_counts.contains_key(&Operation::KeccakGeneral));
-
-        let timing = &mut TimingTree::new(
-            "Segment Proof Generation Without Keccak Test",
-            log::Level::Info,
-        );
-        // Process and prove segment
-        let all_circuits = timed!(
-            timing,
-            log::Level::Info,
-            "Create all recursive circuits",
-            AllRecursiveCircuits::<F, C, D>::new(
-                &all_stark,
-                &[16..17, 8..9, 7..8, 4..9, 8..9, 4..7, 16..17, 16..17, 16..17],
-                &config,
-            )
-        );
-
-        let segment_proof = timed!(
-            timing,
-            log::Level::Info,
-            "Prove segment",
-            all_circuits.prove_segment(
-                &all_stark,
-                &config,
-                payload.trim(),
-                &mut segment_data,
-                timing,
-                None,
-            )?
-        );
-
-        // Verify the generated segment proof
-        timed!(
-            timing,
-            log::Level::Info,
-            "Verify segment proof",
-            all_circuits.verify_root(segment_proof.proof_with_pvs.intern.clone())?
-        );
-
-        // Print timing details
-        timing.print();
-
-        Ok(())
     }
 }

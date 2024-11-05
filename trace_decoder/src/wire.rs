@@ -1,6 +1,6 @@
 //! We support two wire formats:
-//! - Type 1, based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
-//! - Type 2, loosely based on [this specification](https://github.com/0xPolygonHermez/cdk-erigon/blob/d1d6b3c7a4c81c46fd995c1baa5c1f8069ff0348/turbo/trie/WITNESS.md)
+//! - Type 1 (AKA MPT), based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
+//! - Type 2 (AKA SMT), loosely based on [this specification](https://github.com/0xPolygonHermez/cdk-erigon/blob/d1d6b3c7a4c81c46fd995c1baa5c1f8069ff0348/turbo/trie/WITNESS.md)
 //!
 //! Fortunately, their opcodes don't conflict, so we can have a single
 //! [`Instruction`] type, with shared parsing logic in this module, and bail on

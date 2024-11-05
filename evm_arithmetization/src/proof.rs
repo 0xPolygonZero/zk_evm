@@ -4,13 +4,15 @@ use ethereum_types::{Address, H256, U256};
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
+use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
-use starky::proof::MultiProof;
+use starky::lookup::GrandProductChallengeSet;
+use starky::proof::StarkProofWithMetadata;
 
 use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
@@ -21,6 +23,22 @@ pub(crate) const DEFAULT_CAP_HEIGHT: usize = 4;
 /// Number of elements contained in a Merkle cap with default height.
 pub(crate) const DEFAULT_CAP_LEN: usize = 1 << DEFAULT_CAP_HEIGHT;
 
+/// A combination of STARK proofs for independent statements operating on
+/// possibly shared variables, along with Cross-Table Lookup (CTL) challenges to
+/// assert consistency of common variables across tables.
+#[derive(Debug, Clone)]
+pub struct MultiProof<
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    const D: usize,
+    const N: usize,
+> {
+    /// Proofs for all the different STARK modules.
+    pub stark_proofs: [Option<StarkProofWithMetadata<F, C, D>>; N],
+    /// Cross-table lookup challenges.
+    pub ctl_challenges: GrandProductChallengeSet<F>,
+}
+
 /// A STARK proof for each table, plus some metadata used to create recursive
 /// wrapper proofs.
 #[derive(Debug, Clone)]
@@ -30,16 +48,19 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues<F>,
-    /// A flag indicating whether the Keccak and KeccakSponge tables contain
-    /// only padding values (i.e., no meaningful data). This is set to false
-    /// when no actual Keccak operations were performed.
-    pub use_keccak_tables: bool,
+    /// A flag indicating whether the table only contains padding values (i.e.,
+    /// no meaningful data).
+    pub table_in_use: [bool; NUM_TABLES],
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
     /// Returns the degree (i.e. the trace length) of each STARK.
-    pub fn degree_bits(&self, config: &StarkConfig) -> [usize; NUM_TABLES] {
-        self.multi_proof.recover_degree_bits(config)
+    pub fn degree_bits(&self, config: &StarkConfig) -> [Option<usize>; NUM_TABLES] {
+        core::array::from_fn(|i| {
+            self.multi_proof.stark_proofs[i]
+                .as_ref()
+                .map(|proof| proof.proof.recover_degree_bits(config))
+        })
     }
 }
 
@@ -580,6 +601,22 @@ impl MemCap {
             })
             .collect();
 
+        Self { mem_cap }
+    }
+
+    pub fn from_merkle_cap<F: RichField, H: Hasher<F>>(merkle_cap: MerkleCap<F, H>) -> Self {
+        let mem_cap = merkle_cap
+            .0
+            .iter()
+            .map(|h| {
+                h.to_vec()
+                    .iter()
+                    .map(|hi| hi.to_canonical_u64().into())
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
         Self { mem_cap }
     }
 }

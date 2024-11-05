@@ -20,12 +20,13 @@ use anyhow::Result;
 use clap::{Parser, ValueHint};
 use evm_arithmetization::generation::DebugOutputTries;
 use futures::{future, TryStreamExt};
+use lazy_regex::regex_captures;
 use paladin::directive::{Directive, IndexedStream};
 use paladin::runtime::Runtime;
-use regex::Regex;
 use trace_decoder::observer::TriesObserver;
 use tracing::{error, info};
 use zero::ops::register;
+use zero::prover::WIRE_DISPOSITION;
 use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
 
 /// This binary is a debugging tool used to compare
@@ -98,6 +99,7 @@ async fn main() -> Result<()> {
             block_prover_input.struct_logs.clone(),
             prover_config.batch_size,
             &mut observer,
+            WIRE_DISPOSITION,
         )?;
         info!(
             "Number of collected batch tries for block {}: {}",
@@ -135,10 +137,11 @@ async fn main() -> Result<()> {
         {
             // Try to parse block and batch index from error message.
             let error_message = e2.to_string();
-            let re = Regex::new(r"block:(\d+) batch:(\d+)")?;
-            if let Some(cap) = re.captures(&error_message) {
-                let block_number: u64 = cap[1].parse()?;
-                let batch_index: usize = cap[2].parse()?;
+            if let Some((_, block_number, block_index)) =
+                regex_captures!(r"block:(\d+) batch:(\d+)", error_message.as_str())
+            {
+                let block_number: u64 = block_number.parse()?;
+                let batch_index: usize = block_index.parse()?;
 
                 let prover_tries =
                     zero::debug_utils::load_tries_from_disk(block_number, batch_index)?;
@@ -150,8 +153,8 @@ async fn main() -> Result<()> {
                     &DebugOutputTries {
                         state_trie: observer.data[prover_tries.batch_index]
                             .tries
-                            .state
-                            .as_hashed_partial_trie()
+                            .world
+                            .state_trie()
                             .clone(),
                         transaction_trie: observer.data[prover_tries.batch_index]
                             .tries

@@ -1,8 +1,11 @@
+---   # Rust cargo audit workflow
+
 name: Security audit
 on:
   push:
-    paths: 
+    paths:
       - '**/Cargo.toml'
+
 jobs:
   security_audit:
     runs-on: ubuntu-latest

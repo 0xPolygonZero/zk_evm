@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 
+use alloy::eips::BlockId;
 use alloy::transports::http::reqwest::Url;
-use clap::{Parser, Subcommand, ValueHint};
+use clap::{Parser, Subcommand, ValueEnum, ValueHint};
 use zero::prover::cli::CliProverConfig;
 use zero::prover_state::cli::CliProverStateConfig;
 use zero::rpc::RpcType;
+
+const WORKER_HELP_HEADING: &str = "Worker Config options";
 
 /// zero-bin leader config
 #[derive(Parser)]
@@ -23,8 +26,27 @@ pub(crate) struct Cli {
     // mode.
     #[clap(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
+
+    // Mode to use for worker for setup (affinity or default)
+    #[arg(long = "worker-run-mode", help_heading = WORKER_HELP_HEADING, value_enum, default_value = "default")]
+    pub(crate) worker_run_mode: WorkerRunMode,
 }
 
+/// Defines the mode for worker setup in terms of job allocation:
+///
+/// - `Affinity`: Workers are assigned specific types of jobs based on their
+///   capabilities, distinguishing between heavy and light jobs.
+/// - `Default`: No job distinction is made — any worker can handle any type of
+///   job, whether heavy or light.
+///
+/// This enum allows for flexible worker configuration based on workload needs.
+#[derive(ValueEnum, Clone, PartialEq, Debug)]
+pub enum WorkerRunMode {
+    Affinity,
+    Default,
+}
+
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Deletes all the previously cached circuits.
@@ -43,12 +65,17 @@ pub(crate) enum Command {
         // The node RPC type (jerigon / native).
         #[arg(long, short = 't', default_value = "jerigon")]
         rpc_type: RpcType,
-        /// The block interval for which to generate a proof.
-        #[arg(long, short = 'i')]
-        block_interval: String,
-        /// The checkpoint block number.
-        #[arg(short, long, default_value_t = 0)]
-        checkpoint_block_number: u64,
+        /// The start of the block range to prove (inclusive).
+        #[arg(long, short = 's')]
+        start_block: BlockId,
+        /// The end of the block range to prove (inclusive).
+        /// If not provided, leader will work in dynamic mode from `start_block`
+        /// following head of the blockchain.
+        #[arg(long, short = 'e')]
+        end_block: Option<BlockId>,
+        /// The checkpoint block.
+        #[arg(short, long, default_value = "0")]
+        checkpoint_block: BlockId,
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,

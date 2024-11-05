@@ -11,6 +11,7 @@ use itertools::Itertools;
 use libtest_mimic::{Arguments, Trial};
 use mpt_trie::partial_trie::PartialTrie as _;
 use trace_decoder::observer::DummyObserver;
+use zero::prover::WIRE_DISPOSITION;
 
 fn main() -> anyhow::Result<()> {
     let mut trials = vec![];
@@ -30,6 +31,7 @@ fn main() -> anyhow::Result<()> {
                     None,
                     batch_size,
                     &mut DummyObserver::new(),
+                    WIRE_DISPOSITION,
                 )
                 .map_err(|e| format!("{e:?}"))?; // get the full cause chain
                 check!(gen_inputs.len() >= 2);

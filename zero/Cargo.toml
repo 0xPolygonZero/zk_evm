@@ -16,6 +16,7 @@ alloy-primitives.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true
+cfg-if = "1.0.0"
 clap = { workspace = true, features = ["derive", "string"] }
 compat.workspace = true
 directories = "5.0.1"
@@ -26,6 +27,7 @@ hashbrown.workspace = true
 hex.workspace = true
 itertools.workspace = true
 keccak-hash.workspace = true
+lazy-regex = "3.3.0"
 lru.workspace = true
 mpt_trie.workspace = true
 num-traits.workspace = true
@@ -33,7 +35,6 @@ once_cell.workspace = true
 paladin-core.workspace = true
 plonky2.workspace = true
 plonky2_maybe_rayon.workspace = true
-regex = "1.5.4"
 rlp.workspace = true
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
 serde.workspace = true
@@ -51,10 +52,12 @@ zk_evm_common.workspace = true
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"
 
-
 [build-dependencies]
 anyhow.workspace = true
 vergen-git2 = { version = "1.0.0", features = ["build"] }
+
+[dev-dependencies]
+mockall = "0.13.0"
 
 
 [features]

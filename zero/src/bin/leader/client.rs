@@ -1,26 +1,19 @@
 use std::sync::Arc;
 
+use alloy::providers::Provider;
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
-use alloy::transports::http::reqwest::Url;
+use alloy::transports::Transport;
 use anyhow::{anyhow, Result};
-use paladin::runtime::Runtime;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 use zero::block_interval::{BlockInterval, BlockIntervalStream};
 use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
+use zero::provider::CachedProvider;
 use zero::rpc;
-use zero::rpc::{retry::build_http_retry_provider, RpcType};
 
-#[derive(Debug)]
-pub struct RpcParams {
-    pub rpc_url: Url,
-    pub rpc_type: RpcType,
-    pub backoff: u64,
-    pub max_retries: u32,
-    pub block_time: u64,
-}
+use crate::ProofRuntime;
 
 #[derive(Debug)]
 pub struct LeaderConfig {
@@ -30,12 +23,17 @@ pub struct LeaderConfig {
 }
 
 /// The main function for the client.
-pub(crate) async fn client_main(
-    runtime: Arc<Runtime>,
-    rpc_params: RpcParams,
+pub(crate) async fn client_main<ProviderT, TransportT>(
+    proof_runtime: Arc<ProofRuntime>,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
+    block_time: u64,
     block_interval: BlockInterval,
     mut leader_config: LeaderConfig,
-) -> Result<()> {
+) -> Result<()>
+where
+    ProviderT: Provider<TransportT> + 'static,
+    TransportT: Transport + Clone,
+{
     use futures::StreamExt;
 
     let test_only = leader_config.prover_config.test_only;
@@ -43,13 +41,6 @@ pub(crate) async fn client_main(
     if !test_only && get_struct_logs {
         warn!("The struct logs are only used for checks in test_only mode.");
     }
-    let cached_provider = Arc::new(zero::provider::CachedProvider::new(
-        build_http_retry_provider(
-            rpc_params.rpc_url.clone(),
-            rpc_params.backoff,
-            rpc_params.max_retries,
-        )?,
-    ));
 
     if !test_only {
         // For actual proof runs, perform a sanity check on the provided inputs.
@@ -66,10 +57,10 @@ pub(crate) async fn client_main(
     let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(zero::BLOCK_CHANNEL_SIZE);
 
     // Run proving task
-    let runtime_ = runtime.clone();
+    let proof_runtime_ = proof_runtime.clone();
     let proving_task = tokio::spawn(prover::prove(
         block_rx,
-        runtime_,
+        proof_runtime_,
         leader_config.previous_proof.take(),
         Arc::new(leader_config.prover_config),
     ));
@@ -78,7 +69,7 @@ pub(crate) async fn client_main(
     let mut block_interval_stream: BlockIntervalStream = match block_interval {
         block_interval @ BlockInterval::FollowFrom { .. } => {
             block_interval
-                .into_unbounded_stream(cached_provider.clone(), rpc_params.block_time)
+                .into_unbounded_stream(cached_provider.clone(), block_time)
                 .await?
         }
         _ => block_interval.into_bounded_stream()?,
@@ -94,7 +85,6 @@ pub(crate) async fn client_main(
             cached_provider.clone(),
             block_id,
             leader_config.checkpoint_block_number,
-            rpc_params.rpc_type,
             get_struct_logs,
         )
         .await?;
@@ -116,7 +106,8 @@ pub(crate) async fn client_main(
         }
     }
 
-    runtime.close().await?;
+    proof_runtime.light_proof.close().await?;
+    proof_runtime.heavy_proof.close().await?;
 
     if test_only {
         info!("All proof witnesses have been generated successfully.");

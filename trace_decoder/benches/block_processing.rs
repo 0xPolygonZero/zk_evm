@@ -8,6 +8,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use trace_decoder::observer::DummyObserver;
 use trace_decoder::{BlockTrace, OtherBlockData};
+use zero::prover::WIRE_DISPOSITION;
 
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct ProverInput {
@@ -40,6 +41,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                         None,
                         batch_size,
                         &mut DummyObserver::new(),
+                        WIRE_DISPOSITION,
                     )
                     .unwrap()
                 },

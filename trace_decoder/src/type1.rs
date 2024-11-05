@@ -12,26 +12,14 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
+use crate::tries::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Frontend {
     pub state: StateMpt,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     pub storage: BTreeMap<H256, StorageTrie>,
-}
-
-impl Default for Frontend {
-    // This frontend is intended to be used with our custom `zeroTracer`,
-    // which covers branch-to-extension collapse edge cases.
-    fn default() -> Self {
-        Self {
-            state: StateMpt::new(OnOrphanedHashNode::CollapseToExtension),
-            code: BTreeSet::new(),
-            storage: BTreeMap::new(),
-        }
-    }
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -66,10 +54,10 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_key(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
+                .insert_hash(MptKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
-            let path = TrieKey::new(path.iter().copied().chain(key))?
+            let path = MptKey::new(path.iter().copied().chain(key))?
                 .into_hash()
                 .context("invalid depth for leaf of state trie")?;
             match value {
@@ -105,9 +93,7 @@ fn visit(
                             }
                         },
                     };
-                    #[expect(deprecated)] // this is MPT-specific code
-                    let clobbered = frontend.state.insert_by_hashed_address(path, account)?;
-                    ensure!(clobbered.is_none(), "duplicate account");
+                    frontend.state.insert(path, account)?;
                 }
             }
         }
@@ -141,12 +127,12 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
     ) -> anyhow::Result<()> {
         match node {
             Node::Hash(Hash { raw_hash }) => {
-                mpt.insert_hash(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
+                mpt.insert_hash(MptKey::new(path.iter().copied())?, raw_hash.into())?;
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
-                        TrieKey::new(path.iter().copied().chain(key))?,
+                        MptKey::new(path.iter().copied().chain(key))?,
                         rlp::encode(&raw_value.as_slice()).to_vec(),
                     )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),
@@ -392,7 +378,7 @@ fn test_tries() {
         assert_eq!(case.expected_state_root, frontend.state.root());
 
         for (haddr, acct) in frontend.state.iter() {
-            if acct.storage_root != StateMpt::default().root() {
+            if acct.storage_root != StorageTrie::default().root() {
                 assert!(frontend.storage.contains_key(&haddr))
             }
         }

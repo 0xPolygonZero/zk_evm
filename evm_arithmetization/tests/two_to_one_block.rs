@@ -11,6 +11,7 @@ use evm_arithmetization::proof::{
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    TEST_RECURSION_CONFIG, TEST_STARK_CONFIG, TEST_THRESHOLD_DEGREE_BITS,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -161,19 +162,21 @@ fn get_test_block_proof(
     Ok(wrapped_block_proof)
 }
 
-#[ignore]
 #[test]
 fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     init_logger();
     let some_timestamps = [127, 42, 65, 43];
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
 
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
-        &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 17..18, 7..8],
+        &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 16..17, 7..8],
         &config,
+        Some(&TEST_RECURSION_CONFIG),
+        Some(&TEST_RECURSION_CONFIG),
+        Some(TEST_THRESHOLD_DEGREE_BITS),
     );
 
     let bp = some_timestamps

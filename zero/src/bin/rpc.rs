@@ -14,6 +14,7 @@ use url::Url;
 use zero::block_interval::BlockInterval;
 use zero::block_interval::BlockIntervalStream;
 use zero::prover::BlockProverInput;
+use zero::prover::WIRE_DISPOSITION;
 use zero::provider::CachedProvider;
 use zero::rpc;
 
@@ -24,7 +25,6 @@ struct FetchParams {
     pub start_block: u64,
     pub end_block: u64,
     pub checkpoint_block_number: Option<u64>,
-    pub rpc_type: RpcType,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -105,7 +105,6 @@ where
             cached_provider.clone(),
             block_id,
             checkpoint_block_number,
-            params.rpc_type,
             get_struct_logs,
         )
         .await?;
@@ -118,11 +117,12 @@ where
 impl Cli {
     /// Execute the cli command.
     pub async fn execute(self) -> anyhow::Result<()> {
-        let cached_provider = Arc::new(CachedProvider::new(build_http_retry_provider(
+        let retry_provider = build_http_retry_provider(
             self.config.rpc_url.clone(),
             self.config.backoff,
             self.config.max_retries,
-        )?));
+        )?;
+        let cached_provider = Arc::new(CachedProvider::new(retry_provider, self.config.rpc_type));
 
         match self.command {
             Command::Fetch {
@@ -134,7 +134,6 @@ impl Cli {
                     start_block,
                     end_block,
                     checkpoint_block_number,
-                    rpc_type: self.config.rpc_type,
                 };
 
                 let block_prover_inputs =
@@ -161,7 +160,6 @@ impl Cli {
                             start_block: block_number,
                             end_block: block_number,
                             checkpoint_block_number: None,
-                            rpc_type: self.config.rpc_type,
                         };
 
                         let block_prover_inputs = fetch_block_prover_inputs(
@@ -183,6 +181,7 @@ impl Cli {
                             block_prover_input.struct_logs,
                             batch_size,
                             &mut DummyObserver::new(),
+                            WIRE_DISPOSITION,
                         )?;
 
                         if let Some(index) = tx_info.transaction_index {

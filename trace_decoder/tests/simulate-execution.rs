@@ -9,6 +9,7 @@ use common::{cases, Case};
 use libtest_mimic::{Arguments, Trial};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use trace_decoder::observer::DummyObserver;
+use zero::prover::WIRE_DISPOSITION;
 
 fn main() -> anyhow::Result<()> {
     let mut trials = vec![];
@@ -26,6 +27,7 @@ fn main() -> anyhow::Result<()> {
                 None,
                 batch_size,
                 &mut DummyObserver::new(),
+                WIRE_DISPOSITION,
             )
             .context(format!(
                 "error in `trace_decoder` for {name} at batch size {batch_size}"

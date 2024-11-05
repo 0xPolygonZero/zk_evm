@@ -1,3 +1,5 @@
+---   # Rust lint related checks
+
 name: lint
 
 on:
@@ -13,8 +15,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  BINSTALL_NO_CONFIRM: true
-  RUSTDOCFLAGS: "-D warnings"
 
 jobs:
   clippy:
@@ -42,7 +42,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/rust
-      - run: cargo doc --all --no-deps
+      - run: RUSTDOCFLAGS='-D warnings -A rustdoc::private_intra_doc_links' cargo doc --all --no-deps
+      # TODO(zero): https://github.com/0xPolygonZero/zk_evm/issues/718
+      - run: >
+          RUSTDOCFLAGS='-D warnings -A rustdoc::private_intra_doc_links' cargo doc --no-deps --document-private-items
+          --package trace_decoder
+          --package compat
+          --package smt_trie
+          --package zk_evm_proc_macro
+          --package zk_evm_common
   cargo-fmt:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -60,3 +68,13 @@ jobs:
         with:
           tool: taplo-cli
       - run: taplo fmt --check
+  outdated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/rust
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-outdated
+      - run: cargo xtask outdated

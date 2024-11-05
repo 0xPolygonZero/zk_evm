@@ -5,6 +5,7 @@ members = [
   "evm_arithmetization",
   "mpt_trie",
   "proc_macro",
+  "scripts",
   "smt_trie",
   "trace_decoder",
   "zero",
@@ -43,7 +44,6 @@ axum = "0.7.5"
 bitflags = "2.5.0"
 bitvec = "1.0.1"
 bytes = "1.6.0"
-cargo_metadata = "0.18.1"
 ciborium = "0.2.2"
 ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
@@ -72,9 +72,8 @@ num-bigint = "0.4.5"
 num-traits = "0.2.19"
 nunny = "0.2.1"
 once_cell = "1.19.0"
-paladin-core = "0.4.2"
+paladin-core = "0.4.3"
 parking_lot = "0.12.3"
-paste = "1.0.15"
 pest = "2.7.10"
 pest_derive = "2.7.10"
 pretty_env_logger = "0.5.0"
@@ -96,7 +95,6 @@ syn = "2.0"
 thiserror = "1.0.61"
 tiny-keccak = "2.0.2"
 tokio = { version = "1.38.0", features = ["full"] }
-toml = "0.8.14"
 tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -116,10 +114,10 @@ zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdacd49ede15737bc1172546d82e9521b79b" }
 plonky2_maybe_rayon = "0.2.0"
-plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
-starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdacd49ede15737bc1172546d82e9521b79b" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdacd49ede15737bc1172546d82e9521b79b" }
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"

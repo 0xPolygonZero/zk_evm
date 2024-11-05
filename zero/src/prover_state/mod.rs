@@ -15,6 +15,7 @@ use std::borrow::Borrow;
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
+use evm_arithmetization::testing_utils::TEST_STARK_CONFIG;
 use evm_arithmetization::{
     fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
     AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
@@ -174,45 +175,30 @@ impl ProverStateManager {
         &self,
         config: &StarkConfig,
         all_proof: &AllProof,
-    ) -> anyhow::Result<[(RecursiveCircuitsForTableSize, u8); NUM_TABLES]> {
+    ) -> anyhow::Result<[Option<(RecursiveCircuitsForTableSize, u8)>; NUM_TABLES]> {
         let degrees = all_proof.degree_bits(config);
 
-        /// Given a recursive circuit index (e.g., Arithmetic / 0), return a
-        /// tuple containing the loaded table at the specified size and
-        /// its offset relative to the configured range used to pre-process the
-        /// circuits.
-        macro_rules! circuit {
-            ($circuit_index:expr) => {
-                (
-                    RecursiveCircuitResource::get(&(
-                        $circuit_index.into(),
-                        degrees[$circuit_index],
+        // Given a recursive circuit index (e.g., Arithmetic / 0), return a
+        // tuple containing the loaded table at the specified size and
+        // its offset relative to the configured range used to pre-process the
+        // circuits.
+        let circuits = core::array::from_fn(|i| match degrees[i] {
+            Some(size) => RecursiveCircuitResource::get(&(i.into(), size))
+                .map(|circuit_resource| {
+                    Some((
+                        circuit_resource,
+                        (size - self.circuit_config[i].start) as u8,
                     ))
-                    .map_err(|e| {
-                        let circuit: $crate::prover_state::circuit::Circuit = $circuit_index.into();
-                        let size = degrees[$circuit_index];
-                        anyhow::Error::from(e).context(format!(
-                            "Attempting to load circuit: {circuit:?} at size: {size}"
-                        ))
-                    })?,
-                    (degrees[$circuit_index] - self.circuit_config[$circuit_index].start) as u8,
-                )
-            };
-        }
+                })
+                .map_err(|e| {
+                    anyhow::Error::from(e)
+                        .context(format!("Attempting to load circuit: {i} at size: {size}"))
+                })
+                .unwrap_or(None),
+            None => None,
+        });
 
-        Ok([
-            circuit!(0),
-            circuit!(1),
-            circuit!(2),
-            circuit!(3),
-            circuit!(4),
-            circuit!(5),
-            circuit!(6),
-            circuit!(7),
-            circuit!(8),
-            #[cfg(feature = "cdk_erigon")]
-            circuit!(9),
-        ])
+        Ok(circuits)
     }
 
     /// Generate a segment proof using the specified input, loading
@@ -222,20 +208,20 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        config: &StarkConfig,
     ) -> anyhow::Result<ProofWithPublicValues> {
-        let config = StarkConfig::standard_fast_config();
         let all_stark = AllStark::default();
 
         let all_proof = prove(
             &all_stark,
-            &config,
+            config,
             input,
             segment_data,
             &mut TimingTree::default(),
             None,
         )?;
 
-        let table_circuits = self.load_table_circuits(&config, &all_proof)?;
+        let table_circuits = self.load_table_circuits(config, &all_proof)?;
 
         let proof_with_pvs =
             p_state()
@@ -251,10 +237,11 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        config: &StarkConfig,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let p_out = p_state().state.prove_segment(
             &AllStark::default(),
-            &StarkConfig::standard_fast_config(),
+            config,
             input,
             segment_data,
             &mut TimingTree::default(),
@@ -284,15 +271,20 @@ impl ProverStateManager {
         input: (TrimmedGenerationInputs, GenerationSegmentData),
     ) -> anyhow::Result<ProofWithPublicValues> {
         let (generation_inputs, mut segment_data) = input;
+        let config = if self.circuit_config.use_test_config {
+            TEST_STARK_CONFIG
+        } else {
+            StarkConfig::standard_fast_config()
+        };
 
         match self.persistence {
             CircuitPersistence::None | CircuitPersistence::Disk(TableLoadStrategy::Monolithic) => {
                 info!("using monolithic circuit {:?}", self);
-                self.segment_proof_monolithic(generation_inputs, &mut segment_data)
+                self.segment_proof_monolithic(generation_inputs, &mut segment_data, &config)
             }
             CircuitPersistence::Disk(TableLoadStrategy::OnDemand) => {
                 info!("using on demand circuit {:?}", self);
-                self.segment_proof_on_demand(generation_inputs, &mut segment_data)
+                self.segment_proof_on_demand(generation_inputs, &mut segment_data, &config)
             }
         }
     }
