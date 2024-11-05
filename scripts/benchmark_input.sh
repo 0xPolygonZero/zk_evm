@@ -43,7 +43,7 @@ perf stat -e cycles "${REPO_ROOT}/target/release/leader" --runtime in-memory --l
 end_time=$(date +%s%N)
 
 set +o pipefail
-grep "Successfully wrote to disk proof file" "$OUT_LOG_PATH" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"
+grep "Successfully wrote to disk proof file" "$OUTPUT_LOG" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
 	# Some error occurred, display the logs and exit.
 	cat "$OUTPUT_LOG"

@@ -49,8 +49,9 @@ jobs:
           PERF_TIME=`cat output.log | grep "seconds time elapsed" |  tail -1 | awk '{ print ($1)}'`
           PERF_USER_TIME=`cat output.log | grep "seconds user" |  tail -1 | awk '{ print ($1)}'`
           PERF_SYS_TIME=`cat output.log | grep "seconds sys" |  tail -1 | awk '{ print ($1)}'`
-          cat output.log
-          echo "RUN_ID=${{ github.run_id }} MEASURED_PROVING_TIME_SEC=$MEASURED_PROVING_TIME_SEC PERF_TIME=$PERF_TIME PERF_USER_TIME=$PERF_USER_TIME PERF_SYS_TIME=$PERF_SYS_TIME FILE=$BENCHMARK_WITNESS"
+          echo "RUN_ID=${{ github.run_id }} MEASURED_PROVING_TIME_SEC=$MEASURED_PROVING_TIME_SEC \
+            PERF_TIME=$PERF_TIME PERF_USER_TIME=$PERF_USER_TIME \
+            PERF_SYS_TIME=$PERF_SYS_TIME FILE=$BENCHMARK_WITNESS"
           printf '%12s     %-12s     %-24s    %-20s    %-20s    %-20s    %-s\n' \
             `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} \
             $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME \
