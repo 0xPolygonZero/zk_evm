@@ -801,6 +801,7 @@ impl<F: RichField> GenerationState<F> {
         }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
+        self.jumpdest_table = None;
         let (simp, _simw) = simulate_cpu_and_get_user_jumps("terminate_common", self)
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
         self.jumpdest_table = Some(simp);

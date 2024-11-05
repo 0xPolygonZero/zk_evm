@@ -210,10 +210,13 @@ pub fn entrypoint(
                         // causing failover to simulating jumpdest analysis for
                         // the whole batch. There is an optimization opportunity
                         // here.
-                        jumpdest_tables
+                        dbg!(&jumpdest_tables);
+                        let res = jumpdest_tables
                             .into_iter()
                             .collect::<Option<Vec<_>>>()
-                            .map(|jdt| JumpDestTableWitness::merge(jdt.iter()).0)
+                            .map(|jdt| JumpDestTableWitness::merge(jdt.iter()).0);
+                        dbg!(&res);
+                        res
                     },
                 }
             },

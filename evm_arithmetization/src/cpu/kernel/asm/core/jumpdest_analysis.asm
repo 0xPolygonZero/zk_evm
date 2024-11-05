@@ -1,4 +1,4 @@
-// Set @SEGMENT_JUMPDEST_BITS to one between positions [init_pos, final_pos], 
+// Set @SEGMENT_JUMPDEST_BITS to one between positions [init_pos, final_pos],
 // for the given context's code.
 // Pre stack: init_pos, ctx, final_pos, retdest
 // Post stack: (empty)
@@ -16,12 +16,12 @@ loop:
     DUP2 DUP2 GT // i > final_pos
     %jumpi(proof_not_ok)
 
-     // stack: i, final_pos, retdest
+    // stack: i, final_pos, retdest
     DUP1
     MLOAD_GENERAL // SEGMENT_CODE == 0
     // stack: opcode, i, final_pos, retdest
 
-    DUP1 
+    DUP1
     // Slightly more efficient than `%eq_const(0x5b) ISZERO`
     PUSH 0x5b
     SUB
@@ -141,7 +141,7 @@ global write_table_if_jumpdest:
     // stack: proof_prefix_addr, ctx, jumpdest, retdest
     // If we are here we need to check that the next 32 bytes are not
     // PUSHXX for XX > 32 - n, n in {1, 32}.
-    
+
     %stack
         (proof_prefix_addr, ctx) ->
         (ctx, proof_prefix_addr, 32, proof_prefix_addr, ctx)
@@ -214,11 +214,11 @@ return:
 // non-deterministically guessing the sequence of jumpdest
 // addresses used during program execution within the current context.
 // For each jumpdest address we also non-deterministically guess
-// a proof, which is another address in the code such that 
+// a proof, which is another address in the code such that
 // is_jumpdest doesn't abort, when the proof is at the top of the stack
 // an the jumpdest address below. If that's the case we set the
 // corresponding bit in @SEGMENT_JUMPDEST_BITS to 1.
-// 
+//
 // stack: ctx, code_len, retdest
 // stack: (empty)
 global jumpdest_analysis:
@@ -238,7 +238,7 @@ check_proof:
     // stack: address, ctx, code_len, retdest
     DUP3 DUP2 %assert_le
     %decrement
-    // stack: proof, ctx, code_len, retdest
+    // stack: address, ctx, code_len, retdest
     DUP2 SWAP1
     // stack: address, ctx, ctx, code_len, retdest
     // We read the proof
@@ -246,7 +246,7 @@ check_proof:
     // stack: proof, address, ctx, ctx, code_len, retdest
     %write_table_if_jumpdest
     // stack: ctx, code_len, retdest
-    
+
     %jump(jumpdest_analysis)
 
 %macro jumpdest_analysis
