@@ -820,8 +820,9 @@ where
     /// starting from that length, for each `degree_bits` in the range specified
     /// for this STARK module. Specifying a wide enough range allows a
     /// prover to cover all possible scenarios.
-    /// - `config`: the configuration to be used for the STARK prover. It will
-    ///   usually be a fast one yielding large proofs.
+    /// - `config`: the set of configurations to be used for the different proof layers. It will
+    ///   usually be a fast one yielding large proofs for the base STARK prover, and a more
+    /// flexible one for the recursive layers.
     pub fn new(
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
