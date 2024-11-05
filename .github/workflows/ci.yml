@@ -112,7 +112,7 @@ jobs:
 
       - name: Run specific ignored tests in release mode
         run: |
-          RUST_LOG=release cargo test --release \
+          cargo test --release \
           --test empty_tables --test erc721 --test two_to_one_block -- --ignored
 
   test_zero_bin:

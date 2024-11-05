@@ -97,7 +97,6 @@ fi
 if [[ $TEST_ONLY == "test_only" ]]; then
     cargo run --quiet --release --package zero --bin leader -- \
       --test-only \
-      --use-test-config \
       --runtime in-memory \
       --load-strategy on-demand \
       --block-batch-size "$BLOCK_BATCH_SIZE" \
