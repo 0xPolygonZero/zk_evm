@@ -23,12 +23,12 @@ pub type TrieOpResult<T> = Result<T, TrieOpError>;
 pub enum TrieOpError {
     /// An error that occurs when a hash node is found during an insert
     /// operation.
-    #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert! (hash: {0})")]
+    #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert! (hash: {0:x})")]
     HashNodeInsertError(H256),
 
     /// An error that occurs when a hash node is found during a delete
     /// operation.
-    #[error("Attempted to delete a value that ended up inside a hash node! (hash: {0})")]
+    #[error("Attempted to delete a value that ended up inside a hash node! (hash: {0:x})")]
     HashNodeDeleteError(H256),
 
     /// An error that occurs when we encounter an non-existing type of node
@@ -50,7 +50,7 @@ pub enum TrieOpError {
     ExtensionCollapsedIntoHashError(Nibbles, H256),
 
     /// Failed to insert a hash node into the trie.
-    #[error("Attempted to place a hash node on an existing node! (hash: {0})")]
+    #[error("Attempted to place a hash node on an existing node! (hash: {0:x})")]
     ExistingHashNodeError(H256),
 }
 
