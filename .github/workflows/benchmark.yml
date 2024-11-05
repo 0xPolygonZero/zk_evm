@@ -13,7 +13,8 @@ on:
       - "**"
 
 env:
-  BENCHMARK_WITNESS: artifacts/witness_b1000_b1019.json
+  #BENCHMARK_WITNESS: artifacts/witness_b1000_b1019.json
+  BENCHMARK_WITNESS: artifacts/witness_b19807080.json
 
 jobs:
   benchmark_proving:
@@ -41,7 +42,6 @@ jobs:
           if_no_artifact_found: ignore
 
       - name: Run the script
-        # TODO - run the benchmark with 20 blocks file
         run: |
           echo "Benchmarking proving with $BENCHMARK_WITNESS"
           ./scripts/benchmark_input.sh $BENCHMARK_WITNESS | tee benchmark_output.log
@@ -49,6 +49,8 @@ jobs:
           PERF_TIME=`cat output.log | grep "seconds time elapsed" |  tail -1 | awk '{ print ($1)}'`
           PERF_USER_TIME=`cat output.log | grep "seconds user" |  tail -1 | awk '{ print ($1)}'`
           PERF_SYS_TIME=`cat output.log | grep "seconds sys" |  tail -1 | awk '{ print ($1)}'`
+          cat output.log
+          echo "RUN_ID=${{ github.run_id }} MEASURED_PROVING_TIME_SEC=$MEASURED_PROVING_TIME_SEC PERF_TIME=$PERF_TIME PERF_USER_TIME=$PERF_USER_TIME PERF_SYS_TIME=$PERF_SYS_TIME FILE=$BENCHMARK_WITNESS"
           printf '%12s     %-12s     %-24s    %-20s    %-20s    %-20s    %-s\n' \
             `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} \
             $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME \
