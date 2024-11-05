@@ -18,6 +18,9 @@ use plonky2::util::timing::TimingTree;
 
 /// This test focuses on testing zkVM proofs with some empty tables.
 #[test]
+// This test is run in CI under the "Run Specific Ignored Tests in Release Mode" job.
+// It is marked as ignored to prevent it from running by default in debug mode due to its longer
+// execution time.
 #[ignore]
 fn empty_tables() -> anyhow::Result<()> {
     type F = GoldilocksField;
