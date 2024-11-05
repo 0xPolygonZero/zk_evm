@@ -206,7 +206,7 @@ pub fn update_scalable_account_storage(
     insert_storage(storage_trie, slot.into_uint(), h2u(initial_trie_hash))
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(feature = "cdk_erigon")]
 pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
     MptAccountRlp {
         storage_root: storage_trie.hash(),
@@ -214,7 +214,7 @@ pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount
     }
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(feature = "cdk_erigon")]
 pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
     MptAccountRlp {
         storage_root: storage_trie.hash(),
@@ -281,6 +281,39 @@ pub fn segment_with_empty_tables() -> Result<(
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
     Ok((trimmed_inputs, segment_data))
+}
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    use std::collections::BTreeMap;
+
+    use either::Either;
+    // `Type1World` expects full keys, so we manually expand the nibbles here.
+    use mpt_trie::utils::TryFromIterator as _;
+
+    use crate::world::{
+        tries::{StateMpt, StorageTrie},
+        world::Type1World,
+    };
+    let state = HashedPartialTrie::try_from_iter(state.items().map(|(mut key, val)| {
+        key.count = 64;
+        (key, val)
+    }))
+    .expect("This should never fail");
+
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }
 
 #[cfg(test)]

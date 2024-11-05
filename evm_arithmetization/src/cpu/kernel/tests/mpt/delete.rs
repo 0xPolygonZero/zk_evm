@@ -10,12 +10,11 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
-use crate::cpu::kernel::tests::mpt::{
-    get_state_world_no_storage, nibbles_64, test_account_1_rlp, test_account_2,
-};
+use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_account_2};
 use crate::generation::mpt::MptAccountRlp;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
+use crate::testing_utils::get_state_world;
 use crate::util::h2u;
 use crate::Node;
 
@@ -95,7 +94,7 @@ fn test_state_trie(
     // Ignore any storage_root; see documentation note.
     account.storage_root = HashedPartialTrie::from(Node::Empty).hash();
 
-    let state_world = get_state_world_no_storage(state_trie.clone());
+    let state_world = get_state_world(state_trie.clone(), vec![]);
     let trie_inputs = TrieInputs {
         state_trie: state_world,
         transactions_trie: Default::default(),

@@ -1,6 +1,6 @@
 #![cfg(feature = "eth_mainnet")]
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -14,13 +14,8 @@ use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccountR
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
-};
+use evm_arithmetization::testing_utils::*;
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
-use evm_arithmetization::world::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -402,20 +397,4 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-fn get_state_world(
-    state: HashedPartialTrie,
-    storage_tries: Vec<(H256, HashedPartialTrie)>,
-) -> StateWorld {
-    let mut type1world =
-        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
-    let mut init_storage = BTreeMap::default();
-    for (storage, v) in storage_tries {
-        init_storage.insert(storage, StorageTrie::new_with_trie(v));
-    }
-    type1world.set_storage(init_storage);
-    StateWorld {
-        state: Either::Left(type1world),
-    }
 }

@@ -299,8 +299,8 @@ impl<F: RichField> Interpreter<F> {
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
-                // TODO: We should reuse the serilized trie in memory.
-                #[cfg(feature = "eth_mainnet")]
+                // TODO: We should reuse the serialized trie in memory.
+                #[cfg(not(feature = "cdk_erigon"))]
                 h2u(tries
                     .state_trie
                     .state

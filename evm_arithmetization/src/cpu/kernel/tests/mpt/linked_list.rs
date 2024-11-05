@@ -15,14 +15,14 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::linked_list::ACCOUNTS_LINKED_LIST_NODE_SIZE;
 use crate::generation::linked_list::STATE_LINKED_LIST_NODE_SIZE;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::memory::MemorySegmentState;
 
 pub(crate) type AccountsLinkedList<'a> = LinkedList<'a, ACCOUNTS_LINKED_LIST_NODE_SIZE>;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) type StorageLinkedList<'a> = LinkedList<'a, STORAGE_LINKED_LIST_NODE_SIZE>;
 pub(crate) type StateLinkedList<'a> = LinkedList<'a, STATE_LINKED_LIST_NODE_SIZE>;
 
@@ -112,7 +112,7 @@ fn test_list_iterator() -> Result<()> {
         .generation_state
         .memory
         .get_preinit_memory(Segment::StorageLinkedList);
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     {
         let mut storage_list =
             StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList)
@@ -221,7 +221,7 @@ fn test_insert_account() -> Result<()> {
 }
 
 #[test]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn test_insert_storage() -> Result<()> {
     init_logger();
 
@@ -497,7 +497,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 }
 
 #[test]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn test_insert_and_delete_storage() -> Result<()> {
     init_logger();
 

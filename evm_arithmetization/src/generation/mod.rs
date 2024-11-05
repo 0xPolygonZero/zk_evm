@@ -27,7 +27,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::{GenerationState, State};
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::trie_extractor::get_state_trie;
 use crate::generation::trie_extractor::{get_receipt_trie, get_txn_trie};
 use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES};
@@ -702,7 +702,7 @@ pub(crate) fn collect_debug_tries<F: RichField>(
     .inspect_err(|e| error!("failed to retrieve state trie pointer: {e:?}"))
     .ok()?;
 
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     let state_trie = get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
         .inspect_err(|e| error!("unable to retrieve state trie for debugging purposes: {e:?}"))
         .ok()?;

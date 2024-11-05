@@ -12,7 +12,7 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
@@ -518,7 +518,7 @@ fn load_state_trie(
     }
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -728,7 +728,7 @@ type LinkedListsAndTrieData = (
     Vec<Option<U256>>,
 );
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,

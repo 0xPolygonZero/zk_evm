@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use either::Either;
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::Nibbles;
@@ -9,22 +7,19 @@ use mpt_trie::partial_trie::PartialTrie;
 use crate::generation::mpt::EitherRlp;
 use crate::generation::mpt::MptAccountRlp;
 use crate::generation::mpt::{AccountRlp, SmtAccountRlp};
-use crate::world::tries::StateMpt;
-use crate::world::world::StateWorld;
-use crate::world::world::Type1World;
 use crate::Node;
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 mod delete;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 mod hash;
 mod hex_prefix;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 mod insert;
 pub(crate) mod linked_list;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 mod load;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 mod read;
 
 pub(crate) fn nibbles_64<T: Into<U256>>(v: T) -> Nibbles {
@@ -65,7 +60,7 @@ pub(crate) fn test_account_1_empty_storage() -> EitherRlp {
     }
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn test_account_1() -> MptAccountRlp {
     MptAccountRlp {
         nonce: U256::from(1111),
@@ -75,7 +70,7 @@ pub(crate) fn test_account_1() -> MptAccountRlp {
     }
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn test_account_1_rlp() -> Vec<u8> {
     test_account_1().rlp_encode().to_vec()
 }
@@ -84,7 +79,7 @@ pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
     test_account_1_empty_storage().rlp_encode().to_vec()
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn test_account_2() -> MptAccountRlp {
     MptAccountRlp {
         nonce: U256::from(5555),
@@ -94,7 +89,7 @@ pub(crate) fn test_account_2() -> MptAccountRlp {
     }
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn test_account_2_rlp() -> Vec<u8> {
     test_account_2().rlp_encode().to_vec()
 }
@@ -114,22 +109,4 @@ pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
         .into(),
     }
     .into()
-}
-
-#[cfg(feature = "eth_mainnet")]
-pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> StateWorld {
-    // `Type1World` expects full keys, so we manually expand the nibbles here.
-
-    use mpt_trie::utils::TryFromIterator as _;
-    let state_trie = HashedPartialTrie::try_from_iter(state_trie.items().map(|(mut key, val)| {
-        key.count = 64;
-        (key, val)
-    }))
-    .expect("This should never fail");
-
-    StateWorld {
-        state: Either::Left(
-            Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
-        ),
-    }
 }

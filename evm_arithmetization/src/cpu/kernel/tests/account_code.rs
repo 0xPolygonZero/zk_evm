@@ -19,7 +19,7 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::mpt::{load_state_mpt, AccountRlp, EitherRlp, MptAccountRlp, SmtAccountRlp};
 use crate::generation::TrieInputs;
@@ -41,7 +41,7 @@ pub(crate) fn initialize_mpts<F: RichField>(
     }
 
     // Load all MPTs.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     {
         let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(
@@ -504,8 +504,10 @@ fn prepare_interpreter_all_accounts<F: RichField>(
 
 /// Tests an SSTORE within a code similar to the contract code in add11_yml.
 #[test]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn sstore() -> Result<()> {
+    use crate::testing_utils::get_state_world;
+
     init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
@@ -528,7 +530,7 @@ fn sstore() -> Result<()> {
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
     state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
-    let state_trie = get_state_world_no_storage(state_trie_before);
+    let state_trie = get_state_world(state_trie_before, vec![]);
 
     let trie_inputs = TrieInputs {
         state_trie,
@@ -600,7 +602,7 @@ fn sstore() -> Result<()> {
 
 /// Tests an SLOAD within a code similar to the contract code in add11_yml.
 #[test]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn sload() -> Result<()> {
     use std::collections::BTreeMap;
 
@@ -718,19 +720,6 @@ fn sload() -> Result<()> {
     let expected_state_trie_hash = state_trie_before.hash();
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
-}
-
-#[cfg(feature = "eth_mainnet")]
-pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> StateWorld {
-    use std::collections::BTreeMap;
-
-    use crate::world::{tries::StateMpt, world::Type1World};
-
-    StateWorld {
-        state: Either::Left(
-            Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
-        ),
-    }
 }
 
 fn init_logger() {

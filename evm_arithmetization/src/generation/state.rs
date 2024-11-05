@@ -20,7 +20,7 @@ use crate::cpu::stack::MAX_USER_STACK_SIZE;
 #[cfg(feature = "cdk_erigon")]
 use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
 use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
@@ -436,7 +436,7 @@ impl<F: RichField> GenerationState<F> {
         }
     }
 
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
         let (_trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
@@ -446,7 +446,6 @@ impl<F: RichField> GenerationState<F> {
                 trie_inputs,
             )
             .expect("Invalid MPT data for preinitialization");
-        // TODO: REMOVE
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
@@ -505,7 +504,7 @@ impl<F: RichField> GenerationState<F> {
         let bignum_modmul_result_limbs = Vec::new();
         log::debug!("smt trie = {:?}", inputs.tries.state_trie);
 
-        #[cfg(feature = "eth_mainnet")]
+        #[cfg(not(feature = "cdk_erigon"))]
         {
             let mut state = Self {
                 inputs: inputs.trim(),

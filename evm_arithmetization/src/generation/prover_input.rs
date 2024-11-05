@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use super::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use super::linked_list::{AccessLinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD};
 use super::mpt::load_state_mpt;
@@ -374,7 +374,7 @@ impl<F: RichField> GenerationState<F> {
 
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
             "insert_account" | "search_account" => self.run_next_insert_account(input_fn),
@@ -574,7 +574,7 @@ impl<F: RichField> GenerationState<F> {
 
     /// Returns a pointer to a node in the list such that
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_insert_account(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let (&pred_addr, &pred_ptr) = self
@@ -624,7 +624,7 @@ impl<F: RichField> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]`, or  node[0] == addr and `node[1] <=
     /// key < next_node[1]`, where `addr` and `key` are the elements at the top
     /// of the stack.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_insert_slot(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
@@ -652,7 +652,7 @@ impl<F: RichField> GenerationState<F> {
     /// Returns a pointer `ptr` to a node of the form [..] -> [next_addr, ..]
     /// such that `next_addr = addr` and `addr` is the top of the stack.
     /// If the element is not in the list, returns an error.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
@@ -697,7 +697,7 @@ impl<F: RichField> GenerationState<F> {
     /// such that `next_addr == addr` and `next_key == key`,
     /// and `addr, key` are the elements at the top of the stack.
     /// If the element is not in the list, loops forever.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_remove_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
@@ -722,7 +722,7 @@ impl<F: RichField> GenerationState<F> {
     /// `next_addr = @U256_MAX`. This is used to determine the first storage
     /// node for the account at `addr`. `addr` is the element at the top of the
     /// stack.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_remove_address_slots(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
