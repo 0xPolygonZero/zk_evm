@@ -623,11 +623,11 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
 pub struct RecursionConfig {
     /// The configuration to be used for the STARK table prover.
     pub stark_config: StarkConfig,
-    /// Optional configuration for the shrinking circuit.
+    /// The configuration for the shrinking circuit.
     pub shrinking_circuit_config: CircuitConfig,
-    /// Optional configuration for the recursion circuits.
+    /// The configuration for the recursion circuits.
     pub recursion_circuit_config: CircuitConfig,
-    /// Optional recursion threshold in degree bits.
+    /// The recursion threshold in degree bits.
     pub threshold_degree_bits: usize,
 }
 
@@ -820,8 +820,9 @@ where
     /// starting from that length, for each `degree_bits` in the range specified
     /// for this STARK module. Specifying a wide enough range allows a
     /// prover to cover all possible scenarios.
-    /// - `config`: the set of configurations to be used for the different proof layers. It will
-    ///   usually be a fast one yielding large proofs for the base STARK prover, and a more
+    /// - `config`: the set of configurations to be used for the different proof
+    ///   layers. It will usually be a fast one yielding large proofs for the
+    ///   base STARK prover, and a more
     /// flexible one for the recursive layers.
     pub fn new(
         all_stark: &AllStark<F, D>,
