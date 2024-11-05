@@ -8,13 +8,9 @@ on:
   workflow_dispatch:
     branches:
       - "**"
-  pull_request:
-    branches:
-      - "**"
 
 env:
-  #BENCHMARK_WITNESS: artifacts/witness_b1000_b1019.json
-  BENCHMARK_WITNESS: artifacts/witness_b19807080.json
+  BENCHMARK_WITNESS: artifacts/witness_b1000_b1019.json
 
 jobs:
   benchmark_proving:
