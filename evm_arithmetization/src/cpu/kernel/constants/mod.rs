@@ -477,7 +477,6 @@ pub mod cancun_constants {
     pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
         hex!("f57acd40259872606d76197ef052f3d35588dadf919ee1f0e3cb9b62d3f4b02c");
 
-    // #[cfg(feature = "eth_mainnet")]
     pub const BEACON_ROOTS_ACCOUNT: MptAccountRlp = MptAccountRlp {
         nonce: U256::zero(),
         balance: U256::zero(),
@@ -541,7 +540,6 @@ pub mod global_exit_root {
     pub const GLOBAL_EXIT_ROOT_CONTRACT_CODE_HASH: [u8; 32] =
         hex!("6bec2bf64f7e824109f6ed55f77dd7665801d6195e461666ad6a5342a9f6daf5");
 
-    // #[cfg(feature = "eth_mainnet")]
     pub const GLOBAL_EXIT_ROOT_ACCOUNT: MptAccountRlp = MptAccountRlp {
         nonce: U256::zero(),
         balance: U256::zero(),

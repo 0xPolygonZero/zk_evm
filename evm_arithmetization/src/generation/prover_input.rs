@@ -17,7 +17,6 @@ use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
 #[cfg(feature = "eth_mainnet")]
 use super::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
 use super::linked_list::{AccessLinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD};
-// #[cfg(feature = "eth_mainnet")]
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
@@ -101,22 +100,7 @@ impl<F: RichField> GenerationState<F> {
                 .map_or_else(
                     || {
                         let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
-                        // let mut n = Err(ProgramError::ProverInputError(
-                        //     ProverInputError::InvalidInput,
-                        // ));
-                        // #[cfg(feature = "eth_mainnet")]
-                        // {
-                        //     n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content);
 
-                        //     self.memory.insert_preinitialized_segment(
-                        //         Segment::TrieData,
-                        //         crate::witness::memory::MemorySegmentState {
-                        //             content: new_content,
-                        //         },
-                        //     );
-                        // }
-                        // #[cfg(feature = "cdk_erigon")]
-                        // {
                         let n = if cfg!(feature = "cdk_erigon") {
                             Ok(new_content.len())
                         } else {
@@ -153,35 +137,19 @@ impl<F: RichField> GenerationState<F> {
                 .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
-            "trie_data_size" => {
-                // println!(
-                //     "length {}",
-                //     self.memory
-                //         .preinitialized_segments
-                //         .get(&Segment::TrieData)
-                //         .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
-                //         .content
-                //         .len()
-                //         .max(
-                //             self.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                //                 .content
-                //                 .len(),
-                //         )
-                // );
-                Ok(self
-                    .memory
-                    .preinitialized_segments
-                    .get(&Segment::TrieData)
-                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
-                    .content
-                    .len()
-                    .max(
-                        self.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                            .content
-                            .len(),
-                    )
-                    .into())
-            }
+            "trie_data_size" => Ok(self
+                .memory
+                .preinitialized_segments
+                .get(&Segment::TrieData)
+                .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
+                .content
+                .len()
+                .max(
+                    self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                        .content
+                        .len(),
+                )
+                .into()),
 
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
@@ -266,25 +234,6 @@ impl<F: RichField> GenerationState<F> {
     /// Initializes the code segment of the given context with the code
     /// corresponding to the provided hash.
     /// Returns the length of the code.
-    // #[cfg(feature = "eth_mainnet")]
-    // fn run_account_code(&mut self) -> Result<U256, ProgramError> {
-    //     // stack: codehash, ctx, ...
-    //     let codehash = stack_peek(self, 0)?;
-    //     let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
-    //     let context = u256_to_usize(context)?;
-    //     let mut address = MemoryAddress::new(context, Segment::Code, 0);
-    //     let code = self
-    //         .inputs
-    //         .contract_code
-    //         .get(&H256::from_uint(&codehash))
-    //         .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
-    //     for &byte in code {
-    //         self.memory.set(address, byte.into());
-    //         address.increment();
-    //     }
-    //     Ok(code.len().into())
-    // }
-    // #[cfg(feature = "cdk_erigon")]
     fn run_account_code(&mut self) -> Result<U256, ProgramError> {
         // stack: codehash, ctx, ...
 

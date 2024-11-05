@@ -198,7 +198,6 @@ sk_loop:
     DUP2 DUP2 EQ %jumpi(end_sk)
     // stack: rlp_addr, sk_end_rlp_addr, addr, end_rlp_addr
     %decode_rlp_scalar // Storage key // TODO: Should panic when key is not 32 bytes?
-global debug_todo_is_this_a_key_or_a_slot:
     %stack (rlp_addr, key, sk_end_rlp_addr, addr, end_rlp_addr) ->
         (addr, key, sk_loop_contd, rlp_addr, sk_end_rlp_addr, addr, end_rlp_addr)
     %jump(insert_accessed_storage_keys_with_original_value)
@@ -231,7 +230,6 @@ insert_accessed_storage_keys_with_original_value:
 after_read:
     %stack (value, addr, key, retdest) -> (addr, key, value, retdest)
     %insert_accessed_storage_keys
-global debug_si_por_aca:
     // stack: cold_access, value_ptr, value, retdest
     SWAP2
     // stack: value, value_ptr, cold_access, retdest

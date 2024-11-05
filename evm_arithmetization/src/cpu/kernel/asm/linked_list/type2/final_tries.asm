@@ -24,7 +24,6 @@ global insert_all_final_nodes:
     // stack: root_ptr, level, k0, k1, k2, k3, after_smt_insert, key, root_ptr, node_ptr_ptr, retdest
     %jump(smt_insert)
 after_smt_insert:
-global debug_after_smt_insert:
     //stack: root_ptr', key, root_ptr, node_ptr_ptr, retdest
     %stack (new_root_ptr, key, root_ptr, next_node_ptr_ptr) -> (next_node_ptr_ptr, new_root_ptr)
     %next_node
@@ -65,7 +64,6 @@ delete_removed_nodes_end:
     JUMP
 
 delete_node:
-global debug_delete_node:
     // stack: node_ptr_ptr, root_ptr, retdest
     DUP1
     MLOAD_GENERAL

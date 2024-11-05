@@ -86,7 +86,6 @@ global delete_all_touched_addresses:
     PUSH @SEGMENT_TOUCHED_ADDRESSES ADD
     PUSH @SEGMENT_TOUCHED_ADDRESSES
 delete_all_touched_addresses_loop:
-global debug_lobeando:
     // `i` and `len` are both scaled by SEGMENT_TOUCHED_ADDRESSES
     // stack: i, len, retdest
     DUP2 DUP2 EQ %jumpi(delete_all_touched_addresses_done)
@@ -94,19 +93,16 @@ global debug_lobeando:
     DUP1 MLOAD_GENERAL
     // stack: loaded_addr, i, len, retdest
     DUP1
-global debug_loaded_addr:
     %is_empty %jumpi(bingo)
     // stack: loaded_addr, i, len, retdest
     POP %increment %jump(delete_all_touched_addresses_loop)
 bingo:
-global debug_bingo:
     // stack: loaded_addr, i, len, retdest
     %delete_account
     %increment %jump(delete_all_touched_addresses_loop)
 delete_all_touched_addresses_done:
     // stack: i, len, retdest
     %pop2 
-global debug_chaito_noma:
     JUMP
 
 %macro delete_all_touched_addresses

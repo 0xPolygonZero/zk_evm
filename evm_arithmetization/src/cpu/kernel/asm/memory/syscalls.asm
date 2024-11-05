@@ -119,7 +119,6 @@ calldataload_large_offset:
 
 
 codecopy_within_bounds:
-global debug_codecopy_withing_bounds:
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     POP
     // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
@@ -142,7 +141,6 @@ wcopy_within_bounds:
     %jump(memcpy_bytes)
 
 wcopy_empty:
-global debug_wcopy_empty:
     // stack: Gverylow, kexit_info, dest_offset, offset, size
     %charge_gas
     %stack (kexit_info, dest_offset, offset, size) -> (kexit_info)
@@ -150,7 +148,6 @@ global debug_wcopy_empty:
 
 
 codecopy_large_offset:
-global codecopy_large_offset:
     // stack: total_size, src_ctx, kexit_info, dest_offset, offset, size
     POP
     // offset is larger than the size of the {CALLDATA,CODE,RETURNDATA}. So we just have to write zeros.
@@ -162,7 +159,6 @@ global codecopy_large_offset:
     %jump(memset)
 
 wcopy_large_offset:
-global wcopy_large_offset:
     // offset is larger than the size of the {CALLDATA,CODE,RETURNDATA}. So we just have to write zeros.
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
@@ -172,7 +168,6 @@ global wcopy_large_offset:
     %jump(memset)
 
 codecopy_after:
-global codecopy_after:
     // stack: src_ctx, kexit_info
     DUP1 GET_CONTEXT
     // stack: ctx, src_ctx, src_ctx, kexit_info
@@ -186,13 +181,11 @@ global codecopy_after:
     EXIT_KERNEL
 
 codecopy_no_prune:
-global codecopy_no_prune:
     // stack: src_ctx, kexit_info
     POP
     EXIT_KERNEL
 
 wcopy_after:
-global wcopy_after:
     // stack: kexit_info
     EXIT_KERNEL
 

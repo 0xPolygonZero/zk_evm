@@ -31,7 +31,6 @@ global process_type_0_txn:
     %decode_and_store_gas_limit
     %decode_and_store_to
     %decode_and_store_value
-global debug_before_storing_txn_field_data_len:
     %decode_and_store_data
     // stack: rlp_addr, nonce_addr, retdest
     DUP1

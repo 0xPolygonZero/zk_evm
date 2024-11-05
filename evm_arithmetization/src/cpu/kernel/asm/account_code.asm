@@ -120,7 +120,6 @@ load_code_ctd:
     // stack: codehash, ctx, retdest
     DUP1 ISZERO %jumpi(load_code_non_existent_account)
     // Load the code non-deterministically in memory and return the length.
-global debug_account_code:
     PROVER_INPUT(account_code)
 #[cfg(feature = eth_mainnet)]
 {
@@ -220,8 +219,6 @@ load_code_padded_ctd:
         DUP1 %jumpi(non_zero_padding)
         %jump(padd)
 non_zero_padding:
-global debug_len_mod_56:
-
         // curr_len mod 56, padding_addr, addr, len, retdest
         PUSH 56 SUB
 padd:

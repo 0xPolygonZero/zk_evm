@@ -44,9 +44,9 @@
     // (This should be impossible with contract creation transactions or CREATE, but possible with CREATE2.)
     // So we return 1 to indicate an error.
     %%error_collision:
-                %stack (address) -> (1)
+        %stack (address) -> (1)
     %%end:
-                // stack: status
+    // stack: status
 %endmacro
 
 %macro append_created_contracts

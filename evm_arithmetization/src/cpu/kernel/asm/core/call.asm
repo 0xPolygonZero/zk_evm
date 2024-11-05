@@ -25,7 +25,6 @@ global sys_call:
     DUP1 %insert_accessed_addresses
 
     %call_charge_gas(1, 1)
-global debug_after_charge_gas:
     %check_depth
 
     %checkpoint // Checkpoint

@@ -43,7 +43,6 @@ pub(crate) fn nibbles_count<T: Into<U256>>(v: T, count: usize) -> Nibbles {
     }
 }
 
-// #[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_1_empty_storage() -> EitherRlp {
     if cfg!(feature = "cdk_erigon") {
         EitherRlp {
@@ -68,45 +67,15 @@ pub(crate) fn test_account_1_empty_storage() -> EitherRlp {
 
 #[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_1() -> MptAccountRlp {
-    // if cfg!(feature = "cdk_erigon") {
-    //     EitherRlp {
-    //         account_rlp: Either::Right(SmtAccountRlp {
-    //             nonce: U256::from(1111),
-    //             balance: U256::from(2222),
-    //             code_hash: U256::from(4444),
-    //             code_length: 0.into(),
-    //         }),
-    //     }
-    // } else {
     MptAccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         storage_root: H256::from_uint(&U256::from(3333)),
         code_hash: H256::from_uint(&U256::from(4444)),
     }
-
-    // }
 }
-// #[cfg(feature = "cdk_erigon")]
-// pub(crate) fn test_account_1() -> Box<dyn AccountRlp> {
-//     Box::new(SmtAccountRlp {
-//         nonce: U256::from(1111),
-//         balance: U256::from(2222),
-//         code_hash: U256::from(4444),
-//         code_length: 0.into(),
-//     })
-// }
 
-// #[cfg(feature = "cdk_erigon")]
-// pub(crate) fn test_account_1_empty_storage() -> Box<dyn AccountRlp> {
-//     Box::new(SmtAccountRlp {
-//         nonce: U256::from(1111),
-//         balance: U256::from(2222),
-//         code_hash: U256::from(4444),
-//         code_length: 0.into(),
-//     })
-// }
-
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_1_rlp() -> Vec<u8> {
     test_account_1().rlp_encode().to_vec()
 }
@@ -117,16 +86,6 @@ pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
 
 #[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_2() -> MptAccountRlp {
-    // if cfg!(feature = "cdk_erigon") {
-    //     EitherRlp {
-    //         account_rlp: Either::Right(SmtAccountRlp {
-    //             nonce: U256::from(5555),
-    //             balance: U256::from(6666),
-    //             code_hash: U256::from(8888),
-    //             code_length: 0.into(),
-    //         }),
-    //     }
-    // } else {
     MptAccountRlp {
         nonce: U256::from(5555),
         balance: U256::from(6666),
@@ -134,20 +93,8 @@ pub(crate) fn test_account_2() -> MptAccountRlp {
         code_hash: H256::from_uint(&U256::from(8888)),
     }
 }
-// }
 
-// #[cfg(feature = "cdk_erigon")]
-// pub(crate) fn test_account_2() -> Box<dyn AccountRlp> {
-//     use crate::generation::mpt::SmtAccountRlp;
-
-//     Box::new(SmtAccountRlp {
-//         nonce: U256::from(5555),
-//         balance: U256::from(6666),
-//         code_hash: U256::from(8888),
-//         code_length: 0.into(),
-//     })
-// }
-
+#[cfg(feature = "eth_mainnet")]
 pub(crate) fn test_account_2_rlp() -> Vec<u8> {
     test_account_2().rlp_encode().to_vec()
 }

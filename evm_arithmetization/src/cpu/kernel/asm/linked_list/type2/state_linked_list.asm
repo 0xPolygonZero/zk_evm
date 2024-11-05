@@ -281,9 +281,7 @@ global search_key:
     // stack: key, retdest
     PROVER_INPUT(linked_list::search_state)
     // stack: pred_ptr/4, key, retdest
-global debug_pred_ptr_p_4:
     %get_valid_state_ptr
-global debug_pred_ptr:
 
     // stack: pred_ptr, key, retdest
     DUP1
@@ -301,7 +299,6 @@ global debug_pred_ptr:
     // stack: pred_key, pred_ptr, key, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
-global debug_fail_1:
     %assert_eq
     // stack: pred_ptr, key, retdest
     // Check that this is not a deleted node
@@ -310,8 +307,6 @@ global debug_fail_1:
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, key_found)
     // The key is not in the list.
-
-global debug_fail_2:
     PANIC
 
 global key_found:
@@ -324,10 +319,8 @@ global key_found:
     JUMP
 
 key_not_found:
-global debug_key_not_found:
     // stack: pred_key, pred_ptr, key, retdest
     %stack (pred_key, pred_ptr, key, retdest) -> (retdest, 0)
-global debug_o_margot:
     JUMP
 
 %macro search_key

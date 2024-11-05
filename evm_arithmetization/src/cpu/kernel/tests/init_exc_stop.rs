@@ -50,13 +50,11 @@ fn test_init_exc_stop() {
         ..Default::default()
     };
 
-    // #[cfg(feature = "cdk_erigon")]
     let state_trie_before = StateWorld::default();
 
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
-    // #[cfg(feature = "cdk_erigon")]
     let mut expected_state_trie_after = StateWorld::default();
     #[cfg(feature = "eth_mainnet")]
     let (state_trie_before_hashed, storage_tries) =
@@ -113,10 +111,7 @@ fn test_init_exc_stop() {
     }
 
     let mut contract_code = HashMap::new();
-    // #[cfg(feature = "eth_mainnet")]
-    // contract_code.insert(keccak(vec![]), vec![]);
-    // #[cfg(feature = "cdk_erigon")]
-    // contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
+
     let contract_hash = if cfg!(feature = "eth_mainnet") {
         Either::Left(keccak(vec![]))
     } else {
@@ -129,10 +124,6 @@ fn test_init_exc_stop() {
         Either::Right(type2world) => H256::from_uint(&hashout2u(type2world.as_smt().root)),
     };
     let trie_roots_after = TrieRoots {
-        // #[cfg(feature = "cdk_erigon")]
-        // state_root: H256::from_uint(&hashout2u(expected_state_trie_after.root)),
-        // #[cfg(feature = "eth_mainnet")]
-        // state_root: expected_state_trie_after.hash(),
         state_root,
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
@@ -146,8 +137,6 @@ fn test_init_exc_stop() {
             state_trie: state_trie_before,
             transactions_trie,
             receipts_trie,
-            // #[cfg(feature = "eth_mainnet")]
-            // storage_tries,
         },
         trie_roots_after,
         contract_code,

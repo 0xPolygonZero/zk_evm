@@ -53,7 +53,6 @@ after_new_cost:
     %charge_gas
 
     // Compute C_callgas
-global debug_por_aca:
     %stack (kexit_info, Cgascap, address, gas, value) ->
         (Cgascap, address, gas, kexit_info, value)
     DUP5 ISZERO %not_bit

@@ -92,7 +92,6 @@ global create_common:
 
     %create_context
     // stack: new_ctx, address, value, code_offset, code_len, kexit_info
-global debug_new_ctx:
     GET_CONTEXT
     // stack: src_ctx, new_ctx, address, value, code_offset, code_len, kexit_info
 
@@ -114,16 +113,13 @@ global debug_new_ctx:
 
 run_constructor:
     // stack: new_ctx, value, address, kexit_info
-global debug_run_constructor:
     SWAP1 %set_new_ctx_value
-global debug_1:
     // stack: new_ctx, address, kexit_info
 
     // Each line in the block below does not change the stack.
     DUP2 %set_new_ctx_addr
     %address %set_new_ctx_caller
     %set_new_ctx_parent_pc(after_constructor)
-global debug_2:
     // stack: new_ctx, address, kexit_info
 
     // All but 1/64 of the sender's remaining gas goes to the constructor.
@@ -136,9 +132,7 @@ global debug_2:
 
     // Create the new contract account in the state trie.
     DUP2
-global debug_before_create_contract_account:
     %create_contract_account
-global debug_after_create_contract_account:
     // stack: status, new_ctx, address, kexit_info
     %jumpi(create_collision)
 
@@ -185,7 +179,6 @@ after_constructor:
     #[cfg(feature = cdk_erigon)]
     {
         %poseidon_hash_code_unpadded
-        global debug_poseidon_output:
     }
     // stack: codehash, leftover_gas, success, address, kexit_info
     %observe_new_contract
@@ -284,17 +277,14 @@ global set_codehash:
         // stack: addr, codehash, retdest
         DUP1 %insert_touched_addresses
         DUP1 
-    global debug_reading_code:
         %read_code
         // stack: prev_codehash, addr, codehash, retdest
         DUP2
-    global debug_reading_code_length:
         %read_code_length
         %stack (prev_code_length, prev_codehash, addr) -> (addr, prev_codehash, prev_code_length, prev_code_length, addr)
         %journal_add_code_change // Add the code change to the journal.
         // stack: prev_code_length, addr, codehash, retdest
         DUP3 DUP3
-    global debug_setting_code:
         %set_code
         // stack: prev_code_length, addr, codehash, retdest
         %returndatasize 
@@ -304,7 +294,6 @@ global set_codehash:
         %pop3 JUMP
     code_length_changed:
         DUP2
-    global debug_setting_code_lenght:
         %set_code_length
         // stack: addr, codehash, retdest
         %pop2 JUMP

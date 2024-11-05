@@ -110,7 +110,6 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     // Check that the trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
-global debug_el_size:
     %assert_eq
 
 global start_txns:
@@ -187,7 +186,6 @@ global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER)
-global debug_gas_error:
     %assert_eq
     DUP3
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
@@ -220,7 +218,6 @@ global check_state_trie:
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
 
     PROVER_INPUT(trie_ptr::trie_data_size)
-global debug_storing_trie_data_size:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     // stack: trie_data_len
@@ -241,11 +238,9 @@ global debug_storing_trie_data_size:
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-global debug_check_initial_trie:
     %assert_eq
     // Check that the stored trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
-global debug_trie_data_length:
     %assert_eq
 
     // We set a dummy value as an initial trie data length,
@@ -266,7 +261,6 @@ global check_final_state_trie:
     }
     
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
-global debug_final_trie_hash:
     %assert_eq
     // We don't need the trie data length here.
     POP

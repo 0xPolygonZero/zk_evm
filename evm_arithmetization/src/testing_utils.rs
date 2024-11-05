@@ -198,20 +198,10 @@ fn empty_payload() -> Result<GenerationInputs> {
 
     // Initialize an empty state trie and storage tries
     let state_trie_before = HashedPartialTrie::from(crate::Node::Empty);
-    // #[cfg(feature = "eth_mainnet")]
-    // let storage_tries = Vec::new();
+
     let checkpoint_state_trie_root = state_trie_before.hash();
 
     // Prepare the tries without any transactions or receipts
-    // #[cfg(feature = "eth_mainnet")]
-    // let tries_before = TrieInputs {
-    //     state_trie: state_trie_before.clone(),
-    //     storage_tries: storage_tries.clone(),
-    //     transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
-    //     receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
-    // };
-
-    // #[cfg(feature = "cdk_erigon")]
     let tries_before = TrieInputs {
         state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(crate::Node::Empty),

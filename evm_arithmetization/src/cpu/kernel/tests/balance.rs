@@ -14,7 +14,6 @@ use crate::generation::mpt::SmtAccountRlp;
 use crate::Node;
 
 // Test account with a given code hash.
-// #[cfg(feature = "eth_mainnet")]
 fn test_account(balance: U256) -> EitherRlp {
     if cfg!(feature = "eth_mainnet") {
         EitherRlp {
@@ -36,19 +35,6 @@ fn test_account(balance: U256) -> EitherRlp {
         }
     }
 }
-
-// // Test account with a given code hash.
-// #[cfg(feature = "cdk_erigon")]
-// fn test_account(balance: U256) -> SmtAccountRlp {
-//     use smt_trie::code::hash_bytecode_u256;
-
-//     SmtAccountRlp {
-//         nonce: U256::from(1111),
-//         balance,
-//         code_hash: hash_bytecode_u256(vec![0x01, 0x00]),
-//         code_length: 2.into(),
-//     }
-// }
 
 #[test]
 fn test_balance() -> Result<()> {
