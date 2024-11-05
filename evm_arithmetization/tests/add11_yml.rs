@@ -14,14 +14,12 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
 use evm_arithmetization::world::world::{StateWorld, Type1World, World};
-use evm_arithmetization::{
-    AllStark, GenerationInputs, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH,
-};
+use evm_arithmetization::{AllStark, GenerationInputs, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
@@ -257,7 +255,7 @@ fn add11_yml() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
     let inputs = get_generation_inputs();
 
     let max_cpu_len_log = 20;

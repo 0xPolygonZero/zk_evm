@@ -1,3 +1,5 @@
+---   # Workflow for building and running docker images as regression test
+
 name: Docker Build & Run
 
 on:

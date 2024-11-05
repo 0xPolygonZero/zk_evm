@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::smt::{Key, Node};
 

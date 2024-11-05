@@ -2878,6 +2878,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy-regex"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d8e41c97e6bc7ecb552016274b99fbb5d035e8de288c582d9b933af6677bfda"
+dependencies = [
+ "lazy-regex-proc_macros",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "lazy-regex-proc_macros"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76e1d8b05d672c53cb9c7b920bbba8783845ae4f0b076e02a3db1d02c81b4163"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.77",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5875,6 +5898,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5901,6 +5934,7 @@ dependencies = [
  "itertools 0.13.0",
  "jemallocator",
  "keccak-hash 0.10.0",
+ "lazy-regex",
  "lru",
  "mockall",
  "mpt_trie",
@@ -5910,7 +5944,6 @@ dependencies = [
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.12.2",
- "regex",
  "rlp",
  "ruint",
  "serde",

@@ -11,12 +11,12 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
 use evm_arithmetization::world::world::{StateWorld, Type1World};
-use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
+use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -36,7 +36,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
 
     let block_metadata = BlockMetadata {
         block_timestamp: 1.into(),

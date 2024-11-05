@@ -12,11 +12,12 @@ use evm_arithmetization::testing_utils::{
     ger_account_nibbles, ger_contract_from_storage, init_logger, scalable_account_nibbles,
     scalable_contract_from_storage, update_ger_account_storage, update_scalable_account_storage,
     ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+    TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
 use evm_arithmetization::world::world::{StateWorld, Type1World};
-use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
+use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -34,7 +35,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
 
     let block_metadata = BlockMetadata {
         block_timestamp: 1.into(),

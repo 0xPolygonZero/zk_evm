@@ -10,8 +10,6 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp,
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
-#[cfg(feature = "eth_mainnet")]
-use evm_arithmetization::testing_utils::beacon_roots_contract_from_storage;
 use evm_arithmetization::testing_utils::ADDRESS_SCALABLE_L2;
 use evm_arithmetization::testing_utils::LAST_BLOCK_STORAGE_POS;
 use evm_arithmetization::testing_utils::STATE_ROOT_STORAGE_POS;
@@ -19,7 +17,7 @@ use evm_arithmetization::testing_utils::TIMESTAMP_STORAGE_POS;
 use evm_arithmetization::testing_utils::{init_logger, sd2u};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::world::world::{StateWorld, Type2World};
-use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
+use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;

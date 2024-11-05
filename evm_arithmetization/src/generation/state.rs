@@ -445,6 +445,7 @@ impl<F: RichField> GenerationState<F> {
             trie_inputs,
         )
         .expect("Invalid MPT data for preinitialization");
+        // TODO: REMOVE
         println!("trie data len after linked lists {}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
