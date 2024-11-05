@@ -148,7 +148,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
@@ -159,7 +159,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json test_only
@@ -170,7 +170,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
