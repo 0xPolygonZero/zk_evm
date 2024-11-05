@@ -118,6 +118,15 @@ pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
 
 #[cfg(feature = "eth_mainnet")]
 pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> StateWorld {
+    // `Type1World` expects full keys, so we manually expand the nibbles here.
+
+    use mpt_trie::utils::TryFromIterator as _;
+    let state_trie = HashedPartialTrie::try_from_iter(state_trie.items().map(|(mut key, val)| {
+        key.count = 64;
+        (key, val)
+    }))
+    .expect("This should never fail");
+
     StateWorld {
         state: Either::Left(
             Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
