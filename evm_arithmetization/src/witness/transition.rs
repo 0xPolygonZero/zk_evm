@@ -1,5 +1,6 @@
 use ethereum_types::U256;
 use log::log_enabled;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
@@ -12,11 +13,14 @@ use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
 #[cfg(test)]
 use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+#[cfg(test)]
+use crate::cpu::kernel::tests::mpt::linked_list::{AccountsLinkedList, StorageLinkedList};
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
 use crate::generation::state::State;
+use crate::generation::trie_extractor::get_state_trie;
 use crate::memory::segments::Segment;
 // TO REMOVE!
 use crate::util::u256_to_usize;
@@ -289,9 +293,9 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
 
 pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
-    if !log_enabled!(log::Level::Debug) {
-        return;
-    }
+    // if !log_enabled!(log::Level::Debug) {
+    //     return;
+    // }
 
     let pc = state.get_registers().program_counter;
     let is_interesting_offset = KERNEL
@@ -314,6 +318,49 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
+
+    if cfg!(test) {
+        println!("a");
+    } else {
+        println!("b");
+    }
+
+    #[cfg(test)]
+    if {println!("mmmm"); KERNEL.offset_name(pc) == "mpt_hash_state_trie"} {
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!(
+            "accounts linked list = {:?}",
+            AccountsLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
+
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::StorageLinkedList);
+        log::debug!(
+            "state linked list = {:?}",
+            StorageLinkedList::from_mem_and_segment(&mem, Segment::StorageLinkedList)
+        );
+
+        let state_trie_ptr = u256_to_usize(
+            state
+                .get_generation_state()
+                .memory
+                .read_global_metadata(GlobalMetadata::StateTrieRoot),
+        )
+        .unwrap();
+
+        let state_trie = get_state_trie::<HashedPartialTrie>(
+            &state.get_generation_state().memory,
+            state_trie_ptr,
+        )
+        .unwrap();
+
+        log::debug!("state trie {:?}", state_trie);
+    }
 
     #[cfg(test)]
     if KERNEL.offset_name(pc) == "smt_hash_state" || KERNEL.offset_name(pc) == "sys_sstore" {

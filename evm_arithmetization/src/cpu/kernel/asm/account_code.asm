@@ -121,7 +121,7 @@ load_code_ctd:
     DUP1 ISZERO %jumpi(load_code_non_existent_account)
     // Load the code non-deterministically in memory and return the length.
     PROVER_INPUT(account_code)
-#[cfg(feature = eth_mainnet)]
+#[cfg(not(feature = cdk_erigon))]
 {
     %stack (code_size, codehash, ctx, retdest) -> (ctx, code_size, codehash, retdest, code_size)
     // Check that the hash of the loaded code equals `codehash`.

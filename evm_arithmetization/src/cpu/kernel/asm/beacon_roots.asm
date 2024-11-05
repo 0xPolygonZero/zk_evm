@@ -15,18 +15,23 @@ global set_beacon_root:
     // stack: timestamp, 8191, timestamp, retdest
     MOD
     // stack: timestamp_idx, timestamp, retdest
+    %slot_to_storage_key
+    // stack: timestamp_slot_key, timestamp, retdest
     PUSH @BEACON_ROOTS_CONTRACT_STATE_KEY
     %parent_beacon_block_root
-    // stack: calldata, state_key, timestamp_idx, timestamp, retdest
+    // stack: calldata, state_key, timestamp_slot_key, timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH
-    DUP4
-    // stack: timestamp_idx, calldata, state_key, timestamp_idx, timestamp, retdest
+    DUP5
+    MOD
+    // stack: timestamp_idx, calldata, state_key, timestamp_slot_key, timestamp, retdest
     %add_const(@HISTORY_BUFFER_LENGTH)
-    // stack: root_idx, calldata, state_key, timestamp_idx, timestamp, retdest
+    // stack: root_idx, calldata, state_key, timestamp_slot_key, timestamp, retdest
+    %slot_to_storage_key
+    // stack: root_slot_key, calldata, state_key, timestamp_slot_key, timestamp, retdest
     DUP3
-    // stack: state_key, root_slot_idx, calldata, state_key, timestamp_idx, timestamp, retdest
+    // stack: state_key, root_slot_key, calldata, state_key, timestamp_slot_key, timestamp, retdest
     DUP3 ISZERO %jumpi(delete_root_idx_slot)
-    // stack: state_key, root_slot_idx, calldata, state_key, timestamp_idx, timestamp, retdest
+    // stack: state_key, root_slot_key, calldata, state_key, timestamp_slot_key, timestamp, retdest
     %insert_slot_from_addr_key
     // stack: state_key, timestamp_idx, timestamp, retdest
     %insert_slot_from_addr_key

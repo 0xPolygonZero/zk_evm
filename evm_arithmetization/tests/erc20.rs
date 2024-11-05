@@ -255,6 +255,7 @@ fn token_storage_after() -> anyhow::Result<HashedPartialTrie> {
 }
 
 fn giver_account() -> anyhow::Result<MptAccountRlp> {
+    log::debug!("giver bytecode {:?}", giver_bytecode());
     Ok(MptAccountRlp {
         nonce: 1.into(),
         balance: 0.into(),

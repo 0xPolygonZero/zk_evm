@@ -251,23 +251,26 @@ impl<F: RichField> GenerationState<F> {
             .contract_code
             .get(&codehash)
             .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
-        let code_len = code.len();
+        let mut code_len = code.len();
 
         for &byte in code {
             self.memory.set(address, byte.into());
             address.increment();
         }
 
-        // Padding
-        self.memory.set(address, 1.into());
-        let mut len = code_len + 1;
-        len = 56 * ((len + 55) / 56);
-        let last_byte_addr = MemoryAddress::new(context, Segment::Code, len - 1);
-        let mut last_byte = u256_to_usize(self.memory.get_with_init(last_byte_addr))?;
-        last_byte |= 0x80;
-        self.memory.set(last_byte_addr, last_byte.into());
+        #[cfg(feature = "cdk_erigon")]
+        {
+            // Padding
+            self.memory.set(address, 1.into());
+            code_len = code_len + 1;
+            code_len = 56 * ((code_len + 55) / 56);
+            let last_byte_addr = MemoryAddress::new(context, Segment::Code, code_len - 1);
+            let mut last_byte = u256_to_usize(self.memory.get_with_init(last_byte_addr))?;
+            last_byte |= 0x80;
+            self.memory.set(last_byte_addr, last_byte.into());
+        }
 
-        Ok(len.into())
+        Ok(code_len.into())
     }
 
     // Bignum modular multiplication.
