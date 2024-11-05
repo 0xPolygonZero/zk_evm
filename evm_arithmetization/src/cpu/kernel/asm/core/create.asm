@@ -215,6 +215,9 @@ nonce_overflow:
 create_collision:
     %revert_checkpoint
     %mstore_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 0)
+    // Collisions are checked when running the constructor and prior entering the new context
+    // (but after writing some values in the new context), contrary to the other checks here. 
+    // This is why we need to prune the new context.
     %prune_context
     %stack (address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
