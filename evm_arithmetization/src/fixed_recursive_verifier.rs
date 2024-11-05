@@ -57,7 +57,10 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
-use crate::testing_utils::TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS;
+use crate::testing_utils::{
+    TEST_RECURSION_CONFIG, TEST_STARK_CONFIG, TEST_THRESHOLD_DEGREE_BITS,
+    TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS,
+};
 use crate::util::h256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
@@ -615,6 +618,42 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
     }
 }
 
+/// A struct containing the parameters for configuration of
+/// `AllRecursiveCircuits`.
+pub struct RecursionConfig {
+    /// The configuration to be used for the STARK table prover.
+    pub stark_config: StarkConfig,
+    /// The configuration for the shrinking circuit.
+    pub shrinking_circuit_config: CircuitConfig,
+    /// The configuration for the recursion circuits.
+    pub recursion_circuit_config: CircuitConfig,
+    /// The recursion threshold in degree bits.
+    pub threshold_degree_bits: usize,
+}
+
+impl Default for RecursionConfig {
+    fn default() -> Self {
+        RecursionConfig {
+            stark_config: StarkConfig::standard_fast_config(),
+            shrinking_circuit_config: shrinking_config(),
+            recursion_circuit_config: CircuitConfig::standard_recursion_config(),
+            threshold_degree_bits: THRESHOLD_DEGREE_BITS,
+        }
+    }
+}
+
+impl RecursionConfig {
+    /// Returns a test configuration for `RecursionConfig`.
+    pub fn test_config() -> Self {
+        RecursionConfig {
+            stark_config: TEST_STARK_CONFIG,
+            shrinking_circuit_config: TEST_RECURSION_CONFIG,
+            recursion_circuit_config: TEST_RECURSION_CONFIG,
+            threshold_degree_bits: TEST_THRESHOLD_DEGREE_BITS,
+        }
+    }
+}
+
 impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
 where
     F: RichField + Extendable<D>,
@@ -781,24 +820,18 @@ where
     /// starting from that length, for each `degree_bits` in the range specified
     /// for this STARK module. Specifying a wide enough range allows a
     /// prover to cover all possible scenarios.
-    /// - `stark_config`: the configuration to be used for the STARK prover. It
-    ///   will usually be a fast one yielding large proofs.
+    /// - `config`: the set of configurations to be used for the different proof
+    ///   layers. It will usually be a fast one yielding large proofs for the
+    ///   base STARK prover, and a more flexible one for the recursive layers.
     pub fn new(
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
-        stark_config: &StarkConfig,
-        shrinking_circuit_config: Option<&CircuitConfig>,
-        recursion_circuit_config: Option<&CircuitConfig>,
-        threshold_degree_bits: Option<usize>,
+        config: RecursionConfig,
     ) -> Self {
+        let stark_config = &config.stark_config;
+
         // Sanity check on the provided config
         assert_eq!(DEFAULT_CAP_LEN, 1 << stark_config.fri_config.cap_height);
-
-        let shrinking_config = shrinking_config();
-        let shrinking_circuit_config = shrinking_circuit_config.unwrap_or(&shrinking_config);
-        let circuit_config = CircuitConfig::standard_recursion_config();
-        let recursion_circuit_config = recursion_circuit_config.unwrap_or(&circuit_config);
-        let threshold_degree_bits = threshold_degree_bits.unwrap_or(THRESHOLD_DEGREE_BITS);
 
         macro_rules! create_recursive_circuit {
             ($table_enum:expr, $stark_field:ident) => {
@@ -808,8 +841,8 @@ where
                     degree_bits_ranges[*$table_enum].clone(),
                     &all_stark.cross_table_lookups,
                     stark_config,
-                    shrinking_circuit_config,
-                    threshold_degree_bits,
+                    &config.shrinking_circuit_config,
+                    config.threshold_degree_bits,
                 )
             };
         }
@@ -841,7 +874,8 @@ where
             poseidon,
         ];
 
-        let root = Self::create_segment_circuit(&by_table, stark_config, recursion_circuit_config);
+        let root =
+            Self::create_segment_circuit(&by_table, stark_config, &config.recursion_circuit_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
         let batch_aggregation =
             Self::create_batch_aggregation_circuit(&segment_aggregation, stark_config);
