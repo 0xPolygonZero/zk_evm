@@ -822,8 +822,7 @@ where
     /// prover to cover all possible scenarios.
     /// - `config`: the set of configurations to be used for the different proof
     ///   layers. It will usually be a fast one yielding large proofs for the
-    ///   base STARK prover, and a more
-    /// flexible one for the recursive layers.
+    ///   base STARK prover, and a more flexible one for the recursive layers.
     pub fn new(
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
