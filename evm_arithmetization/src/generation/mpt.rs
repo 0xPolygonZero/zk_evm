@@ -721,7 +721,12 @@ where
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type LinkedListsAndTrieData = (Vec<Option<U256>>, Vec<Option<U256>>, Vec<Option<U256>>);
+type LinkedListsAndTrieData = (
+    TrieRootPtrs,
+    Vec<Option<U256>>,
+    Vec<Option<U256>>,
+    Vec<Option<U256>>,
+);
 
 #[cfg(feature = "eth_mainnet")]
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
@@ -738,7 +743,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     let mut trie_data = vec![Some(U256::zero())];
     let mpt_state = match &trie_inputs.state_trie.state {
         Either::Left(type1world) => type1world,
-        Either::Right(_) => panic!("eth_mainnet expects MPTs."),
+        Either::Right(_) => unreachable!("eth_mainnet expects MPTs."),
     };
     let storage_tries_by_state_key = mpt_state
         .get_storage()
@@ -749,6 +754,14 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
             (key, *storage_trie)
         })
         .collect();
+
+    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
+        let mut parsed_txn = vec![U256::from(rlp.len())];
+        parsed_txn.extend(rlp.iter().copied().map(U256::from));
+        Ok(parsed_txn)
+    })?;
+
+    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
     get_state_and_storage_leaves(
         &mpt_state.state_trie(),
@@ -761,7 +774,16 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &storage_tries_by_state_key,
     )?;
 
-    Ok((state_leaves, storage_leaves, trie_data))
+    Ok((
+        TrieRootPtrs {
+            state_root_ptr: None,
+            txn_root_ptr,
+            receipt_root_ptr,
+        },
+        state_leaves,
+        storage_leaves,
+        trie_data,
+    ))
 }
 
 pub(crate) fn load_state_mpt(
@@ -778,12 +800,12 @@ pub(crate) fn load_state_mpt(
                 (key, *storage_trie)
             })
             .collect::<HashMap<_, _>>(),
-        Either::Right(_) => panic!("eth_mainnet expects an MPT."),
+        Either::Right(_) => unreachable!("eth_mainnet expects an MPT."),
     };
 
     let mpt_trie = match &trie_inputs.state_trie.state {
         Either::Left(t) => t.state_trie(),
-        Either::Right(_) => panic!("eth_mainnet expects MPTs."),
+        Either::Right(_) => unreachable!("eth_mainnet expects MPTs."),
     };
 
     load_state_trie(

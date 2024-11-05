@@ -502,15 +502,6 @@ impl<F: RichField> Interpreter<F> {
             .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
     }
 
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    #[cfg(feature = "eth_mainnet")]
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        self.generation_state
-            .memory
-            .insert_preinitialized_segment(segment, values);
-    }
-
     pub(crate) fn is_preinitialized_segment(&self, segment: usize) -> bool {
         self.generation_state
             .memory

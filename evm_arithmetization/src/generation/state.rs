@@ -439,14 +439,14 @@ impl<F: RichField> GenerationState<F> {
     #[cfg(feature = "eth_mainnet")]
     fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
-        let (state_leaves, storage_leaves, trie_data) = load_linked_lists_and_txn_and_receipt_mpts(
-            &mut generation_state.state_pointers.accounts_pointers,
-            &mut generation_state.state_pointers.storage_pointers,
-            trie_inputs,
-        )
-        .expect("Invalid MPT data for preinitialization");
+        let (_trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(
+                &mut generation_state.state_pointers.accounts_pointers,
+                &mut generation_state.state_pointers.storage_pointers,
+                trie_inputs,
+            )
+            .expect("Invalid MPT data for preinitialization");
         // TODO: REMOVE
-        println!("trie data len after linked lists {}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
