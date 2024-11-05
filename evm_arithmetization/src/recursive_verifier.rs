@@ -41,7 +41,7 @@ use crate::proof::{
     MemCapTarget, PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
     TrieRootsTarget, DEFAULT_CAP_LEN,
 };
-use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
+use crate::util::{b256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
 
 pub(crate) struct PublicInputs<T: Copy + Default + Eq + PartialEq + Debug, P: PlonkyPermutation<T>>
@@ -532,7 +532,7 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
     });
 
     // Add kernel hash and kernel length.
-    let kernel_hash_limbs = h256_limbs::<F>(KERNEL.code_hash);
+    let kernel_hash_limbs = b256_limbs::<F>(KERNEL.code_hash);
     let kernel_hash_targets: [Target; 8] = from_fn(|i| builder.constant(kernel_hash_limbs[i]));
     sum = add_data_write(
         builder,
@@ -1081,7 +1081,7 @@ where
     witness
         .set_target_arr(
             &block_metadata_target.block_random,
-            &h256_limbs(block_metadata.block_random),
+            &b256_limbs(block_metadata.block_random),
         )
         .map_err(ProgramError::from)?;
     witness
@@ -1144,7 +1144,7 @@ where
         witness
             .set_target_arr(
                 &block_metadata_target.parent_beacon_block_root,
-                &h256_limbs(block_metadata.parent_beacon_block_root),
+                &b256_limbs(block_metadata.parent_beacon_block_root),
             )
             .map_err(ProgramError::from)?;
     }
@@ -1170,13 +1170,13 @@ where
     W: Witness<F>,
 {
     for i in 0..256 {
-        let block_hash_limbs: [F; 8] = h256_limbs::<F>(block_hashes.prev_hashes[i]);
+        let block_hash_limbs: [F; 8] = b256_limbs::<F>(block_hashes.prev_hashes[i]);
         witness.set_target_arr(
             &block_hashes_target.prev_hashes[8 * i..8 * (i + 1)],
             &block_hash_limbs,
         )?;
     }
-    let cur_block_hash_limbs: [F; 8] = h256_limbs::<F>(block_hashes.cur_hash);
+    let cur_block_hash_limbs: [F; 8] = b256_limbs::<F>(block_hashes.cur_hash);
     witness.set_target_arr(&block_hashes_target.cur_hash, &cur_block_hash_limbs)
 }
 
@@ -1192,7 +1192,7 @@ where
     witness
         .set_target_arr(
             &ed_target.checkpoint_state_trie_root,
-            &h256_limbs::<F>(ed.checkpoint_state_trie_root),
+            &b256_limbs::<F>(ed.checkpoint_state_trie_root),
         )
         .map_err(ProgramError::from)?;
     witness

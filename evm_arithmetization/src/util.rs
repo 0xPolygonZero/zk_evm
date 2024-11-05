@@ -1,6 +1,7 @@
-use ethereum_types::{H160, H256, U256};
+use alloy::primitives::{Address, B256, U256};
 use itertools::Itertools;
 use num::BigUint;
+use num::ToPrimitive;
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;
 use plonky2::field::types::Field;
@@ -42,7 +43,9 @@ pub(crate) fn u256_to_u32<F: Field>(u256: U256) -> Result<F, ProgramError> {
         return Err(ProgramError::IntegerTooLarge);
     }
 
-    Ok(F::from_canonical_u32(u256.low_u32()))
+    Ok(F::from_canonical_u32(u32::from_le_bytes(
+        u256.to_le_bytes(),
+    )))
 }
 
 /// Returns the lowest LE 64-bit word of a `U256` as two field elements
@@ -53,8 +56,8 @@ pub(crate) fn u256_to_u64<F: Field>(u256: U256) -> Result<(F, F), ProgramError> 
     }
 
     Ok((
-        F::from_canonical_u32(u256.low_u64() as u32),
-        F::from_canonical_u32((u256.low_u64() >> 32) as u32),
+        F::from_canonical_u32(u32::from_le_bytes(u256.to_le_bytes())),
+        F::from_canonical_u32((u64::from_le_bytes(u256.to_le_bytes()) >> 32) as u32),
     ))
 }
 
@@ -73,24 +76,23 @@ pub(crate) fn u256_to_u8(u256: U256) -> Result<u8, ProgramError> {
 /// Converts a `U256` to a `bool`, erroring in case of overflow instead of
 /// panicking.
 pub(crate) fn u256_to_bool(u256: U256) -> Result<bool, ProgramError> {
-    if u256 == U256::zero() {
+    if u256 == U256::ZERO {
         Ok(false)
-    } else if u256 == U256::one() {
+    } else if u256 == U256::from(1) {
         Ok(true)
     } else {
         Err(ProgramError::IntegerTooLarge)
     }
 }
 
-/// Converts a `U256` to a `H160`, erroring in case of overflow instead of
+/// Converts a `U256` to a `Address`, erroring in case of overflow instead of
 /// panicking.
-pub(crate) fn u256_to_h160(u256: U256) -> Result<H160, ProgramError> {
-    if u256.bits() / 8 > 20 {
+pub(crate) fn u256_to_b160(u256: U256) -> Result<Address, ProgramError> {
+    if u256.bit_len() / 8 > 20 {
         return Err(ProgramError::IntegerTooLarge);
     }
-    let mut bytes = [0u8; 32];
-    u256.to_big_endian(&mut bytes);
-    Ok(H160(
+    let bytes: [u8; 32] = u256.to_be_bytes();
+    Ok(Address::new(
         bytes[12..]
             .try_into()
             .expect("This conversion cannot fail."),
@@ -99,9 +101,9 @@ pub(crate) fn u256_to_h160(u256: U256) -> Result<H160, ProgramError> {
 
 /// Returns the 32-bit little-endian limbs of a `U256`.
 pub(crate) fn u256_limbs<F: Field>(u256: U256) -> [F; 8] {
-    u256.0
+    u256.as_limbs()
         .into_iter()
-        .flat_map(|limb_64| {
+        .flat_map(|&limb_64| {
             let lo = limb_64 as u32;
             let hi = (limb_64 >> 32) as u32;
             [lo, hi]
@@ -112,9 +114,9 @@ pub(crate) fn u256_limbs<F: Field>(u256: U256) -> [F; 8] {
         .unwrap()
 }
 
-/// Returns the 32-bit little-endian limbs of a `H256`.
-pub(crate) fn h256_limbs<F: Field>(h256: H256) -> [F; 8] {
-    let mut temp_h256 = h256.0;
+/// Returns the 32-bit little-endian limbs of a `B256`.
+pub(crate) fn b256_limbs<F: Field>(b256: B256) -> [F; 8] {
+    let mut temp_h256 = b256.0;
     temp_h256.reverse();
     temp_h256
         .chunks(4)
@@ -210,7 +212,7 @@ pub(crate) fn biguint_to_mem_vec(x: BigUint) -> Vec<U256> {
     mem_vec
 }
 
-pub(crate) fn h2u(h: H256) -> U256 {
+pub(crate) fn h2u(h: B256) -> U256 {
     U256::from_big_endian(&h.0)
 }
 
@@ -225,8 +227,8 @@ pub(crate) fn get_h160<F: RichField>(slice: &[F]) -> H160 {
     )
 }
 
-pub(crate) fn get_h256<F: RichField>(slice: &[F]) -> H256 {
-    H256::from_slice(
+pub(crate) fn get_b256<F: RichField>(slice: &[F]) -> B256 {
+    B256::from_slice(
         &slice
             .iter()
             .rev()

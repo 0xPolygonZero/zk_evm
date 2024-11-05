@@ -817,7 +817,7 @@ mod tests {
                 Segment::ContextMetadata,
                 ContextMetadata::ParentContext.unscale(),
             ),
-            U256::one() << CONTEXT_SCALING_FACTOR,
+            U256::from(1) << CONTEXT_SCALING_FACTOR,
         );
 
         interpreter.run()?;

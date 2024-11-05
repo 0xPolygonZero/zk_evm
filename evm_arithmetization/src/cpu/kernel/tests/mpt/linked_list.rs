@@ -44,8 +44,8 @@ fn test_init_linked_lists() -> Result<()> {
     assert_eq!(
         vec![
             U256::MAX,
-            U256::zero(),
-            U256::zero(),
+            U256::ZERO,
+            U256::ZERO,
             (Segment::AccountsLinkedList as usize).into(),
         ],
         acc_addr_list
@@ -63,9 +63,9 @@ fn test_init_linked_lists() -> Result<()> {
     assert_eq!(
         vec![
             U256::MAX,
-            U256::zero(),
-            U256::zero(),
-            U256::zero(),
+            U256::ZERO,
+            U256::ZERO,
+            U256::ZERO,
             (Segment::StorageLinkedList as usize).into(),
         ],
         acc_addr_list
@@ -93,15 +93,15 @@ fn test_list_iterator() -> Result<()> {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
     let Some([addr, ptr, ptr_cpy, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
 
     let accounts_mem = interpreter
@@ -114,16 +114,16 @@ fn test_list_iterator() -> Result<()> {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
-    assert_eq!(key, U256::zero());
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(key, U256::ZERO);
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
     let Some([addr, _key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
 
     Ok(())
@@ -186,14 +186,14 @@ fn test_insert_account() -> Result<()> {
     };
     // This is the dummy node
     assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     let Some([addr, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::from(address.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
-    assert_eq!(ptr_cpy, U256::zero()); // ptr_cpy is zero because the trie_data segment is empty
+    assert_eq!(ptr_cpy, U256::ZERO); // ptr_cpy is zero because the trie_data segment is empty
     assert_eq!(
         scaled_next_pos,
         (Segment::AccountsLinkedList as usize).into()
@@ -202,8 +202,8 @@ fn test_insert_account() -> Result<()> {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     assert_eq!(
         scaled_new_pos,
         (Segment::AccountsLinkedList as usize + 4).into()
@@ -273,9 +273,9 @@ fn test_insert_storage() -> Result<()> {
     };
     // This is the dummy node.
     assert_eq!(inserted_addr, U256::MAX);
-    assert_eq!(inserted_key, U256::zero());
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(inserted_key, U256::ZERO);
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
 
     let Some([inserted_addr, inserted_key, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -283,7 +283,7 @@ fn test_insert_storage() -> Result<()> {
     assert_eq!(inserted_addr, U256::from(address.0.as_slice()));
     assert_eq!(inserted_key, U256::from(key.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
-    assert_eq!(ptr_cpy, U256::zero()); // ptr_cpy is zero because the trie data segment is empty
+    assert_eq!(ptr_cpy, U256::ZERO); // ptr_cpy is zero because the trie data segment is empty
     assert_eq!(
         scaled_next_pos,
         (Segment::StorageLinkedList as usize).into()
@@ -292,9 +292,9 @@ fn test_insert_storage() -> Result<()> {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(inserted_addr, U256::MAX);
-    assert_eq!(inserted_key, U256::zero());
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
+    assert_eq!(inserted_key, U256::ZERO);
+    assert_eq!(ptr, U256::ZERO);
+    assert_eq!(ptr_cpy, U256::ZERO);
     assert_eq!(
         scaled_new_pos,
         (Segment::StorageLinkedList as usize + 5).into()
@@ -471,8 +471,8 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     for (i, [addr, ptr, ptr_cpy, _]) in list.enumerate() {
         if addr == U256::MAX {
             assert_eq!(addr, U256::MAX);
-            assert_eq!(ptr, U256::zero());
-            assert_eq!(ptr_cpy, U256::zero());
+            assert_eq!(ptr, U256::ZERO);
+            assert_eq!(ptr_cpy, U256::ZERO);
             if i > 0 {
                 break;
             }
@@ -681,9 +681,9 @@ fn test_insert_and_delete_storage() -> Result<()> {
     for (i, [addr, key, ptr, ptr_cpy, _]) in list.enumerate() {
         if addr == U256::MAX {
             assert_eq!(addr, U256::MAX);
-            assert_eq!(key, U256::zero());
-            assert_eq!(ptr, U256::zero());
-            assert_eq!(ptr_cpy, U256::zero());
+            assert_eq!(key, U256::ZERO);
+            assert_eq!(ptr, U256::ZERO);
+            assert_eq!(ptr_cpy, U256::ZERO);
             if i > 0 {
                 break;
             }

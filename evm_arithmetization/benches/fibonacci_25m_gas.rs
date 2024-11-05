@@ -106,7 +106,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let gas_used = U256::from(0x17d7840_u32);
 
     let txn = hex!("f86981a9843b9aca1084017d784094159271b89fea49af29dfaf8b4ece7d042d5d6f0780808360306ba00cdea08ac2e8075188b289d779fa84bf86020c2b162bbee11d2785b5225b0ccca00ea9a76f4641955a74ae8c1589914fc7d6c5bfe5940454a89daf5b12d6f06617");
-    let value = U256::zero();
+    let value = U256::ZERO;
 
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::from(sender),

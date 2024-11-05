@@ -50,7 +50,7 @@ fn main() -> TrieOpResult<()> {
     let _state_trie = StandardTrie::try_from_iter(
         account_entries
             .into_iter()
-            .map(|(k, acc)| (Nibbles::from_h256_be(k), acc.rlp_bytes().to_vec())),
+            .map(|(k, acc)| (Nibbles::from_b256_be(k), acc.rlp_bytes().to_vec())),
     )?;
 
     let _account_storage_tries: Vec<(AccountAddr, HashedPartialTrie)> = account_storage_tries;
@@ -89,7 +89,7 @@ fn generate_fake_account_storage_trie(rng: &mut StdRng) -> TrieOpResult<HashedPa
     let num_storage_entries = rng.gen_range(RANGE_OF_STORAGE_ENTRIES_AN_ACCOUNT_CAN_HAVE);
 
     HashedPartialTrie::try_from_iter((0..num_storage_entries).map(|_| {
-        let hashed_storage_addr = Nibbles::from_h256_be(rng.gen::<HashedAccountAddr>());
+        let hashed_storage_addr = Nibbles::from_b256_be(rng.gen::<HashedAccountAddr>());
         let storage_data = gen_u256(rng).rlp_bytes().to_vec();
 
         (hashed_storage_addr, storage_data)

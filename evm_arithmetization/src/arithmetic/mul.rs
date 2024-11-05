@@ -113,7 +113,7 @@ pub(crate) fn generate<F: PrimeField64>(lv: &mut [F], left_in: U256, right_in: U
     // into an [i64;N] and then copy that to the lv table.
     u256_to_array(&mut lv[INPUT_REGISTER_0], left_in);
     u256_to_array(&mut lv[INPUT_REGISTER_1], right_in);
-    u256_to_array(&mut lv[INPUT_REGISTER_2], U256::zero());
+    u256_to_array(&mut lv[INPUT_REGISTER_2], U256::ZERO);
 
     let input0 = read_value_i64_limbs(lv, INPUT_REGISTER_0);
     let input1 = read_value_i64_limbs(lv, INPUT_REGISTER_1);

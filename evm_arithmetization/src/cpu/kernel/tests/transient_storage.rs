@@ -147,7 +147,7 @@ fn test_tstore_tload() -> Result<()> {
 
     let val = interpreter.stack()[0];
 
-    assert_eq!(U256::zero(), val);
+    assert_eq!(U256::ZERO, val);
     Ok(())
 }
 

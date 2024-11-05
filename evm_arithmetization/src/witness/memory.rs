@@ -103,7 +103,7 @@ pub(crate) static DUMMY_MEMOP: MemoryOp = MemoryOp {
         virt: 0,
     },
     kind: MemoryOpKind::Read,
-    value: U256::zero(),
+    value: U256::ZERO,
 };
 
 impl MemoryOp {

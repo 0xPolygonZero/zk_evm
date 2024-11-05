@@ -288,8 +288,8 @@ mod tests {
                     U256::from(modulus_limbs)
                 };
 
-                let result = if input1 == U256::zero() {
-                    U256::zero()
+                let result = if input1 == U256::ZERO {
+                    U256::ZERO
                 } else if op_filter == IS_DIV {
                     input0 / input1
                 } else {
@@ -336,9 +336,9 @@ mod tests {
                     lv[op_filter] = F::ONE;
 
                     let input0 = U256::from(rng.gen::<[u8; 32]>());
-                    let input1 = U256::zero();
+                    let input1 = U256::ZERO;
 
-                    generate(&mut lv, &mut nv, op_filter, input0, input1, U256::zero());
+                    generate(&mut lv, &mut nv, op_filter, input0, input1, U256::ZERO);
 
                     // check that the correct output was generated
                     assert!(lv[OUTPUT_REGISTER].iter().all(|&c| c == F::ZERO));

@@ -8,7 +8,7 @@ use crate::memory::segments::Segment;
 pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 
-pub const DUMMYHEAD: (U256, U256) = (U256::MAX, U256::zero());
+pub const DUMMYHEAD: (U256, U256) = (U256::MAX, U256::ZERO);
 
 // Provides quick access to pointers that reference the memory location
 // of a storage or accounts linked list node, containing a specific key.
@@ -31,7 +31,7 @@ pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>;
         } else if i == N - 1 {
             Some((segment as usize).into())
         } else {
-            Some(U256::zero())
+            Some(U256::ZERO)
         }
     })
 }

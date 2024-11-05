@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use ethereum_types::H256;
 use num_traits::PrimInt;
 
 use crate::{
@@ -73,10 +72,6 @@ pub(crate) fn is_even<T: PrimInt + BitAnd<Output = T>>(num: T) -> bool {
 
 pub(crate) fn create_mask_of_1s(amt: usize) -> NibblesIntern {
     (NibblesIntern::one() << amt) - 1
-}
-
-pub(crate) fn bytes_to_h256(b: &[u8; 32]) -> H256 {
-    keccak_hash::H256::from_slice(b)
 }
 
 /// Minimal key information of "segments" (nodes) used to construct trie

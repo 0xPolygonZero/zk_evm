@@ -5,7 +5,7 @@ use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
 use crate::proof::*;
-use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
+use crate::util::{b256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
 
 fn observe_root<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
@@ -56,7 +56,7 @@ fn observe_block_metadata<
     challenger.observe_element(u256_to_u32(block_metadata.block_timestamp)?);
     challenger.observe_element(u256_to_u32(block_metadata.block_number)?);
     challenger.observe_element(u256_to_u32(block_metadata.block_difficulty)?);
-    challenger.observe_elements(&h256_limbs::<F>(block_metadata.block_random));
+    challenger.observe_elements(&b256_limbs::<F>(block_metadata.block_random));
     challenger.observe_element(u256_to_u32(block_metadata.block_gaslimit)?);
     challenger.observe_element(u256_to_u32(block_metadata.block_chain_id)?);
     let basefee = u256_to_u64(block_metadata.block_base_fee)?;
@@ -71,7 +71,7 @@ fn observe_block_metadata<
         let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
         challenger.observe_element(excess_blob_gas.0);
         challenger.observe_element(excess_blob_gas.1);
-        challenger.observe_elements(&h256_limbs::<F>(block_metadata.parent_beacon_block_root));
+        challenger.observe_elements(&b256_limbs::<F>(block_metadata.parent_beacon_block_root));
     }
     for i in 0..8 {
         challenger.observe_elements(&u256_limbs(block_metadata.block_bloom[i]));
@@ -116,7 +116,7 @@ fn observe_extra_block_data<
     challenger: &mut Challenger<F, C::Hasher>,
     extra_data: &ExtraBlockData<F>,
 ) -> Result<(), ProgramError> {
-    challenger.observe_elements(&h256_limbs(extra_data.checkpoint_state_trie_root));
+    challenger.observe_elements(&b256_limbs(extra_data.checkpoint_state_trie_root));
     challenger.observe_elements(&extra_data.checkpoint_consolidated_hash);
     challenger.observe_element(u256_to_u32(extra_data.txn_number_before)?);
     challenger.observe_element(u256_to_u32(extra_data.txn_number_after)?);
@@ -180,9 +180,9 @@ fn observe_block_hashes<
     block_hashes: &BlockHashes,
 ) {
     for i in 0..256 {
-        challenger.observe_elements(&h256_limbs::<F>(block_hashes.prev_hashes[i]));
+        challenger.observe_elements(&b256_limbs::<F>(block_hashes.prev_hashes[i]));
     }
-    challenger.observe_elements(&h256_limbs::<F>(block_hashes.cur_hash));
+    challenger.observe_elements(&b256_limbs::<F>(block_hashes.cur_hash));
 }
 
 fn observe_block_hashes_target<

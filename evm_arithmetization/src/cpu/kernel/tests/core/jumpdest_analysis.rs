@@ -170,7 +170,7 @@ fn test_packed_verification() -> Result<()> {
         0xDEADBEEFu32.into(),
         U256::from(CONTEXT) << CONTEXT_SCALING_FACTOR,
         33.into(),
-        U256::one(),
+        U256::from(1),
     ];
     let mut interpreter: Interpreter<F> =
         Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
@@ -252,7 +252,7 @@ fn test_verify_non_jumpdest() -> Result<()> {
                 .expect("The stack should not overflow");
             interpreter.run()?;
             assert!(interpreter.stack().is_empty());
-            assert_eq!(interpreter.get_jumpdest_bit(j), U256::zero());
+            assert_eq!(interpreter.get_jumpdest_bit(j), U256::ZERO);
         }
     }
     Ok(())

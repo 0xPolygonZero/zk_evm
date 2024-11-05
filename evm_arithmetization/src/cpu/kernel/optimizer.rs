@@ -63,8 +63,8 @@ fn constant_propagation(code: &mut Vec<Item>) {
                 "ADD" => Some(x.overflowing_add(y).0),
                 "SUB" => Some(x.overflowing_sub(y).0),
                 "MUL" => Some(x.overflowing_mul(y).0),
-                "DIV" => Some(x.checked_div(y).unwrap_or(U256::zero())),
-                "MOD" => Some(x.checked_rem(y).unwrap_or(U256::zero())),
+                "DIV" => Some(x.checked_div(y).unwrap_or(U256::ZERO)),
+                "MOD" => Some(x.checked_rem(y).unwrap_or(U256::ZERO)),
                 "EXP" => Some(x.overflowing_pow(y).0),
                 "SHL" => Some(y << x),
                 "SHR" => Some(y >> x),
@@ -77,7 +77,7 @@ fn constant_propagation(code: &mut Vec<Item>) {
                 "BYTE" => Some(if x < 32.into() {
                     y.byte(x.as_usize()).into()
                 } else {
-                    U256::zero()
+                    U256::ZERO
                 }),
                 _ => None,
             }
@@ -90,8 +90,8 @@ fn constant_propagation(code: &mut Vec<Item>) {
 
 /// Remove identity operations, e.g. `[PUSH 1, MUL] -> []`.
 fn identity_operations(code: &mut Vec<Item>) {
-    let zero = U256::zero();
-    let one = U256::one();
+    let zero = U256::ZERO;
+    let one = U256::from(1);
     replace_windows(code, |window| {
         if let [Push(Literal(x)), StandardOp(op)] = window {
             match op.as_str() {
@@ -245,8 +245,8 @@ mod tests {
     #[test]
     fn test_constant_propagation_sub_underflowing() {
         let original = vec![
-            Push(Literal(U256::one())),
-            Push(Literal(U256::zero())),
+            Push(Literal(U256::from(1))),
+            Push(Literal(U256::ZERO)),
             StandardOp("SUB".into()),
         ];
         let mut code = original.clone();

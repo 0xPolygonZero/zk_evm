@@ -58,7 +58,7 @@ fn test_invalid_blobhash() -> Result<()> {
 
     let versioned_hashes: Vec<U256> = vec![U256::from_big_endian(&thread_rng().gen::<H256>().0); 5];
     let index = 7;
-    let target_hash = U256::zero(); // out of bound indexing yields 0.
+    let target_hash = U256::ZERO; // out of bound indexing yields 0.
 
     let mut interpreter: Interpreter<F> = Interpreter::new(blobhash_label, vec![], None);
     interpreter

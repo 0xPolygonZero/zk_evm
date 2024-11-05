@@ -114,7 +114,7 @@ fn test_add11_yml() {
             code_hash,
             // Storage map: { 0 => 2 }
             storage_root: HashedPartialTrie::from(Node::Leaf {
-                nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+                nibbles: Nibbles::from_b256_be(keccak([0u8; 32])),
                 value: vec![2],
             })
             .hash(),

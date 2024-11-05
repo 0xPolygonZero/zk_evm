@@ -18,7 +18,7 @@ fn test_intrinsic_gas() -> Result<()> {
     let initial_stack = vec![0xdeadbeefu32.into()];
     let mut interpreter: Interpreter<F> =
         Interpreter::new(intrinsic_gas, initial_stack.clone(), None);
-    interpreter.set_global_metadata_field(GlobalMetadata::ContractCreation, U256::one());
+    interpreter.set_global_metadata_field(GlobalMetadata::ContractCreation, U256::from(1));
     interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![(GAS_TX + GAS_TXCREATE).into()]);
 

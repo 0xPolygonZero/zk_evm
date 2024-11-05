@@ -8,7 +8,7 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::memory::segments::Segment;
-use crate::util::{u256_to_bool, u256_to_h160, u256_to_u8, u256_to_usize};
+use crate::util::{u256_to_b160, u256_to_bool, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryState};
 
@@ -21,7 +21,7 @@ pub(crate) fn read_receipt_trie_value(
 ) -> Result<(Option<u8>, LegacyReceiptRlp), ProgramError> {
     let first_value = slice[0].unwrap_or_default();
     // Skip two elements for non-legacy Receipts, and only one otherwise.
-    let (first_byte, slice) = if first_value == U256::one() || first_value == U256::from(2u8) {
+    let (first_byte, slice) = if first_value == U256::from(1) || first_value == U256::from(2u8) {
         (Some(first_value.as_u32() as u8), &slice[2..])
     } else {
         (None, &slice[1..])
@@ -58,7 +58,7 @@ pub(crate) fn read_logs(
     let mut offset = 0;
     (0..num_logs)
         .map(|_| {
-            let address = u256_to_h160(slice[offset].unwrap_or_default())?;
+            let address = u256_to_b160(slice[offset].unwrap_or_default())?;
             offset += 1;
 
             let num_topics = u256_to_usize(slice[offset].unwrap_or_default())?;

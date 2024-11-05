@@ -39,8 +39,8 @@ pub struct TrieRootPtrs {
 impl Default for AccountRlp {
     fn default() -> Self {
         Self {
-            nonce: U256::zero(),
-            balance: U256::zero(),
+            nonce: U256::ZERO,
+            balance: U256::ZERO,
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
             code_hash: keccak([]),
         }
@@ -168,10 +168,10 @@ where
         Node::Branch { children, value } => {
             // First, set children pointers to 0.
             let first_child_ptr = trie_data.len();
-            trie_data.extend(vec![Some(U256::zero()); 16]);
+            trie_data.extend(vec![Some(U256::ZERO); 16]);
             // Then, set value.
             if value.is_empty() {
-                trie_data.push(Some(U256::zero()));
+                trie_data.push(Some(U256::ZERO));
             } else {
                 let parsed_value = parse_value(value)?.into_iter().map(Some);
                 trie_data.push(Some((trie_data.len() + 1).into()));
@@ -248,9 +248,9 @@ fn load_state_trie(
             }
             // First, set children pointers to 0.
             let first_child_ptr = trie_data.len();
-            trie_data.extend(vec![Some(U256::zero()); 16]);
+            trie_data.extend(vec![Some(U256::ZERO); 16]);
             // Then, set value pointer to 0.
-            trie_data.push(Some(U256::zero()));
+            trie_data.push(Some(U256::ZERO));
 
             // Now, load all children and update their pointers.
             for (i, child) in children.iter().enumerate() {
@@ -547,7 +547,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
     let mut storage_leaves =
         empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
-    let mut trie_data = vec![Some(U256::zero())];
+    let mut trie_data = vec![Some(U256::ZERO)];
 
     let storage_tries_by_state_key = trie_inputs
         .storage_tries

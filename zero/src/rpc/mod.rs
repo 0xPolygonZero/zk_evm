@@ -281,7 +281,7 @@ where
                         .context("target block is missing field `blob_gas_used`")?
                         .into()
                 } else {
-                    U256::zero()
+                    U256::ZERO
                 },
                 block_excess_blob_gas: if cfg!(feature = "eth_mainnet") {
                     target_block
@@ -290,7 +290,7 @@ where
                         .context("target block is missing field `excess_blob_gas`")?
                         .into()
                 } else {
-                    U256::zero()
+                    U256::ZERO
                 },
             },
             b_hashes: BlockHashes {

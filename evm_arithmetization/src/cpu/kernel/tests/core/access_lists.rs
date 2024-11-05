@@ -49,8 +49,8 @@ fn test_init_access_lists() -> Result<()> {
     assert_eq!(
         vec![
             U256::MAX,
-            U256::zero(),
-            U256::zero(),
+            U256::ZERO,
+            U256::ZERO,
             (Segment::AccessedStorageKeys as usize).into()
         ],
         acc_storage_keys
@@ -110,7 +110,7 @@ fn test_insert_address() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[U256::one()]);
+    assert_eq!(interpreter.stack(), &[U256::from(1)]);
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
@@ -157,7 +157,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
             .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
         interpreter.run()?;
-        assert_eq!(interpreter.pop().unwrap(), U256::one());
+        assert_eq!(interpreter.pop().unwrap(), U256::from(1));
     }
 
     for i in 0..n {
@@ -171,7 +171,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
             .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
         interpreter.run()?;
-        assert_eq!(interpreter.pop().unwrap(), U256::zero());
+        assert_eq!(interpreter.pop().unwrap(), U256::ZERO);
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
@@ -190,7 +190,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[U256::one()]);
+    assert_eq!(interpreter.stack(), &[U256::from(1)]);
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
@@ -248,7 +248,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
             .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
         interpreter.run()?;
-        assert_eq!(interpreter.pop().unwrap(), U256::one());
+        assert_eq!(interpreter.pop().unwrap(), U256::from(1));
         interpreter.pop().expect("Stack shouldn't be empty"); // Pop the value_ptr.
     }
 
@@ -266,7 +266,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
             .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
         interpreter.run()?;
-        assert_eq!(interpreter.pop().unwrap(), U256::zero());
+        assert_eq!(interpreter.pop().unwrap(), U256::ZERO);
         interpreter.pop().expect("Stack shouldn't be empty"); // Pop the value_ptr.
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
@@ -289,7 +289,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack()[1], U256::one());
+    assert_eq!(interpreter.stack()[1], U256::from(1));
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),

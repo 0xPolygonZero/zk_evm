@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use ethereum_types::H256;
+use alloy::primitives::B256;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,7 @@ use crate::{
     nibbles::Nibbles,
     trie_hashing::{hash_trie, rlp_encode_and_hash_node, EncodedNode},
     trie_ops::{TrieOpResult, ValOrHash},
-    utils::{bytes_to_h256, TryFromIterator},
+    utils::TryFromIterator,
 };
 
 macro_rules! impl_from_for_trie_type {
@@ -90,7 +90,7 @@ pub trait PartialTrie:
         K: Into<Nibbles>;
 
     /// Get the hash for the node.
-    fn hash(&self) -> H256;
+    fn hash(&self) -> B256;
 
     /// Returns an iterator over the trie that returns all key/value pairs for
     /// every `Leaf` and `Hash` node.
@@ -134,7 +134,7 @@ where
     /// `PartialTrie`s whose RLP encoding is >= 32 bytes. Creating a hash node
     /// for a `PartialTrie` smaller than this will cause an incorrect hash to be
     /// generated for the trie.
-    Hash(H256),
+    Hash(B256),
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
         /// A slice containing the 16 children of this branch node.
@@ -251,7 +251,7 @@ impl PartialTrie for StandardTrie {
         self.0.trie_delete(k, OnOrphanedHashNode::Reject)
     }
 
-    fn hash(&self) -> H256 {
+    fn hash(&self) -> B256 {
         hash_trie(self)
     }
 
@@ -311,7 +311,7 @@ where
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HashedPartialTrie {
     pub(crate) node: Node<HashedPartialTrie>,
-    pub(crate) hash: Arc<RwLock<Option<H256>>>,
+    pub(crate) hash: Arc<RwLock<Option<B256>>>,
 
     pub(crate) strategy: OnOrphanedHashNode,
 }
@@ -335,7 +335,7 @@ impl_from_for_trie_type!(HashedPartialTrie);
 
 impl HashedPartialTrie {
     /// Lazily get calculates the hash for the node,
-    pub(crate) fn get_hash(&self) -> H256 {
+    pub(crate) fn get_hash(&self) -> B256 {
         let hash = *self.hash.read();
 
         match hash {
@@ -344,7 +344,7 @@ impl HashedPartialTrie {
         }
     }
 
-    pub(crate) fn set_hash(&self, v: Option<H256>) {
+    pub(crate) fn set_hash(&self, v: Option<B256>) {
         *self.hash.write() = v;
     }
 }
@@ -404,7 +404,7 @@ impl PartialTrie for HashedPartialTrie {
         res
     }
 
-    fn hash(&self) -> H256 {
+    fn hash(&self) -> B256 {
         self.get_hash()
     }
 
@@ -438,7 +438,7 @@ impl TrieNodeIntern for HashedPartialTrie {
         // We can't hash anything smaller than 32 bytes (which is the case if it's a
         // `Raw` variant), so only cache if this isn't the case.
         if let EncodedNode::Hashed(h) = res {
-            self.set_hash(Some(bytes_to_h256(&h)));
+            self.set_hash(Some(h.into()));
         }
 
         res

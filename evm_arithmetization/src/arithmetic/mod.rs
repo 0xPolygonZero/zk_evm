@@ -1,4 +1,4 @@
-use ethereum_types::U256;
+use alloy::primitives::U256;
 use plonky2::field::types::PrimeField64;
 use serde::{Deserialize, Serialize};
 
@@ -52,13 +52,13 @@ impl BinaryOperator {
                 if input0 < U256::from(256usize) {
                     input1 << input0
                 } else {
-                    U256::zero()
+                    U256::ZERO
                 }
             }
             BinaryOperator::Sub => input0.overflowing_sub(input1).0,
             BinaryOperator::Div => {
                 if input1.is_zero() {
-                    U256::zero()
+                    U256::ZERO
                 } else {
                     input0 / input1
                 }
@@ -67,12 +67,12 @@ impl BinaryOperator {
                 if input0 < U256::from(256usize) {
                     input1 >> input0
                 } else {
-                    U256::zero()
+                    U256::ZERO
                 }
             }
             BinaryOperator::Mod => {
                 if input1.is_zero() {
-                    U256::zero()
+                    U256::ZERO
                 } else {
                     input0 % input1
                 }
@@ -84,7 +84,7 @@ impl BinaryOperator {
             BinaryOperator::SubFp254 => submod(input0, input1, BN_BASE),
             BinaryOperator::Byte => {
                 if input0 >= 32.into() {
-                    U256::zero()
+                    U256::ZERO
                 } else {
                     input1.byte(31 - input0.as_usize()).into()
                 }

@@ -3,8 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use alloy::primitives::B256;
-use keccak_hash::keccak;
+use alloy::primitives::{keccak256, B256};
 use rlp::{Prototype, Rlp};
 use zk_evm_common::EMPTY_TRIE_HASH;
 
@@ -37,7 +36,7 @@ impl<T: PartialTrie> PartialTrieBuilder<T> {
     /// partial trie.
     pub fn insert_proof(&mut self, proof: Vec<Vec<u8>>) {
         for node in proof {
-            self.nodes.insert(keccak(&node), node.to_vec());
+            self.nodes.insert(keccak256(&node), node.to_vec());
         }
     }
 
@@ -79,7 +78,7 @@ impl<T: PartialTrie> PartialTrieBuilder<T> {
                 nibbles.to_hex_prefix_encoding(is_leaf).to_vec(),
                 bytes[1].clone(),
             ]);
-            self.nodes.entry(keccak(&node)).or_insert(node.to_vec());
+            self.nodes.entry(keccak256(&node)).or_insert(node.to_vec());
         }
     }
 }
@@ -88,7 +87,7 @@ impl<T: PartialTrie> PartialTrieBuilder<T> {
 fn construct_partial_trie<T: PartialTrie>(hash: B256, nodes: &HashMap<B256, Vec<u8>>) -> T {
     let bytes = match nodes.get(&hash) {
         Some(value) => rlp::decode_list::<Vec<u8>>(value),
-        None if [B256::zero(), EMPTY_TRIE_HASH].contains(&hash) => return T::default(),
+        None if [B256::ZERO, EMPTY_TRIE_HASH].contains(&hash) => return T::default(),
         None => return T::new(Node::Hash(hash)),
     };
 

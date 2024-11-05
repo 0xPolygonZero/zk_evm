@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use ethereum_types::{Address, H256, U256};
+use alloy::primitives::{Address, B256, U256};
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
@@ -15,7 +15,7 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::StarkProofWithMetadata;
 
 use crate::all_stark::NUM_TABLES;
-use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
+use crate::util::{b256_limbs, get_b256, get_h160, get_u256, h2u};
 use crate::witness::state::RegistersState;
 
 /// The default cap height used for our zkEVM STARK proofs.
@@ -155,9 +155,9 @@ pub struct FinalPublicValues<F: RichField, H: Hasher<F>> {
     /// The chain id of this chian.
     pub chain_id: U256,
     /// State trie root before the execution of this global state transition.
-    pub checkpoint_state_trie_root: H256,
+    pub checkpoint_state_trie_root: B256,
     /// State trie root after the execution of this global state transition.
-    pub new_state_trie_root: H256,
+    pub new_state_trie_root: B256,
     /// A compact view of the block hashes before the previous checkpoint.
     pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
     /// A compact view of the previous block hashes, for connection past
@@ -176,9 +176,9 @@ impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
 
         let chain_id = pis[0].to_noncanonical_u64().into();
         let mut offset = 1;
-        let checkpoint_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        let checkpoint_state_trie_root = get_b256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
-        let new_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        let new_state_trie_root = get_b256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
         let checkpoint_consolidated_hash =
             pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
@@ -313,20 +313,20 @@ impl FinalPublicValuesTarget {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrieRoots {
     /// State trie hash.
-    pub state_root: H256,
+    pub state_root: B256,
     /// Transaction trie hash.
-    pub transactions_root: H256,
+    pub transactions_root: B256,
     /// Receipts trie hash.
-    pub receipts_root: H256,
+    pub receipts_root: B256,
 }
 
 impl TrieRoots {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == TrieRootsTarget::SIZE);
 
-        let state_root = get_h256(&pis[0..TARGET_HASH_SIZE]);
-        let transactions_root = get_h256(&pis[TARGET_HASH_SIZE..2 * TARGET_HASH_SIZE]);
-        let receipts_root = get_h256(&pis[2 * TARGET_HASH_SIZE..3 * TARGET_HASH_SIZE]);
+        let state_root = get_b256(&pis[0..TARGET_HASH_SIZE]);
+        let transactions_root = get_b256(&pis[TARGET_HASH_SIZE..2 * TARGET_HASH_SIZE]);
+        let receipts_root = get_b256(&pis[2 * TARGET_HASH_SIZE..3 * TARGET_HASH_SIZE]);
 
         Self {
             state_root,
@@ -341,8 +341,8 @@ impl TrieRoots {
 impl Default for BlockHashes {
     fn default() -> Self {
         Self {
-            prev_hashes: vec![H256::default(); 256],
-            cur_hash: H256::default(),
+            prev_hashes: vec![B256::default(); 256],
+            cur_hash: B256::default(),
         }
     }
 }
@@ -352,25 +352,25 @@ impl Default for BlockHashes {
 /// are consistent (i.e. shifted by one to the left).
 ///
 /// When the block number is less than 256, dummy values, i.e.
-/// `H256::default()`, should be used for the additional block hashes.
+/// `B256::default()`, should be used for the additional block hashes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockHashes {
     /// The previous 256 hashes to the current block. The leftmost hash, i.e.
     /// `prev_hashes[0]`, is the oldest, and the rightmost, i.e.
     /// `prev_hashes[255]` is the hash of the parent block.
-    pub prev_hashes: Vec<H256>,
+    pub prev_hashes: Vec<B256>,
     // The hash of the current block.
-    pub cur_hash: H256,
+    pub cur_hash: B256,
 }
 
 impl BlockHashes {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == BlockHashesTarget::SIZE);
 
-        let prev_hashes: [H256; 256] = core::array::from_fn(|i| {
-            get_h256(&pis[TARGET_HASH_SIZE * i..TARGET_HASH_SIZE * (i + 1)])
+        let prev_hashes: [B256; 256] = core::array::from_fn(|i| {
+            get_b256(&pis[TARGET_HASH_SIZE * i..TARGET_HASH_SIZE * (i + 1)])
         });
-        let cur_hash = get_h256(&pis[2048..2056]);
+        let cur_hash = get_b256(&pis[2048..2056]);
 
         Self {
             prev_hashes: prev_hashes.to_vec(),
@@ -382,10 +382,10 @@ impl BlockHashes {
 /// Generates the consolidated hash for a sequence of block hashes.
 ///
 /// It will pack 256 contiguous block hashes and hash them out.
-pub fn consolidate_hashes<H: Hasher<F>, F: RichField>(hashes: &[H256]) -> [F; NUM_HASH_OUT_ELTS] {
+pub fn consolidate_hashes<H: Hasher<F>, F: RichField>(hashes: &[B256]) -> [F; NUM_HASH_OUT_ELTS] {
     debug_assert!(hashes.len() == 256);
 
-    let payload = hashes.iter().flat_map(|&h| h256_limbs(h)).collect_vec();
+    let payload = hashes.iter().flat_map(|&h| b256_limbs(h)).collect_vec();
     H::hash_no_pad(&payload)
         .to_vec()
         .try_into()
@@ -404,7 +404,7 @@ pub struct BlockMetadata {
     pub block_number: U256,
     /// The difficulty (before PoS transition) of this block.
     pub block_difficulty: U256,
-    pub block_random: H256,
+    pub block_random: B256,
     /// The gas limit of this block. It must fit in a `u32`.
     pub block_gaslimit: U256,
     /// The chain id of this block.
@@ -418,7 +418,7 @@ pub struct BlockMetadata {
     /// The excess blob base. It must fit in a `u64`.
     pub block_excess_blob_gas: U256,
     /// The hash tree root of the parent beacon block.
-    pub parent_beacon_block_root: H256,
+    pub parent_beacon_block_root: B256,
     /// The block bloom of this block, represented as the consecutive
     /// 32-byte chunks of a block's final bloom filter string.
     pub block_bloom: [U256; 8],
@@ -432,7 +432,7 @@ impl BlockMetadata {
         let block_timestamp = pis[5].to_canonical_u64().into();
         let block_number = pis[6].to_canonical_u64().into();
         let block_difficulty = pis[7].to_canonical_u64().into();
-        let block_random = get_h256(&pis[8..16]);
+        let block_random = get_b256(&pis[8..16]);
         let block_gaslimit = pis[16].to_canonical_u64().into();
         let block_chain_id = pis[17].to_canonical_u64().into();
         let block_base_fee =
@@ -442,9 +442,9 @@ impl BlockMetadata {
             (pis[21].to_canonical_u64() + (pis[22].to_canonical_u64() << 32)).into();
         let block_excess_blob_gas =
             (pis[23].to_canonical_u64() + (pis[24].to_canonical_u64() << 32)).into();
-        let parent_beacon_block_root = get_h256(&pis[25..33]);
+        let parent_beacon_block_root = get_b256(&pis[25..33]);
         let block_bloom =
-            core::array::from_fn(|i| h2u(get_h256(&pis[33 + 8 * i..33 + 8 * (i + 1)])));
+            core::array::from_fn(|i| h2u(get_b256(&pis[33 + 8 * i..33 + 8 * (i + 1)])));
 
         Self {
             block_beneficiary,
@@ -470,7 +470,7 @@ impl BlockMetadata {
 #[serde(bound = "")]
 pub struct ExtraBlockData<F: RichField> {
     /// The state trie digest of the checkpoint block.
-    pub checkpoint_state_trie_root: H256,
+    pub checkpoint_state_trie_root: B256,
     /// The consolidated previous block hashes, at the checkpoint block.
     pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
     /// The transaction count prior execution of the local state transition,
@@ -490,7 +490,7 @@ pub struct ExtraBlockData<F: RichField> {
 impl<F: RichField> Default for ExtraBlockData<F> {
     fn default() -> Self {
         Self {
-            checkpoint_state_trie_root: H256::default(),
+            checkpoint_state_trie_root: B256::default(),
             checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
             txn_number_before: U256::default(),
             txn_number_after: U256::default(),
@@ -513,7 +513,7 @@ impl<F: RichField> ExtraBlockData<F> {
     pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() == ExtraBlockDataTarget::SIZE);
 
-        let checkpoint_state_trie_root = get_h256(&pis[0..8]);
+        let checkpoint_state_trie_root = get_b256(&pis[0..8]);
         let checkpoint_consolidated_hash = pis[8..12].try_into().unwrap();
         let txn_number_before = pis[12].to_canonical_u64().into();
         let txn_number_after = pis[13].to_canonical_u64().into();
@@ -1366,7 +1366,7 @@ impl BlockMetadataTarget {
 /// are consistent (i.e. shifted by eight `Target`s to the left).
 ///
 /// When the block number is less than 256, dummy values, i.e.
-/// `H256::default()`, should be used for the additional block hashes.
+/// `B256::default()`, should be used for the additional block hashes.
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct BlockHashesTarget {
     /// `Target`s for the previous 256 hashes to the current block. The leftmost

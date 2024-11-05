@@ -34,9 +34,9 @@ pub(crate) fn u256_to_trimmed_be_bytes(u256: &U256) -> Vec<u8> {
 
 pub(crate) const fn u256_from_bool(b: bool) -> U256 {
     if b {
-        U256::one()
+        U256::from(1)
     } else {
-        U256::zero()
+        U256::ZERO
     }
 }
 

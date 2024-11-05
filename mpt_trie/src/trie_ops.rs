@@ -1,10 +1,10 @@
 //! Defines various operations for
 //! [`PartialTrie`].
 
-use std::{fmt::Display, mem::size_of};
+use std::fmt::Display;
 
+use alloy::primitives::{B256, U128, U256, U512};
 use enum_as_inner::EnumAsInner;
-use ethereum_types::{H256, U128, U256, U512};
 use log::trace;
 use thiserror::Error;
 
@@ -24,12 +24,12 @@ pub enum TrieOpError {
     /// An error that occurs when a hash node is found during an insert
     /// operation.
     #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert! (hash: {0})")]
-    HashNodeInsertError(H256),
+    HashNodeInsertError(B256),
 
     /// An error that occurs when a hash node is found during a delete
     /// operation.
     #[error("Attempted to delete a value that ended up inside a hash node! (hash: {0})")]
-    HashNodeDeleteError(H256),
+    HashNodeDeleteError(B256),
 
     /// An error that occurs when we encounter an non-existing type of node
     /// during an extension node collapse.
@@ -47,11 +47,11 @@ pub enum TrieOpError {
     /// was made from a leaf. As such, it's the responsibility of whoever is
     /// constructing & mutating the trie that this will never occur.
     #[error("Attempted to collapse an extension node into a hash node! This is unsafe! (See https://github.com/0xPolygonZero/zk_evm/issues/237 for more info) (Extension key: {0:x}, child hash node: {1:x})")]
-    ExtensionCollapsedIntoHashError(Nibbles, H256),
+    ExtensionCollapsedIntoHashError(Nibbles, B256),
 
     /// Failed to insert a hash node into the trie.
     #[error("Attempted to place a hash node on an existing node! (hash: {0})")]
-    ExistingHashNodeError(H256),
+    ExistingHashNodeError(B256),
 }
 
 /// A entry to be inserted into a `PartialTrie`.
@@ -90,19 +90,14 @@ pub enum ValOrHash {
 
     /// A part of a larger trie that we are not storing but still need to know
     /// the merkle hash for.
-    Hash(H256),
+    Hash(B256),
 }
 
 macro_rules! impl_eth_type_from_for_val_variant {
     ($type:ty) => {
         impl From<$type> for ValOrHash {
             fn from(v: $type) -> Self {
-                let size = size_of::<Self>();
-
-                let mut buf = Vec::with_capacity(size);
-                buf.resize(32, 0);
-                v.to_big_endian(&mut buf);
-                ValOrHash::Val(buf)
+                ValOrHash::Val(v.to_be_bytes_vec())
             }
         }
     };
@@ -131,8 +126,8 @@ impl From<&[u8]> for ValOrHash {
     }
 }
 
-impl From<H256> for ValOrHash {
-    fn from(hash: H256) -> Self {
+impl From<B256> for ValOrHash {
+    fn from(hash: B256) -> Self {
         Self::Hash(hash)
     }
 }
@@ -146,9 +141,9 @@ impl_prim_int_from_for_val_variant!(u16);
 impl_prim_int_from_for_val_variant!(u8);
 
 impl ValOrHash {
-    /// Cast a [`ValOrHash::Hash`] enum to the hash ([`H256`]). Panics if called
+    /// Cast a [`ValOrHash::Hash`] enum to the hash ([`B256`]). Panics if called
     /// on the wrong enum variant.
-    pub fn expect_hash(self) -> H256 {
+    pub fn expect_hash(self) -> B256 {
         self.into_hash()
             .expect("Expected a `ValOrHash` to be a hash")
     }

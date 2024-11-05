@@ -294,7 +294,7 @@ fn test_extcodesize() -> Result<()> {
 
     assert_eq!(
         interpreter.stack(),
-        vec![U256::one() << CONTEXT_SCALING_FACTOR, code.len().into()]
+        vec![U256::from(1) << CONTEXT_SCALING_FACTOR, code.len().into()]
     );
 
     Ok(())
@@ -452,7 +452,7 @@ fn prepare_interpreter_all_accounts<F: RichField>(
     interpreter.set_context_metadata_field(
         1,
         ContextMetadata::ParentContext,
-        U256::one() << CONTEXT_SCALING_FACTOR, // ctx = 1
+        U256::from(1) << CONTEXT_SCALING_FACTOR, // ctx = 1
     );
 
     Ok(())
@@ -515,7 +515,7 @@ fn sstore() -> Result<()> {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
         storage_root: HashedPartialTrie::from(Node::Leaf {
-            nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+            nibbles: Nibbles::from_b256_be(keccak([0u8; 32])),
             value: vec![2],
         })
         .hash(),

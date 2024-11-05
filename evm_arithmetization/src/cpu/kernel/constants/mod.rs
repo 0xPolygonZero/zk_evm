@@ -411,7 +411,7 @@ pub mod cancun_constants {
 
     pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
 
-    pub const MIN_BASE_FEE_PER_BLOB_GAS: U256 = U256::one();
+    pub const MIN_BASE_FEE_PER_BLOB_GAS: U256 = U256::from(1);
 
     pub const KZG_VERSIONED_HASH: u8 = 0x01;
 
@@ -454,8 +454,8 @@ pub mod cancun_constants {
         hex!("f57acd40259872606d76197ef052f3d35588dadf919ee1f0e3cb9b62d3f4b02c");
 
     pub const BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
-        nonce: U256::zero(),
-        balance: U256::zero(),
+        nonce: U256::ZERO,
+        balance: U256::ZERO,
         // Storage root for this account at genesis.
         storage_root: H256(hex!(
             "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -515,8 +515,8 @@ pub mod global_exit_root {
         hex!("6bec2bf64f7e824109f6ed55f77dd7665801d6195e461666ad6a5342a9f6daf5");
 
     pub const GLOBAL_EXIT_ROOT_ACCOUNT: AccountRlp = AccountRlp {
-        nonce: U256::zero(),
-        balance: U256::zero(),
+        nonce: U256::ZERO,
+        balance: U256::ZERO,
         // Empty storage root
         storage_root: H256(hex!(
             "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"

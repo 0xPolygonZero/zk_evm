@@ -170,8 +170,8 @@ fn test_bn_final_exponent() -> Result<()> {
     let setup = InterpreterMemoryInitialization {
         label: "bn254_final_exponent".to_string(),
         stack: vec![
-            U256::zero(),
-            U256::zero(),
+            U256::ZERO,
+            U256::ZERO,
             U256::from(ptr),
             U256::from(0xdeadbeefu32),
         ],
@@ -251,7 +251,7 @@ fn test_bn_pairing() -> Result<()> {
         memory: vec![(ptr, input)],
     };
     let interpreter = run_interpreter_with_memory::<F>(setup).unwrap();
-    assert_eq!(interpreter.stack()[0], U256::one());
+    assert_eq!(interpreter.stack()[0], U256::from(1));
     Ok(())
 }
 

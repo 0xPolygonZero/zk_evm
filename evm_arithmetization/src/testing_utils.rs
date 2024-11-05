@@ -151,7 +151,7 @@ pub fn update_scalable_account_storage(
     )?;
 
     let mut arr = [0; 64];
-    (block.block_number - U256::one()).to_big_endian(&mut arr[0..32]);
+    (block.block_number - U256::from(1)).to_big_endian(&mut arr[0..32]);
     U256::from(STATE_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = keccak(arr);
     insert_storage(storage_trie, slot.into_uint(), h2u(initial_trie_hash))
@@ -175,13 +175,13 @@ fn empty_payload() -> Result<GenerationInputs> {
     // Set up default block metadata
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::zero(),
-        block_timestamp: U256::zero(),
-        block_number: U256::one(),
-        block_difficulty: U256::zero(),
+        block_timestamp: U256::ZERO,
+        block_number: U256::from(1),
+        block_difficulty: U256::ZERO,
         block_random: H256::zero(),
-        block_gaslimit: U256::zero(),
-        block_chain_id: U256::one(),
-        block_base_fee: U256::zero(),
+        block_gaslimit: U256::ZERO,
+        block_chain_id: U256::from(1),
+        block_base_fee: U256::ZERO,
         ..Default::default()
     };
 

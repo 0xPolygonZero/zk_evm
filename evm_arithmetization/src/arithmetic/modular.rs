@@ -960,7 +960,7 @@ mod tests {
 
                     let input0 = U256::from(rng.gen::<[u8; 32]>());
                     let input1 = U256::from(rng.gen::<[u8; 32]>());
-                    let modulus = U256::zero();
+                    let modulus = U256::ZERO;
 
                     generate(&mut lv, &mut nv, op_filter, input0, input1, modulus);
 

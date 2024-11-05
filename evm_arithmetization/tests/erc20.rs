@@ -224,7 +224,7 @@ fn token_bytecode() -> Vec<u8> {
 
 fn giver_storage() -> anyhow::Result<HashedPartialTrie> {
     create_account_storage(&[(
-        U256::zero(),
+        U256::ZERO,
         sd2u("546584486846459126461364135121053344201067465379"),
     )])
 }

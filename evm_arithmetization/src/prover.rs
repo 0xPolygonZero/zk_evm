@@ -265,7 +265,7 @@ where
     if !table_in_use[*Table::MemAfter] {
         for hash in &mut mem_after_cap.mem_cap {
             for element in hash.iter_mut() {
-                *element = U256::zero();
+                *element = U256::ZERO;
             }
         }
     }

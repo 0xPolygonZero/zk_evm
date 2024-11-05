@@ -152,7 +152,7 @@ impl<F: RichField> Interpreter<F> {
                     .iter()
                     .map(|&elt| match elt {
                         Some(val) => val,
-                        None => U256::zero(),
+                        None => U256::ZERO,
                     })
                     .collect::<Vec<U256>>()
             };

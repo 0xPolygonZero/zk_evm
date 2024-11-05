@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use ethereum_types::H256;
+use alloy::primitives::B256;
 use log::trace;
 use thiserror::Error;
 
@@ -16,7 +16,7 @@ use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
     trie_hashing::EncodedNode,
-    utils::{bytes_to_h256, TrieNodeType},
+    utils::TrieNodeType,
 };
 
 /// The output type of trie_subset operations.
@@ -183,7 +183,7 @@ impl<N: PartialTrie> TrackedNodeInfo<N> {
         }
     }
 
-    fn get_hash_node_hash_expected(&self) -> H256 {
+    fn get_hash_node_hash_expected(&self) -> B256 {
         match *self.underlying_node {
             Node::Hash(h) => h,
             _ => unreachable!("Expected an underlying hash node!"),
@@ -347,7 +347,7 @@ fn create_partial_trie_subset_from_tracked_trie<N: PartialTrie>(
 
         // Don't hash if it's too small, even if we don't need it.
         if let EncodedNode::Hashed(h) = e_node {
-            return N::new(Node::Hash(bytes_to_h256(&h)));
+            return N::new(Node::Hash(h.into()));
         }
     }
 
@@ -395,7 +395,7 @@ mod tests {
         iter::once,
     };
 
-    use ethereum_types::H256;
+    use alloy::primitives::B256;
 
     use super::{create_trie_subset, create_trie_subsets};
     use crate::{
@@ -522,7 +522,7 @@ mod tests {
     fn encountering_a_hash_node_returns_err() {
         common_setup();
 
-        let trie = TrieType::new(Node::Hash(H256::zero()));
+        let trie = TrieType::new(Node::Hash(B256::ZERO));
         let res = create_trie_subset(&trie, once(0x1234));
 
         assert!(res.is_err())
@@ -757,7 +757,7 @@ mod tests {
         common_setup();
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345])?;
 
-        let base_hash: H256 = trie.hash();
+        let base_hash: B256 = trie.hash();
         let partial_tries = vec![
             create_trie_subset(&trie, vec![0x1234]).unwrap(),
             create_trie_subset(&trie, vec![0x56]).unwrap(),

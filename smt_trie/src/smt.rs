@@ -145,7 +145,7 @@ impl<D: Db> Smt<D> {
                         .copied()
                         .unwrap_or_default()
                         .is_zero());
-                    U256::zero()
+                    U256::ZERO
                 };
             } else {
                 let b = keys.get_bit(level as usize);
@@ -347,7 +347,7 @@ impl<D: Db> Smt<D> {
     /// Delete the key in the SMT.
     pub fn delete(&mut self, key: Key) {
         self.kv_store.remove(&key);
-        self.set(key, U256::zero());
+        self.set(key, U256::ZERO);
     }
 
     /// Set the key to the hash in the SMT.
@@ -416,7 +416,7 @@ impl<D: Db> Smt<D> {
         &self,
         keys: I,
     ) -> Vec<U256> {
-        let mut v = vec![U256::zero(); 2]; // For empty hash node.
+        let mut v = vec![U256::ZERO; 2]; // For empty hash node.
         let key = Key(self.root.elements);
 
         let mut keys_to_include = HashSet::new();
@@ -433,7 +433,7 @@ impl<D: Db> Smt<D> {
 
         serialize(self, key, &mut v, Bits::empty(), &keys_to_include);
         if v.len() == 2 {
-            v.extend([U256::zero(); 2]);
+            v.extend([U256::ZERO; 2]);
         }
         v
     }
@@ -482,8 +482,8 @@ fn serialize<D: Db>(
             let key_right = Key(node.0[4..8].try_into().unwrap());
             let index = v.len();
             v.push(INTERNAL_TYPE.into());
-            v.push(U256::zero());
-            v.push(U256::zero());
+            v.push(U256::ZERO);
+            v.push(U256::ZERO);
             let i_left =
                 serialize(smt, key_left, v, cur_bits.add_bit(false), keys_to_include).into();
             v[index + 1] = i_left;

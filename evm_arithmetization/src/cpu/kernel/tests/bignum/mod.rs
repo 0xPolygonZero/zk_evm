@@ -74,7 +74,7 @@ fn pad_bignums(biguints: &[BigUint], length: usize) -> Vec<U256> {
         .flat_map(|biguint| {
             biguint_to_mem_vec(biguint.clone())
                 .into_iter()
-                .pad_using(length, |_| U256::zero())
+                .pad_using(length, |_| U256::ZERO)
         })
         .collect()
 }

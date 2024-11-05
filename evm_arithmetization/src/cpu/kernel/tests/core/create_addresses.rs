@@ -40,13 +40,13 @@ fn create2_test_cases() -> Vec<Create2TestCase> {
     vec![
         Create2TestCase {
             code_hash: keccak(hex!("00")),
-            salt: U256::zero(),
-            sender: U256::zero(),
+            salt: U256::ZERO,
+            sender: U256::ZERO,
             expected_addr: U256::from_str("0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38").unwrap(),
         },
         Create2TestCase {
             code_hash: keccak(hex!("00")),
-            salt: U256::zero(),
+            salt: U256::ZERO,
             sender: U256::from_str("0xdeadbeef00000000000000000000000000000000").unwrap(),
             expected_addr: U256::from_str("0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3").unwrap(),
         },
@@ -61,8 +61,8 @@ fn create2_test_cases() -> Vec<Create2TestCase> {
         },
         Create2TestCase {
             code_hash: keccak(hex!("deadbeef")),
-            salt: U256::zero(),
-            sender: U256::zero(),
+            salt: U256::ZERO,
+            sender: U256::ZERO,
             expected_addr: U256::from_str("0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e").unwrap(),
         },
         Create2TestCase {
@@ -85,8 +85,8 @@ fn create2_test_cases() -> Vec<Create2TestCase> {
         },
         Create2TestCase {
             code_hash: keccak(hex!("")),
-            salt: U256::zero(),
-            sender: U256::zero(),
+            salt: U256::ZERO,
+            sender: U256::ZERO,
             expected_addr: U256::from_str("0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0").unwrap(),
         },
     ]

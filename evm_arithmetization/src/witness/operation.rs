@@ -633,7 +633,7 @@ pub(crate) fn generate_iszero<F: RichField, T: Transition<F>>(
         t.into()
     };
 
-    generate_pinv_diff(x, U256::zero(), &mut row);
+    generate_pinv_diff(x, U256::ZERO, &mut row);
 
     push_no_write(generation_state, result);
     state.push_cpu(row);
@@ -696,7 +696,7 @@ pub(crate) fn generate_shl<F: RichField, T: Transition<F>>(
         stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
 
     let result = if input0 > U256::from(255u64) {
-        U256::zero()
+        U256::ZERO
     } else {
         input1 << input0
     };
@@ -711,7 +711,7 @@ pub(crate) fn generate_shr<F: RichField, T: Transition<F>>(
         stack_pop_with_log_and_fill::<2, _>(state.get_mut_generation_state(), &mut row)?;
 
     let result = if input0 > U256::from(255u64) {
-        U256::zero()
+        U256::ZERO
     } else {
         input1 >> input0
     };

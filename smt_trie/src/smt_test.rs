@@ -22,7 +22,7 @@ fn test_add_and_rem() {
     smt.set(k, v);
     assert_eq!(v, smt.get(k));
 
-    smt.set(k, U256::zero());
+    smt.set(k, U256::ZERO);
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
     let ser = smt.serialize();
@@ -48,7 +48,7 @@ fn test_add_and_rem_hermez() {
         .map(F::from_canonical_u64)
     );
 
-    smt.set(k, U256::zero());
+    smt.set(k, U256::ZERO);
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
     let ser = smt.serialize();
@@ -83,8 +83,8 @@ fn test_add_shared_element_2() {
     let v2 = U256(thread_rng().gen());
     smt.set(k1, v1);
     smt.set(k2, v2);
-    smt.set(k1, U256::zero());
-    smt.set(k2, U256::zero());
+    smt.set(k1, U256::ZERO);
+    smt.set(k2, U256::ZERO);
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
     let ser = smt.serialize();
@@ -104,9 +104,9 @@ fn test_add_shared_element_3() {
     smt.set(k1, v1);
     smt.set(k2, v2);
     smt.set(k3, v3);
-    smt.set(k1, U256::zero());
-    smt.set(k2, U256::zero());
-    smt.set(k3, U256::zero());
+    smt.set(k1, U256::ZERO);
+    smt.set(k2, U256::ZERO);
+    smt.set(k3, U256::ZERO);
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
     let ser = smt.serialize();
@@ -129,7 +129,7 @@ fn test_add_remove_128() {
         smt.set(k, v);
     }
     for &(k, _) in &kvs {
-        smt.set(k, U256::zero());
+        smt.set(k, U256::ZERO);
     }
     assert_eq!(smt.root.elements, [F::ZERO; 4]);
 
@@ -272,7 +272,7 @@ fn test_no_write_0() {
     let v = U256(thread_rng().gen());
     smt.set(k1, v);
     let root = smt.root;
-    smt.set(k2, U256::zero());
+    smt.set(k2, U256::ZERO);
     assert_eq!(smt.root, root);
 
     let ser = smt.serialize();
@@ -299,11 +299,11 @@ fn test_set_hash_first_level() {
     let mut hash_smt = Smt::<MemoryDb>::default();
     let zero = Bits {
         count: 1,
-        packed: U256::zero(),
+        packed: U256::ZERO,
     };
     let one = Bits {
         count: 1,
-        packed: U256::one(),
+        packed: U256::from(1),
     };
     hash_smt.set_hash(
         zero,
@@ -399,8 +399,8 @@ fn test_serialize_and_prune() {
     assert_eq!(
         trivial_ser,
         vec![
-            U256::zero(),
-            U256::zero(),
+            U256::ZERO,
+            U256::ZERO,
             HASH_TYPE.into(),
             hashout2u(smt.root)
         ]

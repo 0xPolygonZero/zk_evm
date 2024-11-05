@@ -1,8 +1,8 @@
 use core::fmt::Debug;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
+use alloy::primitives::{U256, U512};
 use anyhow::{anyhow, Result};
-use ethereum_types::{U256, U512};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
@@ -22,7 +22,7 @@ pub trait FieldExt:
     fn inv(self) -> Self;
 }
 
-pub(crate) const BN_BASE: U256 = U256([
+pub(crate) const BN_BASE: U256 = U256::from_limbs([
     0x3c208c16d87cfd47,
     0x97816a916871ca8d,
     0xb85045b68181585d,
@@ -38,7 +38,7 @@ impl Distribution<BN254> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BN254 {
         let xs = rng.gen::<[u64; 4]>();
         BN254 {
-            val: U256(xs) % BN_BASE,
+            val: U256::from_limbs(xs) % BN_BASE,
         }
     }
 }
@@ -79,23 +79,25 @@ impl Mul for BN254 {
 
     fn mul(self, other: Self) -> Self {
         BN254 {
-            val: U256::try_from((self.val).full_mul(other.val) % BN_BASE).unwrap(),
+            val: U256::try_from((self.val).mul(other.val) % BN_BASE).unwrap(),
         }
     }
 }
 
 impl FieldExt for BN254 {
-    const ZERO: Self = BN254 { val: U256::zero() };
-    const UNIT: Self = BN254 { val: U256::one() };
+    const ZERO: Self = BN254 { val: U256::ZERO };
+    const UNIT: Self = BN254 {
+        val: U256::from_limbs([0, 0, 0, 1]),
+    };
     fn new(val: usize) -> BN254 {
         BN254 {
             val: U256::from(val),
         }
     }
     fn inv(self) -> BN254 {
-        let exp = BN_BASE - 2;
+        let exp = BN_BASE - U256::from(2);
         let mut current = self;
-        let mut product = BN254 { val: U256::one() };
+        let mut product = BN254 { val: U256::from(1) };
         for j in 0..256 {
             if exp.bit(j) {
                 product = product * current;
@@ -115,7 +117,7 @@ impl Div for BN254 {
     }
 }
 
-pub(crate) const BLS_BASE: U512 = U512([
+pub(crate) const BLS_BASE: U512 = U512::from_limbs([
     0xb9feffffffffaaab,
     0x1eabfffeb153ffff,
     0x6730d2a0f6b0f624,
@@ -126,7 +128,7 @@ pub(crate) const BLS_BASE: U512 = U512([
     0x0,
 ]);
 
-pub(crate) const BLS_SCALAR: U256 = U256([
+pub(crate) const BLS_SCALAR: U256 = U256::from_limbs([
     0xffffffff00000001,
     0x53bda402fffe5bfe,
     0x3339d80809a1d805,
@@ -140,11 +142,11 @@ pub(crate) struct BLS381 {
 
 impl BLS381 {
     pub(crate) fn lo(self) -> U256 {
-        U256(self.val.0[..4].try_into().unwrap())
+        U256::from_le_slice(&self.val.as_le_slice()[..4])
     }
 
     pub(crate) fn hi(self) -> U256 {
-        U256(self.val.0[4..].try_into().unwrap())
+        U256::from_le_slice(&self.val.as_le_slice()[4..])
     }
 }
 
@@ -152,7 +154,7 @@ impl Distribution<BLS381> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BLS381 {
         let xs = rng.gen::<[u64; 8]>();
         BLS381 {
-            val: U512(xs) % BLS_BASE,
+            val: U512::from_limbs(xs) % BLS_BASE,
         }
     }
 }
@@ -192,7 +194,7 @@ impl Sub for BLS381 {
 // <https://github.com/zkcrypto/bls12_381>.
 impl BLS381 {
     fn lsh_128(self) -> BLS381 {
-        let b128: U512 = U512([0, 0, 1, 0, 0, 0, 0, 0]);
+        let b128: U512 = U512::from_limbs([0, 0, 1, 0, 0, 0, 0, 0]);
         // since BLS_BASE < 2^384, multiplying by 2^128 doesn't overflow the U512
         BLS381 {
             val: self.val.saturating_mul(b128) % BLS_BASE,
@@ -270,7 +272,7 @@ impl BLS381 {
         // This can be determined by checking if the element is larger than
         // (p - 1) / 2.
 
-        const MODULUS_MINUS_ONE_DIV_TWO: U512 = U512([
+        const MODULUS_MINUS_ONE_DIV_TWO: U512 = U512::from_limbs([
             0xdcff7fffffffd556,
             0x0f55ffff58a9ffff,
             0xb39869507b587b12,
@@ -314,17 +316,19 @@ impl Mul for BLS381 {
 }
 
 impl FieldExt for BLS381 {
-    const ZERO: Self = BLS381 { val: U512::zero() };
-    const UNIT: Self = BLS381 { val: U512::one() };
+    const ZERO: Self = BLS381 { val: U512::ZERO };
+    const UNIT: Self = BLS381 {
+        val: U512::from_limbs([0, 0, 0, 0, 0, 0, 0, 1]),
+    };
     fn new(val: usize) -> BLS381 {
         BLS381 {
             val: U512::from(val),
         }
     }
     fn inv(self) -> BLS381 {
-        let exp = BLS_BASE - 2;
+        let exp = BLS_BASE - U512::from(2);
         let mut current = self;
-        let mut product = BLS381 { val: U512::one() };
+        let mut product = BLS381 { val: U512::from(1) };
 
         for j in 0..384 {
             if exp.bit(j) {
@@ -501,12 +505,14 @@ impl Adj for Fp2<BN254> {
     const FROB_T: [[Fp2<BN254>; 6]; 2] = [
         [
             Fp2 {
-                re: BN254 { val: U256::one() },
-                im: BN254 { val: U256::zero() },
+                re: BN254 {
+                    val: U256::from_limbs([0, 0, 0, 1]),
+                },
+                im: BN254 { val: U256::ZERO },
             },
             Fp2 {
                 re: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x99e39557176f553d,
                         0xb78cc310c2c3330c,
                         0x4c0bec3cf559b143,
@@ -514,7 +520,7 @@ impl Adj for Fp2<BN254> {
                     ]),
                 },
                 im: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x1665d51c640fcba2,
                         0x32ae2a1d0b7c9dce,
                         0x4ba4cc8bd75a0794,
@@ -524,18 +530,18 @@ impl Adj for Fp2<BN254> {
             },
             Fp2 {
                 re: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xe4bd44e5607cfd48,
                         0xc28f069fbb966e3d,
                         0x5e6dd9e7e0acccb0,
                         0x30644e72e131a029,
                     ]),
                 },
-                im: BN254 { val: U256::zero() },
+                im: BN254 { val: U256::ZERO },
             },
             Fp2 {
                 re: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x7b746ee87bdcfb6d,
                         0x805ffd3d5d6942d3,
                         0xbaff1c77959f25ac,
@@ -543,7 +549,7 @@ impl Adj for Fp2<BN254> {
                     ]),
                 },
                 im: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x380cab2baaa586de,
                         0x0fdf31bf98ff2631,
                         0xa9f30e6dec26094f,
@@ -553,18 +559,18 @@ impl Adj for Fp2<BN254> {
             },
             Fp2 {
                 re: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x5763473177fffffe,
                         0xd4f263f1acdb5c4f,
                         0x59e26bcea0d48bac,
                         0x0,
                     ]),
                 },
-                im: BN254 { val: U256::zero() },
+                im: BN254 { val: U256::ZERO },
             },
             Fp2 {
                 re: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x62e913ee1dada9e4,
                         0xf71614d4b0b71f3a,
                         0x699582b87809d9ca,
@@ -572,7 +578,7 @@ impl Adj for Fp2<BN254> {
                     ]),
                 },
                 im: BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xedae0bcec9c7aac7,
                         0x54f40eb4c3f6068d,
                         0xc2b86abcbe01477a,
@@ -583,13 +589,15 @@ impl Adj for Fp2<BN254> {
         ],
         [
             Fp2 {
-                re: BN254 { val: U256::one() },
-                im: BN254 { val: U256::zero() },
+                re: BN254 {
+                    val: U256::from_limbs([0, 0, 0, 1]),
+                },
+                im: BN254 { val: U256::ZERO },
             },
             Fp2 {
                 re: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0x848a1f55921ea762,
                             0xd33365f7be94ec72,
                             0x80f3c0b75a181e84,
@@ -599,7 +607,7 @@ impl Adj for Fp2<BN254> {
                 },
                 im: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0xc13b4711cd2b8126,
                             0x3685d2ea1bdec763,
                             0x9f3a80b03b0b1c92,
@@ -611,7 +619,7 @@ impl Adj for Fp2<BN254> {
             Fp2 {
                 re: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0x5763473177fffffe,
                             0xd4f263f1acdb5c4f,
                             0x59e26bcea0d48bac,
@@ -619,12 +627,12 @@ impl Adj for Fp2<BN254> {
                         ]),
                     }
                 },
-                im: { BN254 { val: U256::zero() } },
+                im: { BN254 { val: U256::ZERO } },
             },
             Fp2 {
                 re: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0x0e1a92bc3ccbf066,
                             0xe633094575b06bcb,
                             0x19bee0f7b5b2444e,
@@ -634,7 +642,7 @@ impl Adj for Fp2<BN254> {
                 },
                 im: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0x5fe3ed9d730c239f,
                             0xa44a9e08737f96e5,
                             0xfeb0f6ef0cd21d04,
@@ -646,7 +654,7 @@ impl Adj for Fp2<BN254> {
             Fp2 {
                 re: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0xe4bd44e5607cfd48,
                             0xc28f069fbb966e3d,
                             0x5e6dd9e7e0acccb0,
@@ -654,12 +662,12 @@ impl Adj for Fp2<BN254> {
                         ]),
                     }
                 },
-                im: { BN254 { val: U256::zero() } },
+                im: { BN254 { val: U256::ZERO } },
             },
             Fp2 {
                 re: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0xa97bda050992657f,
                             0xde1afb54342c724f,
                             0x1d9da40771b6f589,
@@ -669,7 +677,7 @@ impl Adj for Fp2<BN254> {
                 },
                 im: {
                     BN254 {
-                        val: U256([
+                        val: U256::from_le_bytes([
                             0x5721e37e70c255c9,
                             0x54326430418536d1,
                             0xd2b513cdbb257724,
@@ -683,13 +691,17 @@ impl Adj for Fp2<BN254> {
 
     const FROB_Z: [Fp2<BN254>; 12] = [
         Fp2 {
-            re: { BN254 { val: U256::one() } },
-            im: { BN254 { val: U256::zero() } },
+            re: {
+                BN254 {
+                    val: U256::from_limbs([0, 0, 0, 1]),
+                }
+            },
+            im: { BN254 { val: U256::ZERO } },
         },
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xd60b35dadcc9e470,
                         0x5c521e08292f2176,
                         0xe8b99fdd76e68b60,
@@ -699,7 +711,7 @@ impl Adj for Fp2<BN254> {
             },
             im: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xca5cf05f80f362ac,
                         0x747992778eeec7e5,
                         0xa6327cfe12150b8e,
@@ -711,7 +723,7 @@ impl Adj for Fp2<BN254> {
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xe4bd44e5607cfd49,
                         0xc28f069fbb966e3d,
                         0x5e6dd9e7e0acccb0,
@@ -719,12 +731,12 @@ impl Adj for Fp2<BN254> {
                     ]),
                 }
             },
-            im: { BN254 { val: U256::zero() } },
+            im: { BN254 { val: U256::ZERO } },
         },
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xe86f7d391ed4a67f,
                         0x894cb38dbe55d24a,
                         0xefe9608cd0acaa90,
@@ -734,7 +746,7 @@ impl Adj for Fp2<BN254> {
             },
             im: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x7694aa2bf4c0c101,
                         0x7f03a5e397d439ec,
                         0x06cbeee33576139d,
@@ -746,7 +758,7 @@ impl Adj for Fp2<BN254> {
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xe4bd44e5607cfd48,
                         0xc28f069fbb966e3d,
                         0x5e6dd9e7e0acccb0,
@@ -754,12 +766,12 @@ impl Adj for Fp2<BN254> {
                     ]),
                 }
             },
-            im: { BN254 { val: U256::zero() } },
+            im: { BN254 { val: U256::ZERO } },
         },
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x1264475e420ac20f,
                         0x2cfa95859526b0d4,
                         0x072fc0af59c61f30,
@@ -769,7 +781,7 @@ impl Adj for Fp2<BN254> {
             },
             im: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xe85845e34c4a5b9c,
                         0xa20b7dfd71573c93,
                         0x18e9b79ba4e2606c,
@@ -781,7 +793,7 @@ impl Adj for Fp2<BN254> {
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x3c208c16d87cfd46,
                         0x97816a916871ca8d,
                         0xb85045b68181585d,
@@ -789,12 +801,12 @@ impl Adj for Fp2<BN254> {
                     ]),
                 }
             },
-            im: { BN254 { val: U256::zero() } },
+            im: { BN254 { val: U256::ZERO } },
         },
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x6615563bfbb318d7,
                         0x3b2f4c893f42a916,
                         0xcf96a5d90a9accfd,
@@ -804,7 +816,7 @@ impl Adj for Fp2<BN254> {
             },
             im: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x71c39bb757899a9b,
                         0x2307d819d98302a7,
                         0x121dc8b86f6c4ccf,
@@ -816,7 +828,7 @@ impl Adj for Fp2<BN254> {
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x5763473177fffffe,
                         0xd4f263f1acdb5c4f,
                         0x59e26bcea0d48bac,
@@ -824,12 +836,12 @@ impl Adj for Fp2<BN254> {
                     ]),
                 }
             },
-            im: { BN254 { val: U256::zero() } },
+            im: { BN254 { val: U256::ZERO } },
         },
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x53b10eddb9a856c8,
                         0x0e34b703aa1bf842,
                         0xc866e529b0d4adcd,
@@ -839,7 +851,7 @@ impl Adj for Fp2<BN254> {
             },
             im: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0xc58be1eae3bc3c46,
                         0x187dc4add09d90a0,
                         0xb18456d34c0b44c0,
@@ -851,7 +863,7 @@ impl Adj for Fp2<BN254> {
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x5763473177ffffff,
                         0xd4f263f1acdb5c4f,
                         0x59e26bcea0d48bac,
@@ -859,12 +871,12 @@ impl Adj for Fp2<BN254> {
                     ]),
                 }
             },
-            im: { BN254 { val: U256::zero() } },
+            im: { BN254 { val: U256::ZERO } },
         },
         Fp2 {
             re: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x29bc44b896723b38,
                         0x6a86d50bd34b19b9,
                         0xb120850727bb392d,
@@ -874,7 +886,7 @@ impl Adj for Fp2<BN254> {
             },
             im: {
                 BN254 {
-                    val: U256([
+                    val: U256::from_le_bytes([
                         0x53c846338c32a1ab,
                         0xf575ec93f71a8df9,
                         0x9f668e1adc9ef7f0,
@@ -897,13 +909,15 @@ impl Adj for Fp2<BLS381> {
     const FROB_T: [[Fp2<BLS381>; 6]; 2] = [
         [
             Fp2 {
-                re: BLS381 { val: U512::one() },
-                im: BLS381 { val: U512::zero() },
+                re: BLS381 {
+                    val: U512::from_limbs([0, 0, 0, 0, 0, 0, 0, 1]),
+                },
+                im: BLS381 { val: U512::ZERO },
             },
             Fp2 {
-                re: BLS381 { val: U512::zero() },
+                re: BLS381 { val: U512::ZERO },
                 im: BLS381 {
-                    val: U512([
+                    val: U512::from_le_bytes([
                         0x8bfd00000000aaac,
                         0x409427eb4f49fffd,
                         0x897d29650fb85f9b,
@@ -917,7 +931,7 @@ impl Adj for Fp2<BLS381> {
             },
             Fp2 {
                 re: BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x2e01fffffffefffe,
                         0xde17d813620a0002,
                         0xddb3a93be6f89688,
@@ -928,15 +942,17 @@ impl Adj for Fp2<BLS381> {
                         0x0000000000000000,
                     ]),
                 },
-                im: BLS381 { val: U512::zero() },
+                im: BLS381 { val: U512::ZERO },
             },
             Fp2 {
-                re: BLS381 { val: U512::zero() },
-                im: BLS381 { val: U512::one() },
+                re: BLS381 { val: U512::ZERO },
+                im: BLS381 {
+                    val: U512::from_limbs([0, 0, 0, 0, 0, 0, 0, 1]),
+                },
             },
             Fp2 {
                 re: BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x8bfd00000000aaac,
                         0x409427eb4f49fffd,
                         0x897d29650fb85f9b,
@@ -947,12 +963,12 @@ impl Adj for Fp2<BLS381> {
                         0x0000000000000000,
                     ]),
                 },
-                im: BLS381 { val: U512::zero() },
+                im: BLS381 { val: U512::ZERO },
             },
             Fp2 {
-                re: BLS381 { val: U512::zero() },
+                re: BLS381 { val: U512::ZERO },
                 im: BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x2e01fffffffefffe,
                         0xde17d813620a0002,
                         0xddb3a93be6f89688,
@@ -967,13 +983,15 @@ impl Adj for Fp2<BLS381> {
         ],
         [
             Fp2 {
-                re: BLS381 { val: U512::one() },
-                im: BLS381 { val: U512::zero() },
+                re: BLS381 {
+                    val: U512::from_limbs([0, 0, 0, 0, 0, 0, 0, 1]),
+                },
+                im: BLS381 { val: U512::ZERO },
             },
             Fp2 {
                 re: {
                     BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x8bfd00000000aaad,
                             0x409427eb4f49fffd,
                             0x897d29650fb85f9b,
@@ -985,12 +1003,12 @@ impl Adj for Fp2<BLS381> {
                         ]),
                     }
                 },
-                im: { BLS381 { val: U512::zero() } },
+                im: { BLS381 { val: U512::ZERO } },
             },
             Fp2 {
                 re: {
                     BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x8bfd00000000aaac,
                             0x409427eb4f49fffd,
                             0x897d29650fb85f9b,
@@ -1002,12 +1020,12 @@ impl Adj for Fp2<BLS381> {
                         ]),
                     }
                 },
-                im: { BLS381 { val: U512::zero() } },
+                im: { BLS381 { val: U512::ZERO } },
             },
             Fp2 {
                 re: {
                     BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0xb9feffffffffaaaa,
                             0x1eabfffeb153ffff,
                             0x6730d2a0f6b0f624,
@@ -1019,12 +1037,12 @@ impl Adj for Fp2<BLS381> {
                         ]),
                     }
                 },
-                im: { BLS381 { val: U512::zero() } },
+                im: { BLS381 { val: U512::ZERO } },
             },
             Fp2 {
                 re: {
                     BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x2e01fffffffefffe,
                             0xde17d813620a0002,
                             0xddb3a93be6f89688,
@@ -1036,12 +1054,12 @@ impl Adj for Fp2<BLS381> {
                         ]),
                     }
                 },
-                im: { BLS381 { val: U512::zero() } },
+                im: { BLS381 { val: U512::ZERO } },
             },
             Fp2 {
                 re: {
                     BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x2e01fffffffeffff,
                             0xde17d813620a0002,
                             0xddb3a93be6f89688,
@@ -1053,20 +1071,24 @@ impl Adj for Fp2<BLS381> {
                         ]),
                     }
                 },
-                im: { BLS381 { val: U512::zero() } },
+                im: { BLS381 { val: U512::ZERO } },
             },
         ],
     ];
 
     const FROB_Z: [Fp2<BLS381>; 12] = [
         Fp2 {
-            re: { BLS381 { val: U512::one() } },
-            im: { BLS381 { val: U512::zero() } },
+            re: {
+                BLS381 {
+                    val: U512::from_limbs([0, 0, 0, 0, 0, 0, 0, 1]),
+                }
+            },
+            im: { BLS381 { val: U512::ZERO } },
         },
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x8d0775ed92235fb8,
                         0xf67ea53d63e7813d,
                         0x7b2443d784bab9c4,
@@ -1080,7 +1102,7 @@ impl Adj for Fp2<BLS381> {
             },
             im: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x2cf78a126ddc4af3,
                         0x282d5ac14d6c7ec2,
                         0xec0c8ec971f63c5f,
@@ -1096,7 +1118,7 @@ impl Adj for Fp2<BLS381> {
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x2e01fffffffeffff,
                         0xde17d813620a0002,
                         0xddb3a93be6f89688,
@@ -1108,12 +1130,12 @@ impl Adj for Fp2<BLS381> {
                     ]),
                 }
             },
-            im: { BLS381 { val: U512::zero() } },
+            im: { BLS381 { val: U512::ZERO } },
         },
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0xf1ee7b04121bdea2,
                         0x304466cf3e67fa0a,
                         0xef396489f61eb45e,
@@ -1127,7 +1149,7 @@ impl Adj for Fp2<BLS381> {
             },
             im: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0xc81084fbede3cc09,
                         0xee67992f72ec05f4,
                         0x77f76e17009241c5,
@@ -1143,7 +1165,7 @@ impl Adj for Fp2<BLS381> {
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x2e01fffffffefffe,
                         0xde17d813620a0002,
                         0xddb3a93be6f89688,
@@ -1155,12 +1177,12 @@ impl Adj for Fp2<BLS381> {
                     ]),
                 }
             },
-            im: { BLS381 { val: U512::zero() } },
+            im: { BLS381 { val: U512::ZERO } },
         },
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x1ee605167ff82995,
                         0x5871c1908bd478cd,
                         0xdb45f3536814f0bd,
@@ -1174,7 +1196,7 @@ impl Adj for Fp2<BLS381> {
             },
             im: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x9b18fae980078116,
                         0xc63a3e6e257f8732,
                         0x8beadf4d8e9c0566,
@@ -1190,7 +1212,7 @@ impl Adj for Fp2<BLS381> {
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0xb9feffffffffaaaa,
                         0x1eabfffeb153ffff,
                         0x6730d2a0f6b0f624,
@@ -1202,12 +1224,12 @@ impl Adj for Fp2<BLS381> {
                     ]),
                 }
             },
-            im: { BLS381 { val: U512::zero() } },
+            im: { BLS381 { val: U512::ZERO } },
         },
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x2cf78a126ddc4af3,
                         0x282d5ac14d6c7ec2,
                         0xec0c8ec971f63c5f,
@@ -1221,7 +1243,7 @@ impl Adj for Fp2<BLS381> {
             },
             im: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x8d0775ed92235fb8,
                         0xf67ea53d63e7813d,
                         0x7b2443d784bab9c4,
@@ -1237,7 +1259,7 @@ impl Adj for Fp2<BLS381> {
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x8bfd00000000aaac,
                         0x409427eb4f49fffd,
                         0x897d29650fb85f9b,
@@ -1249,12 +1271,12 @@ impl Adj for Fp2<BLS381> {
                     ]),
                 }
             },
-            im: { BLS381 { val: U512::zero() } },
+            im: { BLS381 { val: U512::ZERO } },
         },
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0xc81084fbede3cc09,
                         0xee67992f72ec05f4,
                         0x77f76e17009241c5,
@@ -1268,7 +1290,7 @@ impl Adj for Fp2<BLS381> {
             },
             im: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0xf1ee7b04121bdea2,
                         0x304466cf3e67fa0a,
                         0xef396489f61eb45e,
@@ -1284,7 +1306,7 @@ impl Adj for Fp2<BLS381> {
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x8bfd00000000aaad,
                         0x409427eb4f49fffd,
                         0x897d29650fb85f9b,
@@ -1296,12 +1318,12 @@ impl Adj for Fp2<BLS381> {
                     ]),
                 }
             },
-            im: { BLS381 { val: U512::zero() } },
+            im: { BLS381 { val: U512::ZERO } },
         },
         Fp2 {
             re: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x9b18fae980078116,
                         0xc63a3e6e257f8732,
                         0x8beadf4d8e9c0566,
@@ -1315,7 +1337,7 @@ impl Adj for Fp2<BLS381> {
             },
             im: {
                 BLS381 {
-                    val: U512([
+                    val: U512::from_limbs([
                         0x1ee605167ff82995,
                         0x5871c1908bd478cd,
                         0xdb45f3536814f0bd,
@@ -1809,9 +1831,11 @@ impl Stack for BLS381 {
 
     fn from_stack(stack: &[U256]) -> BLS381 {
         let mut val = [0u64; 8];
-        val[..4].copy_from_slice(&stack[0].0);
-        val[4..].copy_from_slice(&stack[1].0);
-        BLS381 { val: U512(val) }
+        val[..4].copy_from_slice(stack[0].as_limbs());
+        val[4..].copy_from_slice(stack[1].as_limbs());
+        BLS381 {
+            val: U512::from_limbs(val),
+        }
     }
 }
 
@@ -1907,9 +1931,9 @@ mod tests {
             Fp6::<BLS381> {
                 t0: Fp2::<BLS381>::ZERO,
                 t1: Fp2::<BLS381> {
-                    re: BLS381 { val: U512::zero() },
+                    re: BLS381 { val: U512::ZERO },
                     im: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x8bfd00000000aaac,
                             0x409427eb4f49fffd,
                             0x897d29650fb85f9b,
@@ -1927,7 +1951,7 @@ mod tests {
                 t0: Fp2::<BLS381>::ZERO,
                 t1: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x2e01fffffffefffe,
                             0xde17d813620a0002,
                             0xddb3a93be6f89688,
@@ -1938,7 +1962,7 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
                 t2: Fp2::<BLS381>::ZERO,
             },
@@ -1954,7 +1978,7 @@ mod tests {
                 t0: Fp2::<BLS381>::ZERO,
                 t1: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x8bfd00000000aaac,
                             0x409427eb4f49fffd,
                             0x897d29650fb85f9b,
@@ -1965,16 +1989,16 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
                 t2: Fp2::<BLS381>::ZERO,
             },
             Fp6::<BLS381> {
                 t0: Fp2::<BLS381>::ZERO,
                 t1: Fp2::<BLS381> {
-                    re: BLS381 { val: U512::zero() },
+                    re: BLS381 { val: U512::ZERO },
                     im: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x2e01fffffffefffe,
                             0xde17d813620a0002,
                             0xddb3a93be6f89688,
@@ -2008,7 +2032,7 @@ mod tests {
                 t1: Fp2::<BLS381>::ZERO,
                 t2: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x8bfd00000000aaad,
                             0x409427eb4f49fffd,
                             0x897d29650fb85f9b,
@@ -2019,7 +2043,7 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
             },
             Fp6::<BLS381> {
@@ -2027,7 +2051,7 @@ mod tests {
                 t1: Fp2::<BLS381>::ZERO,
                 t2: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x8bfd00000000aaac,
                             0x409427eb4f49fffd,
                             0x897d29650fb85f9b,
@@ -2038,7 +2062,7 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
             },
             Fp6::<BLS381> {
@@ -2046,7 +2070,7 @@ mod tests {
                 t1: Fp2::<BLS381>::ZERO,
                 t2: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0xb9feffffffffaaaa,
                             0x1eabfffeb153ffff,
                             0x6730d2a0f6b0f624,
@@ -2057,7 +2081,7 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
             },
             Fp6::<BLS381> {
@@ -2065,7 +2089,7 @@ mod tests {
                 t1: Fp2::<BLS381>::ZERO,
                 t2: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x2e01fffffffefffe,
                             0xde17d813620a0002,
                             0xddb3a93be6f89688,
@@ -2076,7 +2100,7 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
             },
             Fp6::<BLS381> {
@@ -2084,7 +2108,7 @@ mod tests {
                 t1: Fp2::<BLS381>::ZERO,
                 t2: Fp2::<BLS381> {
                     re: BLS381 {
-                        val: U512([
+                        val: U512::from_limbs([
                             0x2e01fffffffeffff,
                             0xde17d813620a0002,
                             0xddb3a93be6f89688,
@@ -2095,7 +2119,7 @@ mod tests {
                             0x0000000000000000,
                         ]),
                     },
-                    im: BLS381 { val: U512::zero() },
+                    im: BLS381 { val: U512::ZERO },
                 },
             },
         ];
@@ -2130,7 +2154,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x8d0775ed92235fb8,
                                 0xf67ea53d63e7813d,
                                 0x7b2443d784bab9c4,
@@ -2142,7 +2166,7 @@ mod tests {
                             ]),
                         },
                         im: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x2cf78a126ddc4af3,
                                 0x282d5ac14d6c7ec2,
                                 0xec0c8ec971f63c5f,
@@ -2163,7 +2187,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x2e01fffffffeffff,
                                 0xde17d813620a0002,
                                 0xddb3a93be6f89688,
@@ -2174,7 +2198,7 @@ mod tests {
                                 0x0000000000000000,
                             ]),
                         },
-                        im: BLS381 { val: U512::zero() },
+                        im: BLS381 { val: U512::ZERO },
                     },
                     t1: Fp2::<BLS381>::ZERO,
                     t2: Fp2::<BLS381>::ZERO,
@@ -2185,7 +2209,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0xf1ee7b04121bdea2,
                                 0x304466cf3e67fa0a,
                                 0xef396489f61eb45e,
@@ -2197,7 +2221,7 @@ mod tests {
                             ]),
                         },
                         im: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0xc81084fbede3cc09,
                                 0xee67992f72ec05f4,
                                 0x77f76e17009241c5,
@@ -2218,7 +2242,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x2e01fffffffefffe,
                                 0xde17d813620a0002,
                                 0xddb3a93be6f89688,
@@ -2229,7 +2253,7 @@ mod tests {
                                 0x0000000000000000,
                             ]),
                         },
-                        im: BLS381 { val: U512::zero() },
+                        im: BLS381 { val: U512::ZERO },
                     },
                     t1: Fp2::<BLS381>::ZERO,
                     t2: Fp2::<BLS381>::ZERO,
@@ -2240,7 +2264,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x1ee605167ff82995,
                                 0x5871c1908bd478cd,
                                 0xdb45f3536814f0bd,
@@ -2252,7 +2276,7 @@ mod tests {
                             ]),
                         },
                         im: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x9b18fae980078116,
                                 0xc63a3e6e257f8732,
                                 0x8beadf4d8e9c0566,
@@ -2273,7 +2297,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0xb9feffffffffaaaa,
                                 0x1eabfffeb153ffff,
                                 0x6730d2a0f6b0f624,
@@ -2284,7 +2308,7 @@ mod tests {
                                 0x0000000000000000,
                             ]),
                         },
-                        im: BLS381 { val: U512::zero() },
+                        im: BLS381 { val: U512::ZERO },
                     },
                     t1: Fp2::<BLS381>::ZERO,
                     t2: Fp2::<BLS381>::ZERO,
@@ -2295,7 +2319,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x2cf78a126ddc4af3,
                                 0x282d5ac14d6c7ec2,
                                 0xec0c8ec971f63c5f,
@@ -2307,7 +2331,7 @@ mod tests {
                             ]),
                         },
                         im: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x8d0775ed92235fb8,
                                 0xf67ea53d63e7813d,
                                 0x7b2443d784bab9c4,
@@ -2328,7 +2352,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x8bfd00000000aaac,
                                 0x409427eb4f49fffd,
                                 0x897d29650fb85f9b,
@@ -2339,7 +2363,7 @@ mod tests {
                                 0x0000000000000000,
                             ]),
                         },
-                        im: BLS381 { val: U512::zero() },
+                        im: BLS381 { val: U512::ZERO },
                     },
                     t1: Fp2::<BLS381>::ZERO,
                     t2: Fp2::<BLS381>::ZERO,
@@ -2350,7 +2374,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0xc81084fbede3cc09,
                                 0xee67992f72ec05f4,
                                 0x77f76e17009241c5,
@@ -2362,7 +2386,7 @@ mod tests {
                             ]),
                         },
                         im: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0xf1ee7b04121bdea2,
                                 0x304466cf3e67fa0a,
                                 0xef396489f61eb45e,
@@ -2383,7 +2407,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x8bfd00000000aaad,
                                 0x409427eb4f49fffd,
                                 0x897d29650fb85f9b,
@@ -2394,7 +2418,7 @@ mod tests {
                                 0x0000000000000000,
                             ]),
                         },
-                        im: BLS381 { val: U512::zero() },
+                        im: BLS381 { val: U512::ZERO },
                     },
                     t1: Fp2::<BLS381>::ZERO,
                     t2: Fp2::<BLS381>::ZERO,
@@ -2405,7 +2429,7 @@ mod tests {
                 z1: Fp6::<BLS381> {
                     t0: Fp2::<BLS381> {
                         re: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x9b18fae980078116,
                                 0xc63a3e6e257f8732,
                                 0x8beadf4d8e9c0566,
@@ -2417,7 +2441,7 @@ mod tests {
                             ]),
                         },
                         im: BLS381 {
-                            val: U512([
+                            val: U512::from_limbs([
                                 0x1ee605167ff82995,
                                 0x5871c1908bd478cd,
                                 0xdb45f3536814f0bd,

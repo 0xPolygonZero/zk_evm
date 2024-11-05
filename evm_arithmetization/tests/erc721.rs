@@ -225,11 +225,11 @@ fn contract_bytecode() -> Vec<u8> {
 fn contract_storage() -> anyhow::Result<HashedPartialTrie> {
     create_account_storage(&[
         (
-            U256::zero(),
+            U256::ZERO,
             sh2u("0x54657374546f6b656e0000000000000000000000000000000000000000000012"),
         ),
         (
-            U256::one(),
+            U256::from(1),
             sh2u("0x5445535400000000000000000000000000000000000000000000000000000008"),
         ),
         (
@@ -250,11 +250,11 @@ fn contract_storage() -> anyhow::Result<HashedPartialTrie> {
 fn contract_storage_after() -> anyhow::Result<HashedPartialTrie> {
     create_account_storage(&[
         (
-            U256::zero(),
+            U256::ZERO,
             sh2u("0x54657374546f6b656e0000000000000000000000000000000000000000000012"),
         ),
         (
-            U256::one(),
+            U256::from(1),
             sh2u("0x5445535400000000000000000000000000000000000000000000000000000008"),
         ),
         (

@@ -331,7 +331,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                     let mut dummy_address = next.address;
                     dummy_address.virt -= max_rc;
                     let dummy_read =
-                        MemoryOp::new_dummy_read(dummy_address, curr.timestamp + 1, U256::zero());
+                        MemoryOp::new_dummy_read(dummy_address, curr.timestamp + 1, U256::ZERO);
                     memory_ops.push(dummy_read);
                     next = dummy_read;
                 }
@@ -340,7 +340,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                     let mut dummy_address = curr.address;
                     dummy_address.virt += max_rc + 1;
                     let dummy_read =
-                        MemoryOp::new_dummy_read(dummy_address, curr.timestamp + 1, U256::zero());
+                        MemoryOp::new_dummy_read(dummy_address, curr.timestamp + 1, U256::ZERO);
                     memory_ops.push(dummy_read);
                     curr = dummy_read;
                 }
@@ -373,7 +373,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             kind: Read,
             address: padding_addr,
             timestamp: last_op.timestamp + 1,
-            value: U256::zero(),
+            value: U256::ZERO,
         };
         let num_ops = memory_ops.len();
         // We want at least one padding row, so that the last real operation can have

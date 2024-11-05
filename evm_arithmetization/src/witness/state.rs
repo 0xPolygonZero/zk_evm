@@ -47,7 +47,7 @@ impl Default for RegistersState {
             program_counter: KERNEL.global_labels["init"],
             is_kernel: true,
             stack_len: 0,
-            stack_top: U256::zero(),
+            stack_top: U256::ZERO,
             is_stack_top_read: false,
             check_overflow: false,
             context: 0,

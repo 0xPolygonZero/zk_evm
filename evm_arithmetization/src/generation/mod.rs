@@ -452,7 +452,7 @@ fn initialize_kernel_code_and_shift_table(memory: &mut MemoryState) {
     }
 
     let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
-    let mut shift_val = U256::one();
+    let mut shift_val = U256::from(1);
     for _ in 0..256 {
         memory.set(shift_addr, shift_val);
         shift_addr.increment();

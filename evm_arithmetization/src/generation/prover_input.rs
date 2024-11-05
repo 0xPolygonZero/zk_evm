@@ -82,10 +82,10 @@ impl<F: RichField> GenerationState<F> {
         self.jumpdest_table = None;
         let end = self.next_txn_index == self.inputs.txn_hashes.len();
         if end {
-            Ok(U256::one())
+            Ok(U256::from(1))
         } else {
             self.next_txn_index += 1;
-            Ok(U256::zero())
+            Ok(U256::ZERO)
         }
     }
 
@@ -370,7 +370,7 @@ impl<F: RichField> GenerationState<F> {
             Ok((next_jumpdest_address + 1).into())
         } else {
             jumpdest_table.remove(&context);
-            Ok(U256::zero())
+            Ok(U256::ZERO)
         }
     }
 
@@ -402,7 +402,7 @@ impl<F: RichField> GenerationState<F> {
         let address = u256_to_usize(stack_peek(self, 0)?)?;
         let closest_opcode_addr = get_closest_opcode_address(&code, address);
         Ok(if closest_opcode_addr < 32 {
-            U256::zero()
+            U256::ZERO
         } else {
             closest_opcode_addr.into()
         })
@@ -498,7 +498,7 @@ impl<F: RichField> GenerationState<F> {
 
     fn run_reset(&mut self) -> Result<U256, ProgramError> {
         self.access_lists_ptrs = LinkedListsPtrs::default();
-        Ok(U256::zero())
+        Ok(U256::ZERO)
     }
 
     /// Returns a pointer to a node in the list such that
@@ -608,7 +608,7 @@ impl<F: RichField> GenerationState<F> {
         let (_, &pred_ptr) = self
             .state_ptrs
             .storage
-            .range(..(addr, U256::zero()))
+            .range(..(addr, U256::ZERO))
             .next_back()
             .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
 
@@ -642,14 +642,14 @@ impl<F: RichField> GenerationState<F> {
 
         // Validate scalars
         if z > BLS_SCALAR || y > BLS_SCALAR {
-            return Ok(U256::zero());
+            return Ok(U256::ZERO);
         }
 
         let mut comm_bytes = [0u8; 48];
         comm_lo.to_big_endian(&mut comm_bytes[16..48]); // only actually 16 bytes
         if comm_bytes[16..32] != [0; 16] {
             // Commitments must fit in 48 bytes.
-            return Ok(U256::zero());
+            return Ok(U256::ZERO);
         }
         comm_hi.to_big_endian(&mut comm_bytes[0..32]);
 
@@ -657,7 +657,7 @@ impl<F: RichField> GenerationState<F> {
         proof_lo.to_big_endian(&mut proof_bytes[16..48]); // only actually 16 bytes
         if proof_bytes[16..32] != [0; 16] {
             // Proofs must fit in 48 bytes.
-            return Ok(U256::zero());
+            return Ok(U256::ZERO);
         }
         proof_hi.to_big_endian(&mut proof_bytes[0..32]);
 
@@ -673,7 +673,7 @@ impl<F: RichField> GenerationState<F> {
         expected_versioned_hash |= U256::from(KZG_VERSIONED_HASH) << 248; // append 1
 
         if versioned_hash != expected_versioned_hash {
-            return Ok(U256::zero());
+            return Ok(U256::ZERO);
         }
 
         self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
@@ -717,13 +717,13 @@ impl<F: RichField> GenerationState<F> {
         let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes) {
             c
         } else {
-            return Ok(U256::zero());
+            return Ok(U256::ZERO);
         };
 
         let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes) {
             p
         } else {
-            return Ok(U256::zero());
+            return Ok(U256::ZERO);
         };
 
         // TODO: use some WNAF method if performance becomes critical
@@ -771,7 +771,7 @@ impl<F: RichField> GenerationState<F> {
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT
         {
-            Ok(U256::zero())
+            Ok(U256::ZERO)
         } else {
             Ok(U256::from_big_endian(
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1],
@@ -843,7 +843,7 @@ impl<F: RichField> GenerationState<F> {
             if opcode == JUMPDEST_OPCODE {
                 self.memory.set(
                     MemoryAddress::new(self.registers.context, Segment::JumpdestBits, pos),
-                    U256::one(),
+                    U256::from(1),
                 );
             }
         }
@@ -1093,7 +1093,7 @@ impl EvmField {
 
 fn modexp(x: U256, e: U256, n: U256) -> Result<U256, ProgramError> {
     let mut current = x;
-    let mut product = U256::one();
+    let mut product = U256::from(1);
 
     for j in 0..256 {
         if e.bit(j) {
@@ -1114,7 +1114,7 @@ fn fake_exponential(factor: U256, numerator: U256, denominator: U256) -> U256 {
     }
 
     let mut i = 1;
-    let mut output = U256::zero();
+    let mut output = U256::ZERO;
     let mut numerator_accum = factor * denominator;
     while !numerator_accum.is_zero() {
         output += numerator_accum;

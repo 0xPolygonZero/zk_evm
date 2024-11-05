@@ -216,6 +216,7 @@ dependencies = [
  "cfg-if",
  "const-hex",
  "derive_more",
+ "getrandom",
  "hex-literal",
  "itoa",
  "k256",
@@ -2030,6 +2031,7 @@ dependencies = [
 name = "evm_arithmetization"
 version = "0.4.0"
 dependencies = [
+ "alloy",
  "anyhow",
  "bytes",
  "criterion",

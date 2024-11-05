@@ -218,7 +218,7 @@ pub mod bn254 {
     // with generator given by (1, 2).
     impl CyclicGroup for CurveAff<BN254> {
         const GENERATOR: CurveAff<BN254> = CurveAff {
-            x: BN254 { val: U256::one() },
+            x: BN254 { val: U256::from(1) },
             y: BN254 {
                 val: U256([2, 0, 0, 0]),
             },

@@ -34,7 +34,7 @@ pub(crate) fn initial_memory_merkle_cap<
         row[crate::memory_continuation::columns::value_limb(0)] = F::from_canonical_u8(byte);
         trace.push(row);
     }
-    let mut val = U256::one();
+    let mut val = U256::from(1);
     // Push shift table.
     for i in 0..256 {
         let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];

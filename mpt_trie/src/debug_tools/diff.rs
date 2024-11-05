@@ -719,8 +719,8 @@ mod tests {
                 TestAccountRlp {
                     nonce: U256::from(1),
                     balance: U256::from(2),
-                    storage_root: B256::from(1312378.into()),
-                    code_hash: B256::from(943221.into()),
+                    storage_root: B256::random(),
+                    code_hash: B256::random(),
                 },
             ),
             (
@@ -728,8 +728,8 @@ mod tests {
                 TestAccountRlp {
                     nonce: U256::from(2),
                     balance: U256::from(3),
-                    storage_root: B256::from(1123178.into()),
-                    code_hash: B256::from(8133221.into()),
+                    storage_root: B256::random(),
+                    code_hash: B256::random(),
                 },
             ),
             (
@@ -737,8 +737,8 @@ mod tests {
                 TestAccountRlp {
                     nonce: U256::from(100),
                     balance: U256::from(101),
-                    storage_root: B256::from(12345678.into()),
-                    code_hash: B256::from(94321.into()),
+                    storage_root: B256::random(),
+                    code_hash: B256::random(),
                 },
             ),
             (
@@ -746,8 +746,8 @@ mod tests {
                 TestAccountRlp {
                     nonce: U256::from(3000),
                     balance: U256::from(3002),
-                    storage_root: B256::from(123456781.into()),
-                    code_hash: B256::from(943214141.into()),
+                    storage_root: B256::random(),
+                    code_hash: B256::random(),
                 },
             ),
         ];
@@ -766,7 +766,7 @@ mod tests {
         // Change data on multiple accounts
         data[1].1.balance += U256::from(1);
         data[3].1.nonce += U256::from(2);
-        data[3].1.storage_root = B256::from(4445556.into());
+        data[3].1.storage_root = B256::random();
         let b = create_trie_with_data(&data)?;
 
         let diff = create_full_diff_between_tries(&a, &b);

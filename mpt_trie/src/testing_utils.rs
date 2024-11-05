@@ -3,7 +3,7 @@ use std::{
     iter::{once, repeat},
 };
 
-use ethereum_types::{H256, U256};
+use alloy::primitives::{B256, U256};
 use log::info;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, RngCore, SeedableRng};
 
@@ -23,7 +23,7 @@ const MIN_BYTES_FOR_VAR_KEY: usize = 5;
 pub(crate) type TrieType = HashedPartialTrie;
 
 pub(crate) type TestInsertValEntry = (Nibbles, Vec<u8>);
-pub(crate) type TestInsertHashEntry = (Nibbles, H256);
+pub(crate) type TestInsertHashEntry = (Nibbles, B256);
 type TestInsertEntry<T> = (Nibbles, T);
 
 // Don't want this exposed publicly, but it is useful for testing.
@@ -84,7 +84,7 @@ pub(crate) fn generate_n_random_fixed_trie_hash_entries(
     n: usize,
     seed: u64,
 ) -> impl Iterator<Item = TestInsertHashEntry> {
-    gen_n_random_trie_value_entries_common(n, seed, gen_fixed_nibbles, |_| H256::random())
+    gen_n_random_trie_value_entries_common(n, seed, gen_fixed_nibbles, |_| B256::random())
 }
 
 pub(crate) fn generate_n_random_variable_trie_value_entries(
@@ -133,7 +133,7 @@ pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: PartialTr
         .map(|(k, _)| k.merge_nibble(1))
         .choose_multiple(&mut rng, n)
         .into_iter()
-        .map(|k| (k, rng.gen()))
+        .map(|k| (k, B256::random()))
         .collect()
 }
 
@@ -142,7 +142,8 @@ fn gen_fixed_nibbles(rng: &mut StdRng) -> Nibbles {
     k_bytes[0..3].copy_from_slice(rng.gen::<[u64; 3]>().as_slice());
     k_bytes[3] = rng.gen_range(0x1000_0000_0000_0000..0xffff_ffff_ffff_ffff);
 
-    U256(k_bytes).into()
+    // TODO(sergethispr): check
+    U256::from_limbs(k_bytes).into()
 }
 
 fn gen_variable_nibbles_even_padded_nibbles(rng: &mut StdRng) -> Nibbles {
@@ -162,8 +163,9 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
         *b = rng.gen();
     }
 
-    U256::from_little_endian(&bytes).into()
+    U256::from_le_bytes(bytes).into()
 }
+
 // TODO: Replace with `PartialTrie` `iter` methods once done...
 pub(crate) fn get_non_hash_values_in_trie<N: PartialTrie>(
     trie: &Node<N>,

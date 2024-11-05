@@ -132,7 +132,7 @@ fn test_init_exc_stop() {
     let exc_stop_offset = KERNEL.global_labels["exc_stop"];
 
     let pc_u256 = U256::from(interpreter.get_registers().program_counter);
-    let exit_info = pc_u256 + (U256::one() << 32);
+    let exit_info = pc_u256 + (U256::from(1) << 32);
     interpreter.push(exit_info).unwrap();
     interpreter.get_mut_registers().program_counter = exc_stop_offset;
     interpreter.halt_offsets = vec![KERNEL.global_labels["halt_final"]];
@@ -158,7 +158,7 @@ fn test_init_exc_stop() {
                 segment: Segment::RegistersStates.unscale(),
                 virt: REGISTERS_LEN + RegistersIdx::IsKernel as usize,
             },
-            U256::one(),
+            U256::from(1),
         ),
     ];
     interpreter.set_memory_multi_addresses(&regs_to_set);

@@ -57,7 +57,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
-use crate::util::h256_limbs;
+use crate::util::b256_limbs;
 use crate::verifier::initial_memory_merkle_cap;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
@@ -1960,7 +1960,7 @@ where
         // The transactions and receipts tries are empty at the beginning of the block.
         let initial_trie = HashedPartialTrie::from(Node::Empty).hash();
 
-        for (i, limb) in h256_limbs::<F>(initial_trie).into_iter().enumerate() {
+        for (i, limb) in b256_limbs::<F>(initial_trie).into_iter().enumerate() {
             let limb_target = builder.constant(limb);
             builder.connect(x.trie_roots_before.transactions_root[i], limb_target);
             builder.connect(x.trie_roots_before.receipts_root[i], limb_target);
@@ -2490,13 +2490,13 @@ where
 
             // Initialize the checkpoint block roots before, and state root after.
             let state_trie_root_before_keys = 0..TARGET_HASH_SIZE;
-            for (key, &value) in state_trie_root_before_keys.zip_eq(&h256_limbs::<F>(
+            for (key, &value) in state_trie_root_before_keys.zip_eq(&b256_limbs::<F>(
                 agg_root_proof.public_values.trie_roots_before.state_root,
             )) {
                 nonzero_pis.insert(key, value);
             }
             let txn_trie_root_before_keys = TARGET_HASH_SIZE..TARGET_HASH_SIZE * 2;
-            for (key, &value) in txn_trie_root_before_keys.clone().zip_eq(&h256_limbs::<F>(
+            for (key, &value) in txn_trie_root_before_keys.clone().zip_eq(&b256_limbs::<F>(
                 agg_root_proof
                     .public_values
                     .trie_roots_before
@@ -2507,7 +2507,7 @@ where
             let receipts_trie_root_before_keys = TARGET_HASH_SIZE * 2..TARGET_HASH_SIZE * 3;
             for (key, &value) in receipts_trie_root_before_keys
                 .clone()
-                .zip_eq(&h256_limbs::<F>(
+                .zip_eq(&b256_limbs::<F>(
                     agg_root_proof.public_values.trie_roots_before.receipts_root,
                 ))
             {
@@ -2515,7 +2515,7 @@ where
             }
             let state_trie_root_after_keys =
                 TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TARGET_HASH_SIZE;
-            for (key, &value) in state_trie_root_after_keys.zip_eq(&h256_limbs::<F>(
+            for (key, &value) in state_trie_root_after_keys.zip_eq(&b256_limbs::<F>(
                 agg_root_proof.public_values.trie_roots_before.state_root,
             )) {
                 nonzero_pis.insert(key, value);
@@ -2549,7 +2549,7 @@ where
                     + BlockMetadataTarget::SIZE
                     + BlockHashesTarget::SIZE
                     + 8;
-            for (key, &value) in checkpoint_state_trie_keys.zip_eq(&h256_limbs::<F>(
+            for (key, &value) in checkpoint_state_trie_keys.zip_eq(&b256_limbs::<F>(
                 agg_root_proof
                     .public_values
                     .extra_block_data
@@ -2569,7 +2569,7 @@ where
                         - 16;
             for i in 0..agg_root_proof.public_values.block_hashes.prev_hashes.len() - 1 {
                 let targets =
-                    h256_limbs::<F>(agg_root_proof.public_values.block_hashes.prev_hashes[i]);
+                    b256_limbs::<F>(agg_root_proof.public_values.block_hashes.prev_hashes[i]);
                 for j in 0..8 {
                     nonzero_pis.insert(block_hashes_keys.start + 8 * (i + 1) + j, targets[j]);
                 }
@@ -2581,7 +2581,7 @@ where
                 + BlockHashesTarget::SIZE
                 - 8;
             let cur_targets =
-                h256_limbs::<F>(agg_root_proof.public_values.block_hashes.prev_hashes[255]);
+                b256_limbs::<F>(agg_root_proof.public_values.block_hashes.prev_hashes[255]);
             for i in 0..8 {
                 nonzero_pis.insert(block_hashes_current_start + i, cur_targets[i]);
             }

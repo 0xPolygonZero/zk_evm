@@ -190,11 +190,7 @@ pub(crate) fn generate<F: PrimeField64>(lv: &mut [F], idx: U256, val: U256) {
 
     u256_to_array(
         &mut lv[OUTPUT_REGISTER],
-        if idx < 32.into() {
-            output
-        } else {
-            U256::zero()
-        },
+        if idx < 32.into() { output } else { U256::ZERO },
     );
 }
 

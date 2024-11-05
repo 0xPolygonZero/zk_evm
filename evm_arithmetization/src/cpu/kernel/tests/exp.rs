@@ -25,14 +25,14 @@ fn test_exp() -> Result<()> {
     assert_eq!(stack_with_kernel, vec![expected_exp]);
 
     // 0 base
-    let initial_stack = vec![0xDEADBEEFu32.into(), b, U256::zero()];
+    let initial_stack = vec![0xDEADBEEFu32.into(), b, U256::ZERO];
     let stack_with_kernel = run_interpreter::<F>(exp, initial_stack)?.stack();
 
-    let expected_exp = U256::zero().overflowing_pow(b).0;
+    let expected_exp = U256::ZERO.overflowing_pow(b).0;
     assert_eq!(stack_with_kernel, vec![expected_exp]);
 
     // 0 exponent
-    let initial_stack = vec![0xDEADBEEFu32.into(), U256::zero(), a];
+    let initial_stack = vec![0xDEADBEEFu32.into(), U256::ZERO, a];
     interpreter.set_is_kernel(true);
     interpreter.set_context(0);
     let stack_with_kernel = run_interpreter::<F>(exp, initial_stack)?.stack();

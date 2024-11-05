@@ -412,7 +412,7 @@ where
                     channel.used = F::ZERO;
                     channel.value[0] = F::ONE;
                 } else {
-                    if jumpdest_bit != ethereum_types::U256::one() {
+                    if jumpdest_bit != ethereum_types::U256::from(1) {
                         return Err(ProgramError::InvalidJumpDestination);
                     }
                     self.push_memory(jumpdest_bit_log);
@@ -498,7 +498,7 @@ where
                 channel.used = F::ZERO;
                 channel.value[0] = F::ONE;
             } else {
-                if jumpdest_bit != ethereum_types::U256::one() {
+                if jumpdest_bit != ethereum_types::U256::from(1) {
                     return Err(ProgramError::InvalidJumpiDestination);
                 }
                 self.push_memory(jumpdest_bit_log);

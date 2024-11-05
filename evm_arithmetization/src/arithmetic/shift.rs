@@ -57,9 +57,9 @@ pub(crate) fn generate<F: PrimeField64>(
     // If `shift >= 256`, the shifted displacement is set to 0.
     // Compute 1 << shift and store it in the third input register.
     let shifted_displacement = if shift > U256::from(255u64) {
-        U256::zero()
+        U256::ZERO
     } else {
-        U256::one() << shift
+        U256::from(1) << shift
     };
 
     u256_to_array(&mut lv[INPUT_REGISTER_2], shifted_displacement);

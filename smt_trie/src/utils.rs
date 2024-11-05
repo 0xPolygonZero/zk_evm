@@ -39,7 +39,7 @@ pub(crate) fn limbs2f(limbs: [F; 8]) -> U256 {
     limbs
         .into_iter()
         .enumerate()
-        .fold(U256::zero(), |acc, (i, x)| {
+        .fold(U256::ZERO, |acc, (i, x)| {
             acc + (U256::from(x.to_canonical_u64()) << (i * 32))
         })
 }
