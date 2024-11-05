@@ -455,7 +455,7 @@ impl Type2World {
     }
 }
 
-// TODO(serge): Remove this module once this crate uses alloy types.
+// TODO(@sergerad): Remove this module once this crate uses alloy types.
 mod compat {
     use alloy::primitives::{Address, U256};
 

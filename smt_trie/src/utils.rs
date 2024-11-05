@@ -32,7 +32,7 @@ pub(crate) fn hash_key_hash(k: Key, h: [F; 4]) -> [F; 4] {
 /// Split a U256 into 8 32-bit limbs in little-endian order.
 pub(crate) fn f2limbs(x: U256) -> [F; 8] {
     std::array::from_fn(|i| {
-        F::from_canonical_u32(*(x >> (32 * i)).as_limbs().last().unwrap() as u32)
+        F::from_canonical_u32(*(x >> (32 * i)).as_limbs().first().unwrap() as u32)
     })
 }
 

@@ -18,7 +18,7 @@ fn test_add_and_rem() {
     let mut smt = Smt::<MemoryDb>::default();
 
     let k = Key(F::rand_array());
-    let v = U256::saturating_from(thread_rng().gen::<u64>());
+    let v = U256::from(thread_rng().gen::<u64>());
     smt.set(k, v);
     assert_eq!(v, smt.get(k));
 
@@ -60,8 +60,8 @@ fn test_update_element_1() {
     let mut smt = Smt::<MemoryDb>::default();
 
     let k = Key(F::rand_array());
-    let v1 = U256::saturating_from(thread_rng().gen::<u64>());
-    let v2 = U256::saturating_from(thread_rng().gen::<u64>());
+    let v1 = U256::from(thread_rng().gen::<u64>());
+    let v2 = U256::from(thread_rng().gen::<u64>());
     smt.set(k, v1);
     let root = smt.root;
     smt.set(k, v2);
@@ -79,8 +79,8 @@ fn test_add_shared_element_2() {
     let k1 = Key(F::rand_array());
     let k2 = Key(F::rand_array());
     assert_ne!(k1, k2, "Unlucky");
-    let v1 = U256::saturating_from(thread_rng().gen::<u64>());
-    let v2 = U256::saturating_from(thread_rng().gen::<u64>());
+    let v1 = U256::from(thread_rng().gen::<u64>());
+    let v2 = U256::from(thread_rng().gen::<u64>());
     smt.set(k1, v1);
     smt.set(k2, v2);
     smt.set(k1, U256::ZERO);
@@ -98,9 +98,9 @@ fn test_add_shared_element_3() {
     let k1 = Key(F::rand_array());
     let k2 = Key(F::rand_array());
     let k3 = Key(F::rand_array());
-    let v1 = U256::saturating_from(thread_rng().gen::<u64>());
-    let v2 = U256::saturating_from(thread_rng().gen::<u64>());
-    let v3 = U256::saturating_from(thread_rng().gen::<u64>());
+    let v1 = U256::from(thread_rng().gen::<u64>());
+    let v2 = U256::from(thread_rng().gen::<u64>());
+    let v3 = U256::from(thread_rng().gen::<u64>());
     smt.set(k1, v1);
     smt.set(k2, v2);
     smt.set(k3, v3);
@@ -120,7 +120,7 @@ fn test_add_remove_128() {
     let kvs = (0..128)
         .map(|_| {
             let k = Key(F::rand_array());
-            let v = U256::saturating_from(thread_rng().gen::<u64>());
+            let v = U256::from(thread_rng().gen::<u64>());
             smt.set(k, v);
             (k, v)
         })
@@ -144,7 +144,7 @@ fn test_should_read_random() {
     let kvs = (0..128)
         .map(|_| {
             let k = Key(F::rand_array());
-            let v = U256::saturating_from(thread_rng().gen::<u64>());
+            let v = U256::from(thread_rng().gen::<u64>());
             smt.set(k, v);
             (k, v)
         })
@@ -273,7 +273,7 @@ fn test_no_write_0() {
 
     let k1 = Key(F::rand_array());
     let k2 = Key(F::rand_array());
-    let v = U256::saturating_from(thread_rng().gen::<u64>());
+    let v = U256::from(thread_rng().gen::<u64>());
     smt.set(k1, v);
     let root = smt.root;
     smt.set(k2, U256::ZERO);
@@ -290,7 +290,7 @@ fn test_set_hash_first_level() {
     let kvs = (0..128)
         .map(|_| {
             let k = Key(F::rand_array());
-            let v = U256::saturating_from(random::<u64>());
+            let v = U256::from(random::<u64>());
             smt.set(k, v);
             (k, v)
         })
@@ -357,7 +357,7 @@ fn test_set_hash_order() {
             break key;
         }
     };
-    let val = U256::saturating_from(random::<u64>());
+    let val = U256::from(random::<u64>());
     smt.set(key, val);
 
     let mut second_smt = Smt::<MemoryDb>::default();
@@ -379,7 +379,7 @@ fn test_serialize_and_prune() {
 
     for _ in 0..128 {
         let k = Key(F::rand_array());
-        let v = U256::saturating_from(random::<u64>());
+        let v = U256::from(random::<u64>());
         smt.set(k, v);
     }
 
@@ -405,7 +405,7 @@ fn test_serialize_and_prune() {
         vec![
             U256::ZERO,
             U256::ZERO,
-            U256::from_le_bytes([0, 0, 0, 0, 0, 0, 0, HASH_TYPE]),
+            U256::from(HASH_TYPE),
             hashout2u(smt.root)
         ]
     );
