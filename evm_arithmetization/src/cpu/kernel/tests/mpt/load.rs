@@ -85,7 +85,7 @@ fn load_all_mpts_leaf() -> Result<()> {
             test_account_1().code_hash.into_uint(),
             // Values used for hashing.
             type_leaf,
-            3.into(),
+            64.into(), // should be 3 nibbles but keys are extended for `Type1World`
             0xABC.into(),
             9.into(), // value ptr
             test_account_1().nonce,
@@ -246,11 +246,11 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
             test_account_1().code_hash.into_uint(),
             // Values used for hashing.
             type_extension,
-            3.into(),     // 3 nibbles
+            64.into(),    // should be 3 nibbles but keys are extended for `Type1World`
             0xABC.into(), // key part
             9.into(),     // Pointer to the leaf node immediately below.
             type_leaf,
-            3.into(),     // 3 nibbles
+            64.into(),    // should be 3 nibbles but keys are extended for `Type1World`
             0xDEF.into(), // key part
             13.into(),    // value pointer
             test_account_1().nonce,
