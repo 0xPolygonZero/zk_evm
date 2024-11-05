@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-use ethereum_types::{BigEndianHash, H256, U256};
+use alloy::primitives::{B256, U256};
 use serde::{Deserialize, Serialize};
 
 pub type Bit = bool;
@@ -22,11 +22,11 @@ impl From<U256> for Bits {
     }
 }
 
-impl From<H256> for Bits {
-    fn from(packed: H256) -> Self {
+impl From<B256> for Bits {
+    fn from(packed: B256) -> Self {
         Bits {
             count: 256,
-            packed: packed.into_uint(),
+            packed: packed.into(),
         }
     }
 }
@@ -38,7 +38,7 @@ impl Add for Bits {
         assert!(self.count + rhs.count <= 256, "Overflow");
         Self {
             count: self.count + rhs.count,
-            packed: self.packed * (U256::one() << rhs.count) + rhs.packed,
+            packed: self.packed * (U256::from(1) << rhs.count) + rhs.packed,
         }
     }
 }
@@ -47,7 +47,7 @@ impl Bits {
     pub const fn empty() -> Self {
         Bits {
             count: 0,
-            packed: U256::zero(),
+            packed: U256::ZERO,
         }
     }
 
@@ -57,7 +57,7 @@ impl Bits {
 
     pub fn pop_next_bit(&mut self) -> Bit {
         assert!(!self.is_empty(), "Cannot pop from empty bits");
-        let b = !(self.packed & U256::one()).is_zero();
+        let b = !(self.packed & U256::from(1)).is_zero();
         self.packed >>= 1;
         self.count -= 1;
         b
@@ -65,11 +65,11 @@ impl Bits {
 
     pub fn get_bit(&self, i: usize) -> Bit {
         assert!(i < self.count, "Index out of bounds");
-        !(self.packed & (U256::one() << (self.count - 1 - i))).is_zero()
+        !(self.packed & (U256::from(1) << (self.count - 1 - i))).is_zero()
     }
 
     pub fn push_bit(&mut self, bit: Bit) {
-        self.packed = self.packed * 2 + U256::from(bit as u64);
+        self.packed = self.packed * U256::from(2) + U256::from(bit as u64);
         self.count += 1;
     }
 

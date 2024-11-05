@@ -367,9 +367,8 @@ impl World for Type2World {
         Ok(())
     }
     fn root(&mut self) -> H256 {
-        let mut it = [0; 32];
-        smt_trie::utils::hashout2u(self.as_smt().root).to_big_endian(&mut it);
-        H256(it)
+        let root = smt_trie::utils::hashout2u(self.as_smt().root);
+        H256::from_slice(root.as_le_slice())
     }
 }
 
@@ -430,11 +429,16 @@ impl Type2World {
                 (code_length, key_code_length),
             ] {
                 if let Some(value) = value {
-                    smt.set(key_fn(*addr), *value);
+                    let addr = compat::address(*addr);
+                    let value = compat::u256(*value);
+                    smt.set(key_fn(addr), value);
                 }
             }
             for (slot, value) in storage {
-                smt.set(key_storage(*addr, *slot), *value);
+                let addr = compat::address(*addr);
+                let slot = compat::u256(*slot);
+                let value = compat::u256(*value);
+                smt.set(key_storage(addr, slot), value);
             }
         }
         smt
@@ -448,5 +452,20 @@ impl Type2World {
             accounts,
             hashed_out,
         }
+    }
+}
+
+// TODO(serge): Remove this module once this crate uses alloy types.
+mod compat {
+    use alloy::primitives::{Address, U256};
+
+    pub(crate) fn address(addr: ethereum_types::H160) -> Address {
+        Address::from_slice(addr.as_bytes())
+    }
+
+    pub(crate) fn u256(value: ethereum_types::U256) -> U256 {
+        let mut buf = [0u8; 32];
+        value.to_little_endian(&mut buf);
+        U256::from_le_bytes(buf)
     }
 }

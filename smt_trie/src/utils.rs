@@ -1,4 +1,4 @@
-use ethereum_types::{H256, U256};
+use alloy::primitives::U256;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::Poseidon;
 
@@ -31,7 +31,9 @@ pub(crate) fn hash_key_hash(k: Key, h: [F; 4]) -> [F; 4] {
 
 /// Split a U256 into 8 32-bit limbs in little-endian order.
 pub(crate) fn f2limbs(x: U256) -> [F; 8] {
-    std::array::from_fn(|i| F::from_canonical_u32((x >> (32 * i)).low_u32()))
+    std::array::from_fn(|i| {
+        F::from_canonical_u32(*(x >> (32 * i)).as_limbs().last().unwrap() as u32)
+    })
 }
 
 /// Pack 8 32-bit limbs in little-endian order into a U256.
@@ -39,7 +41,7 @@ pub(crate) fn limbs2f(limbs: [F; 8]) -> U256 {
     limbs
         .into_iter()
         .enumerate()
-        .fold(U256::zero(), |acc, (i, x)| {
+        .fold(U256::ZERO, |acc, (i, x)| {
             acc + (U256::from(x.to_canonical_u64()) << (i * 32))
         })
 }
@@ -58,19 +60,19 @@ pub fn hashout2h(h: HashOut) -> H256 {
 
 /// Convert a `Key` to a `U256`.
 pub fn key2u(key: Key) -> U256 {
-    U256(key.0.map(|x| x.to_canonical_u64()))
+    U256::from_limbs(key.0.map(|x| x.to_canonical_u64()))
 }
 
 /// Convert a `U256` to a `Hashout`.
 pub(crate) fn u2h(x: U256) -> HashOut {
     HashOut {
-        elements: x.0.map(F::from_canonical_u64),
+        elements: x.as_limbs().map(F::from_canonical_u64),
     }
 }
 
 /// Convert a `U256` to a `Key`.
 pub(crate) fn u2k(x: U256) -> Key {
-    Key(x.0.map(F::from_canonical_u64))
+    Key(x.as_limbs().map(F::from_canonical_u64))
 }
 
 /// Given a node, return the index of the unique non-zero sibling, or -1 if

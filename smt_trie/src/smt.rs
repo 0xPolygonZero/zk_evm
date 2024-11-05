@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 
-use ethereum_types::U256;
+use alloy::primitives::U256;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
@@ -145,7 +145,7 @@ impl<D: Db> Smt<D> {
                         .copied()
                         .unwrap_or_default()
                         .is_zero());
-                    U256::zero()
+                    U256::ZERO
                 };
             } else {
                 let b = keys.get_bit(level as usize);
@@ -347,7 +347,7 @@ impl<D: Db> Smt<D> {
     /// Delete the key in the SMT.
     pub fn delete(&mut self, key: Key) {
         self.kv_store.remove(&key);
-        self.set(key, U256::zero());
+        self.set(key, U256::ZERO);
     }
 
     /// Set the key to the hash in the SMT.
@@ -416,7 +416,7 @@ impl<D: Db> Smt<D> {
         &self,
         keys: I,
     ) -> Vec<U256> {
-        let mut v = vec![U256::zero(); 2]; // For empty hash node.
+        let mut v = vec![U256::ZERO; 2]; // For empty hash node.
         let key = Key(self.root.elements);
 
         let mut keys_to_include = HashSet::new();
@@ -433,7 +433,7 @@ impl<D: Db> Smt<D> {
 
         serialize(self, key, &mut v, Bits::empty(), &keys_to_include);
         if v.len() == 2 {
-            v.extend([U256::zero(); 2]);
+            v.extend([U256::ZERO; 2]);
         }
         v
     }
@@ -457,7 +457,7 @@ fn serialize<D: Db>(
 
     if !keys_to_include.contains(&cur_bits) || smt.db.get_node(&key).is_none() {
         let index = v.len();
-        v.push(HASH_TYPE.into());
+        v.push(U256::saturating_from(HASH_TYPE));
         v.push(key2u(key));
         index
     } else if let Some(node) = smt.db.get_node(&key) {
@@ -473,7 +473,7 @@ fn serialize<D: Db>(
             let rem_key = Key(node.0[0..4].try_into().unwrap());
             let val = limbs2f(val_a);
             let index = v.len();
-            v.push(LEAF_TYPE.into());
+            v.push(U256::saturating_from(LEAF_TYPE));
             v.push(key2u(rem_key));
             v.push(val);
             index
@@ -481,14 +481,24 @@ fn serialize<D: Db>(
             let key_left = Key(node.0[0..4].try_into().unwrap());
             let key_right = Key(node.0[4..8].try_into().unwrap());
             let index = v.len();
-            v.push(INTERNAL_TYPE.into());
-            v.push(U256::zero());
-            v.push(U256::zero());
-            let i_left =
-                serialize(smt, key_left, v, cur_bits.add_bit(false), keys_to_include).into();
+            v.push(U256::saturating_from(INTERNAL_TYPE));
+            v.push(U256::ZERO);
+            v.push(U256::ZERO);
+            let i_left = U256::from(serialize(
+                smt,
+                key_left,
+                v,
+                cur_bits.add_bit(false),
+                keys_to_include,
+            ));
             v[index + 1] = i_left;
-            let i_right =
-                serialize(smt, key_right, v, cur_bits.add_bit(true), keys_to_include).into();
+            let i_right = U256::from(serialize(
+                smt,
+                key_right,
+                v,
+                cur_bits.add_bit(true),
+                keys_to_include,
+            ));
             v[index + 2] = i_right;
             index
         }
@@ -507,15 +517,16 @@ pub fn hash_serialize_u256(v: &[U256]) -> U256 {
 }
 
 fn _hash_serialize(v: &[U256], ptr: usize) -> HashOut {
-    assert!(v[ptr] <= u8::MAX.into());
-    match v[ptr].as_u64() as u8 {
+    let byte: u8 = v[ptr].try_into().unwrap();
+    match byte {
         HASH_TYPE => u2h(v[ptr + 1]),
 
         INTERNAL_TYPE => {
             let mut node = Node([F::ZERO; 12]);
             for b in 0..2 {
                 let child_index = v[ptr + 1 + b];
-                let child_hash = _hash_serialize(v, child_index.as_usize());
+                let child_index: usize = child_index.try_into().unwrap();
+                let child_hash = _hash_serialize(v, child_index);
                 node.0[b * 4..(b + 1) * 4].copy_from_slice(&child_hash.elements);
             }
             F::poseidon(node.0)[0..4].try_into().unwrap()
