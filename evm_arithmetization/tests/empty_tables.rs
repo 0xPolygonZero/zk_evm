@@ -18,6 +18,7 @@ use plonky2::util::timing::TimingTree;
 
 /// This test focuses on testing zkVM proofs with some empty tables.
 #[test]
+#[ignore]
 fn empty_tables() -> anyhow::Result<()> {
     type F = GoldilocksField;
     const D: usize = 2;

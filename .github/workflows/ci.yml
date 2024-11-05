@@ -95,6 +95,26 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  run_ignored_tests:
+    name: Run Specific Ignored Tests in Release Mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Run specific ignored tests in release mode
+        run: |
+          RUST_LOG=release cargo test --release \
+          --test empty_tables --test erc721 --test two_to_one_block -- --ignored
+
   test_zero_bin:
     name: Test zero_bin
     runs-on: ubuntu-latest
