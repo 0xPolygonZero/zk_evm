@@ -286,11 +286,21 @@ impl ProverStateManager {
         match self.persistence {
             CircuitPersistence::None | CircuitPersistence::Disk(TableLoadStrategy::Monolithic) => {
                 info!("using monolithic circuit {:?}", self);
-                self.segment_proof_monolithic(generation_inputs, &mut segment_data, &config, abort_signal)
+                self.segment_proof_monolithic(
+                    generation_inputs,
+                    &mut segment_data,
+                    &config,
+                    abort_signal,
+                )
             }
             CircuitPersistence::Disk(TableLoadStrategy::OnDemand) => {
                 info!("using on demand circuit {:?}", self);
-                self.segment_proof_on_demand(generation_inputs, &mut segment_data, &config, abort_signal)
+                self.segment_proof_on_demand(
+                    generation_inputs,
+                    &mut segment_data,
+                    &config,
+                    abort_signal,
+                )
             }
         }
     }
