@@ -5,29 +5,11 @@ use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
-use smt_trie::code::hash_bytecode_h256;
 
-use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
-
-/// Utility trait to leverage a specific hash function.
-pub(crate) trait Hasher {
-    fn hash(bytes: &[u8]) -> H256;
-}
-
-pub(crate) struct PoseidonHash;
-pub(crate) struct KeccakHash;
-
-impl Hasher for PoseidonHash {
-    fn hash(bytes: &[u8]) -> H256 {
-        hash_bytecode_h256(&bytes)
-    }
-}
-
-impl Hasher for KeccakHash {
-    fn hash(bytes: &[u8]) -> H256 {
-        keccak_hash::keccak(bytes)
-    }
-}
+use crate::{
+    tries::{MptKey, SmtKey, StateMpt, StorageTrie},
+    Hasher, KeccakHash, PoseidonHash,
+};
 
 /// The [core](crate::core) of this crate is agnostic over state and storage
 /// representations.

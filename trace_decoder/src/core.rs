@@ -1,6 +1,7 @@
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
+    marker::PhantomData,
     mem,
 };
 
@@ -21,6 +22,7 @@ use zk_evm_common::gwei_to_wei;
 use crate::{
     observer::{DummyObserver, Observer},
     world::Type2World,
+    Hasher, KeccakHash, PoseidonHash,
 };
 use crate::{
     tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
@@ -61,9 +63,7 @@ pub fn entrypoint(
         BlockTraceTriePreImages::Separate(_) => FatalMissingCode(true),
         BlockTraceTriePreImages::Combined(_) => FatalMissingCode(false),
     };
-    let (world, mut code) = start(trie_pre_images, wire_disposition)?;
-
-    code.extend(code_db);
+    let start = start(trie_pre_images, wire_disposition)?;
 
     let OtherBlockData {
         b_data:
@@ -82,22 +82,26 @@ pub fn entrypoint(
         *amt = gwei_to_wei(*amt)
     }
 
-    let batches = match world {
-        Either::Left(type1world) => Either::Left(
-            middle(
-                type1world,
-                batch(txn_info, batch_size_hint),
-                &mut code,
-                &b_meta,
-                ger_data,
-                withdrawals,
-                fatal_missing_code,
-                observer,
-            )?
-            .into_iter()
-            .map(|it| it.map(Either::Left)),
-        ),
-        Either::Right(type2world) => {
+    let batches = match start {
+        Either::Left((type1world, mut code)) => {
+            code.extend(code_db);
+            Either::Left(
+                middle(
+                    type1world,
+                    batch(txn_info, batch_size_hint),
+                    &mut code,
+                    &b_meta,
+                    ger_data,
+                    withdrawals,
+                    fatal_missing_code,
+                    observer,
+                )?
+                .into_iter()
+                .map(|it| it.map(Either::Left)),
+            )
+        }
+        Either::Right((type2world, mut code)) => {
+            code.extend(code_db);
             Either::Right(
                 middle(
                     type2world,
@@ -134,6 +138,7 @@ pub fn entrypoint(
                  withdrawals,
              }| {
                 let (state, storage) = world
+                    .clone()
                     .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
                     .into_state_and_storage();
                 GenerationInputs {
@@ -157,7 +162,10 @@ pub fn entrypoint(
                     checkpoint_consolidated_hash,
                     contract_code: contract_code
                         .into_iter()
-                        .map(|it| (keccak_hash::keccak(&it), it))
+                        .map(|it| match &world {
+                            Either::Left(_type1) => (KeccakHash::hash(&it), it),
+                            Either::Right(_type2) => (PoseidonHash::hash(&it), it),
+                        })
                         .collect(),
                     block_metadata: b_meta.clone(),
                     block_hashes: b_hashes.clone(),
@@ -177,7 +185,9 @@ pub fn entrypoint(
 fn start(
     pre_images: BlockTraceTriePreImages,
     wire_disposition: WireDisposition,
-) -> anyhow::Result<(Either<Type1World, Type2World>, Hash2Code)> {
+) -> anyhow::Result<
+    Either<(Type1World, Hash2Code<KeccakHash>), (Type2World, Hash2Code<PoseidonHash>)>,
+> {
     Ok(match pre_images {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/401
         //                refactor our convoluted input types
@@ -224,10 +234,7 @@ fn start(
                         .map(|v| (k, v))
                 })
                 .collect::<Result<_, _>>()?;
-            (
-                Either::Left(Type1World::new(state, storage)?),
-                Hash2Code::new(),
-            )
+            Either::Left((Type1World::new(state, storage)?, Hash2Code::new()))
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions = crate::wire::parse(&compact)
@@ -239,18 +246,20 @@ fn start(
                         storage,
                         code,
                     } = crate::type1::frontend(instructions)?;
-                    (
-                        Either::Left(Type1World::new(state, storage)?),
+
+                    Either::Left((
+                        Type1World::new(state, storage)?,
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
-                    )
+                    ))
                 }
                 WireDisposition::Type2 => {
                     let crate::type2::Frontend { world: trie, code } =
                         crate::type2::frontend(instructions)?;
-                    (
-                        Either::Right(trie),
+
+                    Either::Right((
+                        trie,
                         Hash2Code::from_iter(code.into_iter().map(NonEmpty::into_vec)),
-                    )
+                    ))
                 }
             }
         }
@@ -388,7 +397,7 @@ fn middle<WorldT: World + Clone>(
     // None represents a dummy transaction that should not increment the transaction index
     // all batches SHOULD not be empty
     batches: Vec<Vec<Option<TxnInfo>>>,
-    code: &mut Hash2Code,
+    code: &mut Hash2Code<WorldT::CodeHasher>,
     block: &BlockMetadata,
     ger_data: Option<(H256, H256)>,
     // added to final batch
@@ -787,15 +796,17 @@ fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// trace.
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
-struct Hash2Code {
-    /// Key must always be [`hash`](keccak_hash) of value.
+struct Hash2Code<H: Hasher> {
+    /// Key must always be [`hash`](World::CodeHasher) of value.
     inner: HashMap<H256, Vec<u8>>,
+    _phantom: PhantomData<H>,
 }
 
-impl Hash2Code {
+impl<H: Hasher> Hash2Code<H> {
     pub fn new() -> Self {
         let mut this = Self {
             inner: HashMap::new(),
+            _phantom: PhantomData,
         };
         this.insert(vec![]);
         this
@@ -804,11 +815,11 @@ impl Hash2Code {
         self.inner.get(&hash).cloned()
     }
     pub fn insert(&mut self, code: Vec<u8>) {
-        self.inner.insert(keccak_hash::keccak(&code), code);
+        self.inner.insert(H::hash(&code), code);
     }
 }
 
-impl Extend<Vec<u8>> for Hash2Code {
+impl<H: Hasher> Extend<Vec<u8>> for Hash2Code<H> {
     fn extend<II: IntoIterator<Item = Vec<u8>>>(&mut self, iter: II) {
         for it in iter {
             self.insert(it)
@@ -816,7 +827,7 @@ impl Extend<Vec<u8>> for Hash2Code {
     }
 }
 
-impl FromIterator<Vec<u8>> for Hash2Code {
+impl<H: Hasher> FromIterator<Vec<u8>> for Hash2Code<H> {
     fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
         let mut this = Self::new();
         this.extend(iter);

@@ -14,6 +14,8 @@ use u4::U4;
 
 use crate::tries::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
+use crate::world::{Type1World, World};
+use crate::Hasher as _;
 
 #[derive(Debug, Clone, Default)]
 pub struct Frontend {
@@ -85,11 +87,11 @@ fn visit(
                             match code {
                                 Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
                                 Some(Either::Right(Code { code })) => {
-                                    let hash = keccak_hash::keccak(&code);
+                                    let hash = <Type1World as World>::CodeHasher::hash(&code);
                                     frontend.code.insert(code);
                                     hash
                                 }
-                                None => keccak_hash::keccak([]),
+                                None => <Type1World as World>::CodeHasher::hash(&[]),
                             }
                         },
                     };
