@@ -479,7 +479,7 @@ echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false
 Move the generated files to the appropriate subdirectory, and they will be automatically included in the test run.
 
 
-### Proving blocks using docker compose setup and leader-worker ampq communication
+### Proving blocks using docker compose setup and leader-worker amqp communication
 
 To prove blocks using the docker compose setup and independent container leader and worker execution, you can use the `prove_stdio_docker_compose.sh` script:
 
@@ -488,7 +488,7 @@ cd scripts
 prove_stdio_docker_compose.sh ../path/to/block_witness.json
 ```
 
-Check the script and `docker-compose.yml` file for to further customize the setup.
+Check the script and `docker-compose.yml` file to further customize the setup (e.g. number of workers).
 
 ## License
 
