@@ -57,7 +57,9 @@ where
         block_trace: BlockTrace {
             trie_pre_images: BlockTraceTriePreImages::Combined(CombinedPreImages {
                 compact: hex::decode(block_witness.strip_prefix("0x").unwrap_or(&block_witness))
-                    .context("invalid hex returned from call to {WITNESS_ENDPOINT}")?,
+                    .context(format!(
+                        "invalid hex returned from call to {WITNESS_ENDPOINT}"
+                    ))?,
             }),
             txn_info: tx_results.into_iter().map(|it| it.result).collect(),
             code_db: Default::default(),
