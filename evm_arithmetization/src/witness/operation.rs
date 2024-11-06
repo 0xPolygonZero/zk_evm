@@ -250,7 +250,7 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
 
     let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
 
-    push_no_write(generation_state, hash);
+    push_no_write(generation_state, hash.into());
 
     state.push_poseidon(poseidon_op);
 
