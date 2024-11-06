@@ -427,7 +427,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 10 nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 10m nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
@@ -443,10 +443,9 @@ for BLOCK in $BLOCKS; do
 
   ### Clean up except when unknown error or undecided
   TEST_OUT_PATH="${REPO_ROOT}/$BLOCK.test.out"
-  if [ $EXITCODE -ne 1 ] && [ $EXITCODE -ne 2 ]; then
-    #rm $TEST_OUT_PATH
-    #rm $WITNESS
-    echo
+  if [ $EXITCODE -ne 1 ] && [ $EXITCODE -ne 2 ] && [ $EXITCODE -ne 5 ]; then
+    rm $TEST_OUT_PATH
+    rm $WITNESS
   fi
 
 done
