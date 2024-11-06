@@ -96,7 +96,7 @@ jobs:
           RUST_BACKTRACE: 1
 
   run_ignored_tests:
-    name: Run Specific Ignored Tests in Release Mode
+    name: Slow evm_arithmetization tests in release mode
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -193,4 +193,4 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
+        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json "" use_test_config
