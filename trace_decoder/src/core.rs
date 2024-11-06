@@ -11,6 +11,8 @@ use ethereum_types::{Address, BigEndianHash as _, U256};
 use evm_arithmetization::{
     generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
+    tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
+    world::{Hasher, KeccakHash, PoseidonHash, Type1World, Type2World, World},
     GenerationInputs,
 };
 use itertools::Itertools as _;
@@ -19,14 +21,8 @@ use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
 use zk_evm_common::gwei_to_wei;
 
+use crate::observer::{DummyObserver, Observer};
 use crate::{
-    observer::{DummyObserver, Observer},
-    world::Type2World,
-    Hasher, KeccakHash, PoseidonHash,
-};
-use crate::{
-    tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
-    world::{Type1World, World},
     BlockLevelData, BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     OtherBlockData, SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages,
     TxnInfo, TxnMeta, TxnTrace,

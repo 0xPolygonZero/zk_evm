@@ -7,9 +7,10 @@ use anyhow::ensure;
 use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
+
+use crate::generation::mpt::AccountRlp;
 
 /// Bounded sequence of [`U4`],
 /// used as a key for [MPT](HashedPartialTrie) types in this module.

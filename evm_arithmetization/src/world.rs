@@ -5,18 +5,36 @@ use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
+use smt_trie::code::hash_bytecode_h256;
 
-use crate::{
-    tries::{MptKey, SmtKey, StateMpt, StorageTrie},
-    Hasher, KeccakHash, PoseidonHash,
-};
+/// Utility trait to leverage a specific hash function across Type1 and Type2
+/// zkEVM variants.
+pub trait Hasher {
+    fn hash(bytes: &[u8]) -> H256;
+}
 
-/// The [core](crate::core) of this crate is agnostic over state and storage
-/// representations.
+pub struct PoseidonHash;
+pub struct KeccakHash;
+
+impl Hasher for PoseidonHash {
+    fn hash(bytes: &[u8]) -> H256 {
+        hash_bytecode_h256(bytes)
+    }
+}
+
+impl Hasher for KeccakHash {
+    fn hash(bytes: &[u8]) -> H256 {
+        keccak_hash::keccak(bytes)
+    }
+}
+
+use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
+
+/// The `core` module of the `trace_decoder` crate is agnostic over state and
+/// storage representations.
 ///
 /// This is the common interface to those data structures.
-/// See also [crate::_DEVELOPER_DOCS].
-pub(crate) trait World {
+pub trait World {
     /// (State) subtries may be _hashed out.
     /// This type is a key which may identify a subtrie.
     type SubtriePath;
@@ -50,8 +68,8 @@ pub(crate) trait World {
     /// Creates a new account at `address` if it does not exist.
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
 
-    /// The [core](crate::core) of this crate tracks required subtries for
-    /// proving.
+    /// The `core` module of the `trace_decoder` crate tracks required subtries
+    /// for proving.
     ///
     /// In case of a state delete, it may be that certain parts of the subtrie
     /// must be retained. If so, it will be returned as [`Some`].

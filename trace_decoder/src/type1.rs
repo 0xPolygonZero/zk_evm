@@ -7,15 +7,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::tries::{MptKey, StateMpt, StorageTrie};
+use evm_arithmetization::world::{Hasher as _, Type1World, World};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::tries::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
-use crate::world::{Type1World, World};
-use crate::Hasher as _;
 
 #[derive(Debug, Clone, Default)]
 pub struct Frontend {
