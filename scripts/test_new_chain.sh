@@ -42,7 +42,7 @@ function statistics()
   SEVENS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "7")
   EIGHTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "8")
   NINES=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "9")
-  TIMEOUTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "134")
+  TIMEOUTS=$(cat $RESULTS | tail -n $PREFIX_LEN | tr -s ' ' | cut -d' ' -f4 | grep --count "124")
 
   printf "\n\nStatistics\n" | tee -a $RESULTS
   echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
@@ -386,9 +386,9 @@ FAILING_BLOCKS3="
 "
 
 #BLOCKS="$(seq $STATICTIP)"
-#BLOCKS="$(seq 6555)"
-BLOCKS=$FAILING_BLOCKS3
-BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
+BLOCKS="$(seq 6555)"
+#BLOCKS=$FAILING_BLOCKS3
+#BLOCKS=`echo $BLOCKS | tr ' ' '\n' | sort -nu | tr '\n' ' '`
 
 echo "Testing:  $BLOCKS"
 
@@ -406,7 +406,7 @@ echo "6 [expected] is empty witness. Possibly due to Error: Failed to get proof 
 echo "7 [expected] is Found a Hash node during an insert in a PartialTrie" | tee -a $RESULTS
 echo "8 [expected] is Attempted to delete a value that ended up inside a hash node" | tee -a $RESULTS
 echo "9 [expected] is Memory allocation failed.  Increase RAM" | tee -a $RESULTS
-echo "134 [undecided] is timeout.  Try increasing the proving timeout." | tee -a $RESULTS
+echo "124 [undecided] is timeout.  Try increasing the proving timeout." | tee -a $RESULTS
 
 printf "\ngithash       block verdict   r  rpc-time  test-time total-time  tx-ok tx-none tx-total \n" | tee -a $RESULTS
 echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
@@ -427,7 +427,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 10m nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 5h nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%-Hh%-Mm%-Ss'`
