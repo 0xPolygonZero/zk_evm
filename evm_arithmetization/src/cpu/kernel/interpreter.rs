@@ -5,11 +5,13 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
+use core::option::Option::None;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
-use log::Level;
+use keccak_hash::H256;
+use log::{trace, Level};
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
@@ -19,8 +21,10 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::jumpdest::{JumpDestTableProcessed, JumpDestTableWitness};
 use crate::generation::linked_list::LinkedListsPtrs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
+use crate::generation::prover_input::get_proofs_and_jumpdests;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
@@ -54,6 +58,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// The interpreter will halt only if the current context matches
     /// halt_context
     pub(crate) halt_context: Option<usize>,
+    /// A table of call contexts and the JUMPDEST offsets that they jumped to.
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
@@ -73,9 +78,9 @@ pub(crate) struct Interpreter<F: RichField> {
 pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     final_label: &str,
     state: &GenerationState<F>,
-) -> Option<HashMap<usize, Vec<usize>>> {
+) -> Option<(JumpDestTableProcessed, JumpDestTableWitness)> {
     match state.jumpdest_table {
-        Some(_) => None,
+        Some(_) => Default::default(),
         None => {
             let halt_pc = KERNEL.global_labels[final_label];
             let initial_context = state.registers.context;
@@ -94,16 +99,22 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             let clock = interpreter.get_clock();
 
-            interpreter
+            let (jdtp, jdtw) = interpreter
                 .generation_state
-                .set_jumpdest_analysis_inputs(interpreter.jumpdest_table);
+                .get_jumpdest_analysis_inputs(interpreter.jumpdest_table.clone());
 
             log::debug!(
                 "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
                 clock
             );
 
-            interpreter.generation_state.jumpdest_table
+            // if let Some(cc) = interpreter.generation_state.jumpdest_table {
+            //     interpreter.generation_state.jumpdest_table =
+            //         Some(JumpDestTableProcessed::merge([&cc, &jdtp]));
+            // } else {
+            //     interpreter.generation_state.jumpdest_table = Some(jdtp.clone());
+            // }
+            Some((jdtp, jdtw))
         }
     }
 }
@@ -116,7 +127,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
-    pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
     pub(crate) access_lists_ptrs: LinkedListsPtrs,
     pub(crate) state_ptrs: LinkedListsPtrs,
     pub(crate) next_txn_index: usize,
@@ -150,6 +161,49 @@ pub(crate) fn set_registers_and_run<F: RichField>(
     });
 
     interpreter.run()
+}
+
+/// Computes the JUMPDEST proofs for each context.
+///
+/// # Arguments
+///
+/// - `jumpdest_table_rpc`:  The raw table received from RPC.
+/// - `code_db`: The corresponding database of contract code used in the trace.
+///
+/// # Output
+///
+/// Returns a [`JumpDestTableProccessed`].
+pub(crate) fn get_jumpdest_analysis_inputs_rpc_progressive<F: RichField>(
+    jumpdest_table_rpc: &JumpDestTableWitness,
+    generation_state: &GenerationState<F>,
+) -> JumpDestTableProcessed {
+    let current_ctx = generation_state.registers.context;
+    let current_code = generation_state.get_current_code().unwrap();
+    let current_code_hash = generation_state.get_current_code_hash().unwrap();
+    let code_map: &HashMap<H256, Vec<u8>> = &generation_state.inputs.contract_code;
+
+    trace!(
+        "current_code: {:?}, current_code_hash: {:?}, {:?} <============",
+        &current_code,
+        &current_code_hash,
+        code_map.contains_key(&current_code_hash),
+    );
+    trace!("code_map: {:?}", &code_map);
+    dbg!(current_ctx, current_code_hash, jumpdest_table_rpc.clone());
+    let mut ctx_proof = HashMap::<usize, Vec<_>>::new();
+    if jumpdest_table_rpc.contains_key(&current_code_hash) {
+        let cc = &(*jumpdest_table_rpc)[&current_code_hash].0;
+        if cc.contains_key(&current_ctx) {
+            let current_offsets = cc[&current_ctx].clone();
+            //let ctx_proof = prove_context_jumpdests(&current_code, &offsets);
+            let largest_address = current_offsets.last().unwrap().clone();
+            let offset_proofs =
+                get_proofs_and_jumpdests(&current_code, largest_address, current_offsets);
+            ctx_proof.insert(current_ctx, offset_proofs);
+        }
+    }
+
+    JumpDestTableProcessed::new(ctx_proof)
 }
 
 impl<F: RichField> Interpreter<F> {

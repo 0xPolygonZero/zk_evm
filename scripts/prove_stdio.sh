@@ -1,6 +1,6 @@
 #!/bin/bash
 # ------------------------------------------------------------------------------
-set -exo pipefail
+set -x
 
 # Run prover with the parsed input from the standard terminal.
 # To generate the json input file, use the `rpc` tool, for example:
@@ -17,27 +17,30 @@ else
     num_procs=$(nproc)
 fi
 
-# Force the working directory to always be the `tools/` directory. 
+# Force the working directory to always be the `tools/` directory.
 REPO_ROOT=$(git rev-parse --show-toplevel)
 PROOF_OUTPUT_DIR="${REPO_ROOT}/proofs"
 
-BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
+BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-1}"
 echo "Block batch size: $BLOCK_BATCH_SIZE"
+
+BATCH_SIZE=${BATCH_SIZE:-1}
+echo "Batch size: $BATCH_SIZE"
 
 OUTPUT_LOG="${REPO_ROOT}/output.log"
 PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
-TEST_OUT_PATH="${REPO_ROOT}/test.out"
+TEST_OUT_PATH="${REPO_ROOT}/$3.test.out"
 
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
 
-export RUST_MIN_STACK=33554432
+#export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=full
-export RUST_LOG=info
+export RUST_LOG=trace
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
-export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
+export RUSTFLAGS='-C target-cpu=native -Z linker-features=-lld'
 
 INPUT_FILE=$1
 TEST_ONLY=$2
@@ -45,6 +48,11 @@ TEST_ONLY=$2
 if [[ $INPUT_FILE == "" ]]; then
     echo "Please provide witness json input file, e.g. artifacts/witness_b19240705.json"
     exit 1
+fi
+
+if [[ ! -s $INPUT_FILE ]]; then
+    echo "Input file $INPUT_FILE does not exist or has length 0."
+    exit 6
 fi
 
 # Circuit sizes only matter in non test_only mode.
@@ -95,23 +103,34 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --quiet --release --package zero --bin leader -- \
+    nice -19 cargo run --quiet --release --package zero --bin leader -- \
       --test-only \
       --runtime in-memory \
       --load-strategy on-demand \
       --block-batch-size "$BLOCK_BATCH_SIZE" \
       --proof-output-dir "$PROOF_OUTPUT_DIR" \
-      stdio < "$INPUT_FILE" &> "$TEST_OUT_PATH"
+      --batch-size "$BATCH_SIZE" \
+      --save-inputs-on-error stdio
+      stdio < "$INPUT_FILE" |& tee &> "$TEST_OUT_PATH"
 
     if grep -q 'All proof witnesses have been generated successfully.' "$TEST_OUT_PATH"; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
+        #rm $TEST_OUT_PATH
+        exit 0
+    elif grep -q 'Attempted to collapse an extension node' "$TEST_OUT_PATH"; then
+        echo "ERROR: Attempted to collapse an extension node. See "$TEST_OUT_PATH" for more details."
         rm "$TEST_OUT_PATH"
-        exit
-    else
+        exit 4
+    elif grep -q 'SIMW == RPCW ? false' "$TEST_OUT_PATH"; then
+        echo "ERROR: SIMW == RPCW ? false. See "$TEST_OUT_PATH" for more details."
+        exit 5
+    elif grep -q 'Proving task finished with error' "$TEST_OUT_PATH"; then
         # Some error occurred, display the logs and exit.
-        cat "$TEST_OUT_PATH"
-        echo "Failed to create proof witnesses. See $TEST_OUT_PATH for more details."
+        echo "ERROR: Proving task finished with error. See "$TEST_OUT_PATH" for more details."
         exit 1
+    else
+        echo -e "\n\nUndecided.  Proving process has stopped but verdict is undecided. See $TEST_OUT_PATH for more details."
+        exit 2
     fi
 fi
 
@@ -119,10 +138,10 @@ cargo build --release --jobs "$num_procs"
 
 
 start_time=$(date +%s%N)
-"${REPO_ROOT}/target/release/leader" --runtime in-memory \
+nice -19 "${REPO_ROOT}/target/release/leader" --runtime in-memory \
     --load-strategy on-demand -n 1 \
     --block-batch-size "$BLOCK_BATCH_SIZE" \
-    --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" &> "$OUTPUT_LOG"
+    --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" |& tee "$OUTPUT_LOG"
 end_time=$(date +%s%N)
 
 grep "Successfully wrote to disk proof file " "$OUTPUT_LOG" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"
@@ -136,9 +155,9 @@ fi
 while read -r proof_file;
 do
   echo "Verifying proof file $proof_file"
-  verify_file=$PROOF_OUTPUT_DIR/verify_$(basename "$proof_file").out
-  "${REPO_ROOT}/target/release/verifier" -f "$proof_file" | tee "$verify_file"
-  if grep -q 'All proofs verified successfully!' "$verify_file"; then
+  verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
+  nice -19 "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee "$verify_file"
+  if grep -q 'All proofs verified successfully!' $verify_file; then
       echo "Proof verification for file $proof_file successful";
       rm "$verify_file" # we keep the generated proof for potential reuse
   else

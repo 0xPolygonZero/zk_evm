@@ -69,7 +69,7 @@ mod type2;
 mod wire;
 mod world;
 
-pub use core::{entrypoint, WireDisposition};
+pub use core::{entrypoint, is_precompile, WireDisposition};
 
 mod core;
 

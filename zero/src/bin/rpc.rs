@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use alloy::primitives::B256;
 use alloy::providers::Provider;
@@ -13,10 +14,12 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero::block_interval::BlockInterval;
 use zero::block_interval::BlockIntervalStream;
+use zero::parsing::parse_duration;
 use zero::prover::BlockProverInput;
 use zero::prover::WIRE_DISPOSITION;
 use zero::provider::CachedProvider;
 use zero::rpc;
+use zero::rpc::JumpdestSrc;
 
 use self::rpc::{retry::build_http_retry_provider, RpcType};
 
@@ -25,6 +28,8 @@ struct FetchParams {
     pub start_block: u64,
     pub end_block: u64,
     pub checkpoint_block_number: Option<u64>,
+    pub jumpdest_src: JumpdestSrc,
+    pub timeout: Duration,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -35,12 +40,23 @@ struct RpcToolConfig {
     /// The RPC Tracer Type.
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
+    /// The source of jumpdest tables.
+    #[arg(
+        short = 'j',
+        long,
+        default_value = "client-fetched-structlogs",
+        required = false
+    )]
+    jumpdest_src: JumpdestSrc,
     /// Backoff in milliseconds for retry requests.
     #[arg(long, default_value_t = 0)]
     backoff: u64,
     /// The maximum number of retries.
     #[arg(long, default_value_t = 0)]
     max_retries: u32,
+    /// Timeout for fetching structlog traces
+    #[arg(long, default_value = "60", value_parser = parse_duration)]
+    timeout: Duration,
 }
 
 #[derive(Subcommand)]
@@ -97,9 +113,14 @@ where
         let (block_num, _is_last_block) = block_interval_elem?;
         let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
         // Get the prover input for particular block.
-        let result =
-            rpc::block_prover_input(cached_provider.clone(), block_id, checkpoint_block_number)
-                .await?;
+        let result = rpc::block_prover_input(
+            cached_provider.clone(),
+            block_id,
+            checkpoint_block_number,
+            params.jumpdest_src,
+            params.timeout,
+        )
+        .await?;
 
         block_prover_inputs.push(result);
     }
@@ -126,6 +147,8 @@ impl Cli {
                     start_block,
                     end_block,
                     checkpoint_block_number,
+                    jumpdest_src: self.config.jumpdest_src,
+                    timeout: self.config.timeout,
                 };
 
                 let block_prover_inputs =
@@ -151,6 +174,8 @@ impl Cli {
                             start_block: block_number,
                             end_block: block_number,
                             checkpoint_block_number: None,
+                            jumpdest_src: self.config.jumpdest_src,
+                            timeout: self.config.timeout,
                         };
 
                         let block_prover_inputs =
@@ -204,8 +229,10 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::Registry::default()
         .with(
             tracing_subscriber::fmt::layer()
+                // With the default configuration trace information is written
+                // to stdout, but we already use stdout to write our payload (the witness).
+                .with_writer(std::io::stderr)
                 .with_ansi(false)
-                .compact()
                 .with_filter(EnvFilter::from_default_env()),
         )
         .init();

@@ -8,6 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
+use super::jumpdest::JumpDestTableProcessed;
 use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
@@ -386,7 +387,7 @@ pub struct GenerationState<F: RichField> {
     /// "proof" for a jump destination is either 0 or an address i > 32 in
     /// the code (not necessarily pointing to an opcode) such that for every
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
-    pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
 
     /// Provides quick access to pointers that reference the location
     /// of either and account or a slot in the respective access list.
@@ -494,12 +495,12 @@ impl<F: RichField> GenerationState<F> {
             // We cannot observe anything as the stack is empty.
             return Ok(());
         }
-        if dst == KERNEL.global_labels["observe_new_address"] {
+        if dst == KERNEL.global_labels["observe_new_address"] && self.is_kernel() {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             let tip_h160 = H160::from(tip_h256);
             self.observe_address(tip_h160);
-        } else if dst == KERNEL.global_labels["observe_new_contract"] {
+        } else if dst == KERNEL.global_labels["observe_new_contract"] && self.is_kernel() {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             self.observe_contract(tip_h256)?;

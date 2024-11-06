@@ -36,6 +36,8 @@ alloy = { version = '0.3.0', default-features = false, features = [
   "transport-http",
   "rpc-types-debug",
 ] }
+alloy-primitives = "0.8.0"
+alloy-serde = "0.3.0"
 anyhow = "1.0.86"
 async-stream = "0.3.5"
 axum = "0.7.5"
@@ -47,6 +49,7 @@ ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
 compat = { path = "compat" }
 criterion = "0.5.1"
+derive_more = "1.0.0"
 dotenvy = "0.15.7"
 either = "1.12.0"
 enum-as-inner = "0.6.0"
@@ -87,6 +90,7 @@ ruint = "1.12.3"
 serde = "1.0.203"
 serde_json = "1.0.118"
 serde_path_to_error = "0.1.16"
+serde_with = "3.8.1"
 serde-big-array = "0.5.1"
 sha2 = "0.10.8"
 static_assertions = "1.1.0"
@@ -95,8 +99,8 @@ thiserror = "1.0.61"
 tiny-keccak = "2.0.2"
 tokio = { version = "1.38.0", features = ["full"] }
 tower = "0.4"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { version = "0.1", features = ["attributes"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 trybuild = "1.0"
 u4 = "0.1.0"
 uint = "0.9.5"
@@ -120,3 +124,27 @@ starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2488cdac
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"
+
+[profile.release]
+opt-level = 3
+debug = true
+incremental = true
+debug-assertions = true
+lto = false
+overflow-checks = false
+
+[profile.test]
+opt-level = 3
+debug = true
+incremental = true
+debug-assertions = true
+lto = false
+overflow-checks = false
+
+[profile.dev]
+opt-level = 3
+debug = true
+incremental = true
+debug-assertions = true
+lto = false
+overflow-checks = false

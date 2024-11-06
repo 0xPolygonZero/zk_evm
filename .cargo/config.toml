@@ -1,7 +1,18 @@
 [build]
 # https://github.com/rust-lang/rust/pull/124129
 # https://github.com/dtolnay/linkme/pull/88
-rustflags = ["-Z", "linker-features=-lld"]
+
+[env]
+RUST_BACKTRACE = "1"
+RUST_TEST_NOCAPTURE = "1"
+
+[term]
+verbose = true
+color = 'auto'
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-Z", "linker-features=-lld", "-C", "target-cpu=native"] #, "-C", "link-arg=-fuse-ld=/usr/bin/mold", "-C", "debuginfo=2"]
 
 [alias]
 xtask = ["run", "--package=xtask", "--"]

@@ -1,6 +1,10 @@
+use core::option::Option::None;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::time::Duration;
 
 use __compat_primitive_types::{H256, U256};
+use alloy::eips::BlockNumberOrTag;
+use alloy::rpc::types::trace::geth::TraceResult;
 use alloy::{
     primitives::{keccak256, Address, B256},
     providers::{
@@ -9,38 +13,120 @@ use alloy::{
         Provider,
     },
     rpc::types::{
-        eth::Transaction,
-        eth::{AccessList, Block},
+        eth::{AccessList, Block, Transaction},
         trace::geth::{
-            AccountState, DiffMode, GethDebugBuiltInTracerType, GethTrace, PreStateConfig,
-            PreStateFrame, PreStateMode,
+            AccountState, DiffMode, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingOptions, GethTrace, PreStateConfig, PreStateFrame, PreStateMode,
+            StructLog,
         },
-        trace::geth::{GethDebugTracerType, GethDebugTracingOptions},
     },
     transports::Transport,
 };
-use anyhow::Context as _;
-use compat::Compat;
+use anyhow::{bail, Context as _, Ok};
+use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
+use tracing::{debug, warn};
 
-use super::CodeDb;
+use crate::rpc::jumpdest::get_block_normalized_structlogs;
+use crate::rpc::Compat;
+use crate::rpc::{
+    jumpdest::{self},
+    JumpdestSrc,
+};
+pub(crate) async fn get_block_prestate_traces<ProviderT, TransportT>(
+    provider: &ProviderT,
+    block: &BlockNumberOrTag,
+    tracing_options: GethDebugTracingOptions,
+) -> anyhow::Result<Vec<GethTrace>>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    let block_prestate_traces = provider
+        .debug_trace_block_by_number(*block, tracing_options)
+        .await?;
+
+    block_prestate_traces
+        .into_iter()
+        .map(|trace_result| match trace_result {
+            TraceResult::Success { result, .. } => Ok(result),
+            TraceResult::Error { error, .. } => {
+                bail!("error fetching block prestate traces: {:?}", error)
+            }
+        })
+        .collect::<Result<Vec<GethTrace>, anyhow::Error>>()
+}
 
 /// Processes the transactions in the given block and updates the code db.
-pub(super) async fn process_transactions<ProviderT, TransportT>(
+pub async fn process_transactions<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
+    jumpdest_src: JumpdestSrc,
+    fetch_timeout: &Duration,
 ) -> anyhow::Result<(CodeDb, Vec<TxnInfo>)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
+    // Get block prestate traces
+    let block_prestate_trace = get_block_prestate_traces(
+        provider,
+        &BlockNumberOrTag::from(block.header.number),
+        prestate_tracing_options(false),
+    )
+    .await?;
+
+    // Get block diff traces
+    let block_diff_trace = get_block_prestate_traces(
+        provider,
+        &BlockNumberOrTag::from(block.header.number),
+        prestate_tracing_options(true),
+    )
+    .await?;
+
+    let block_structlogs = match jumpdest_src {
+        JumpdestSrc::ProverSimulation => vec![None; block_prestate_trace.len()],
+        JumpdestSrc::ClientFetchedStructlogs => {
+            // In case of the error with retrieving structlogs from the server,
+            // continue without interruption. Equivalent to `ProverSimulation` case.
+            get_block_normalized_structlogs(
+                provider,
+                &BlockNumberOrTag::from(block.header.number),
+                fetch_timeout,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                warn!(
+                    "failed to fetch server structlogs for block {}: {e}",
+                    block.header.number
+                );
+                vec![None; block_prestate_trace.len()]
+            })
+            .into_iter()
+            .map(|tx_struct_log| tx_struct_log.map(|it| it.1))
+            .collect()
+        }
+        JumpdestSrc::Serverside => todo!(
+            "Not implemented. See https://github.com/0xPolygonZero/erigon/issues/20 for details."
+        ),
+    };
+
     block
         .transactions
         .as_transactions()
         .context("No transactions in block")?
         .iter()
-        .map(|tx| process_transaction(provider, tx))
+        .zip(
+            block_prestate_trace.into_iter().zip(
+                block_diff_trace
+                    .into_iter()
+                    .zip(block_structlogs.into_iter()),
+            ),
+        )
+        .map(|(tx, (pre_trace, (diff_trace, structlog)))| {
+            process_transaction(provider, tx, pre_trace, diff_trace, structlog)
+        })
         .collect::<FuturesOrdered<_>>()
         .try_fold(
             (BTreeSet::new(), Vec::new()),
@@ -55,24 +141,21 @@ where
 
 /// Processes the transaction with the given transaction hash and updates the
 /// accounts state.
-async fn process_transaction<ProviderT, TransportT>(
+pub async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
+    pre_trace: GethTrace,
+    diff_trace: GethTrace,
+    structlog_opt: Option<Vec<StructLog>>,
 ) -> anyhow::Result<(CodeDb, TxnInfo)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let (tx_receipt, pre_trace, diff_trace) = fetch_tx_data(provider, &tx.hash).await?;
+    let tx_receipt = fetch_tx_receipt(provider, &tx.hash).await?;
     let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
-
-    let tx_meta = TxnMeta {
-        byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
-        new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
-        gas_used: tx_receipt.gas_used as u64,
-    };
 
     let (code_db, mut tx_traces) = match (pre_trace, diff_trace) {
         (
@@ -85,7 +168,29 @@ where
     // Handle case when transaction failed and a contract creation was reverted
     if !tx_status && tx_receipt.contract_address.is_some() {
         tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
-    }
+    };
+
+    let jumpdest_table: Option<JumpDestTableWitness> = structlog_opt.and_then(|struct_logs| {
+        jumpdest::generate_jumpdest_table(tx, &struct_logs, tx_traces.iter().map(|(a, t)| (*a, t)))
+            .map_or_else(
+                |error| {
+                    debug!(
+                        "{}: JumpDestTable generation failed with reason: {:?}",
+                        tx.hash.to_string(),
+                        error
+                    );
+                    None
+                },
+                Some,
+            )
+    });
+
+    let tx_meta = TxnMeta {
+        byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
+        new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
+        gas_used: tx_receipt.gas_used as u64,
+        jumpdest_table,
+    };
 
     Ok((
         code_db,
@@ -100,26 +205,16 @@ where
 }
 
 /// Fetches the transaction data for the given transaction hash.
-async fn fetch_tx_data<ProviderT, TransportT>(
+async fn fetch_tx_receipt<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
-) -> anyhow::Result<(<Ethereum as Network>::ReceiptResponse, GethTrace, GethTrace), anyhow::Error>
+) -> anyhow::Result<<Ethereum as Network>::ReceiptResponse>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let tx_receipt_fut = provider.get_transaction_receipt(*tx_hash);
-    let pre_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(false));
-    let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
-
-    let (tx_receipt, pre_trace, diff_trace) =
-        futures::try_join!(tx_receipt_fut, pre_trace_fut, diff_trace_fut,)?;
-
-    Ok((
-        tx_receipt.context("Transaction receipt not found.")?,
-        pre_trace,
-        diff_trace,
-    ))
+    let tx_receipt = provider.get_transaction_receipt(*tx_hash).await?;
+    tx_receipt.context("Transaction receipt not found.")
 }
 
 /// Parse the access list data into a hashmap.

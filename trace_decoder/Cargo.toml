@@ -15,6 +15,7 @@ alloy-compat = "0.1.0"
 anyhow.workspace = true
 bitflags.workspace = true
 bitvec.workspace = true
+build-array = "0.1.2"
 bytes.workspace = true
 ciborium.workspace = true
 ciborium-io.workspace = true

@@ -103,6 +103,7 @@ async fn main() -> Result<()> {
         Command::Rpc {
             rpc_url,
             rpc_type,
+            jumpdest_src,
             checkpoint_block,
             previous_proof,
             block_time,
@@ -110,6 +111,7 @@ async fn main() -> Result<()> {
             end_block,
             backoff,
             max_retries,
+            timeout,
         } => {
             // Construct the provider.
             let previous_proof = get_previous_proof(previous_proof)?;
@@ -139,6 +141,8 @@ async fn main() -> Result<()> {
                     previous_proof,
                     prover_config,
                 },
+                jumpdest_src,
+                timeout,
             )
             .await?;
         }
