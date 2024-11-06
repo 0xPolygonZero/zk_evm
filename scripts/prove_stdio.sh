@@ -122,16 +122,13 @@ start_time=$(date +%s%N)
 
 cmd=("${REPO_ROOT}/target/release/leader" --runtime in-memory \
     --load-strategy on-demand -n 1 \
-    --block-batch-size "$BLOCK_BATCH_SIZE" \
-    --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE")
+    --block-batch-size "$BLOCK_BATCH_SIZE")
 
-# Conditionally add --use-test-config if USE_TEST_CONFIG is set to "true"
 if [[ "$USE_TEST_CONFIG" == "use_test_config" ]]; then
     cmd+=("--use-test-config")
 fi
 
-# Run the command and capture output
-"${cmd[@]}" &> "$OUTPUT_LOG"
+"${cmd[@]}" --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" &> "$OUTPUT_LOG"
 end_time=$(date +%s%N)
 
 grep "Successfully wrote to disk proof file " "$OUTPUT_LOG" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"
