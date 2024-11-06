@@ -56,7 +56,8 @@
 /// we can continue to do the main work of "executing" the transactions.
 ///
 /// The core of this library is agnostic over the (combined)
-/// state and storage representation - see [`world::World`] for more.
+/// state and storage representation - see [`evm_arithmetization::world::World`]
+/// for more.
 const _DEVELOPER_DOCS: () = ();
 
 mod interface;

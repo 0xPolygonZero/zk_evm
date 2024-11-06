@@ -176,7 +176,8 @@ pub fn entrypoint(
 /// [`HashedPartialTrie`](mpt_trie::partial_trie::HashedPartialTrie),
 /// or a [`wire`](crate::wire)-encoded representation of one.
 ///
-/// Turn either of those into our [internal representations](crate::tries).
+/// Turn either of those into our [internal
+/// representations](evm_arithmetization::tries).
 #[allow(clippy::type_complexity)]
 fn start(
     pre_images: BlockTraceTriePreImages,
