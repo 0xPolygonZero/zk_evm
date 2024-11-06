@@ -155,8 +155,8 @@ fn visit(
                     collated.nonce = Some(value)
                 }
                 SmtLeafType::Code => {
-                    ensure!(collated.code.is_none());
-                    collated.code = Some(value)
+                    ensure!(collated.code_hash.is_none());
+                    collated.code_hash = Some(value)
                 }
                 SmtLeafType::Storage(slot) => {
                     ensure!(slot.len() <= 32);
