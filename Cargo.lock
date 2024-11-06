@@ -3420,8 +3420,8 @@ dependencies = [
 
 [[package]]
 name = "paladin-core"
-version = "0.4.4"
-source = "git+https://github.com/0xPolygonZero/paladin.git?branch=feat/abort-signal#eb0376800e85d762dfb349cad415ee14c57f190f"
+version = "0.4.3"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3453,7 +3453,7 @@ dependencies = [
 [[package]]
 name = "paladin-opkind-derive"
 version = "0.4.4"
-source = "git+https://github.com/0xPolygonZero/paladin.git?branch=feat/abort-signal#eb0376800e85d762dfb349cad415ee14c57f190f"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
 dependencies = [
  "quote",
  "syn 2.0.77",
