@@ -368,7 +368,7 @@ impl World for Type2World {
     }
     fn root(&mut self) -> H256 {
         let root = smt_trie::utils::hashout2u(self.as_smt().root);
-        H256::from_slice(root.as_le_slice())
+        H256::from(root.to_be_bytes())
     }
 }
 
@@ -464,8 +464,6 @@ mod compat {
     }
 
     pub(crate) fn u256(value: ethereum_types::U256) -> U256 {
-        let mut buf = [0u8; 32];
-        value.to_little_endian(&mut buf);
-        U256::from_le_bytes(buf)
+        U256::from_limbs(value.0)
     }
 }

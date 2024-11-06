@@ -517,7 +517,7 @@ pub fn hash_serialize_u256(v: &[U256]) -> U256 {
 }
 
 fn _hash_serialize(v: &[U256], ptr: usize) -> HashOut {
-    let byte: u8 = v[ptr].try_into().unwrap();
+    let byte: u8 = v[ptr].try_into().expect("U256 should have been <= u8::MAX");
     match byte {
         HASH_TYPE => u2h(v[ptr + 1]),
 

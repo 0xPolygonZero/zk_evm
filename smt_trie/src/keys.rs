@@ -74,8 +74,9 @@ pub fn key_storage(addr: Address, slot: U256) -> Key {
     let capacity: [F; 4] = {
         let mut arr = [F::ZERO; 12];
         for i in 0..4 {
-            arr[2 * i] = F::from_canonical_u32(u32::try_from(slot).unwrap());
-            arr[2 * i + 1] = F::from_canonical_u32((u64::try_from(slot).unwrap() >> 32) as u32);
+            let limbs = slot.as_limbs()[i];
+            arr[2 * i] = F::from_canonical_u32(limbs as u32);
+            arr[2 * i + 1] = F::from_canonical_u32((limbs >> 32) as u32);
         }
         F::poseidon(arr)[0..4].try_into().unwrap()
     };
