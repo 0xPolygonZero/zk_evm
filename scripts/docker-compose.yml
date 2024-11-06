@@ -8,7 +8,7 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-    command: bash -c "leader --runtime amqp --proof-output-dir ./proofs --block-batch-size ${LEADER_BLOCK_BATCH_SIZE} stdio < /witness"
+    command: bash -c "leader --runtime amqp --load-strategy on-demand --proof-output-dir ./proofs --block-batch-size ${LEADER_BLOCK_BATCH_SIZE} stdio < /witness"
     environment:
       - RUST_LOG=info
       - AMQP_URI=amqp://rabbitmq:5672
