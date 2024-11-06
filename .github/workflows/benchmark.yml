@@ -16,16 +16,16 @@ jobs:
   benchmark_proving:
     name: Benchmark proving for representative blocks
     runs-on: zero-reg
-    timeout-minutes: 900  # Timeout TBD
+    timeout-minutes: 300
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Build the project
         run: |
-          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
+          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld' cargo build --release
           sudo sysctl kernel.perf_event_paranoid=0
 
       - name: Download previous results
