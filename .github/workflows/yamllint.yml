@@ -23,4 +23,4 @@ jobs:
           yamllint
           --format github
           -d "{extends: default, rules: {line-length: {max: 120}, truthy: {check-keys: false}}}"
-          .github
+          .github scripts
