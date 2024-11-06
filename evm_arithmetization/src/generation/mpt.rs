@@ -12,7 +12,7 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
@@ -518,7 +518,7 @@ fn load_state_trie(
     }
 }
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -613,6 +613,7 @@ fn get_state_and_storage_leaves(
 
             // Push the payload in the trie data.
             trie_data.push(Some(nonce));
+            log::debug!("key = {:?} nonce = {:?} balance= {:?}", addr_key, nonce, balance);
             trie_data.push(Some(balance));
             // The Storage pointer is only written in the trie.
             trie_data.push(Some(0.into()));
@@ -721,9 +722,14 @@ where
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type LinkedListsAndTrieData = (Vec<Option<U256>>, Vec<Option<U256>>, Vec<Option<U256>>);
+type LinkedListsAndTrieData = (
+    TrieRootPtrs,
+    Vec<Option<U256>>,
+    Vec<Option<U256>>,
+    Vec<Option<U256>>,
+);
 
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
@@ -738,7 +744,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     let mut trie_data = vec![Some(U256::zero())];
     let mpt_state = match &trie_inputs.state_trie.state {
         Either::Left(type1world) => type1world,
-        Either::Right(_) => panic!("eth_mainnet expects MPTs."),
+        Either::Right(_) => unreachable!("eth_mainnet expects MPTs."),
     };
     let storage_tries_by_state_key = mpt_state
         .get_storage()
@@ -749,6 +755,14 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
             (key, *storage_trie)
         })
         .collect();
+
+    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
+        let mut parsed_txn = vec![U256::from(rlp.len())];
+        parsed_txn.extend(rlp.iter().copied().map(U256::from));
+        Ok(parsed_txn)
+    })?;
+
+    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
     get_state_and_storage_leaves(
         &mpt_state.state_trie(),
@@ -761,7 +775,16 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &storage_tries_by_state_key,
     )?;
 
-    Ok((state_leaves, storage_leaves, trie_data))
+    Ok((
+        TrieRootPtrs {
+            state_root_ptr: None,
+            txn_root_ptr,
+            receipt_root_ptr,
+        },
+        state_leaves,
+        storage_leaves,
+        trie_data,
+    ))
 }
 
 pub(crate) fn load_state_mpt(
@@ -778,12 +801,12 @@ pub(crate) fn load_state_mpt(
                 (key, *storage_trie)
             })
             .collect::<HashMap<_, _>>(),
-        Either::Right(_) => panic!("eth_mainnet expects an MPT."),
+        Either::Right(_) => unreachable!("eth_mainnet expects an MPT."),
     };
 
     let mpt_trie = match &trie_inputs.state_trie.state {
         Either::Left(t) => t.state_trie(),
-        Either::Right(_) => panic!("eth_mainnet expects MPTs."),
+        Either::Right(_) => unreachable!("eth_mainnet expects MPTs."),
     };
 
     load_state_trie(

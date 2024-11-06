@@ -31,9 +31,11 @@ global set_beacon_root:
     DUP3
     // stack: state_key, root_slot_key, calldata, state_key, timestamp_slot_key, timestamp, retdest
     DUP3 ISZERO %jumpi(delete_root_idx_slot)
-    // stack: state_key, root_slot_key, calldata, state_key, timestamp_slot_key, timestamp, retdest
+    // stack: state_key, root_slot_key, calldata, state_key, timestamp_slot_key, timestamp, 
+global debug_inserting_first_slot:
     %insert_slot_from_addr_key
     // stack: state_key, timestamp_idx, timestamp, retdest
+global debug_inserting_second_slot:
     %insert_slot_from_addr_key
     // stack: retdest
     JUMP

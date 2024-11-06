@@ -19,9 +19,9 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
-use crate::generation::mpt::{AccountRlp, EitherRlp, MptAccountRlp, SmtAccountRlp};
+use crate::generation::mpt::{load_state_mpt, AccountRlp, EitherRlp, MptAccountRlp, SmtAccountRlp};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -33,18 +33,26 @@ pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: &TrieInputs,
 ) {
-    // Load all MPTs.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(feature = "cdk_erigon")]
     {
-        let (state_leaves, storage_leaves, trie_data) = load_linked_lists_and_txn_and_receipt_mpts(
-            &mut interpreter
-                .generation_state
-                .state_pointers
-                .accounts_pointers,
-            &mut interpreter.generation_state.state_pointers.storage_pointers,
-            trie_inputs,
-        )
-        .expect("Invalid MPT data for preinitialization");
+        interpreter
+            .generation_state
+            .preinitialize_linked_lists(trie_inputs);
+    }
+
+    // Load all MPTs.
+    #[cfg(not(feature = "cdk_erigon"))]
+    {
+        let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(
+                &mut interpreter
+                    .generation_state
+                    .state_pointers
+                    .accounts_pointers,
+                &mut interpreter.generation_state.state_pointers.storage_pointers,
+                trie_inputs,
+            )
+            .expect("Invalid MPT data for preinitialization");
 
         interpreter.generation_state.memory.contexts[0].segments
             [Segment::AccountsLinkedList.unscale()]
@@ -54,30 +62,38 @@ pub(crate) fn initialize_mpts<F: RichField>(
         .content = storage_leaves;
         interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()]
             .content = trie_data.clone();
-        // interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
+        interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
 
-        // if trie_root_ptrs.state_root_ptr.is_none() {
-        // trie_root_ptrs.state_root_ptr = Some(
-        //     load_state_mpt(
-        //         &trie_inputs.trim(),
-        //         &mut interpreter.generation_state.memory.contexts[0].segments
-        //             [Segment::TrieData.unscale()]
-        //         .content,
-        //     )
-        //     .expect("Invalid MPT data for preinitialization"),
-        // );
-        // }
+        if trie_root_ptrs.state_root_ptr.is_none() {
+            trie_root_ptrs.state_root_ptr = Some(
+                load_state_mpt(
+                    &trie_inputs.trim(),
+                    &mut interpreter.generation_state.memory.contexts[0].segments
+                        [Segment::TrieData.unscale()]
+                    .content,
+                )
+                .expect("Invalid MPT data for preinitialization"),
+            );
+        }
 
-        // let mut to_set = vec![];
-        // if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
-        //     to_set.push((state_addr, state_root_ptr.into()));
-        // }
-        // to_set.extend([
-        //     (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
-        //     (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
-        // ]);
+        let state_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
+        let txn_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into())
+                .unwrap();
+        let receipts_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
 
-        // interpreter.set_memory_multi_addresses(&to_set);
+        let mut to_set = vec![];
+        if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
+            to_set.push((state_addr, state_root_ptr.into()));
+        }
+        to_set.extend([
+            (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
+            (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
+        ]);
+
+        interpreter.set_memory_multi_addresses(&to_set);
 
         for (i, data) in trie_data.iter().enumerate() {
             let trie_addr = MemoryAddress::new(0, Segment::TrieData, i);
@@ -86,13 +102,6 @@ pub(crate) fn initialize_mpts<F: RichField>(
                 .memory
                 .set(trie_addr, data.unwrap_or_default());
         }
-    }
-
-    #[cfg(feature = "cdk_erigon")]
-    {
-        interpreter
-            .generation_state
-            .preinitialize_linked_lists(trie_inputs);
     }
 
     let accounts_len = Segment::AccountsLinkedList as usize
@@ -141,13 +150,6 @@ pub(crate) fn initialize_mpts<F: RichField>(
         (initial_accounts_len_addr, accounts_len.into()),
         (initial_storage_len_addr, storage_len.into()),
     ]);
-
-    let _state_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
-    let _txn_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into()).unwrap();
-    let _receipts_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
 }
 
 // Stolen from `tests/mpt/insert.rs`
@@ -502,8 +504,10 @@ fn prepare_interpreter_all_accounts<F: RichField>(
 
 /// Tests an SSTORE within a code similar to the contract code in add11_yml.
 #[test]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn sstore() -> Result<()> {
+    use crate::testing_utils::get_state_world;
+
     init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
@@ -526,7 +530,7 @@ fn sstore() -> Result<()> {
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
     state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
-    let state_trie = get_state_world_no_storage(state_trie_before);
+    let state_trie = get_state_world(state_trie_before, vec![]);
 
     let trie_inputs = TrieInputs {
         state_trie,
@@ -598,7 +602,7 @@ fn sstore() -> Result<()> {
 
 /// Tests an SLOAD within a code similar to the contract code in add11_yml.
 #[test]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 fn sload() -> Result<()> {
     use std::collections::BTreeMap;
 
@@ -716,19 +720,6 @@ fn sload() -> Result<()> {
     let expected_state_trie_hash = state_trie_before.hash();
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
-}
-
-#[cfg(feature = "eth_mainnet")]
-pub(crate) fn get_state_world_no_storage(state_trie: HashedPartialTrie) -> StateWorld {
-    use std::collections::BTreeMap;
-
-    use crate::world::{tries::StateMpt, world::Type1World};
-
-    StateWorld {
-        state: Either::Left(
-            Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap(),
-        ),
-    }
 }
 
 fn init_logger() {

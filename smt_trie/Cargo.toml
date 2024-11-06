@@ -14,11 +14,11 @@ keywords.workspace = true
 [dependencies]
 ethereum-types = { workspace = true }
 hex-literal = { workspace = true }
+log = { workspace = true }
+mpt_trie = { workspace = true }
 plonky2 = { workspace = true }
-mpt_trie = {workspace = true}
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
-log = { workspace = true }
 
 [dev-dependencies]
 hex-literal.workspace = true

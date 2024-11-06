@@ -11,8 +11,10 @@ use crate::cpu::kernel::parser::parse;
 
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
     158
-} else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
+} else if cfg!(feature = "cdk_erigon") {
     159
+} else if cfg!(feature = "polygon_pos") {
+    154
 } else {
     // unreachable
     0
@@ -37,7 +39,7 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/call_gas.asm"),
     include_str!("asm/core/create.asm"),
     include_str!("asm/core/create_addresses.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/core/create_contract_account.asm"),
     #[cfg(feature = "cdk_erigon")]
     include_str!("asm/core/create_type2_contract_account.asm"),
@@ -45,13 +47,13 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/create_receipt.asm"),
     include_str!("asm/core/gas.asm"),
     include_str!("asm/core/intrinsic_gas.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/core/jumpdest_analysis.asm"),
     include_str!("asm/core/nonce.asm"),
     include_str!("asm/core/process_txn.asm"),
     include_str!("asm/core/syscall.asm"),
     include_str!("asm/core/terminate.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/core/transfer.asm"),
     #[cfg(feature = "cdk_erigon")]
     include_str!("asm/core/transfer_cdk_erigon.asm"),
@@ -127,13 +129,13 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/hash/sha2/temp_words.asm"),
     include_str!("asm/hash/sha2/write_length.asm"),
     include_str!("asm/main.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/linked_list/accounts_linked_list.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/linked_list/storage_linked_list.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/linked_list/final_tries.asm"),
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/linked_list/initial_tries.asm"),
     #[cfg(feature = "cdk_erigon")]
     include_str!("asm/linked_list/type2/state_linked_list.asm"),

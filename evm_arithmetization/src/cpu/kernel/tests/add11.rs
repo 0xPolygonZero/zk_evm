@@ -13,7 +13,6 @@ use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
 use smt_trie::code::hash_bytecode_u256;
 
-use super::get_state_world_from_trie_and_storage;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{
@@ -21,10 +20,7 @@ use crate::generation::mpt::{
 };
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-};
+use crate::testing_utils::*;
 use crate::{GenerationInputs, EMPTY_CONSOLIDATED_BLOCKHASH};
 
 #[test]
@@ -122,7 +118,7 @@ fn test_add11_yml() {
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 
-    let state_trie = get_state_world_from_trie_and_storage(state_trie_before, storage_tries);
+    let state_trie = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie,
         transactions_trie: Node::Empty.into(),
@@ -385,7 +381,7 @@ fn test_add11_yml_with_exception() {
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 
-    let state_trie = get_state_world_from_trie_and_storage(state_trie_before, storage_tries);
+    let state_trie = get_state_world(state_trie_before, storage_tries);
 
     let tries_before = TrieInputs {
         state_trie,

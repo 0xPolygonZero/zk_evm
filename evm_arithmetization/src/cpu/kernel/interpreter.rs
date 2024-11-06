@@ -238,6 +238,7 @@ impl<F: RichField> Interpreter<F> {
         // Set state's inputs. We trim unnecessary components.
         self.generation_state.inputs = inputs.trim();
 
+        log::debug!("interpreter");
         let trie_root_ptrs = self
             .generation_state
             .preinitialize_trie_data_and_get_trie_ptrs(tries);
@@ -299,8 +300,8 @@ impl<F: RichField> Interpreter<F> {
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
-                // TODO: We should reuse the serilized trie in memory.
-                #[cfg(feature = "eth_mainnet")]
+                // TODO: We should reuse the serialized trie in memory.
+                #[cfg(not(feature = "cdk_erigon"))]
                 h2u(tries
                     .state_trie
                     .state
@@ -500,15 +501,6 @@ impl<F: RichField> Interpreter<F> {
         self.generation_state
             .memory
             .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
-    }
-
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    #[cfg(feature = "eth_mainnet")]
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        self.generation_state
-            .memory
-            .insert_preinitialized_segment(segment, values);
     }
 
     pub(crate) fn is_preinitialized_segment(&self, segment: usize) -> bool {

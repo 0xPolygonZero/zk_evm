@@ -19,6 +19,7 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
+use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::state::State;
 use crate::generation::trie_extractor::get_state_trie;
 use crate::memory::segments::Segment;
@@ -319,21 +320,21 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
         ),
     );
 
-    if cfg!(test) {
-        println!("a");
-    } else {
-        println!("b");
-    }
 
-    #[cfg(test)]
-    if {println!("mmmm"); KERNEL.offset_name(pc) == "mpt_hash_state_trie"} {
+    // #[cfg(test)]
+    if KERNEL.offset_name(pc) == "mpt_hash_state_trie" || KERNEL.offset_name(pc) == "init" {
+        let mem = state
+        .get_generation_state()
+        .memory
+        .get_preinit_memory(Segment::TrieData);
+        log::debug!("account nonce = {:?} balance {:?} code hash {:?}", mem[5], mem[6], mem[8]);
         let mem = state
             .get_generation_state()
             .memory
             .get_preinit_memory(Segment::AccountsLinkedList);
         log::debug!(
             "accounts linked list = {:?}",
-            AccountsLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+            LinkedList::<4>::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
         );
 
         let mem = state
@@ -341,8 +342,8 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             .memory
             .get_preinit_memory(Segment::StorageLinkedList);
         log::debug!(
-            "state linked list = {:?}",
-            StorageLinkedList::from_mem_and_segment(&mem, Segment::StorageLinkedList)
+            "storage linked list = {:?}",
+            LinkedList::<5>::from_mem_and_segment(&mem, Segment::StorageLinkedList)
         );
 
         let state_trie_ptr = u256_to_usize(
@@ -359,6 +360,7 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
         )
         .unwrap();
 
+        log::debug!("state trie ptr = {:?}", state_trie_ptr);
         log::debug!("state trie {:?}", state_trie);
     }
 

@@ -2,13 +2,13 @@ use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
-use super::get_state_world_no_storage;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1_rlp, test_account_2_rlp};
 use crate::generation::TrieInputs;
+use crate::testing_utils::get_state_world;
 use crate::world::world::World;
 use crate::Node;
 
@@ -28,12 +28,13 @@ fn mpt_hash_empty() -> Result<()> {
 #[test]
 fn mpt_hash_empty_branch() -> Result<()> {
     let children = core::array::from_fn(|_| Node::Empty.into());
-    let state_trie = get_state_world_no_storage(
+    let state_trie = get_state_world(
         Node::Branch {
             children,
             value: vec![],
         }
         .into(),
+        vec![],
     );
     let trie_inputs = TrieInputs {
         state_trie,
@@ -47,7 +48,7 @@ fn mpt_hash_empty_branch() -> Result<()> {
 fn mpt_hash_hash() -> Result<()> {
     let hash = H256::random();
 
-    let state_trie = get_state_world_no_storage(Node::Hash(hash).into());
+    let state_trie = get_state_world(Node::Hash(hash).into(), vec![]);
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
@@ -59,12 +60,13 @@ fn mpt_hash_hash() -> Result<()> {
 
 #[test]
 fn mpt_hash_leaf() -> Result<()> {
-    let state_trie = get_state_world_no_storage(
+    let state_trie = get_state_world(
         Node::Leaf {
             nibbles: 0xABC_u64.into(),
             value: test_account_1_rlp(),
         }
         .into(),
+        vec![],
     );
     let trie_inputs = TrieInputs {
         state_trie,
@@ -76,7 +78,7 @@ fn mpt_hash_leaf() -> Result<()> {
 
 #[test]
 fn mpt_hash_extension_to_leaf() -> Result<()> {
-    let state_trie = get_state_world_no_storage(extension_to_leaf(test_account_1_rlp()));
+    let state_trie = get_state_world(extension_to_leaf(test_account_1_rlp()), vec![]);
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
@@ -95,12 +97,13 @@ fn mpt_hash_branch_to_leaf() -> Result<()> {
 
     let mut children = core::array::from_fn(|_| Node::Empty.into());
     children[3] = leaf;
-    let state_trie = get_state_world_no_storage(
+    let state_trie = get_state_world(
         Node::Branch {
             children,
             value: vec![],
         }
         .into(),
+        vec![],
     );
 
     let trie_inputs = TrieInputs {

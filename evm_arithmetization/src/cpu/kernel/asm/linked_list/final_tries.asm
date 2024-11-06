@@ -33,7 +33,10 @@ after_insert_all_slots:
     // stack: storage_ptr_ptr', key, root_ptr, account_ptr_ptr, retdest
     DUP4
     %increment
+global debug_account_ptr_ptr:
     MLOAD_GENERAL
+
+global debug_account_ptr:
     %stack
         (payload_ptr, storage_ptr_ptr_p, key, root_ptr, account_ptr_ptr) -> 
         (root_ptr, 64, key, payload_ptr, after_insert_account, account_ptr_ptr, storage_ptr_ptr_p)

@@ -122,7 +122,7 @@ pub(crate) fn eval_packed_jump_jumpi<P: PackedField>(
     yield_constr.constraint(filter * jumps_lv.should_jump * dst_hi_sum);
 
     // We skip jump destinations verification with `cdk_erigon`.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     {
         let jumpdest_flag_channel = lv.mem_channels[NUM_GP_CHANNELS - 1];
 
@@ -289,7 +289,7 @@ pub(crate) fn eval_ext_circuit_jump_jumpi<F: RichField + Extendable<D>, const D:
     }
 
     // We skip jump destinations verification with `cdk_erigon`.
-    #[cfg(feature = "eth_mainnet")]
+    #[cfg(not(feature = "cdk_erigon"))]
     {
         let jumpdest_flag_channel = lv.mem_channels[NUM_GP_CHANNELS - 1];
 

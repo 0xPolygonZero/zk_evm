@@ -30,7 +30,6 @@ use std::{ops::Range, str::FromStr};
 
 use anyhow::Result;
 use ethereum_types::U256;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::hash::hash_types::RichField;
 
 use super::{
@@ -322,38 +321,5 @@ impl<F: RichField> Interpreter<F> {
         }
 
         self.generation_state.registers.context = context;
-    }
-}
-
-#[cfg(feature = "eth_mainnet")]
-use std::collections::BTreeMap;
-
-#[cfg(feature = "eth_mainnet")]
-use keccak_hash::H256;
-
-#[cfg(feature = "eth_mainnet")]
-use crate::world::{
-    tries::StateMpt,
-    world::{StateWorld, Type1World},
-};
-
-#[cfg(feature = "eth_mainnet")]
-fn get_state_world_from_trie_and_storage(
-    state_trie: HashedPartialTrie,
-    storage_tries: Vec<(H256, HashedPartialTrie)>,
-) -> StateWorld {
-    use either::Either;
-
-    use crate::world::tries::StorageTrie;
-
-    let mut type1world =
-        Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap();
-    let mut init_storage = BTreeMap::default();
-    for (storage, v) in storage_tries {
-        init_storage.insert(storage, StorageTrie::new_with_trie(v));
-    }
-    type1world.set_storage(init_storage);
-    StateWorld {
-        state: Either::Left(type1world),
     }
 }

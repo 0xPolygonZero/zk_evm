@@ -4,7 +4,7 @@ use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 
 pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 pub const STATE_LINKED_LIST_NODE_SIZE: usize = 4;
 
@@ -27,7 +27,7 @@ pub(crate) struct AccessLinkedListsPtrs {
 // Provides quick access to pointers that reference the memory location
 // of state nodes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg(feature = "eth_mainnet")]
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) struct StateLinkedListsPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
@@ -62,7 +62,7 @@ pub(crate) fn empty_list_mem<const N: usize>(offset: usize) -> [Option<U256>; N]
     })
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 pub(crate) mod testing {
     use std::fmt;
     use std::marker::PhantomData;

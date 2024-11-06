@@ -1,3 +1,5 @@
+---   # Workflow with multiple jobs to test different parts of the project
+
 name: Continuous Integration
 
 on:
@@ -22,7 +24,6 @@ jobs:
     name: Test mpt_trie
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -37,7 +38,11 @@ jobs:
       - name: Test in mpt_trie subdirectory
         run: cargo test --manifest-path mpt_trie/Cargo.toml
         env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
+          RUSTFLAGS: >
+            -Copt-level=3
+            -Cdebug-assertions
+            -Coverflow-checks=y
+            -Cdebuginfo=0
           RUST_LOG: 1
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
@@ -50,8 +55,6 @@ jobs:
       RUST_LOG: info
       CARGO_INCREMENTAL: 1
       RUST_BACKTRACE: 1
-
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -63,7 +66,7 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: build # build separately so test logs are actually nice
+      - name: build  # build separately so test logs are actually nice
         run: cargo build --tests --manifest-path trace_decoder/Cargo.toml
 
       - name: test
@@ -73,7 +76,6 @@ jobs:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -97,7 +99,6 @@ jobs:
     name: Test zero_bin
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -112,7 +113,6 @@ jobs:
       - name: Test in zero_bin subdirectory
         run: |
           cargo test --manifest-path zero/Cargo.toml
-
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1
@@ -123,7 +123,6 @@ jobs:
     name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: ${{ ! contains(toJSON(github.event.commits.*.message), '[skip-ci]') }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -149,7 +148,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
@@ -160,7 +159,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json test_only
@@ -171,7 +170,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json

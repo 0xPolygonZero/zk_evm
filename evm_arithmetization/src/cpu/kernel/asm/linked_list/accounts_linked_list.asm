@@ -49,6 +49,7 @@ global store_initial_accounts:
     %assert_eq(store_initial_accounts_end) // next_node_ptr ==  current_node_ptr + node_size
     // stack: next_node_ptr, cur_len', retdest
     
+global debug_loop:
 loop_store_initial_accounts:
     // stack: current_node_ptr, cur_len, retdest
     %get_trie_data_size

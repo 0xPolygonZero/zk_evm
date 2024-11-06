@@ -22,6 +22,7 @@ use evm_arithmetization::generation::mpt::{
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
+use evm_arithmetization::testing_utils::get_state_world;
 #[cfg(feature = "eth_mainnet")]
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
@@ -150,8 +151,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
 
         storage_tries.push((sender_state_key, Node::Empty.into()));
         storage_tries.push((to_state_key, Node::Empty.into()));
-        state_trie_before =
-            get_state_world_from_trie_and_storage(state_trie_before_hashed, storage_tries);
+        state_trie_before = get_state_world(state_trie_before_hashed, storage_tries);
     }
 
     #[cfg(feature = "cdk_erigon")]
@@ -259,8 +259,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
         )?;
-        expected_state_trie_after =
-            get_state_world_from_trie_and_storage(expected_state_trie_after_hashed, vec![]);
+        expected_state_trie_after = get_state_world(expected_state_trie_after_hashed, vec![]);
     }
 
     #[cfg(feature = "cdk_erigon")]
@@ -372,28 +371,5 @@ fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccountRlp, c
             addr,
             U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
         );
-    }
-}
-#[cfg(feature = "eth_mainnet")]
-use std::collections::BTreeMap;
-
-#[cfg(feature = "eth_mainnet")]
-use evm_arithmetization::world::{tries::StateMpt, world::Type1World};
-#[cfg(feature = "eth_mainnet")]
-fn get_state_world_from_trie_and_storage(
-    state_trie: HashedPartialTrie,
-    storage_tries: Vec<(H256, HashedPartialTrie)>,
-) -> StateWorld {
-    use evm_arithmetization::world::tries::StorageTrie;
-
-    let mut type1world =
-        Type1World::new(StateMpt::new_with_inner(state_trie), BTreeMap::default()).unwrap();
-    let mut init_storage = BTreeMap::default();
-    for (storage, v) in storage_tries {
-        init_storage.insert(storage, StorageTrie::new_with_trie(v));
-    }
-    type1world.set_storage(init_storage);
-    StateWorld {
-        state: Either::Left(type1world),
     }
 }
