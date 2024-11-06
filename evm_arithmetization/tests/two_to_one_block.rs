@@ -162,6 +162,10 @@ fn get_test_block_proof(
 }
 
 #[test]
+// This test is run in CI under the "Run Specific Ignored Tests in Release Mode" job.
+// It is marked as ignored to prevent it from running by default in debug mode due to its longer
+// execution time.
+#[ignore]
 fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     init_logger();
     let some_timestamps = [127, 42, 65, 43];
