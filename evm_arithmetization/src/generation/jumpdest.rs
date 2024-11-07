@@ -41,7 +41,13 @@ pub struct Context(pub HashMap<usize, BTreeSet<usize>>);
 
 /// The result after proving a [`JumpDestTableWitness`].
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default, Deref, DerefMut)]
-pub(crate) struct JumpDestTableProcessed(HashMap<usize, Vec<usize>>);
+pub(crate) struct JumpDestTableProcessed {
+    pub contexts: HashMap<usize, Vec<usize>>,
+    /// Translates batch index to a wittness index
+    pub index: HashMap<usize, usize>,
+    largest_batch_index: usize,
+    largest_witness_index: usize,
+}
 
 /// Map `CodeHash -> (Context -> [JumpDests])`
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default, Deref, DerefMut)]
@@ -59,7 +65,33 @@ impl Context {
 
 impl JumpDestTableProcessed {
     pub fn new(ctx_map: HashMap<usize, Vec<usize>>) -> Self {
-        Self(ctx_map)
+        Self {
+            contexts: ctx_map,
+            // mapping from batch indices to witness indices
+            index: Default::default(),
+            largest_batch_index: 0,
+            largest_witness_index: 0,
+        }
+    }
+
+    pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut Vec<usize>> {
+        if *batch_ctx <= self.largest_batch_index {
+            let witness_index = self.index[batch_ctx];
+            return self.contexts.get_mut(&witness_index);
+        }
+
+        let mut new_witness_index = self.largest_witness_index;
+        for i in new_witness_index + 1..*batch_ctx {
+            if self.contexts.contains_key(&i) {
+                new_witness_index = i;
+                break;
+            }
+        }
+
+        self.largest_witness_index = new_witness_index;
+        self.largest_batch_index = *batch_ctx;
+        self.index.insert(*batch_ctx, new_witness_index);
+        self.contexts.get_mut(&new_witness_index)
     }
 }
 
