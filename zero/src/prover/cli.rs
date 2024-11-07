@@ -15,20 +15,20 @@ fn get_default_output_path() -> PathBuf {
 #[derive(Args, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct CliProverConfig {
     /// The log of the max number of CPU cycles per proof.
-    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 19)]
+    #[arg(short, long, env="ZERO_BIN_MAX_CPU_LEN_LOG", help_heading = HELP_HEADING, default_value_t = 19)]
     max_cpu_len_log: usize,
     /// Number of transactions in a batch to process at once.
-    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 10)]
+    #[arg(short, long, env="ZERO_BIN_BATCH_SIZE", help_heading = HELP_HEADING, default_value_t = 10)]
     batch_size: usize,
     /// If true, save the public inputs to disk on error.
-    #[arg(short='i', long, help_heading = HELP_HEADING, default_value_t = false)]
+    #[arg(short='i', long, env="ZERO_BIN_SAVE_INPUTS_ON_ERROR", help_heading = HELP_HEADING, default_value_t = false)]
     save_inputs_on_error: bool,
     /// If true, only test the trace decoder and witness generation without
     /// generating a proof.
-    #[arg(long, help_heading = HELP_HEADING, default_value_t = false)]
+    #[arg(long, env="ZERO_BIN_TEST_ONLY", help_heading = HELP_HEADING, default_value_t = false)]
     test_only: bool,
     /// Directory where the generated proofs will be written.
-    #[arg(long, short = 'o', value_hint = ValueHint::FilePath, default_value = get_default_output_path().into_os_string())]
+    #[arg(short = 'o', long, env="ZERO_BIN_PROOF_OUTPUT_DIR", value_hint = ValueHint::FilePath, default_value = get_default_output_path().into_os_string())]
     proof_output_dir: PathBuf,
     /// Keep intermediate proofs. Default action is to
     /// delete them after the final proof is generated.
@@ -41,11 +41,11 @@ pub struct CliProverConfig {
     keep_intermediate_proofs: bool,
     /// Number of blocks in a batch. For every block batch, the prover will
     /// generate one proof file.
-    #[arg(long, default_value_t = 8)]
+    #[arg(long, env="ZERO_BIN_BLOCK_BATCH_SIZE", default_value_t = 8)]
     block_batch_size: usize,
     /// The maximum number of block proving tasks that can run in parallel. Must
     /// be greater than zero.
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, env="ZERO_BIN_BLOCK_POOL_SIZE", default_value_t = 16)]
     block_pool_size: usize,
 }
 
