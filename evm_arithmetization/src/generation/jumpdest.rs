@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 pub struct Context(pub HashMap<usize, BTreeSet<usize>>);
 
 /// The result after proving a [`JumpDestTableWitness`].
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default, Deref, DerefMut)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JumpDestTableProcessed {
     pub contexts: HashMap<usize, Vec<usize>>,
     /// Translates batch index to a wittness index
@@ -92,6 +92,11 @@ impl JumpDestTableProcessed {
         self.largest_batch_index = *batch_ctx;
         self.index.insert(*batch_ctx, new_witness_index);
         self.contexts.get_mut(&new_witness_index)
+    }
+
+    pub fn remove_ctx(&mut self, batch_ctx: &usize) {
+        let witness_index = self.index[batch_ctx];
+        self.contexts.remove(&witness_index);
     }
 }
 
@@ -159,7 +164,7 @@ impl Display for JumpDestTableProcessed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "\n=== JumpDestTableProcessed ===")?;
 
-        let v = sorted(self.0.clone());
+        let v = sorted(self.contexts.clone());
         for (ctx, code) in v {
             writeln!(f, "ctx: {:?} {:?}", ctx, code)?;
         }

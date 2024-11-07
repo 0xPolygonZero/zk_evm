@@ -371,12 +371,12 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
             Ok((next_jumpdest_address + 1).into())
         } else {
-            jumpdest_table.remove(&context);
+            jumpdest_table.remove_ctx(&context);
             Ok(U256::zero())
         }
     }
@@ -390,7 +390,7 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
             Ok(next_jumpdest_proof.into())

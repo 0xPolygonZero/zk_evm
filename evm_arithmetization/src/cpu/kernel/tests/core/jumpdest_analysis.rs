@@ -133,7 +133,7 @@ fn test_jumpdest_analysis() -> Result<()> {
         .jumpdest_table
         .as_mut()
         .unwrap()
-        .get_mut(&CONTEXT)
+        .try_get_ctx_mut(&CONTEXT)
         .unwrap()
         .pop();
     interpreter
