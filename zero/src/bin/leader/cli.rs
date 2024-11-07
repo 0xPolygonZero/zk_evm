@@ -63,37 +63,42 @@ pub(crate) enum Command {
         #[arg(short = 'u', long, env="ZERO_BIN_RPC_URL", value_hint = ValueHint::Url)]
         rpc_url: Url,
         // The node RPC type (jerigon / native).
-        #[arg(short = 'T', long, env="ZERO_BIN_RPC_TYPE", default_value = "JERIGON")]
+        #[arg(
+            short = 'T',
+            long,
+            env = "ZERO_BIN_RPC_TYPE",
+            default_value = "JERIGON"
+        )]
         rpc_type: RpcType,
         /// The start of the block range to prove (inclusive).
-        #[arg(short = 's', long, env="ZERO_BIN_START_BLOCK")]
+        #[arg(short = 's', long, env = "ZERO_BIN_START_BLOCK")]
         start_block: BlockId,
         /// The end of the block range to prove (inclusive).
         /// If not provided, leader will work in dynamic mode from `start_block`
         /// following head of the blockchain.
-        #[arg(short = 'e', long, env="ZERO_BIN_END_BLOCK")]
+        #[arg(short = 'e', long, env = "ZERO_BIN_END_BLOCK")]
         end_block: Option<BlockId>,
         /// The checkpoint block.
-        #[arg(short, long, env="ZERO_BIN_CHECKPOINT_BLOCK", default_value = "0")]
+        #[arg(short, long, env = "ZERO_BIN_CHECKPOINT_BLOCK", default_value = "0")]
         checkpoint_block: BlockId,
         /// The previous proof output.
         #[arg(short = 'f', long, env="ZERO_BIN_PREVIOUS_PROOF", value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
         /// Blockchain network block time in milliseconds. This value is used
         /// to determine the blockchain node polling interval.
-        #[arg(short, long, env="ZERO_BIN_BLOCK_TIME", env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
+        #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
         block_time: u64,
         /// Backoff in milliseconds for retry requests
-        #[arg(long, env="ZERO_BIN_BACKOFF", default_value_t = 0)]
+        #[arg(long, env = "ZERO_BIN_BACKOFF", default_value_t = 0)]
         backoff: u64,
         /// The maximum number of retries
-        #[arg(long, env="ZERO_BIN_MAX_RETRIES", default_value_t = 0)]
+        #[arg(long, env = "ZERO_BIN_MAX_RETRIES", default_value_t = 0)]
         max_retries: u32,
     },
     /// Reads input from HTTP and writes output to a directory.
     Http {
         /// The port on which to listen.
-        #[arg(short, long, env="ZERO_BIN_PORT", default_value_t = 8080)]
+        #[arg(short, long, env = "ZERO_BIN_PORT", default_value_t = 8080)]
         port: u16,
         /// The directory to which output should be written.
         #[arg(short, long, env="ZERO_BIN_OUTPUT_DIR", value_hint = ValueHint::DirPath)]

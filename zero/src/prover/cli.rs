@@ -41,11 +41,11 @@ pub struct CliProverConfig {
     keep_intermediate_proofs: bool,
     /// Number of blocks in a batch. For every block batch, the prover will
     /// generate one proof file.
-    #[arg(long, env="ZERO_BIN_BLOCK_BATCH_SIZE", default_value_t = 8)]
+    #[arg(long, env = "ZERO_BIN_BLOCK_BATCH_SIZE", default_value_t = 8)]
     block_batch_size: usize,
     /// The maximum number of block proving tasks that can run in parallel. Must
     /// be greater than zero.
-    #[arg(long, env="ZERO_BIN_BLOCK_POOL_SIZE", default_value_t = 16)]
+    #[arg(long, env = "ZERO_BIN_BLOCK_POOL_SIZE", default_value_t = 16)]
     block_pool_size: usize,
 }
 

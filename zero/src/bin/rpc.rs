@@ -33,13 +33,18 @@ struct RpcToolConfig {
     #[arg(short = 'u', long, env="ZERO_BIN_RPC_URL", value_hint = ValueHint::Url)]
     rpc_url: Url,
     /// The RPC Tracer Type.
-    #[arg(short = 't', long, env="ZERO_BIN_RPC_TYPE", default_value = "jerigon")]
+    #[arg(
+        short = 't',
+        long,
+        env = "ZERO_BIN_RPC_TYPE",
+        default_value = "jerigon"
+    )]
     rpc_type: RpcType,
     /// Backoff in milliseconds for retry requests.
-    #[arg(long, env="ZERO_BIN_BACKOFF", default_value_t = 0)]
+    #[arg(long, env = "ZERO_BIN_BACKOFF", default_value_t = 0)]
     backoff: u64,
     /// The maximum number of retries.
-    #[arg(long, env="ZERO_BIN_MAX_RETRIES", default_value_t = 0)]
+    #[arg(long, env = "ZERO_BIN_MAX_RETRIES", default_value_t = 0)]
     max_retries: u32,
 }
 
@@ -59,10 +64,10 @@ enum Command {
     },
     Extract {
         /// Transaction hash.
-        #[arg(short, long, env="ZERO_BIN_TX")]
+        #[arg(short, long, env = "ZERO_BIN_TX")]
         tx: String,
         /// Number of transactions in a batch to process at once.
-        #[arg(short, long, env="ZERO_BIN_BATCH_SIZE", default_value_t = 1)]
+        #[arg(short, long, env = "ZERO_BIN_BATCH_SIZE", default_value_t = 1)]
         batch_size: usize,
     },
 }
