@@ -13,7 +13,7 @@ use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
 #[cfg(test)]
 use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
-#[cfg(test)]
+#[cfg(all(test, not(feature = "cdk_erigon")))]
 use crate::cpu::kernel::tests::mpt::linked_list::{AccountsLinkedList, StorageLinkedList};
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
@@ -21,6 +21,7 @@ use crate::cpu::stack::{
 };
 use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::state::State;
+#[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::trie_extractor::get_state_trie;
 use crate::memory::segments::Segment;
 // TO REMOVE!
@@ -320,14 +321,18 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
         ),
     );
 
-
-    // #[cfg(test)]
+    #[cfg(all(test, not(feature = "cdk_erigon")))]
     if KERNEL.offset_name(pc) == "mpt_hash_state_trie" || KERNEL.offset_name(pc) == "init" {
         let mem = state
-        .get_generation_state()
-        .memory
-        .get_preinit_memory(Segment::TrieData);
-        log::debug!("account nonce = {:?} balance {:?} code hash {:?}", mem[5], mem[6], mem[8]);
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::TrieData);
+        log::debug!(
+            "account nonce = {:?} balance {:?} code hash {:?}",
+            mem[5],
+            mem[6],
+            mem[8]
+        );
         let mem = state
             .get_generation_state()
             .memory
