@@ -170,6 +170,7 @@ pub(crate) fn set_registers_and_run<F: RichField>(
 pub(crate) fn get_jumpdest_analysis_inputs_rpc(
     jumpdest_table_rpc: &JumpDestTableWitness,
     code_map: &HashMap<H256, Vec<u8>>,
+    prev: usize,
 ) -> JumpDestTableProcessed {
     let ctx_proofs = (*jumpdest_table_rpc)
         .iter()
@@ -182,7 +183,7 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
             prove_context_jumpdests(code, ctx_jumpdests)
         })
         .collect();
-    JumpDestTableProcessed::new(ctx_proofs)
+    JumpDestTableProcessed::new_with_start(ctx_proofs, prev)
 }
 
 /// Orchestrates the proving of all contexts in a specific bytecode.

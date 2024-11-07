@@ -361,9 +361,18 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
+        log::info!("CONTEXT {} NEXT {}", context, self.next_txn_index);
+
+        let curr_idx = self.next_txn_index - 1;
+
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
         }
+        let prev = self.max_ctx.get(curr_idx - 1).copied().unwrap_or(0);
+        if curr_idx == self.max_ctx.len() {
+            self.max_ctx.push(prev + context)
+        }
+        self.max_ctx[curr_idx] = std::cmp::max(self.max_ctx[curr_idx], prev + context);
 
         let Some(jumpdest_table) = &mut self.jumpdest_table else {
             return Err(ProgramError::ProverInputError(
@@ -791,10 +800,11 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
+        let prev = self.max_ctx.last().copied().unwrap_or(0);
         let rpcw = self.inputs.jumpdest_table.clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw
             .as_ref()
-            .map(|jdt| get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+            .map(|jdt| get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev));
         if rpcp.is_some() {
             self.jumpdest_table = rpcp;
             return Ok(());
