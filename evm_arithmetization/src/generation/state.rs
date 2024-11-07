@@ -436,7 +436,7 @@ impl<F: RichField> GenerationState<F> {
         let txn_root_ptr =
             load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
         let receipt_root_ptr =
-            load_receipts_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+            load_receipts_mpt(&trie_inputs.receipts_trie, &mut trie_data).unwrap();
         self.memory.insert_preinitialized_segment(
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },

@@ -17,7 +17,7 @@ global set_beacon_root:
     // stack: timestamp_idx, timestamp, retdest
     PUSH @BEACON_ROOTS_CONTRACT_STATE_KEY
     %parent_beacon_block_root
-    // stack: calldata, state_key, ttimestamp_idx, timestamp, retdest
+    // stack: calldata, state_key, timestamp_idx, timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH
     DUP5
     MOD
