@@ -201,7 +201,7 @@ fn start(
                                     path.into_hash()
                                         .context("invalid path length in direct state trie")?,
                                     rlp::decode(&bytes)
-                                        .context("invalid AccountRlp in direct state trie")?,
+                                        .context("invalid Account in direct state trie")?,
                                 )?;
                             }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {

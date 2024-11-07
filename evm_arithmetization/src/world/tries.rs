@@ -11,7 +11,7 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, Partia
 use serde::{Deserialize, Serialize};
 use u4::{AsNibbles, U4};
 
-use crate::generation::mpt::MptAccountRlp;
+use crate::generation::mpt::MptAccount;
 
 /// Bounded sequence of [`U4`],
 /// used as a key for [MPT](HashedPartialTrie) types in this module.
@@ -272,12 +272,12 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
-/// Global, [`Address`] `->` [`AccountRlp`].
+/// Global, [`Address`] `->` [`Account`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMpt {
-    /// Values are always [`rlp`]-encoded [`AccountRlp`],
+    /// Values are always [`rlp`]-encoded [`Account`],
     /// inserted at [256 bits](MptKey::from_hash).
     inner: HashedPartialTrie,
 }
@@ -289,7 +289,7 @@ impl Default for StateMpt {
 }
 
 #[track_caller]
-fn assert_rlp_account(bytes: impl AsRef<[u8]>) -> MptAccountRlp {
+fn assert_rlp_account(bytes: impl AsRef<[u8]>) -> MptAccount {
     rlp::decode(bytes.as_ref()).expect("invalid RLP in StateMPT")
 }
 
@@ -317,13 +317,13 @@ impl StateMpt {
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         Ok(self.inner.insert(key.into_nibbles(), hash)?)
     }
-    pub fn insert(&mut self, key: H256, account: MptAccountRlp) -> anyhow::Result<()> {
+    pub fn insert(&mut self, key: H256, account: MptAccount) -> anyhow::Result<()> {
         Ok(self.inner.insert(
             MptKey::from_hash(key).into_nibbles(),
             rlp::encode(&account).to_vec(),
         )?)
     }
-    pub fn get(&self, key: H256) -> Option<MptAccountRlp> {
+    pub fn get(&self, key: H256) -> Option<MptAccount> {
         self.inner
             .get(MptKey::from_hash(key).into_nibbles())
             .map(assert_rlp_account)
@@ -345,7 +345,7 @@ impl StateMpt {
         self.inner = new;
         Ok(())
     }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, MptAccountRlp)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (H256, MptAccount)> + '_ {
         self.inner.items().filter_map(|(key, rlp)| match rlp {
             mpt_trie::trie_ops::ValOrHash::Val(vec) => Some((
                 MptKey::from_nibbles(key).into_hash().expect("bad depth"),

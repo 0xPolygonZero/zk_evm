@@ -1,11 +1,11 @@
-// #![cfg(feature = "eth_mainnet")]
+#![cfg(feature = "eth_mainnet")]
 
 use std::str::FromStr;
 use std::time::Duration;
 
 use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -71,7 +71,7 @@ fn test_erc20() -> anyhow::Result<()> {
     state_trie_before.insert(giver_nibbles, rlp::encode(&giver_account()?).to_vec())?;
     state_trie_before.insert(token_nibbles, rlp::encode(&token_account()?).to_vec())?;
 
-    let account: MptAccountRlp = rlp::decode(&vec![
+    let account: MptAccount = rlp::decode(&vec![
         248, 68, 128, 128, 160, 137, 205, 24, 134, 60, 67, 40, 191, 183, 72, 15, 201, 189, 37, 25,
         188, 192, 83, 19, 163, 35, 250, 187, 2, 115, 42, 47, 21, 67, 41, 186, 215, 160, 245, 122,
         205, 64, 37, 152, 114, 96, 109, 118, 25, 126, 240, 82, 243, 211, 85, 136, 218, 223, 145,
@@ -129,14 +129,14 @@ fn test_erc20() -> anyhow::Result<()> {
 
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
         let sender_account = sender_account();
-        let sender_account_after = MptAccountRlp {
+        let sender_account_after = MptAccount {
             nonce: sender_account.nonce + 1,
             balance: sender_account.balance - gas_used * 0xa,
             ..sender_account
         };
         state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
         state_trie_after.insert(giver_nibbles, rlp::encode(&giver_account()?).to_vec())?;
-        let token_account_after = MptAccountRlp {
+        let token_account_after = MptAccount {
             storage_root: token_storage_after()?.hash(),
             ..token_account()?
         };
@@ -261,9 +261,9 @@ fn token_storage_after() -> anyhow::Result<HashedPartialTrie> {
     ])
 }
 
-fn giver_account() -> anyhow::Result<MptAccountRlp> {
+fn giver_account() -> anyhow::Result<MptAccount> {
     log::debug!("giver bytecode {:?}", giver_bytecode());
-    Ok(MptAccountRlp {
+    Ok(MptAccount {
         nonce: 1.into(),
         balance: 0.into(),
         storage_root: giver_storage()?.hash(),
@@ -271,8 +271,8 @@ fn giver_account() -> anyhow::Result<MptAccountRlp> {
     })
 }
 
-fn token_account() -> anyhow::Result<MptAccountRlp> {
-    Ok(MptAccountRlp {
+fn token_account() -> anyhow::Result<MptAccount> {
+    Ok(MptAccount {
         nonce: 1.into(),
         balance: 0.into(),
         storage_root: token_storage()?.hash(),
@@ -280,8 +280,8 @@ fn token_account() -> anyhow::Result<MptAccountRlp> {
     })
 }
 
-fn sender_account() -> MptAccountRlp {
-    MptAccountRlp {
+fn sender_account() -> MptAccount {
+    MptAccount {
         nonce: 0.into(),
         balance: sd2u("10000000000000000000000"),
         storage_root: Default::default(),

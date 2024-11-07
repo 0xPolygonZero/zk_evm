@@ -19,7 +19,7 @@ fn test_process_receipt() -> Result<()> {
     /* Tests process_receipt, which:
     - computes the cumulative gas
     - computes the bloom filter
-    - inserts the receipt data in MPT_TRIE_DATA
+    - inserts the receipt data in TRIE_DATA
     - inserts a node in receipt_trie
     - resets the bloom filter to 0 for the next transaction. */
     let process_receipt = KERNEL.global_labels["process_receipt"];

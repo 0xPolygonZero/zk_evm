@@ -15,9 +15,7 @@ use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::generation::mpt::{
-    AccountRlp, EitherRlp, LegacyReceiptRlp, MptAccountRlp, SmtAccountRlp,
-};
+use crate::generation::mpt::{Account, EitherAccount, LegacyReceiptRlp, MptAccount, SmtAccount};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::testing_utils::*;
@@ -51,53 +49,41 @@ fn test_add11_yml() {
     }
 
     let beneficiary_account_before = if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: 1.into(),
-                ..MptAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            nonce: 1.into(),
+            ..MptAccount::default()
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: 1.into(),
-                ..SmtAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: 1.into(),
+            ..SmtAccount::default()
+        }))
     };
     let sender_account_before = if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                ..MptAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..MptAccount::default()
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                ..SmtAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..SmtAccount::default()
+        }))
     };
 
     let to_account_before = if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
-                ..MptAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
+            ..MptAccount::default()
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                code_hash: code_hash.expect_right("cdk_erigon uses Poseidon."),
-                code_length: code.len().into(),
-                ..SmtAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash: code_hash.expect_right("cdk_erigon uses Poseidon."),
+            code_length: code.len().into(),
+            ..SmtAccount::default()
+        }))
     };
 
     let (mut state_trie_before, mut storage_tries) =
@@ -145,60 +131,48 @@ fn test_add11_yml() {
 
     let expected_state_trie_after = {
         let beneficiary_account_after = if cfg!(feature = "eth_mainnet") {
-            EitherRlp {
-                account_rlp: Either::Left(MptAccountRlp {
-                    nonce: 1.into(),
-                    ..MptAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Left(MptAccount {
+                nonce: 1.into(),
+                ..MptAccount::default()
+            }))
         } else {
-            EitherRlp {
-                account_rlp: Either::Right(SmtAccountRlp {
-                    nonce: 1.into(),
-                    ..SmtAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Right(SmtAccount {
+                nonce: 1.into(),
+                ..SmtAccount::default()
+            }))
         };
         let sender_account_after = if cfg!(feature = "eth_mainnet") {
-            EitherRlp {
-                account_rlp: Either::Left(MptAccountRlp {
-                    balance: 0xde0b6b3a75be550u64.into(),
-                    nonce: 1.into(),
-                    ..MptAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Left(MptAccount {
+                balance: 0xde0b6b3a75be550u64.into(),
+                nonce: 1.into(),
+                ..MptAccount::default()
+            }))
         } else {
-            EitherRlp {
-                account_rlp: Either::Right(SmtAccountRlp {
-                    balance: 0xde0b6b3a75be550u64.into(),
-                    nonce: 1.into(),
-                    ..SmtAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Right(SmtAccount {
+                balance: 0xde0b6b3a75be550u64.into(),
+                nonce: 1.into(),
+                ..SmtAccount::default()
+            }))
         };
 
         let to_account_after = if cfg!(feature = "eth_mainnet") {
-            EitherRlp {
-                account_rlp: Either::Left(MptAccountRlp {
-                    balance: 0xde0b6b3a76586a0u64.into(),
-                    code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
-                    // Storage map: { 0 => 2 }
-                    storage_root: HashedPartialTrie::from(Node::Leaf {
-                        nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-                        value: vec![2],
-                    })
-                    .hash(),
-                    ..MptAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Left(MptAccount {
+                balance: 0xde0b6b3a76586a0u64.into(),
+                code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
+                // Storage map: { 0 => 2 }
+                storage_root: HashedPartialTrie::from(Node::Leaf {
+                    nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+                    value: vec![2],
+                })
+                .hash(),
+                ..MptAccount::default()
+            }))
         } else {
-            EitherRlp {
-                account_rlp: Either::Right(SmtAccountRlp {
-                    balance: 0xde0b6b3a76586a0u64.into(),
-                    code_hash: code_hash.expect_right("cdk_erigon uses Keccak."),
-                    ..SmtAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Right(SmtAccount {
+                balance: 0xde0b6b3a76586a0u64.into(),
+                code_hash: code_hash.expect_right("cdk_erigon uses Keccak."),
+                ..SmtAccount::default()
+            }))
         };
 
         update_beacon_roots_account_storage(
@@ -315,52 +289,40 @@ fn test_add11_yml_with_exception() {
     }
 
     let beneficiary_account_before = if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: 1.into(),
-                ..MptAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            nonce: 1.into(),
+            ..MptAccount::default()
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: 1.into(),
-                ..SmtAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: 1.into(),
+            ..SmtAccount::default()
+        }))
     };
     let sender_account_before = if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                ..MptAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..MptAccount::default()
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                ..SmtAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..SmtAccount::default()
+        }))
     };
     let to_account_before = if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
-                ..MptAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
+            ..MptAccount::default()
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                balance: 0x0de0b6b3a7640000u64.into(),
-                code_hash: code_hash.expect_right("cdk_erigon uses Poseidon."),
-                code_length: code.len().into(),
-                ..SmtAccountRlp::default()
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash: code_hash.expect_right("cdk_erigon uses Poseidon."),
+            code_length: code.len().into(),
+            ..SmtAccount::default()
+        }))
     };
 
     let (mut state_trie_before, mut storage_tries) =
@@ -414,21 +376,17 @@ fn test_add11_yml_with_exception() {
         let beneficiary_account_after = beneficiary_account_before;
         // This is the only account that changes: the nonce and the balance are updated.
         let sender_account_after = if cfg!(feature = "eth_mainnet") {
-            EitherRlp {
-                account_rlp: Either::Left(MptAccountRlp {
-                    balance: sender_account_before.get_balance() - txn_gas_limit * gas_price,
-                    nonce: 1.into(),
-                    ..MptAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Left(MptAccount {
+                balance: sender_account_before.get_balance() - txn_gas_limit * gas_price,
+                nonce: 1.into(),
+                ..MptAccount::default()
+            }))
         } else {
-            EitherRlp {
-                account_rlp: Either::Right(SmtAccountRlp {
-                    balance: sender_account_before.get_balance() - txn_gas_limit * gas_price,
-                    nonce: 1.into(),
-                    ..SmtAccountRlp::default()
-                }),
-            }
+            EitherAccount(Either::Right(SmtAccount {
+                balance: sender_account_before.get_balance() - txn_gas_limit * gas_price,
+                nonce: 1.into(),
+                ..SmtAccount::default()
+            }))
         };
 
         let to_account_after = to_account_before;

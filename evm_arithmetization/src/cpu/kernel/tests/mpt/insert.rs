@@ -15,7 +15,7 @@ use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{
     nibbles_64, nibbles_count, test_account_1_rlp, test_account_2,
 };
-use crate::generation::mpt::MptAccountRlp;
+use crate::generation::mpt::MptAccount;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -166,7 +166,7 @@ fn mpt_insert_branch_to_leaf_same_key() -> Result<()> {
 fn test_state_trie(
     mut state_trie: HashedPartialTrie,
     k: Nibbles,
-    mut account: MptAccountRlp,
+    mut account: MptAccount,
 ) -> Result<()> {
     assert_eq!(k.count, 64);
 

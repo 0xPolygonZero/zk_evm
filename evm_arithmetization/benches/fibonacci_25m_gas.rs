@@ -16,8 +16,8 @@ use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
 use evm_arithmetization::generation::mpt::{
-    get_h256_from_code_hash, get_u256_from_code_hash, AccountRlp, CodeHashType, EitherRlp,
-    LegacyReceiptRlp, MptAccountRlp,
+    get_h256_from_code_hash, get_u256_from_code_hash, Account, CodeHashType, EitherAccount,
+    LegacyReceiptRlp, MptAccount,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
@@ -96,14 +96,14 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
 
     let sender_account_before = if cfg!(feature = "cdk_erigon") {
-        Either::Right(SmtAccountRlp {
+        Either::Right(SmtAccount {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
             code_hash: hash_bytecode_u256(vec![]),
             code_length: 0.into(),
         })
     } else {
-        Either::Left(MptAccountRlp {
+        Either::Left(MptAccount {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
             storage_root: empty_trie_root,
@@ -112,25 +112,21 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     };
 
     let to_account_before = if cfg!(feature = "cdk_erigon") {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: 1.into(),
-                balance: 0.into(),
-                code_hash: get_u256_from_code_hash(code_hash.clone())
-                    .expect("In cdk_erigon, the code_hash is a U256"),
-                code_length: code.len().into(),
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: 1.into(),
+            balance: 0.into(),
+            code_hash: get_u256_from_code_hash(code_hash.clone())
+                .expect("In cdk_erigon, the code_hash is a U256"),
+            code_length: code.len().into(),
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: 1.into(),
-                balance: 0.into(),
-                storage_root: empty_trie_root,
-                code_hash: get_h256_from_code_hash(code_hash.clone())
-                    .expect("In eth_mainnet, the code_hash is a H256"),
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            nonce: 1.into(),
+            balance: 0.into(),
+            storage_root: empty_trie_root,
+            code_hash: get_h256_from_code_hash(code_hash.clone())
+                .expect("In eth_mainnet, the code_hash is a H256"),
+        }))
     };
 
     let mut state_trie_before = StateWorld::default();
@@ -158,7 +154,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     {
         let sender_account_before_smt =
             sender_account_before.expect_right("The sender account is an SMT.");
-        let to_account_before_smt = to_account_before.as_smt_account_rlp();
+        let to_account_before_smt = to_account_before.as_smt_account();
         set_account(
             &mut state_trie_before,
             H160(sender),
@@ -214,27 +210,23 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let sender_account_after = if cfg!(feature = "cdk_erigon") {
         let sender_account_before_smt =
             sender_account_before.expect_right("cdk_erigon expects SMTs.");
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                balance: sender_account_before_smt.get_balance()
-                    - value
-                    - gas_used * block_metadata.block_base_fee,
-                nonce: sender_account_before_smt.get_nonce() + 1,
-                ..sender_account_before_smt
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            balance: sender_account_before_smt.get_balance()
+                - value
+                - gas_used * block_metadata.block_base_fee,
+            nonce: sender_account_before_smt.get_nonce() + 1,
+            ..sender_account_before_smt
+        }))
     } else {
         let sender_account_before_mpt =
             sender_account_before.expect_left("eth_mainnet expects MPTs.");
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: sender_account_before_mpt.get_balance()
-                    - value
-                    - gas_used * block_metadata.block_base_fee,
-                nonce: sender_account_before_mpt.get_nonce() + 1,
-                ..sender_account_before_mpt
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            balance: sender_account_before_mpt.get_balance()
+                - value
+                - gas_used * block_metadata.block_base_fee,
+            nonce: sender_account_before_mpt.get_nonce() + 1,
+            ..sender_account_before_mpt
+        }))
     };
     let to_account_after = &to_account_before;
 
@@ -264,8 +256,8 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
 
     #[cfg(feature = "cdk_erigon")]
     {
-        let sender_account_after_smt = sender_account_after.as_smt_account_rlp();
-        let to_account_after_smt = to_account_after.as_smt_account_rlp();
+        let sender_account_after_smt = sender_account_after.as_smt_account();
+        let to_account_after_smt = to_account_after.as_smt_account();
         set_account(
             &mut expected_state_trie_after,
             H160(sender),
@@ -348,10 +340,10 @@ fn init_logger() {
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
-use evm_arithmetization::generation::mpt::SmtAccountRlp;
+use evm_arithmetization::generation::mpt::SmtAccount;
 
 #[cfg(feature = "cdk_erigon")]
-fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccountRlp, code: &[u8]) {
+fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccount, code: &[u8]) {
     use evm_arithmetization::world::world::World;
 
     let key = key_balance(addr);

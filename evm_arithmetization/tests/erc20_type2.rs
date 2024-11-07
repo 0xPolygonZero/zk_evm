@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp, SmtAccountRlp};
+use evm_arithmetization::generation::mpt::{Account, LegacyReceiptRlp, LogRlp, SmtAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -17,7 +17,7 @@ use evm_arithmetization::testing_utils::TIMESTAMP_STORAGE_POS;
 use evm_arithmetization::testing_utils::{init_logger, sd2u};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::world::world::{StateWorld, Type2World};
-use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
+use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
@@ -132,7 +132,7 @@ fn test_erc20() -> anyhow::Result<()> {
     let expected_smt_after: StateWorld = {
         let mut smt = StateWorld::default();
         let sender_account = sender_account();
-        let sender_account_after = SmtAccountRlp {
+        let sender_account_after = SmtAccount {
             nonce: sender_account.nonce + 1,
             balance: sender_account.balance - gas_used * 0xa,
             ..sender_account
@@ -310,10 +310,10 @@ fn scalable_storage_after(block: &BlockMetadata, state_root_before: U256) -> Has
     storage
 }
 
-fn giver_account() -> SmtAccountRlp {
+fn giver_account() -> SmtAccount {
     let code = giver_bytecode();
     let len = code.len();
-    SmtAccountRlp {
+    SmtAccount {
         nonce: 1.into(),
         balance: 0.into(),
         code_hash: hash_bytecode_u256(code),
@@ -321,10 +321,10 @@ fn giver_account() -> SmtAccountRlp {
     }
 }
 
-fn token_account() -> SmtAccountRlp {
+fn token_account() -> SmtAccount {
     let code = token_bytecode();
     let len = code.len();
-    SmtAccountRlp {
+    SmtAccount {
         nonce: 1.into(),
         balance: 0.into(),
         code_hash: hash_bytecode_u256(code),
@@ -332,16 +332,16 @@ fn token_account() -> SmtAccountRlp {
     }
 }
 
-fn sender_account() -> SmtAccountRlp {
-    SmtAccountRlp {
+fn sender_account() -> SmtAccount {
+    SmtAccount {
         nonce: 0.into(),
         balance: sd2u("10000000000000000000000"),
         ..Default::default()
     }
 }
 
-fn scalable_account() -> SmtAccountRlp {
-    SmtAccountRlp {
+fn scalable_account() -> SmtAccount {
+    SmtAccount {
         nonce: 0.into(),
         balance: 0.into(),
         ..Default::default()
@@ -367,7 +367,7 @@ fn bloom() -> [U256; 8] {
 fn set_account(
     world: &mut StateWorld,
     addr: Address,
-    account: &SmtAccountRlp,
+    account: &SmtAccount,
     storage: &HashMap<U256, U256>,
     code: &[u8],
 ) {

@@ -9,7 +9,7 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 use smt_trie::code::hash_bytecode_u256;
 
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::Account;
 use crate::world::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -121,7 +121,7 @@ pub trait World {
 pub struct Type1World {
     state: StateMpt,
     /// Writes to storage should be reconciled with
-    /// [`storage_root`](evm_arithmetization::generation::mpt::AccountRlp)s.
+    /// [`storage_root`](evm_arithmetization::generation::mpt::Account)s.
     storage: BTreeMap<H256, StorageTrie>,
 }
 

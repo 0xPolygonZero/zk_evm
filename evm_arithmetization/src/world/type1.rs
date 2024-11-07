@@ -11,7 +11,7 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::generation::mpt::MptAccountRlp;
+use crate::generation::mpt::MptAccount;
 use crate::world::tries::{MptKey, StateMpt, StorageTrie};
 use crate::world::wire::{Instruction, SmtLeaf};
 
@@ -68,7 +68,7 @@ fn visit(
                     storage,
                     code,
                 }) => {
-                    let account = MptAccountRlp {
+                    let account = MptAccount {
                         nonce: nonce.into(),
                         balance,
                         storage_root: {

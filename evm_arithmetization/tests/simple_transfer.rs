@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -45,13 +45,13 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
 
-    let sender_account_before = MptAccountRlp {
+    let sender_account_before = MptAccount {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
         code_hash: keccak([]),
     };
-    let to_account_before = MptAccountRlp::default();
+    let to_account_before = MptAccount::default();
 
     let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
@@ -101,12 +101,12 @@ fn test_simple_transfer() -> anyhow::Result<()> {
 
         log::debug!("beacon roots expected account:: {:?}", beacon_roots_account);
 
-        let sender_account_after = MptAccountRlp {
+        let sender_account_after = MptAccount {
             balance: sender_account_before.balance - value - gas_used * 10,
             nonce: sender_account_before.nonce + 1,
             ..sender_account_before
         };
-        let to_account_after = MptAccountRlp {
+        let to_account_after = MptAccount {
             balance: value,
             ..to_account_before
         };

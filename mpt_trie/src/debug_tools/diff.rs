@@ -707,7 +707,7 @@ mod tests {
         #[derive(
             RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord,
         )]
-        pub struct TestAccountRlp {
+        pub struct TestAccount {
             pub nonce: U256,
             pub balance: U256,
             pub storage_root: H256,
@@ -717,7 +717,7 @@ mod tests {
         let mut data = vec![
             (
                 keccak(hex::decode("f0d4c12a5768d806021f80a262b4d39d26c58b8d").unwrap()),
-                TestAccountRlp {
+                TestAccount {
                     nonce: U256::from(1),
                     balance: U256::from(2),
                     storage_root: H256::from_uint(&1312378.into()),
@@ -726,7 +726,7 @@ mod tests {
             ),
             (
                 keccak(hex::decode("95222290dd7278aa3ddd389cc1e1d165cc4bafe5").unwrap()),
-                TestAccountRlp {
+                TestAccount {
                     nonce: U256::from(2),
                     balance: U256::from(3),
                     storage_root: H256::from_uint(&1123178.into()),
@@ -735,7 +735,7 @@ mod tests {
             ),
             (
                 keccak(hex::decode("43682bcf1ce452a70b72c109551084076c6377e0").unwrap()),
-                TestAccountRlp {
+                TestAccount {
                     nonce: U256::from(100),
                     balance: U256::from(101),
                     storage_root: H256::from_uint(&12345678.into()),
@@ -744,7 +744,7 @@ mod tests {
             ),
             (
                 keccak(hex::decode("97a9a15168c22b3c137e6381037e1499c8ad0978").unwrap()),
-                TestAccountRlp {
+                TestAccount {
                     nonce: U256::from(3000),
                     balance: U256::from(3002),
                     storage_root: H256::from_uint(&123456781.into()),
@@ -753,7 +753,7 @@ mod tests {
             ),
         ];
 
-        let create_trie_with_data = |trie: &Vec<(H256, TestAccountRlp)>| -> Result<HashedPartialTrie, Box<dyn std::error::Error>> {
+        let create_trie_with_data = |trie: &Vec<(H256, TestAccount)>| -> Result<HashedPartialTrie, Box<dyn std::error::Error>> {
             let mut tr = HashedPartialTrie::default();
             tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[0].0.as_bytes()))?, rlp::encode(&trie[0].1).as_ref())?;
             tr.insert::<Nibbles, &[u8]>(Nibbles::from_str(&hex::encode(trie[1].0.as_bytes()))?, rlp::encode(&trie[1].1).as_ref())?;

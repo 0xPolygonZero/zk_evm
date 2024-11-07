@@ -4,9 +4,9 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use mpt_trie::partial_trie::PartialTrie;
 
-use crate::generation::mpt::EitherRlp;
-use crate::generation::mpt::MptAccountRlp;
-use crate::generation::mpt::{AccountRlp, SmtAccountRlp};
+use crate::generation::mpt::EitherAccount;
+use crate::generation::mpt::MptAccount;
+use crate::generation::mpt::{Account, SmtAccount};
 use crate::Node;
 
 #[cfg(not(feature = "cdk_erigon"))]
@@ -38,31 +38,27 @@ pub(crate) fn nibbles_count<T: Into<U256>>(v: T, count: usize) -> Nibbles {
     }
 }
 
-pub(crate) fn test_account_1_empty_storage() -> EitherRlp {
+pub(crate) fn test_account_1_empty_storage() -> EitherAccount {
     if cfg!(feature = "cdk_erigon") {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: U256::from(1111),
-                balance: U256::from(2222),
-                code_hash: U256::from(4444),
-                code_length: 0.into(),
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            code_hash: U256::from(4444),
+            code_length: 0.into(),
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: U256::from(1111),
-                balance: U256::from(2222),
-                storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-                code_hash: H256::from_uint(&U256::from(4444)),
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: H256::from_uint(&U256::from(4444)),
+        }))
     }
 }
 
 #[cfg(not(feature = "cdk_erigon"))]
-pub(crate) fn test_account_1() -> MptAccountRlp {
-    MptAccountRlp {
+pub(crate) fn test_account_1() -> MptAccount {
+    MptAccount {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         storage_root: H256::from_uint(&U256::from(3333)),
@@ -80,8 +76,8 @@ pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
 }
 
 #[cfg(not(feature = "cdk_erigon"))]
-pub(crate) fn test_account_2() -> MptAccountRlp {
-    MptAccountRlp {
+pub(crate) fn test_account_2() -> MptAccount {
+    MptAccount {
         nonce: U256::from(5555),
         balance: U256::from(6666),
         storage_root: H256::from_uint(&U256::from(7777)),
