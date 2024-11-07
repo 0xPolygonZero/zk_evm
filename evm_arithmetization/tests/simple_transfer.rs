@@ -99,6 +99,8 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
+        log::debug!("beacon roots expected account:: {:?}", beacon_roots_account);
+
         let sender_account_after = MptAccountRlp {
             balance: sender_account_before.balance - value - gas_used * 10,
             nonce: sender_account_before.nonce + 1,

@@ -692,6 +692,8 @@ where
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
             storage_leaves.push(Some(slot_key));
+
+            log::debug!("pushing keys {:?} and {:?}", addr_key, slot_key);
             // Write `value_ptr_ptr`.
             let leaves = parse_value(value)?
                 .into_iter()

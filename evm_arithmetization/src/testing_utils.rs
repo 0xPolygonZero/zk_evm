@@ -93,6 +93,7 @@ fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) -> anyh
     let mut bytes = [0; 32];
     slot.to_big_endian(&mut bytes);
     let key = keccak(bytes);
+    log::debug!("slot key = {:?}", key);
     let nibbles = Nibbles::from_bytes_be(key.as_bytes()).unwrap();
     if value.is_zero() {
         trie.delete(nibbles)?;
@@ -123,13 +124,21 @@ pub fn update_beacon_roots_account_storage(
     let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.value;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
 
+    log::debug!("inseting timestamp = {:?} and root = {:?}", timestamp, h2u(parent_root));
+    log::debug!("initial storage trie = {:?}", storage_trie);
+
     insert_storage(storage_trie, timestamp_idx, timestamp)?;
-    insert_storage(storage_trie, root_idx, h2u(parent_root))
+    insert_storage(storage_trie, root_idx, h2u(parent_root))?;
+
+    log::debug!("storage trie = {:?}", storage_trie);
+
+    Ok(())
 }
 
 /// Returns the beacon roots contract account from its provided storage trie.
 #[cfg(feature = "eth_mainnet")]
 pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
+    log::debug!("hashing beacon roots");
     MptAccountRlp {
         storage_root: storage_trie.hash(),
         ..BEACON_ROOTS_ACCOUNT
