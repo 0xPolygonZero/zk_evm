@@ -185,7 +185,7 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
 const HASH_CONSTANTS: [(&str, [u8; 32]); 3] = [
     // Hash of an empty string: keccak(b'').hex()
     (
-        "EMPTY_STRING_HASH",
+        "EMPTY_STRING_KECCAK_HASH",
         hex!("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"),
     ),
     // Hash of an empty node: keccak(rlp.encode(b'')).hex()
