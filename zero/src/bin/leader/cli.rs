@@ -67,7 +67,7 @@ pub(crate) enum Command {
             short = 'T',
             long,
             env = "ZERO_BIN_RPC_TYPE",
-            default_value = "JERIGON"
+            default_value = "jerigon"
         )]
         rpc_type: RpcType,
         /// The start of the block range to prove (inclusive).
