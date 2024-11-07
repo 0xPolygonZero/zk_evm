@@ -159,8 +159,12 @@ pub fn entrypoint(
                     contract_code: contract_code
                         .into_iter()
                         .map(|it| match &world {
-                            Either::Left(_type1) => (KeccakHash::hash(&it), it),
-                            Either::Right(_type2) => (PoseidonHash::hash(&it), it),
+                            Either::Left(_type1) => {
+                                (<Type1World as World>::CodeHasher::hash(&it), it)
+                            }
+                            Either::Right(_type2) => {
+                                (<Type2World as World>::CodeHasher::hash(&it), it)
+                            }
                         })
                         .collect(),
                     block_metadata: b_meta.clone(),
