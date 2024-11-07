@@ -221,6 +221,18 @@ pub(crate) trait State<F: RichField> {
                 "initial state linked list = {:?}",
                 StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
             );
+            #[cfg(not(feature = "cdk_erigon"))]
+            {
+                use crate::cpu::kernel::tests::mpt::linked_list::StorageLinkedList;
+                let mem = self
+                .get_generation_state()
+                .memory
+                .get_preinit_memory(Segment::StorageLinkedList);
+                log::debug!(
+                    "initial storage linked list = {:?}",
+                    StorageLinkedList::from_mem_and_segment(&mem, Segment::StorageLinkedList)
+                );
+            }
         }
 
         loop {
@@ -351,13 +363,13 @@ pub(crate) trait State<F: RichField> {
     /// Logs `msg` in `debug` mode.
     #[inline]
     fn log_debug(&self, msg: String) {
-        log::debug!("{}", msg);
+        // log::debug!("{}", msg);
     }
 
     /// Logs `msg` at `level`.
     #[inline]
     fn log(&self, level: Level, msg: String) {
-        log::log!(level, "{}", msg);
+        // log::log!(level, "{}", msg);
     }
 }
 

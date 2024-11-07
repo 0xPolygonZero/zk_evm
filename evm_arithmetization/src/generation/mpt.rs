@@ -342,7 +342,9 @@ where
 {
     let node_ptr = trie_data.len();
     let type_of_trie = PartialTrieType::of(trie) as u32;
+    log::debug!("el trie = {:?}", trie);
     if type_of_trie > 0 {
+        log::debug!("writting {:?} in {:?}", type_of_trie, trie_data.len());
         trie_data.push(Some(type_of_trie.into()));
     }
 
@@ -487,6 +489,7 @@ fn load_state_trie(
                 .get(&merged_key)
                 .copied()
                 .unwrap_or(&storage_hash_only);
+            log::debug!("storage tries = {:?}", storage_tries_by_state_key);
 
             assert_eq!(storage_trie.hash(), storage_root,
                 "In TrieInputs, an account's storage_root didn't match the associated storage trie hash");
@@ -504,11 +507,14 @@ fn load_state_trie(
             trie_data.push(Some(balance));
             // Storage trie ptr.
             let storage_ptr_ptr = trie_data.len();
+            log::debug!("pushing storage_ptr = {:?}", storage_ptr_ptr + 2);
             trie_data.push(Some((trie_data.len() + 2).into()));
             trie_data.push(Some(code_hash.into_uint()));
             // We don't need to store the slot values, as they will be overwritten in
             // `mpt_set_payload`.
+            log::debug!("loading storage");
             let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value_no_return)?;
+            log::debug!("storage_ptr = {storage_ptr}");
             if storage_ptr == 0 {
                 trie_data[storage_ptr_ptr] = Some(0.into());
             }
@@ -613,7 +619,12 @@ fn get_state_and_storage_leaves(
 
             // Push the payload in the trie data.
             trie_data.push(Some(nonce));
-            log::debug!("key = {:?} nonce = {:?} balance= {:?}", addr_key, nonce, balance);
+            log::debug!(
+                "key = {:?} nonce = {:?} balance= {:?}",
+                addr_key,
+                nonce,
+                balance
+            );
             trie_data.push(Some(balance));
             // The Storage pointer is only written in the trie.
             trie_data.push(Some(0.into()));
@@ -794,15 +805,17 @@ pub(crate) fn load_state_mpt(
     trie_data: &mut Vec<Option<U256>>,
 ) -> Result<usize, ProgramError> {
     let storage_tries_by_state_key = match &trie_inputs.state_trie.state {
-        Either::Left(mpt) => mpt
-            .get_storage()
-            .iter()
-            .map(|(hashed_address, storage_trie)| {
-                let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
-                    .expect("An H256 is 32 bytes long");
-                (key, *storage_trie)
-            })
-            .collect::<HashMap<_, _>>(),
+        Either::Left(mpt) => {
+            log::debug!("el mundo = {:?}", mpt);
+            mpt.get_storage()
+                .iter()
+                .map(|(hashed_address, storage_trie)| {
+                    let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
+                        .expect("An H256 is 32 bytes long");
+                    (key, *storage_trie)
+                })
+                .collect::<HashMap<_, _>>()
+        }
         Either::Right(_) => unreachable!("eth_mainnet expects an MPT."),
     };
 
