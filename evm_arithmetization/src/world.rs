@@ -5,18 +5,42 @@ use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
+use smt_trie::code::hash_bytecode_h256;
+
+/// Utility trait to leverage a specific hash function across Type1 and Type2
+/// zkEVM variants.
+pub trait Hasher {
+    fn hash(bytes: &[u8]) -> H256;
+}
+
+pub struct PoseidonHash;
+pub struct KeccakHash;
+
+impl Hasher for PoseidonHash {
+    fn hash(bytes: &[u8]) -> H256 {
+        hash_bytecode_h256(bytes)
+    }
+}
+
+impl Hasher for KeccakHash {
+    fn hash(bytes: &[u8]) -> H256 {
+        keccak_hash::keccak(bytes)
+    }
+}
 
 use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
 
-/// The [core](crate::core) of this crate is agnostic over state and storage
-/// representations.
+/// The `core` module of the `trace_decoder` crate is agnostic over state and
+/// storage representations.
 ///
 /// This is the common interface to those data structures.
-/// See also [crate::_DEVELOPER_DOCS].
-pub(crate) trait World {
+pub trait World {
     /// (State) subtries may be _hashed out.
     /// This type is a key which may identify a subtrie.
     type SubtriePath;
+
+    /// Hasher to use for contract bytecode.
+    type CodeHasher: Hasher;
 
     //////////////////////
     /// Account operations
@@ -44,8 +68,8 @@ pub(crate) trait World {
     /// Creates a new account at `address` if it does not exist.
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
 
-    /// The [core](crate::core) of this crate tracks required subtries for
-    /// proving.
+    /// The `core` module of the `trace_decoder` crate tracks required subtries
+    /// for proving.
     ///
     /// In case of a state delete, it may be that certain parts of the subtrie
     /// must be retained. If so, it will be returned as [`Some`].
@@ -148,6 +172,8 @@ impl Type1World {
 
 impl World for Type1World {
     type SubtriePath = MptKey;
+    type CodeHasher = KeccakHash;
+
     fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
         Ok(self.state.get(keccak_hash::keccak(address)).is_some())
     }
@@ -170,7 +196,7 @@ impl World for Type1World {
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
         let key = keccak_hash::keccak(address);
         let mut acct = self.state.get(key).unwrap_or_default();
-        acct.code_hash = code.right_or_else(keccak_hash::keccak);
+        acct.code_hash = code.right_or_else(Self::CodeHasher::hash);
         self.state.insert(key, acct)
     }
     fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
@@ -248,6 +274,8 @@ impl World for Type1World {
 
 impl World for Type2World {
     type SubtriePath = SmtKey;
+    type CodeHasher = PoseidonHash;
+
     fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
         Ok(self.accounts.contains_key(&address))
     }
@@ -269,10 +297,14 @@ impl World for Type2World {
         let acct = self.accounts.entry(address).or_default();
         match code {
             Either::Left(bytes) => {
-                acct.code = Some(keccak_hash::keccak(bytes).into_uint());
-                acct.code_length = Some(U256::from(bytes.len()))
+                acct.code_length = Some(U256::from(bytes.len()));
+                if bytes.is_empty() {
+                    acct.code_hash = None;
+                } else {
+                    acct.code_hash = Some(Self::CodeHasher::hash(bytes).into_uint());
+                }
             }
-            Either::Right(hash) => acct.code = Some(hash.into_uint()),
+            Either::Right(hash) => acct.code_hash = Some(hash.into_uint()),
         };
         Ok(())
     }
@@ -349,7 +381,7 @@ impl World for Type2World {
 pub struct Type2Entry {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
-    pub code: Option<U256>,
+    pub code_hash: Option<U256>,
     pub code_length: Option<U256>,
     pub storage: BTreeMap<U256, U256>,
 }
@@ -383,7 +415,7 @@ impl Type2World {
             Type2Entry {
                 balance,
                 nonce,
-                code,
+                code_hash,
                 code_length,
                 storage,
             },
@@ -394,7 +426,7 @@ impl Type2World {
             for (value, key_fn) in [
                 (balance, key_balance as fn(_) -> _),
                 (nonce, key_nonce),
-                (code, key_code),
+                (code_hash, key_code),
                 (code_length, key_code_length),
             ] {
                 if let Some(value) = value {

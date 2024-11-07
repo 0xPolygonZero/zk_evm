@@ -45,7 +45,8 @@ bytes = "1.6.0"
 ciborium = "0.2.2"
 ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
-compat = { path = "compat" }
+alloy-compat = "0.1.0"
+copyvec = "0.2.0"
 criterion = "0.5.1"
 dotenvy = "0.15.7"
 either = "1.12.0"
@@ -104,6 +105,7 @@ url = "2.5.2"
 winnow = "0.6.13"
 
 # local dependencies
+compat = { path = "compat" }
 evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0", default-features = false }
 mpt_trie = { path = "mpt_trie", version = "0.4.1" }
 smt_trie = { path = "smt_trie", version = "0.1.1" }

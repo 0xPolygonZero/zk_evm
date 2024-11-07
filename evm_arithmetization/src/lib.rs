@@ -284,7 +284,9 @@ pub mod witness;
 pub mod curve_pairings;
 pub mod extension_tower;
 pub mod testing_utils;
+pub mod tries;
 pub mod util;
+pub mod world;
 
 // Public definitions and re-exports
 mod public_types;
