@@ -28,7 +28,7 @@ use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
-use evm_arithmetization::world::world::StateWorld;
+use evm_arithmetization::world::StateWorld;
 use evm_arithmetization::{Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -38,7 +38,7 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 #[cfg(feature = "cdk_erigon")]
 use plonky2::field::types::PrimeField64;
-use smt_trie::code::hash_bytecode_u256;
+use smt_trie::code::hash_bytecode_h256;
 #[cfg(feature = "cdk_erigon")]
 use smt_trie::keys::{key_balance, key_code_length};
 use smt_trie::utils::hashout2u;
@@ -88,7 +88,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     ];
 
     let code_hash = if cfg!(feature = "cdk_erigon") {
-        CodeHashType::Uint(hash_bytecode_u256(code.to_vec()))
+        CodeHashType::Uint(hash_bytecode_h256(code.to_vec()))
     } else {
         CodeHashType::Hash(keccak(code))
     };
@@ -99,7 +99,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         Either::Right(SmtAccount {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
-            code_hash: hash_bytecode_u256(vec![]),
+            code_hash: hash_bytecode_h256(&[]),
             code_length: 0.into(),
         })
     } else {
@@ -195,16 +195,13 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     };
 
     let mut contract_code = HashMap::new();
+    // TODO(Robin) Review this
     if cfg!(feature = "eth_mainnet") {
-        let empty_code_hash = Either::Left(keccak(vec![]));
-        let code_hash = Either::Left(keccak(code));
-        contract_code.insert(empty_code_hash, vec![]);
-        contract_code.insert(code_hash, code.to_vec());
+        contract_code.insert(keccak(vec![]), vec![]);
+        contract_code.insert(keccak(code), code.to_vec());
     } else {
-        let empty_code_hash = Either::Right(hash_bytecode_u256(vec![]));
-        let code_hash = Either::Right(hash_bytecode_u256(code.to_vec()));
-        contract_code.insert(empty_code_hash, vec![]);
-        contract_code.insert(code_hash, code.to_vec());
+        contract_code.insert(hash_bytecode_h256(&[]), vec![]);
+        contract_code.insert(hash_bytecode_h256(&code), code.to_vec());
     }
 
     let sender_account_after = if cfg!(feature = "cdk_erigon") {
@@ -344,7 +341,7 @@ use evm_arithmetization::generation::mpt::SmtAccount;
 
 #[cfg(feature = "cdk_erigon")]
 fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccount, code: &[u8]) {
-    use evm_arithmetization::world::world::World;
+    use evm_arithmetization::world::World;
 
     let key = key_balance(addr);
     log::debug!(
@@ -356,7 +353,7 @@ fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccount, code
     if let Either::Right(ref mut smt_state) = world.state {
         smt_state.update_balance(addr, |b| *b = account.get_balance());
         smt_state.update_nonce(addr, |n| *n = account.get_nonce());
-        smt_state.set_code_hash(addr, code);
+        smt_state.set_code(addr, code);
         let key = key_code_length(addr);
         log::debug!(
             "setting {:?} code length, the key is {:?}",

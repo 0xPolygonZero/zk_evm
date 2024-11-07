@@ -3,7 +3,6 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -49,6 +48,10 @@ type C = KeccakGoldilocksConfig;
 /// `1337` from address `0x5B38Da6a701c568545dCfcB03FcB875f56beddC4` to address
 /// `0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2`.
 #[test]
+// This test is run in CI under the "Run Specific Ignored Tests in Release Mode" job.
+// It is marked as ignored to prevent it from running by default in debug mode due to its longer
+// execution time.
+#[ignore]
 fn test_erc721() -> anyhow::Result<()> {
     init_logger();
 
@@ -85,7 +88,7 @@ fn test_erc721() -> anyhow::Result<()> {
     let gas_used = 58_418.into();
 
     let contract_code = [contract_bytecode(), vec![]]
-        .map(|v| (Either::Left(keccak(v.clone())), v))
+        .map(|v| (keccak(v.clone()), v))
         .into();
 
     let logs = vec![LogRlp {

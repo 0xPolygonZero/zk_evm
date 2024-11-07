@@ -18,9 +18,9 @@ use crate::cpu::kernel::tests::mpt::{
 use crate::generation::mpt::MptAccount;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
+use crate::tries::StateMpt;
 use crate::util::h2u;
-use crate::world::tries::StateMpt;
-use crate::world::world::{StateWorld, Type1World};
+use crate::world::{StateWorld, Type1World};
 use crate::Node;
 
 #[test]

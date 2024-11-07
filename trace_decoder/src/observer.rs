@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use ethereum_types::U256;
-use evm_arithmetization::world::tries::{ReceiptTrie, TransactionTrie};
+use evm_arithmetization::tries::{ReceiptTrie, TransactionTrie};
 
 use crate::core::IntraBlockTries;
 

@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{H160, H256, U256};
 use evm_arithmetization::generation::mpt::MptAccount;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -44,7 +43,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
+    contract_code.insert(keccak(vec![]), vec![]);
 
     // Just one withdrawal.
     let withdrawals = vec![(H160(random()), U256(random()))];

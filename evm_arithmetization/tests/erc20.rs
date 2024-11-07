@@ -3,7 +3,6 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -113,7 +112,7 @@ fn test_erc20() -> anyhow::Result<()> {
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]
-        .map(|v| (Either::Left(keccak(v.clone())), v))
+        .map(|v| (keccak(v.clone()), v))
         .into();
 
     let expected_state_trie_after: HashedPartialTrie = {

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -83,7 +82,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
+    contract_code.insert(keccak(vec![]), vec![]);
 
     let expected_state_trie_after: HashedPartialTrie = {
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);

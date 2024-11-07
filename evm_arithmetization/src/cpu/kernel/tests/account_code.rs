@@ -11,7 +11,7 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
-use smt_trie::code::hash_bytecode_u256;
+use smt_trie::code::hash_bytecode_h256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
@@ -27,7 +27,7 @@ use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
-use crate::world::world::StateWorld;
+use crate::world::StateWorld;
 
 pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
@@ -279,7 +279,7 @@ fn test_account(code: &[u8]) -> EitherAccount {
         EitherAccount(Either::Right(SmtAccount {
             nonce: U256::from(1111),
             balance: U256::from(2222),
-            code_hash: hash_bytecode_u256(code.to_vec()),
+            code_hash: hash_bytecode_h256(&code).into_uint(),
             code_length: code.len().into(),
         }))
     }
@@ -315,12 +315,9 @@ fn test_extcodesize() -> Result<()> {
         .push(U256::from_big_endian(address.as_bytes()))
         .expect("The stack should not overflow");
     interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
-        HashMap::from([(Either::Left(keccak(&code)), code.clone())])
+        HashMap::from([(keccak(&code), code.clone())])
     } else {
-        HashMap::from([(
-            Either::Right(hash_bytecode_u256(code.clone())),
-            code.clone(),
-        )])
+        HashMap::from([(hash_bytecode_h256(&code), code.clone())])
     };
 
     interpreter.run()?;
@@ -396,12 +393,9 @@ fn test_extcodecopy() -> Result<()> {
         .push((0xDEADBEEFu64 + (1 << 32)).into())
         .expect("The stack should not overflow"); // kexit_info
     interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
-        HashMap::from([(Either::Left(keccak(&code)), code.clone())])
+        HashMap::from([(keccak(&code), code.clone())])
     } else {
-        HashMap::from([(
-            Either::Right(hash_bytecode_u256(code.clone())),
-            code.clone(),
-        )])
+        HashMap::from([(hash_bytecode_h256(&code), code.clone())])
     };
 
     interpreter.run()?;
@@ -598,7 +592,7 @@ fn sstore() -> Result<()> {
 fn sload() -> Result<()> {
     use std::collections::BTreeMap;
 
-    use crate::world::{
+    use crate::{
         tries::{StateMpt, StorageTrie},
         world::Type1World,
     };

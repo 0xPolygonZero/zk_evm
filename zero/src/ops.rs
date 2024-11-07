@@ -8,7 +8,7 @@ use evm_arithmetization::{prover::testing::simulate_execution_all_segments, Gene
 use evm_arithmetization::{Field, ProofWithPublicValues, PublicValues, TrimmedGenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
-    registry, RemoteExecute,
+    registry, AbortSignal, RemoteExecute,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -30,7 +30,7 @@ impl Operation for SegmentProof {
     type Input = evm_arithmetization::AllData;
     type Output = SegmentAggregatableProof;
 
-    fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
+    fn execute(&self, all_data: Self::Input, abort: AbortSignal) -> Result<Self::Output> {
         let all_data =
             all_data.map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?;
 
@@ -39,7 +39,7 @@ impl Operation for SegmentProof {
         let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
         let proof = if self.save_inputs_on_error {
             crate::prover_state::p_manager()
-                .generate_segment_proof(all_data)
+                .generate_segment_proof(all_data, abort)
                 .map_err(|e| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
@@ -58,7 +58,7 @@ impl Operation for SegmentProof {
                 })?
         } else {
             crate::prover_state::p_manager()
-                .generate_segment_proof(all_data)
+                .generate_segment_proof(all_data, abort)
                 .map_err(|e| FatalError::from_str(&e.to_string(), FatalStrategy::Terminate))?
         };
 
@@ -78,7 +78,7 @@ impl Operation for SegmentProofTestOnly {
     type Input = (GenerationInputs, usize, usize);
     type Output = ();
 
-    fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
+    fn execute(&self, inputs: Self::Input, _abort: AbortSignal) -> Result<Self::Output> {
         if self.save_inputs_on_error || self.save_tries_on_error {
             simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|err| {
                 let block_number = inputs.0.block_metadata.block_number.low_u64();
@@ -259,7 +259,7 @@ pub fn generate_segment_agg_proof(
 impl Monoid for SegmentAggProof {
     type Elem = SegmentAggregatableProof;
 
-    fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
+    fn combine(&self, a: Self::Elem, b: Self::Elem, _abort: AbortSignal) -> Result<Self::Elem> {
         let proof = generate_segment_agg_proof(p_state(), &a, &b, false).map_err(|e| {
             if self.save_inputs_on_error {
                 let pv = vec![
@@ -304,7 +304,7 @@ fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
 impl Monoid for BatchAggProof {
     type Elem = BatchAggregatableProof;
 
-    fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
+    fn combine(&self, a: Self::Elem, b: Self::Elem, _abort: AbortSignal) -> Result<Self::Elem> {
         let lhs = match a {
             BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::SegmentAgg(
                 generate_segment_agg_proof(
@@ -378,7 +378,7 @@ impl Operation for BlockProof {
     type Input = ProofWithPublicValues;
     type Output = GeneratedBlockProof;
 
-    fn execute(&self, input: Self::Input) -> Result<Self::Output> {
+    fn execute(&self, input: Self::Input, _abort: AbortSignal) -> Result<Self::Output> {
         let b_height = input.public_values.block_metadata.block_number.low_u64();
         let parent_intern = self.prev.as_ref().map(|p| &p.intern);
 

@@ -56,16 +56,19 @@
 /// we can continue to do the main work of "executing" the transactions.
 ///
 /// The core of this library is agnostic over the (combined)
-/// state and storage representation - see [`world::World`] for more.
+/// state and storage representation - see [`evm_arithmetization::world::World`]
+/// for more.
 const _DEVELOPER_DOCS: () = ();
 
 mod interface;
-
-pub use core::{entrypoint, WireDisposition};
-
 pub use interface::*;
 
+mod type1;
+mod type2;
+mod wire;
+
 mod core;
+pub use core::{entrypoint, WireDisposition};
 
 /// Implementation of the observer for the trace decoder.
 pub mod observer;

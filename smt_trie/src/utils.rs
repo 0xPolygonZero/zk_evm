@@ -1,4 +1,4 @@
-use ethereum_types::U256;
+use ethereum_types::{H256, U256};
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::Poseidon;
 
@@ -47,6 +47,13 @@ pub(crate) fn limbs2f(limbs: [F; 8]) -> U256 {
 /// Convert a `HashOut` to a `U256`.
 pub fn hashout2u(h: HashOut) -> U256 {
     key2u(Key(h.elements))
+}
+
+/// Convert a `HashOut` to a `H256`.
+pub fn hashout2h(h: HashOut) -> H256 {
+    let mut it = [0; 32];
+    hashout2u(h).to_big_endian(&mut it);
+    H256(it)
 }
 
 /// Convert a `Key` to a `U256`.

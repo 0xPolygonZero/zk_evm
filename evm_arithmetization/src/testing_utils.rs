@@ -26,7 +26,7 @@ use crate::proof::TrieRoots;
 use crate::witness::operation::Operation;
 use crate::{
     generation::{TrieInputs, TrimmedGenerationInputs},
-    world::world::StateWorld,
+    world::StateWorld,
 };
 use crate::{
     proof::BlockMetadata, util::h2u, GenerationInputs, GenerationSegmentData, SegmentDataIterator,
@@ -307,7 +307,7 @@ pub fn get_state_world(
     // `Type1World` expects full keys, so we manually expand the nibbles here.
     use mpt_trie::utils::TryFromIterator as _;
 
-    use crate::world::{
+    use crate::{
         tries::{StateMpt, StorageTrie},
         world::Type1World,
     };

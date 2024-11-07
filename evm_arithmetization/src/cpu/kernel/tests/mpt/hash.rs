@@ -9,7 +9,7 @@ use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1_rlp, test_account_2_rlp};
 use crate::generation::TrieInputs;
 use crate::testing_utils::get_state_world;
-use crate::world::world::World;
+use crate::world::World;
 use crate::Node;
 
 // TODO: Test with short leaf. Might need to be a storage trie.

@@ -1,11 +1,11 @@
 /// Functions to hash contract bytecode using Poseidon.
 /// See `hashContractBytecode()` in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt-utils.js for reference implementation.
-use ethereum_types::U256;
+use ethereum_types::H256;
 use plonky2::field::types::Field;
 use plonky2::hash::poseidon::{self, Poseidon};
 
 use crate::smt::{HashOut, F};
-use crate::utils::hashout2u;
+use crate::utils::hashout2h;
 
 pub fn hash_contract_bytecode(mut code: Vec<u8>) -> HashOut {
     poseidon_pad_byte_vec(&mut code);
@@ -43,8 +43,8 @@ pub fn poseidon_pad_byte_vec(bytes: &mut Vec<u8>) {
     *bytes.last_mut().unwrap() |= 0x80;
 }
 
-pub fn hash_bytecode_u256(code: Vec<u8>) -> U256 {
-    hashout2u(hash_contract_bytecode(code))
+pub fn hash_bytecode_h256(code: &[u8]) -> H256 {
+    hashout2h(hash_contract_bytecode(code.to_vec()))
 }
 
 #[cfg(test)]

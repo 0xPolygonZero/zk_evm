@@ -219,12 +219,12 @@ impl Default for MptAccount {
 
 impl Default for SmtAccount {
     fn default() -> Self {
-        use smt_trie::code::hash_bytecode_u256;
+        use smt_trie::code::hash_bytecode_h256;
 
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
-            code_hash: hash_bytecode_u256(vec![]),
+            code_hash: hash_bytecode_h256(&[]).into_uint(),
             code_length: U256::zero(),
         }
     }

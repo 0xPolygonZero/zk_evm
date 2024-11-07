@@ -2,13 +2,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
-use smt_trie::code::hash_bytecode_u256;
+use smt_trie::code::hash_bytecode_h256;
 
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
@@ -600,12 +599,8 @@ impl<F: RichField> GenerationState<F> {
             self.observe_address(tip_h160);
         } else if dst == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(self, 0)?;
-            let tip_either = if cfg!(feature = "cdk_erigon") {
-                Either::Right(tip_u256)
-            } else {
-                Either::Left(H256::from_uint(&tip_u256))
-            };
-            self.observe_contract(tip_either)?;
+            let tip = H256::from_uint(&tip_u256);
+            self.observe_contract(tip)?;
         }
 
         Ok(())
@@ -621,10 +616,7 @@ impl<F: RichField> GenerationState<F> {
     /// Observe the given code hash and store the associated code.
     /// When called, the code corresponding to `codehash` should be stored in
     /// the return data.
-    pub(crate) fn observe_contract(
-        &mut self,
-        codehash: Either<H256, U256>,
-    ) -> Result<(), ProgramError> {
+    pub(crate) fn observe_contract(&mut self, codehash: H256) -> Result<(), ProgramError> {
         if self.inputs.contract_code.contains_key(&codehash) {
             return Ok(()); // Return early if the code hash has already been
                            // observed.
@@ -641,9 +633,9 @@ impl<F: RichField> GenerationState<F> {
             .map(|x| x.unwrap_or_default().low_u32() as u8)
             .collect::<Vec<_>>();
         let hash = if cfg!(feature = "cdk_erigon") {
-            Either::Left(keccak(&code))
+            keccak(&code)
         } else {
-            Either::Right(hash_bytecode_u256(code.clone()))
+            hash_bytecode_h256(&code)
         };
         debug_assert_eq!(hash, codehash);
 

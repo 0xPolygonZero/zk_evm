@@ -5,7 +5,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
@@ -152,8 +151,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
-    contract_code.insert(Either::Left(code_hash), code.to_vec());
+    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(code_hash, code.to_vec());
 
     // Update the state and receipt tries after the transaction, so that we have the
     // correct expected tries: Update accounts

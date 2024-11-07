@@ -3,7 +3,6 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -90,11 +89,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let contract_code = [
-        (Either::Left(keccak(&code)), code.clone()),
-        (Either::Left(keccak([])), vec![]),
-    ]
-    .into();
+    let contract_code = [(keccak(&code), code.clone()), (keccak(&[]), vec![])].into();
 
     let expected_state_trie_after: HashedPartialTrie = {
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);

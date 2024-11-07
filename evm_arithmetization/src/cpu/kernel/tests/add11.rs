@@ -11,7 +11,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
-use smt_trie::code::hash_bytecode_u256;
+use smt_trie::code::hash_bytecode_h256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
@@ -37,14 +37,14 @@ fn test_add11_yml() {
 
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
     let code_hash = if cfg!(feature = "eth_mainnet") {
-        Either::Left(keccak(code))
+        keccak(code)
     } else {
-        Either::Right(hash_bytecode_u256(code.to_vec()))
+        hash_bytecode_h256(&code)
     };
 
     let mut contract_code = HashMap::new();
     if cfg!(feature = "eth_mainnet") {
-        contract_code.insert(Either::Left(keccak(vec![])), vec![]);
+        contract_code.insert(keccak(vec![]), vec![]);
         contract_code.insert(code_hash, code.to_vec());
     }
 
@@ -74,13 +74,13 @@ fn test_add11_yml() {
     let to_account_before = if cfg!(feature = "eth_mainnet") {
         EitherAccount(Either::Left(MptAccount {
             balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
+            code_hash,
             ..MptAccount::default()
         }))
     } else {
         EitherAccount(Either::Right(SmtAccount {
             balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash: code_hash.expect_right("cdk_erigon uses Poseidon."),
+            code_hash: code_hash.into_uint(),
             code_length: code.len().into(),
             ..SmtAccount::default()
         }))
@@ -158,7 +158,7 @@ fn test_add11_yml() {
         let to_account_after = if cfg!(feature = "eth_mainnet") {
             EitherAccount(Either::Left(MptAccount {
                 balance: 0xde0b6b3a76586a0u64.into(),
-                code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
+                code_hash,
                 // Storage map: { 0 => 2 }
                 storage_root: HashedPartialTrie::from(Node::Leaf {
                     nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
@@ -170,7 +170,7 @@ fn test_add11_yml() {
         } else {
             EitherAccount(Either::Right(SmtAccount {
                 balance: 0xde0b6b3a76586a0u64.into(),
-                code_hash: code_hash.expect_right("cdk_erigon uses Keccak."),
+                code_hash: code_hash.into_uint(),
                 ..SmtAccount::default()
             }))
         };
@@ -277,14 +277,14 @@ fn test_add11_yml_with_exception() {
 
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x8e, 0x00];
     let code_hash = if cfg!(feature = "eth_mainnet") {
-        Either::Left(keccak(code))
+        keccak(code)
     } else {
-        Either::Right(hash_bytecode_u256(code.to_vec()))
+        hash_bytecode_h256(&code)
     };
 
     let mut contract_code = HashMap::new();
     if cfg!(feature = "eth_mainnet") {
-        contract_code.insert(Either::Left(keccak(vec![])), vec![]);
+        contract_code.insert(keccak(vec![]), vec![]);
         contract_code.insert(code_hash, code.to_vec());
     }
 
@@ -313,13 +313,13 @@ fn test_add11_yml_with_exception() {
     let to_account_before = if cfg!(feature = "eth_mainnet") {
         EitherAccount(Either::Left(MptAccount {
             balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash: code_hash.expect_left("eth_mainnet uses Keccak."),
+            code_hash,
             ..MptAccount::default()
         }))
     } else {
         EitherAccount(Either::Right(SmtAccount {
             balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash: code_hash.expect_right("cdk_erigon uses Poseidon."),
+            code_hash: code_hash.into_uint(),
             code_length: code.len().into(),
             ..SmtAccount::default()
         }))
@@ -349,7 +349,6 @@ fn test_add11_yml_with_exception() {
         state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        // storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");

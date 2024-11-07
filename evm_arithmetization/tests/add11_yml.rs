@@ -15,7 +15,7 @@ use evm_arithmetization::testing_utils::{
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::world::world::World;
+use evm_arithmetization::world::World;
 use evm_arithmetization::{AllStark, GenerationInputs, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -113,10 +113,8 @@ fn get_generation_inputs() -> GenerationInputs {
     };
 
     let mut contract_code = HashMap::new();
-    let empty_hash_code = Either::Left(keccak(vec![]));
-    let code_hash_either = Either::Left(code_hash);
-    contract_code.insert(empty_hash_code, vec![]);
-    contract_code.insert(code_hash_either, code.to_vec());
+    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(code_hash, code.to_vec());
 
     let expected_state_trie_after = {
         update_beacon_roots_account_storage(

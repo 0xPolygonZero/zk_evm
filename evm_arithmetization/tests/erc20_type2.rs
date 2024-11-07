@@ -16,7 +16,7 @@ use evm_arithmetization::testing_utils::STATE_ROOT_STORAGE_POS;
 use evm_arithmetization::testing_utils::TIMESTAMP_STORAGE_POS;
 use evm_arithmetization::testing_utils::{init_logger, sd2u};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::world::world::{StateWorld, Type2World};
+use evm_arithmetization::world::{StateWorld, Type2World};
 use evm_arithmetization::{AllStark, Node, StarkConfig, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -27,7 +27,7 @@ use plonky2::field::types::Field;
 use plonky2::field::types::PrimeField64;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
-use smt_trie::code::hash_bytecode_u256;
+use smt_trie::code::hash_bytecode_h256;
 use smt_trie::db::{Db, MemoryDb};
 use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
 use smt_trie::smt::Smt;
@@ -126,7 +126,7 @@ fn test_erc20() -> anyhow::Result<()> {
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]
-        .map(|v| (Either::Right(hash_bytecode_u256(v.clone())), v))
+        .map(|v| (hash_bytecode_h256(&v), v))
         .into();
 
     let expected_smt_after: StateWorld = {
@@ -316,7 +316,7 @@ fn giver_account() -> SmtAccount {
     SmtAccount {
         nonce: 1.into(),
         balance: 0.into(),
-        code_hash: hash_bytecode_u256(code),
+        code_hash: hash_bytecode_h256(&code).into_uint(),
         code_length: len.into(),
     }
 }
@@ -327,7 +327,7 @@ fn token_account() -> SmtAccount {
     SmtAccount {
         nonce: 1.into(),
         balance: 0.into(),
-        code_hash: hash_bytecode_u256(code),
+        code_hash: hash_bytecode_h256(&code).into_uint(),
         code_length: len.into(),
     }
 }
@@ -371,7 +371,7 @@ fn set_account(
     storage: &HashMap<U256, U256>,
     code: &[u8],
 ) {
-    use evm_arithmetization::world::world::World;
+    use evm_arithmetization::world::World;
 
     let key = key_balance(addr);
     log::debug!(
@@ -383,7 +383,7 @@ fn set_account(
     if let Either::Right(ref mut smt_state) = world.state {
         smt_state.update_balance(addr, |b| *b = account.get_balance());
         smt_state.update_nonce(addr, |n| *n = account.get_nonce());
-        smt_state.set_code_hash(addr, code);
+        smt_state.set_code(addr, Either::Left(code));
         let key = key_code_length(addr);
         log::debug!(
             "setting {:?} code length, the key is {:?}",

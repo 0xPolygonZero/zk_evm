@@ -16,8 +16,8 @@ use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
 use crate::generation::TrieInputs;
 use crate::testing_utils::get_state_world;
-use crate::world::tries::StateMpt;
-use crate::world::world::{StateWorld, Type1World};
+use crate::tries::StateMpt;
+use crate::world::{StateWorld, Type1World};
 use crate::Node;
 
 #[test]
