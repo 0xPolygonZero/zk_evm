@@ -24,26 +24,6 @@ use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
-#[derive(Clone)]
-pub enum CodeHashType {
-    Hash(H256),
-    Uint(U256),
-}
-
-pub fn get_h256_from_code_hash(code_hash: CodeHashType) -> Option<H256> {
-    match code_hash {
-        CodeHashType::Hash(h) => Some(h),
-        _ => None,
-    }
-}
-
-pub fn get_u256_from_code_hash(code_hash: CodeHashType) -> Option<U256> {
-    match code_hash {
-        CodeHashType::Uint(u) => Some(u),
-        _ => None,
-    }
-}
-
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MptAccount {
     pub nonce: U256,
@@ -65,8 +45,8 @@ impl Account for MptAccount {
     fn get_code_length(&self) -> U256 {
         panic!("No code length in an MPT's account.")
     }
-    fn get_code_hash(&self) -> CodeHashType {
-        CodeHashType::Hash(self.code_hash)
+    fn get_code_hash(&self) -> H256 {
+        self.code_hash
     }
     fn get_code_hash_u256(&self) -> U256 {
         self.code_hash.into_uint()
@@ -97,8 +77,8 @@ impl Account for SmtAccount {
     fn get_code_length(&self) -> U256 {
         self.code_length
     }
-    fn get_code_hash(&self) -> CodeHashType {
-        CodeHashType::Uint(self.code_hash)
+    fn get_code_hash(&self) -> H256 {
+        H256::from_uint(&self.code_hash)
     }
     fn get_code_hash_u256(&self) -> U256 {
         self.code_hash
@@ -113,7 +93,7 @@ pub trait Account: Any {
     fn get_balance(&self) -> U256;
     fn get_storage_root(&self) -> H256;
     fn get_code_length(&self) -> U256;
-    fn get_code_hash(&self) -> CodeHashType;
+    fn get_code_hash(&self) -> H256;
     fn get_code_hash_u256(&self) -> U256;
     fn rlp_encode(&self) -> BytesMut;
 }
@@ -169,7 +149,7 @@ impl Account for EitherAccount {
             Either::Right(smt_rlp) => smt_rlp.get_code_length(),
         }
     }
-    fn get_code_hash(&self) -> CodeHashType {
+    fn get_code_hash(&self) -> H256 {
         match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_code_hash(),
             Either::Right(smt_rlp) => smt_rlp.get_code_hash(),

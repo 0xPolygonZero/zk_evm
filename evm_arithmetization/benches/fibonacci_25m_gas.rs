@@ -15,13 +15,11 @@ use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
-use evm_arithmetization::generation::mpt::{
-    get_h256_from_code_hash, get_u256_from_code_hash, Account, CodeHashType, EitherAccount,
-    LegacyReceiptRlp, MptAccount,
-};
+use evm_arithmetization::generation::mpt::{Account, EitherAccount, LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
+#[cfg(not(feature = "cdk_erigon"))]
 use evm_arithmetization::testing_utils::get_state_world;
 #[cfg(feature = "eth_mainnet")]
 use evm_arithmetization::testing_utils::{
@@ -88,9 +86,9 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     ];
 
     let code_hash = if cfg!(feature = "cdk_erigon") {
-        CodeHashType::Uint(hash_bytecode_h256(code.to_vec()))
+        hash_bytecode_h256(&code)
     } else {
-        CodeHashType::Hash(keccak(code))
+        keccak(&code)
     };
 
     let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
@@ -99,7 +97,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         Either::Right(SmtAccount {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
-            code_hash: hash_bytecode_h256(&[]),
+            code_hash: hash_bytecode_h256(&[]).into_uint(),
             code_length: 0.into(),
         })
     } else {
@@ -115,8 +113,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         EitherAccount(Either::Right(SmtAccount {
             nonce: 1.into(),
             balance: 0.into(),
-            code_hash: get_u256_from_code_hash(code_hash.clone())
-                .expect("In cdk_erigon, the code_hash is a U256"),
+            code_hash: code_hash.into_uint(),
             code_length: code.len().into(),
         }))
     } else {
@@ -124,8 +121,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
             nonce: 1.into(),
             balance: 0.into(),
             storage_root: empty_trie_root,
-            code_hash: get_h256_from_code_hash(code_hash.clone())
-                .expect("In eth_mainnet, the code_hash is a H256"),
+            code_hash,
         }))
     };
 
@@ -353,7 +349,7 @@ fn set_account(world: &mut StateWorld, addr: Address, account: &SmtAccount, code
     if let Either::Right(ref mut smt_state) = world.state {
         smt_state.update_balance(addr, |b| *b = account.get_balance());
         smt_state.update_nonce(addr, |n| *n = account.get_nonce());
-        smt_state.set_code(addr, code);
+        smt_state.set_code(addr, Either::Left(code));
         let key = key_code_length(addr);
         log::debug!(
             "setting {:?} code length, the key is {:?}",

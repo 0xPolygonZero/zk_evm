@@ -12,14 +12,13 @@ use evm_arithmetization::{
     generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
     tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
-    world::{Hasher, KeccakHash, PoseidonHash, Type1World, Type2World, World},
+    world::{Hasher, KeccakHash, PoseidonHash, StateWorld, Type1World, Type2World, World},
     GenerationInputs,
 };
 use itertools::Itertools as _;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie as _;
 use nunny::NonEmpty;
-use smt_trie::code::hash_bytecode_h256;
 use zk_evm_common::gwei_to_wei;
 
 use crate::observer::{DummyObserver, Observer};
@@ -134,10 +133,6 @@ pub fn entrypoint(
                  after,
                  withdrawals,
              }| {
-                let (state, storage) = world
-                    .clone()
-                    .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
-                    .into_state_and_storage();
                 GenerationInputs {
                     txn_number_before: first_txn_ix.into(),
                     gas_used_before: running_gas_used.into(),
@@ -149,7 +144,9 @@ pub fn entrypoint(
                     withdrawals,
                     ger_data,
                     tries: TrieInputs {
-                        state_trie: StateWorld { state: world },
+                        state_trie: StateWorld {
+                            state: world.clone(),
+                        },
                         transactions_trie: transaction.into(),
                         receipts_trie: receipt.into(),
                     },
@@ -238,11 +235,11 @@ fn start(
             Either::Left((Type1World::new(state, storage)?, Hash2Code::new()))
         }
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
-            let instructions = evm_arithmetization::world::wire::parse(&compact)
+            let instructions = crate::wire::parse(&compact)
                 .context("couldn't parse instructions from binary format")?;
             match wire_disposition {
                 WireDisposition::Type1 => {
-                    let type1::Frontend {
+                    let crate::type1::Frontend {
                         state,
                         storage,
                         code,
