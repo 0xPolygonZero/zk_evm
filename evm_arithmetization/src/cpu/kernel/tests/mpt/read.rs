@@ -8,15 +8,18 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
 use crate::generation::TrieInputs;
-use crate::testing_utils::get_state_world;
+use crate::testing_utils::{get_state_world, init_logger};
 
 #[test]
 fn mpt_read() -> Result<()> {
+    init_logger();
     let trie_inputs = TrieInputs {
         state_trie: get_state_world(extension_to_leaf(test_account_1_rlp()), vec![]),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
     };
+
+    log::debug!("state trie: {:?}", trie_inputs.state_trie);
 
     let mpt_read = KERNEL.global_labels["mpt_read"];
 
@@ -34,7 +37,7 @@ fn mpt_read() -> Result<()> {
         .push(0xABCDEFu64.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(6.into())
+        .push(64.into())
         .expect("The stack should not overflow");
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
@@ -42,8 +45,9 @@ fn mpt_read() -> Result<()> {
     interpreter.run()?;
 
     assert_eq!(interpreter.stack().len(), 1);
-    // mpt_read returns a pointer to the accounts pointer
+    // mpt_read returns a pointer to a pointer to the accounts pointer
     let result_ptr_ptr = interpreter.stack()[0].as_usize();
+    log::debug!("el ptr = {result_ptr_ptr}");
     let result_ptr = interpreter.get_trie_data()[result_ptr_ptr..][..4][0].as_usize();
     let result = &interpreter.get_trie_data()[result_ptr..][..4];
     assert_eq!(result[0], test_account_1().nonce);

@@ -307,11 +307,6 @@ pub fn get_state_world(
         tries::{StateMpt, StorageTrie},
         world::Type1World,
     };
-    let state = HashedPartialTrie::try_from_iter(state.items().map(|(mut key, val)| {
-        key.count = 64;
-        (key, val)
-    }))
-    .expect("This should never fail");
 
     let mut type1world =
         Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();

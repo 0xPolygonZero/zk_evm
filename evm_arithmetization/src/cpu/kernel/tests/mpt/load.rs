@@ -56,7 +56,10 @@ fn load_all_mpts_empty() -> Result<()> {
 fn load_all_mpts_leaf() -> Result<()> {
     let state_trie = get_state_world(
         Node::Leaf {
-            nibbles: 0xABC_u64.into(),
+            nibbles: Nibbles {
+                count: 64,
+                packed: 0xABC_u64.into(),
+            },
             value: test_account_1_rlp(),
         }
         .into(),
@@ -246,11 +249,11 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
             test_account_1().code_hash.into_uint(),
             // Values used for hashing.
             type_extension,
-            64.into(),    // should be 3 nibbles but keys are extended for `Type1World`
+            61.into(),    // The extension node has 61 nibbles
             0xABC.into(), // key part
             9.into(),     // Pointer to the leaf node immediately below.
             type_leaf,
-            64.into(),    // should be 3 nibbles but keys are extended for `Type1World`
+            3.into(),     // The remaining 3 nibbles
             0xDEF.into(), // key part
             13.into(),    // value pointer
             test_account_1().nonce,

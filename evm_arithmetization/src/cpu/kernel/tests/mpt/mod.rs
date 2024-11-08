@@ -98,7 +98,10 @@ pub(crate) fn test_account_2_rlp() -> Vec<u8> {
 /// account.
 pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
     Node::Extension {
-        nibbles: 0xABC_u64.into(),
+        nibbles: Nibbles {
+            count: 61,
+            packed: 0xABC_u64.into(),
+        },
         child: Node::Leaf {
             nibbles: Nibbles {
                 count: 3,

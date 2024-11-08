@@ -941,7 +941,7 @@ impl<F: RichField> GenerationState<F> {
         self.get_code(self.registers.context)
     }
 
-    fn get_code(&self, context: usize) -> Result<Vec<u8>, ProgramError> {
+    pub(crate) fn get_code(&self, context: usize) -> Result<Vec<u8>, ProgramError> {
         let code_len = self.get_code_len(context)?;
         let code = (0..code_len)
             .map(|i| {
@@ -954,7 +954,7 @@ impl<F: RichField> GenerationState<F> {
         Ok(code)
     }
 
-    fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
+    pub fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
         let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
             context,
             Segment::ContextMetadata,

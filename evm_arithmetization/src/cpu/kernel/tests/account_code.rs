@@ -530,8 +530,7 @@ fn sstore() -> Result<()> {
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
     state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
-    let state_trie = get_state_world(state_trie_before, vec![(addr_hashed, HashedPartialTrie::from(Node::Empty))]);// storage tries is empty but should contain empty tries?
-
+    let state_trie = get_state_world(state_trie_before, vec![(addr_hashed, HashedPartialTrie::from(Node::Empty))]);
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Node::Empty.into(),
