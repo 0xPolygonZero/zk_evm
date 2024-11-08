@@ -92,7 +92,8 @@ delete_all_touched_addresses_loop:
     // stack: i, len, retdest
     DUP1 MLOAD_GENERAL
     // stack: loaded_addr, i, len, retdest
-    DUP1 %is_empty %jumpi(bingo)
+    DUP1
+    %is_empty %jumpi(bingo)
     // stack: loaded_addr, i, len, retdest
     POP %increment %jump(delete_all_touched_addresses_loop)
 bingo:
@@ -101,7 +102,8 @@ bingo:
     %increment %jump(delete_all_touched_addresses_loop)
 delete_all_touched_addresses_done:
     // stack: i, len, retdest
-    %pop2 JUMP
+    %pop2 
+    JUMP
 
 %macro delete_all_touched_addresses
     %stack () -> (%%after)

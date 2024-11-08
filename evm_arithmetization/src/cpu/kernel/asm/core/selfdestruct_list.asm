@@ -72,7 +72,8 @@ bingo:
     %increment %jump(delete_all_selfdestructed_addresses_loop)
 delete_all_selfdestructed_addresses_done:
     // stack: i, len, retdest
-    %pop2 JUMP
+    %pop2 
+    JUMP
 
 %macro delete_all_selfdestructed_addresses
     %stack () -> (%%after)

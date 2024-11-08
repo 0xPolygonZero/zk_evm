@@ -13,6 +13,7 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
+use crate::testing_utils::init_logger;
 use crate::witness::memory::MemoryAddress;
 use crate::GenerationInputs;
 
@@ -220,6 +221,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
 
 #[test]
 fn test_revert() -> Result<()> {
+    init_logger();
     // We use a modified kernel with an extra file defining a label
     // where the `checkpoint` macro from file cpu/kernel/asm/journal/journal.asm
     // is expanded.
@@ -267,6 +269,8 @@ fn test_revert() -> Result<()> {
     }
 
     let gas_before_checkpoint = interpreter.generation_state.registers.gas_used;
+
+    log::debug!("Saperlipopete");
 
     // We will revert to the point where `val` was 9
     let checkpoint = TEST_KERNEL.global_labels["checkpoint"];
@@ -323,6 +327,8 @@ fn test_revert() -> Result<()> {
         .push(kexit_info)
         .expect("The stack should not overflow");
     assert!(interpreter.run().is_err());
+    
+    log::debug!("Yubigobinabi");
 
     // Now we should load the value before the revert
     let sys_tload = TEST_KERNEL.global_labels["sys_tload"];

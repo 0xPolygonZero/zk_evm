@@ -5,7 +5,11 @@ use anyhow::{ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
+use mpt_trie::partial_trie::HashedPartialTrie;
+use serde::{Deserialize, Serialize};
 use smt_trie::code::hash_bytecode_h256;
+
+use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
 
 /// Utility trait to leverage a specific hash function across Type1 and Type2
 /// zkEVM variants.
@@ -28,7 +32,24 @@ impl Hasher for KeccakHash {
     }
 }
 
-use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct StateWorld {
+    pub state: Either<Type1World, Type2World>,
+}
+
+impl Default for StateWorld {
+    fn default() -> Self {
+        if cfg!(feature = "cdk_erigon") {
+            StateWorld {
+                state: Either::Right(Type2World::default()),
+            }
+        } else {
+            StateWorld {
+                state: Either::Left(Type1World::default()),
+            }
+        }
+    }
+}
 
 /// The `core` module of the `trace_decoder` crate is agnostic over state and
 /// storage representations.
@@ -62,6 +83,11 @@ pub trait World {
     ///
     /// Creates a new account at `address` if it does not exist.
     fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()>;
+
+    /// Hash the provided code with this `World`'s [`CodeHasher`].
+    fn hash_code(&self, code: &[u8]) -> H256 {
+        Self::CodeHasher::hash(code)
+    }
 
     /// Update the code for the account at the given address.
     ///
@@ -116,7 +142,7 @@ pub trait World {
     fn root(&mut self) -> H256;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
 pub struct Type1World {
     state: StateMpt,
     /// Writes to storage should be reconciled with
@@ -148,10 +174,20 @@ impl Type1World {
         let Self { state, storage } = self;
         (state, storage)
     }
+    pub fn set_storage(&mut self, storage: BTreeMap<H256, StorageTrie>) {
+        self.storage = storage;
+    }
     fn get_storage_mut(&mut self, address: Address) -> anyhow::Result<&mut StorageTrie> {
         self.storage
             .get_mut(&keccak_hash::keccak(address))
             .context("no such storage")
+    }
+    pub(crate) fn get_storage(&self) -> Vec<(H256, &HashedPartialTrie)> {
+        // TODO(Robin)
+        self.storage
+            .iter()
+            .map(|(key, value)| (*key, value.as_hashed_partial_trie()))
+            .collect::<Vec<_>>()
     }
     fn on_storage<T>(
         &mut self,
@@ -373,11 +409,134 @@ impl World for Type2World {
     }
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) type StateKey = MptKey;
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) type StateKey = SmtKey;
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) type CodeHasher = KeccakHash;
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) type CodeHasher = PoseidonHash;
+
+impl World for StateWorld {
+    type SubtriePath = StateKey;
+    type CodeHasher = CodeHasher;
+
+    fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
+        match &mut self.state {
+            Either::Left(type1) => type1.contains(address),
+            Either::Right(type2) => type2.contains(address),
+        }
+    }
+    fn update_balance(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut U256),
+    ) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.update_balance(address, f),
+            Either::Right(type2) => type2.update_balance(address, f),
+        }
+    }
+    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.update_nonce(address, f),
+            Either::Right(type2) => type2.update_nonce(address, f),
+        }
+    }
+    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.set_code(address, code),
+            Either::Right(type2) => type2.set_code(address, code),
+        }
+    }
+    fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
+        // TODO: Find a way to revamp this
+        #[cfg(not(feature = "cdk_erigon"))]
+        match &mut self.state {
+            Either::Left(type1) => type1.reporting_destroy(address),
+            Either::Right(_type2) => unreachable!("Type2 is not supported."),
+        }
+        #[cfg(feature = "cdk_erigon")]
+        match &mut self.state {
+            Either::Left(_type1) => unreachable!("Type1 is not supported"),
+            Either::Right(type2) => type2.reporting_destroy(address),
+        }
+    }
+    fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.create_storage(address),
+            Either::Right(type2) => type2.create_storage(address),
+        }
+    }
+    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.destroy_storage(address),
+            Either::Right(type2) => type2.destroy_storage(address),
+        }
+    }
+    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.store_int(address, slot, value),
+            Either::Right(type2) => type2.store_int(address, slot, value),
+        }
+    }
+    fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.store_hash(address, hash, value),
+            Either::Right(type2) => type2.store_hash(address, hash, value),
+        }
+    }
+    fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256> {
+        match &mut self.state {
+            Either::Left(type1) => type1.load_int(address, slot),
+            Either::Right(type2) => type2.load_int(address, slot),
+        }
+    }
+    fn reporting_destroy_slot(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>> {
+        match &mut self.state {
+            Either::Left(type1) => type1.reporting_destroy_slot(address, slot),
+            Either::Right(type2) => type2.reporting_destroy_slot(address, slot),
+        }
+    }
+    fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.mask_storage(masks),
+            Either::Right(type2) => type2.mask_storage(masks),
+        }
+    }
+    fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) -> anyhow::Result<()> {
+        #[cfg(not(feature = "cdk_erigon"))]
+        match &mut self.state {
+            Either::Left(type1) => type1.mask(paths),
+            Either::Right(_type2) => unreachable!("Type2 is not supported."),
+        }
+        #[cfg(feature = "cdk_erigon")]
+        match &mut self.state {
+            Either::Left(_type1) => unreachable!("Type1 is not supported"),
+            Either::Right(type2) => type2.mask(paths),
+        }
+    }
+    fn root(&mut self) -> H256 {
+        match &mut self.state {
+            Either::Left(type1) => type1.root(),
+            Either::Right(type2) => type2.root(),
+        }
+    }
+}
+
 // Having optional fields here is an odd decision,
 // but without the distinction,
 // the wire tests fail.
 // This may be a bug in the SMT library.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
 pub struct Type2Entry {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
@@ -387,7 +546,7 @@ pub struct Type2Entry {
 }
 
 // This is a buffered version
-#[derive(Clone, Debug)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
 pub struct Type2World {
     accounts: BTreeMap<Address, Type2Entry>,
     hashed_out: BTreeMap<SmtKey, H256>,

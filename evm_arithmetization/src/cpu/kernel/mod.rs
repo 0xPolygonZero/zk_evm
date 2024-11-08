@@ -18,7 +18,7 @@ pub use constants::cancun_constants;
 pub use constants::global_exit_root;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use assembler::assemble;
 use parser::parse;

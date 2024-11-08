@@ -5,7 +5,8 @@
 %endmacro
 
 global sload_current:
-    %read_storage_linked_list
+    // stack: slot, retdest
+    %read_slot_from_current_addr
     // stack: value, retdest
     SWAP1
     JUMP

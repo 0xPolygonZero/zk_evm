@@ -1104,6 +1104,7 @@ checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
  "funty",
  "radium",
+ "serde",
  "tap",
  "wyz",
 ]
@@ -1856,6 +1857,9 @@ name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "elliptic-curve"
@@ -2033,8 +2037,11 @@ dependencies = [
  "alloy",
  "alloy-compat",
  "anyhow",
+ "bitflags 2.6.0",
  "bitvec",
  "bytes",
+ "ciborium",
+ "ciborium-io",
  "copyvec",
  "criterion",
  "either",
@@ -2050,6 +2057,7 @@ dependencies = [
  "mpt_trie",
  "num",
  "num-bigint",
+ "nunny",
  "once_cell",
  "pest",
  "pest_derive",
@@ -2066,6 +2074,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "smt_trie",
+ "stackstack",
  "starky",
  "static_assertions",
  "thiserror",
@@ -2075,6 +2084,7 @@ dependencies = [
  "tracing",
  "u4",
  "url",
+ "winnow",
  "zk_evm_common",
  "zk_evm_proc_macro",
 ]
@@ -4684,6 +4694,8 @@ version = "0.1.1"
 dependencies = [
  "ethereum-types",
  "hex-literal",
+ "log",
+ "mpt_trie",
  "plonky2",
  "rand",
  "serde",

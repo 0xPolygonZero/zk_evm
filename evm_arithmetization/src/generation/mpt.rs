@@ -1,7 +1,9 @@
 use core::ops::Deref;
+use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
@@ -10,6 +12,7 @@ use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
+#[cfg(not(feature = "cdk_erigon"))]
 use super::linked_list::{
     empty_list_mem, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
@@ -22,11 +25,158 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AccountRlp {
+pub struct MptAccount {
     pub nonce: U256,
     pub balance: U256,
     pub storage_root: H256,
     pub code_hash: H256,
+}
+
+impl Account for MptAccount {
+    fn get_nonce(&self) -> U256 {
+        self.nonce
+    }
+    fn get_balance(&self) -> U256 {
+        self.balance
+    }
+    fn get_storage_root(&self) -> H256 {
+        self.storage_root
+    }
+    fn get_code_length(&self) -> U256 {
+        panic!("No code length in an MPT's account.")
+    }
+    fn get_code_hash(&self) -> H256 {
+        self.code_hash
+    }
+    fn get_code_hash_u256(&self) -> U256 {
+        self.code_hash.into_uint()
+    }
+    fn rlp_encode(&self) -> BytesMut {
+        rlp::encode(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SmtAccount {
+    pub nonce: U256,
+    pub balance: U256,
+    pub code_length: U256,
+    pub code_hash: U256,
+}
+
+impl Account for SmtAccount {
+    fn get_nonce(&self) -> U256 {
+        self.nonce
+    }
+    fn get_balance(&self) -> U256 {
+        self.balance
+    }
+    fn get_storage_root(&self) -> H256 {
+        panic!("No storage root in an SMT's account.")
+    }
+    fn get_code_length(&self) -> U256 {
+        self.code_length
+    }
+    fn get_code_hash(&self) -> H256 {
+        H256::from_uint(&self.code_hash)
+    }
+    fn get_code_hash_u256(&self) -> U256 {
+        self.code_hash
+    }
+    fn rlp_encode(&self) -> BytesMut {
+        unimplemented!("SMTs do not support RLP encoding.")
+    }
+}
+
+pub trait Account: Any {
+    fn get_nonce(&self) -> U256;
+    fn get_balance(&self) -> U256;
+    fn get_storage_root(&self) -> H256;
+    fn get_code_length(&self) -> U256;
+    fn get_code_hash(&self) -> H256;
+    fn get_code_hash_u256(&self) -> U256;
+    fn rlp_encode(&self) -> BytesMut;
+}
+
+pub struct EitherAccount(pub Either<MptAccount, SmtAccount>);
+
+impl EitherAccount {
+    #[cfg(test)]
+    pub(crate) fn rlp_encode(&self) -> BytesMut {
+        match &self.0 {
+            Either::Left(mpt_acct) => mpt_acct.rlp_encode(),
+            Either::Right(smt_acct) => smt_acct.rlp_encode(),
+        }
+    }
+
+    pub fn as_smt_account(&self) -> &SmtAccount {
+        match &self.0 {
+            Either::Left(_mpt_account_rlp) => panic!("cdk_erigon expects SMTs"),
+            Either::Right(smt_account_rlp) => smt_account_rlp,
+        }
+    }
+
+    pub fn as_mpt_account(&self) -> &MptAccount {
+        match &self.0 {
+            Either::Left(mpt_account_rlp) => mpt_account_rlp,
+            Either::Right(_smt_account_rlp) => panic!("eth_main expects MPTs"),
+        }
+    }
+}
+
+impl Account for EitherAccount {
+    fn get_nonce(&self) -> U256 {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.get_nonce(),
+            Either::Right(smt_rlp) => smt_rlp.get_nonce(),
+        }
+    }
+    fn get_balance(&self) -> U256 {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.get_balance(),
+            Either::Right(smt_rlp) => smt_rlp.get_balance(),
+        }
+    }
+    fn get_storage_root(&self) -> H256 {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.get_storage_root(),
+            Either::Right(smt_rlp) => smt_rlp.get_storage_root(),
+        }
+    }
+    fn get_code_length(&self) -> U256 {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.get_code_length(),
+            Either::Right(smt_rlp) => smt_rlp.get_code_length(),
+        }
+    }
+    fn get_code_hash(&self) -> H256 {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.get_code_hash(),
+            Either::Right(smt_rlp) => smt_rlp.get_code_hash(),
+        }
+    }
+    fn get_code_hash_u256(&self) -> U256 {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.get_code_hash_u256(),
+            Either::Right(smt_rlp) => smt_rlp.get_code_hash_u256(),
+        }
+    }
+    fn rlp_encode(&self) -> BytesMut {
+        match self.0 {
+            Either::Left(mpt_rlp) => mpt_rlp.rlp_encode(),
+            Either::Right(smt_rlp) => smt_rlp.rlp_encode(),
+        }
+    }
+}
+
+impl Default for EitherAccount {
+    fn default() -> Self {
+        EitherAccount(if cfg!(feature = "cdk_erigon") {
+            Either::Right(SmtAccount::default())
+        } else {
+            Either::Left(MptAccount::default())
+        })
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -36,13 +186,26 @@ pub struct TrieRootPtrs {
     pub receipt_root_ptr: usize,
 }
 
-impl Default for AccountRlp {
+impl Default for MptAccount {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
             code_hash: keccak([]),
+        }
+    }
+}
+
+impl Default for SmtAccount {
+    fn default() -> Self {
+        use smt_trie::code::hash_bytecode_h256;
+
+        Self {
+            nonce: U256::zero(),
+            balance: U256::zero(),
+            code_hash: hash_bytecode_h256(&[]).into_uint(),
+            code_length: U256::zero(),
         }
     }
 }
@@ -155,7 +318,9 @@ where
 {
     let node_ptr = trie_data.len();
     let type_of_trie = PartialTrieType::of(trie) as u32;
+    log::debug!("el trie = {:?}", trie);
     if type_of_trie > 0 {
+        log::debug!("writting {:?} in {:?}", type_of_trie, trie_data.len());
         trie_data.push(Some(type_of_trie.into()));
     }
 
@@ -285,8 +450,8 @@ fn load_state_trie(
             Ok(node_ptr)
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
+            let account: MptAccount = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let MptAccount {
                 nonce,
                 balance,
                 storage_root,
@@ -299,6 +464,7 @@ fn load_state_trie(
                 .get(&merged_key)
                 .copied()
                 .unwrap_or(&storage_hash_only);
+            log::debug!("storage tries = {:?}", storage_tries_by_state_key);
 
             assert_eq!(storage_trie.hash(), storage_root,
                 "In TrieInputs, an account's storage_root didn't match the associated storage trie hash");
@@ -316,11 +482,14 @@ fn load_state_trie(
             trie_data.push(Some(balance));
             // Storage trie ptr.
             let storage_ptr_ptr = trie_data.len();
+            log::debug!("pushing storage_ptr = {:?}", storage_ptr_ptr + 2);
             trie_data.push(Some((trie_data.len() + 2).into()));
             trie_data.push(Some(code_hash.into_uint()));
             // We don't need to store the slot values, as they will be overwritten in
             // `mpt_set_payload`.
+            log::debug!("loading storage");
             let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value_no_return)?;
+            log::debug!("storage_ptr = {storage_ptr}");
             if storage_ptr == 0 {
                 trie_data[storage_ptr_ptr] = Some(0.into());
             }
@@ -330,6 +499,7 @@ fn load_state_trie(
     }
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -340,6 +510,7 @@ fn get_state_and_storage_leaves(
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
+    log::debug!("lee su trie data len a {:?}", trie_data.len());
     match trie.deref() {
         Node::Branch { children, value } => {
             if !value.is_empty() {
@@ -384,8 +555,8 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
+            let account: MptAccount = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let MptAccount {
                 nonce,
                 balance,
                 storage_root,
@@ -415,13 +586,20 @@ fn get_state_and_storage_leaves(
             state_leaves.push(Some(addr_key));
             // Set `value_ptr_ptr`.
             state_leaves.push(Some(trie_data.len().into()));
-            // Set counter.
+            // Push something on the original `value_ptr_ptr` (to be set later in the
+            // kernel).
             state_leaves.push(Some(0.into()));
             // Set the next node as the initial node.
             state_leaves.push(Some((Segment::AccountsLinkedList as usize).into()));
 
             // Push the payload in the trie data.
             trie_data.push(Some(nonce));
+            log::debug!(
+                "key = {:?} nonce = {:?} balance= {:?}",
+                addr_key,
+                nonce,
+                balance
+            );
             trie_data.push(Some(balance));
             // The Storage pointer is only written in the trie.
             trie_data.push(Some(0.into()));
@@ -500,6 +678,8 @@ where
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
             storage_leaves.push(Some(slot_key));
+
+            log::debug!("pushing keys {:?} and {:?}", addr_key, slot_key);
             // Write `value_ptr_ptr`.
             let leaves = parse_value(value)?
                 .into_iter()
@@ -527,48 +707,40 @@ where
 }
 
 /// A type alias used to gather:
-///     - the trie root pointers for all tries
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type TriePtrsLinkedLists = (
-    TrieRootPtrs,
-    Vec<Option<U256>>,
-    Vec<Option<U256>>,
-    Vec<Option<U256>>,
-);
+type LinkedListsAndTrieData = (Vec<Option<U256>>, Vec<Option<U256>>, Vec<Option<U256>>);
 
-pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) fn load_linked_lists(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     trie_inputs: &TrieInputs,
-) -> Result<TriePtrsLinkedLists, ProgramError> {
+) -> Result<LinkedListsAndTrieData, ProgramError> {
     let mut state_leaves =
-        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
+        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList as usize)
+            .to_vec();
     let mut storage_leaves =
-        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
+        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList as usize)
+            .to_vec();
     let mut trie_data = vec![Some(U256::zero())];
-
-    let storage_tries_by_state_key = trie_inputs
-        .storage_tries
+    let mpt_state = match &trie_inputs.state_trie.state {
+        Either::Left(type1world) => type1world,
+        Either::Right(_) => unreachable!("eth_mainnet expects MPTs."),
+    };
+    let storage_tries_by_state_key = mpt_state
+        .get_storage()
         .iter()
         .map(|(hashed_address, storage_trie)| {
             let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
                 .expect("An H256 is 32 bytes long");
-            (key, storage_trie)
+            (key, *storage_trie)
         })
         .collect();
 
-    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
-        let mut parsed_txn = vec![U256::from(rlp.len())];
-        parsed_txn.extend(rlp.iter().copied().map(U256::from));
-        Ok(parsed_txn)
-    })?;
-
-    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
-
     get_state_and_storage_leaves(
-        &trie_inputs.state_trie,
+        &mpt_state.state_trie(),
         empty_nibbles(),
         &mut state_leaves,
         &mut storage_leaves,
@@ -578,38 +750,57 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &storage_tries_by_state_key,
     )?;
 
-    Ok((
-        TrieRootPtrs {
-            state_root_ptr: None,
-            txn_root_ptr,
-            receipt_root_ptr,
-        },
-        state_leaves,
-        storage_leaves,
-        trie_data,
-    ))
+    Ok((state_leaves, storage_leaves, trie_data))
 }
 
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,
 ) -> Result<usize, ProgramError> {
-    let storage_tries_by_state_key = trie_inputs
-        .storage_tries
-        .iter()
-        .map(|(hashed_address, storage_trie)| {
-            let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
-                .expect("An H256 is 32 bytes long");
-            (key, storage_trie)
-        })
-        .collect();
+    let storage_tries_by_state_key = match &trie_inputs.state_trie.state {
+        Either::Left(mpt) => {
+            log::debug!("el mundo = {:?}", mpt);
+            mpt.get_storage()
+                .iter()
+                .map(|(hashed_address, storage_trie)| {
+                    let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
+                        .expect("An H256 is 32 bytes long");
+                    (key, *storage_trie)
+                })
+                .collect::<HashMap<_, _>>()
+        }
+        Either::Right(_) => unreachable!("eth_mainnet expects an MPT."),
+    };
+
+    let mpt_trie = match &trie_inputs.state_trie.state {
+        Either::Left(t) => t.state_trie(),
+        Either::Right(_) => unreachable!("eth_mainnet expects MPTs."),
+    };
 
     load_state_trie(
-        &trie_inputs.state_trie,
+        mpt_trie,
         empty_nibbles(),
         trie_data,
         &storage_tries_by_state_key,
     )
+}
+
+pub(crate) fn load_transactions_mpt(
+    transactions_trie: &HashedPartialTrie,
+    trie_data: &mut Vec<Option<U256>>,
+) -> Result<usize, ProgramError> {
+    load_mpt(transactions_trie, trie_data, &|rlp| {
+        let mut parsed_txn = vec![U256::from(rlp.len())];
+        parsed_txn.extend(rlp.iter().copied().map(U256::from));
+        Ok(parsed_txn)
+    })
+}
+
+pub(crate) fn load_receipts_mpt(
+    receipts_trie: &HashedPartialTrie,
+    trie_data: &mut Vec<Option<U256>>,
+) -> Result<usize, ProgramError> {
+    load_mpt(receipts_trie, trie_data, &parse_receipts)
 }
 
 pub mod transaction_testing {

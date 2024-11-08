@@ -225,10 +225,10 @@ decode_and_store_access_list_finish:
 %endmacro
 
 insert_accessed_storage_keys_with_original_value:
-    %stack (addr, key, retdest) -> (key, addr, after_read, addr, key, retdest)
+    %stack (addr, key, retdest) -> (addr, key, after_read, addr, key, retdest)
     %jump(sload_with_addr)
 after_read:
-    %stack (value, addr, key, retdest) -> ( addr, key, value, retdest)
+    %stack (value, addr, key, retdest) -> (addr, key, value, retdest)
     %insert_accessed_storage_keys
     // stack: cold_access, value_ptr, value, retdest
     SWAP2
@@ -239,7 +239,7 @@ after_read:
     JUMP
 
 sload_with_addr:
-    %read_storage_linked_list_w_addr
+    %read_slot_from_addr
     // stack: value, retdest
     SWAP1
     JUMP

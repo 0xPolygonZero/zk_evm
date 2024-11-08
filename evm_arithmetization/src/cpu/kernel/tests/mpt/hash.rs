@@ -1,6 +1,6 @@
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256};
-use mpt_trie::partial_trie::PartialTrie;
+use mpt_trie::nibbles::Nibbles;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -9,6 +9,8 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1_rlp, test_account_2_rlp};
 use crate::generation::TrieInputs;
+use crate::testing_utils::get_state_world;
+use crate::world::World;
 use crate::Node;
 
 // TODO: Test with short leaf. Might need to be a storage trie.
@@ -19,7 +21,6 @@ fn mpt_hash_empty() -> Result<()> {
         state_trie: Default::default(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     test_state_trie(trie_inputs)
@@ -28,16 +29,18 @@ fn mpt_hash_empty() -> Result<()> {
 #[test]
 fn mpt_hash_empty_branch() -> Result<()> {
     let children = core::array::from_fn(|_| Node::Empty.into());
-    let state_trie = Node::Branch {
-        children,
-        value: vec![],
-    }
-    .into();
+    let state_trie = get_state_world(
+        Node::Branch {
+            children,
+            value: vec![],
+        }
+        .into(),
+        vec![],
+    );
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
     test_state_trie(trie_inputs)
 }
@@ -45,11 +48,12 @@ fn mpt_hash_empty_branch() -> Result<()> {
 #[test]
 fn mpt_hash_hash() -> Result<()> {
     let hash = H256::random();
+
+    let state_trie = get_state_world(Node::Hash(hash).into(), vec![]);
     let trie_inputs = TrieInputs {
-        state_trie: Node::Hash(hash).into(),
+        state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     test_state_trie(trie_inputs)
@@ -57,28 +61,32 @@ fn mpt_hash_hash() -> Result<()> {
 
 #[test]
 fn mpt_hash_leaf() -> Result<()> {
-    let state_trie = Node::Leaf {
-        nibbles: 0xABC_u64.into(),
-        value: test_account_1_rlp(),
-    }
-    .into();
+    let state_trie = get_state_world(
+        Node::Leaf {
+            nibbles: Nibbles{
+                count: 64,
+                packed: 0xABC_u64.into(),
+            },
+            value: test_account_1_rlp(),
+        }
+        .into(),
+        vec![],
+    );
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
     test_state_trie(trie_inputs)
 }
 
 #[test]
 fn mpt_hash_extension_to_leaf() -> Result<()> {
-    let state_trie = extension_to_leaf(test_account_1_rlp());
+    let state_trie = get_state_world(extension_to_leaf(test_account_1_rlp()), vec![]);
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
     test_state_trie(trie_inputs)
 }
@@ -86,24 +94,29 @@ fn mpt_hash_extension_to_leaf() -> Result<()> {
 #[test]
 fn mpt_hash_branch_to_leaf() -> Result<()> {
     let leaf = Node::Leaf {
-        nibbles: 0xABC_u64.into(),
+        nibbles: Nibbles {
+            count: 63,
+            packed: 0xABC_u64.into(),
+        },
         value: test_account_2_rlp(),
     }
     .into();
 
     let mut children = core::array::from_fn(|_| Node::Empty.into());
     children[3] = leaf;
-    let state_trie = Node::Branch {
-        children,
-        value: vec![],
-    }
-    .into();
+    let state_trie = get_state_world(
+        Node::Branch {
+            children,
+            value: vec![],
+        }
+        .into(),
+        vec![],
+    );
 
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     test_state_trie(trie_inputs)
@@ -138,7 +151,7 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
         interpreter.stack()
     );
     let hash = H256::from_uint(&interpreter.stack()[1]);
-    let expected_state_trie_hash = trie_inputs.state_trie.hash();
+    let expected_state_trie_hash = trie_inputs.state_trie.state.unwrap_left().root();
     assert_eq!(hash, expected_state_trie_hash);
 
     Ok(())

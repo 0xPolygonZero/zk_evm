@@ -113,10 +113,13 @@ pub(crate) enum GlobalMetadata {
 
     /// Address where the base fee to be burnt is sent.
     BurnAddr,
+
+    /// Number of used storage slots in newly created contracts.
+    NewStorageSlotsLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 54;
+    pub(crate) const COUNT: usize = 55;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -179,6 +182,7 @@ impl GlobalMetadata {
             Self::TransientStorageLen,
             Self::BlobVersionedHashesLen,
             Self::BurnAddr,
+            Self::NewStorageSlotsLen,
         ]
     }
 
@@ -245,6 +249,7 @@ impl GlobalMetadata {
             Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
             Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
             Self::BurnAddr => "GLOBAL_METADATA_BURN_ADDR",
+            Self::NewStorageSlotsLen => "GLOBAL_METADATA_NEW_STORAGE_SLOTS_LEN",
         }
     }
 }

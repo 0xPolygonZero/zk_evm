@@ -7,9 +7,13 @@ mod common;
 use alloy_compat::Compat as _;
 use assert2::check;
 use common::{cases, Case};
+use either::Either;
+use ethereum_types::BigEndianHash;
 use itertools::Itertools;
+use keccak_hash::H256;
 use libtest_mimic::{Arguments, Trial};
 use mpt_trie::partial_trie::PartialTrie as _;
+use smt_trie::utils::hashout2u;
 use trace_decoder::observer::DummyObserver;
 use zero::prover::WIRE_DISPOSITION;
 
@@ -36,12 +40,24 @@ fn main() -> anyhow::Result<()> {
                 check!(gen_inputs.len() >= 2);
                 check!(
                     Some(other.checkpoint_state_trie_root)
-                        == gen_inputs.first().map(|it| it.tries.state_trie.hash())
+                        == gen_inputs
+                            .first()
+                            .map(|it| match &it.tries.state_trie.state {
+                                Either::Left(type1world) => type1world.state_trie().hash(),
+                                Either::Right(type2world) =>
+                                    H256::from_uint(&hashout2u(type2world.as_smt().root)),
+                            })
                 );
                 let pairs = || gen_inputs.iter().tuple_windows::<(_, _)>();
                 check!(
                     pairs().position(|(before, after)| {
-                        before.trie_roots_after.state_root != after.tries.state_trie.hash()
+                        let after_hash = match &after.tries.state_trie.state {
+                            Either::Left(type1world) => type1world.state_trie().hash(),
+                            Either::Right(type2world) => {
+                                H256::from_uint(&hashout2u(type2world.as_smt().root))
+                            }
+                        };
+                        before.trie_roots_after.state_root != after_hash
                     }) == None
                 );
                 check!(

@@ -9,14 +9,11 @@ use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
-};
+use evm_arithmetization::testing_utils::*;
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
@@ -72,20 +69,20 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let code_hash = keccak(code);
 
     // Set accounts before the transaction.
-    let beneficiary_account_before = AccountRlp {
+    let beneficiary_account_before = MptAccount {
         nonce: 1.into(),
-        ..AccountRlp::default()
+        ..MptAccount::default()
     };
 
     let sender_balance_before = 5000000000000000u64;
-    let sender_account_before = AccountRlp {
+    let sender_account_before = MptAccount {
         balance: sender_balance_before.into(),
-        ..AccountRlp::default()
+        ..MptAccount::default()
     };
-    let to_account_before = AccountRlp {
+    let to_account_before = MptAccount {
         balance: 9000000000u64.into(),
         code_hash,
-        ..AccountRlp::default()
+        ..MptAccount::default()
     };
 
     // Initialize the state trie with three accounts.
@@ -129,11 +126,12 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         rlp::encode(&receipt_0).to_vec(),
     )?;
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: receipts_trie.clone(),
-        storage_tries,
+        // storage_tries,
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -159,27 +157,27 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     // Update the state and receipt tries after the transaction, so that we have the
     // correct expected tries: Update accounts
     #[cfg(feature = "cdk_erigon")]
-    let beneficiary_account_after = AccountRlp {
+    let beneficiary_account_after = Account {
         nonce: 1.into(),
         balance: block_metadata.block_base_fee * gas_used,
-        ..AccountRlp::default()
+        ..Account::default()
     };
-    #[cfg(not(feature = "cdk_erigon"))]
-    let beneficiary_account_after = AccountRlp {
+    #[cfg(feature = "eth_mainnet")]
+    let beneficiary_account_after = MptAccount {
         nonce: 1.into(),
-        ..AccountRlp::default()
+        ..MptAccount::default()
     };
 
     let sender_balance_after = sender_balance_before - gas_used * txn_gas_price;
-    let sender_account_after = AccountRlp {
+    let sender_account_after = MptAccount {
         balance: sender_balance_after.into(),
         nonce: 1.into(),
-        ..AccountRlp::default()
+        ..MptAccount::default()
     };
-    let to_account_after = AccountRlp {
+    let to_account_after = MptAccount {
         balance: 9000000000u64.into(),
         code_hash,
-        ..AccountRlp::default()
+        ..MptAccount::default()
     };
 
     update_beacon_roots_account_storage(

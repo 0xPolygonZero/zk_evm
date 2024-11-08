@@ -4,15 +4,11 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, create_account_storage,
-    init_logger, preinitialized_state_and_storage_tries, sd2u, sh2u,
-    update_beacon_roots_account_storage, TEST_STARK_CONFIG,
-};
+use evm_arithmetization::testing_utils::*;
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
@@ -79,11 +75,12 @@ fn test_erc721() -> anyhow::Result<()> {
 
     storage_tries.push((contract_state_key, contract_storage()?));
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        // storage_tries,
     };
 
     let txn = signed_tx();
@@ -143,13 +140,13 @@ fn test_erc721() -> anyhow::Result<()> {
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let owner_account = owner_account();
-        let owner_account_after = AccountRlp {
+        let owner_account_after = MptAccount {
             nonce: owner_account.nonce + 1,
             balance: owner_account.balance - gas_used * 0xa,
             ..owner_account
         };
         state_trie_after.insert(owner_nibbles, rlp::encode(&owner_account_after).to_vec())?;
-        let contract_account_after = AccountRlp {
+        let contract_account_after = MptAccount {
             storage_root: contract_storage_after()?.hash(),
             ..contract_account()?
         };
@@ -276,8 +273,8 @@ fn contract_storage_after() -> anyhow::Result<HashedPartialTrie> {
     ])
 }
 
-fn owner_account() -> AccountRlp {
-    AccountRlp {
+fn owner_account() -> MptAccount {
+    MptAccount {
         nonce: 2.into(),
         balance: 0x1000000.into(),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -285,8 +282,8 @@ fn owner_account() -> AccountRlp {
     }
 }
 
-fn contract_account() -> anyhow::Result<AccountRlp> {
-    Ok(AccountRlp {
+fn contract_account() -> anyhow::Result<MptAccount> {
+    Ok(MptAccount {
         nonce: 0.into(),
         balance: 0.into(),
         storage_root: contract_storage()?.hash(),

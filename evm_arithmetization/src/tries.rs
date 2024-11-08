@@ -8,9 +8,10 @@ use bitvec::{array::BitArray, slice::BitSlice};
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
+use serde::{Deserialize, Serialize};
 use u4::{AsNibbles, U4};
 
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::MptAccount;
 
 /// Bounded sequence of [`U4`],
 /// used as a key for [MPT](HashedPartialTrie) types in this module.
@@ -97,7 +98,7 @@ fn mpt_key_into_hash() {
 /// used as a key for SMT tries.
 ///
 /// Semantically equivalent to [`smt_trie::bits::Bits`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct SmtKey {
     bits: bitvec::array::BitArray<[u8; 32]>,
     len: usize,
@@ -271,12 +272,12 @@ impl From<ReceiptTrie> for HashedPartialTrie {
     }
 }
 
-/// Global, [`Address`] `->` [`AccountRlp`].
+/// Global, [`Address`] `->` [`Account`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMpt {
-    /// Values are always [`rlp`]-encoded [`AccountRlp`],
+    /// Values are always [`rlp`]-encoded [`Account`],
     /// inserted at [256 bits](MptKey::from_hash).
     inner: HashedPartialTrie,
 }
@@ -288,7 +289,7 @@ impl Default for StateMpt {
 }
 
 #[track_caller]
-fn assert_rlp_account(bytes: impl AsRef<[u8]>) -> AccountRlp {
+fn assert_rlp_account(bytes: impl AsRef<[u8]>) -> MptAccount {
     rlp::decode(bytes.as_ref()).expect("invalid RLP in StateMPT")
 }
 
@@ -303,20 +304,26 @@ impl StateMpt {
             ),
         }
     }
+    pub fn new_with_inner(inner: HashedPartialTrie) -> Self {
+        Self { inner }
+    }
     pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
+    }
+    pub fn as_mut_hashed_partial_trie(&mut self) -> &mut HashedPartialTrie {
+        &mut self.inner
     }
     /// Insert a _hashed out_ part of the trie
     pub fn insert_hash(&mut self, key: MptKey, hash: H256) -> anyhow::Result<()> {
         Ok(self.inner.insert(key.into_nibbles(), hash)?)
     }
-    pub fn insert(&mut self, key: H256, account: AccountRlp) -> anyhow::Result<()> {
+    pub fn insert(&mut self, key: H256, account: MptAccount) -> anyhow::Result<()> {
         Ok(self.inner.insert(
             MptKey::from_hash(key).into_nibbles(),
             rlp::encode(&account).to_vec(),
         )?)
     }
-    pub fn get(&self, key: H256) -> Option<AccountRlp> {
+    pub fn get(&self, key: H256) -> Option<MptAccount> {
         self.inner
             .get(MptKey::from_hash(key).into_nibbles())
             .map(assert_rlp_account)
@@ -338,7 +345,7 @@ impl StateMpt {
         self.inner = new;
         Ok(())
     }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (H256, MptAccount)> + '_ {
         self.inner.items().filter_map(|(key, rlp)| match rlp {
             mpt_trie::trie_ops::ValOrHash::Val(vec) => Some((
                 MptKey::from_nibbles(key).into_hash().expect("bad depth"),
@@ -358,7 +365,7 @@ impl From<StateMpt> for HashedPartialTrie {
 /// Global, per-account.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }
@@ -367,6 +374,9 @@ impl StorageTrie {
         Self {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
+    }
+    pub fn new_with_trie(untyped: HashedPartialTrie) -> Self {
+        Self { untyped }
     }
     pub fn get(&mut self, key: &MptKey) -> Option<&[u8]> {
         self.untyped.get(key.into_nibbles())

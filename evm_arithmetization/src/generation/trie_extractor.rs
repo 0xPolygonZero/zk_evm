@@ -5,7 +5,7 @@ use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 
-use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use super::mpt::{LegacyReceiptRlp, LogRlp};
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::memory::segments::Segment;
 use crate::util::{u256_to_bool, u256_to_h160, u256_to_u8, u256_to_usize};
@@ -89,15 +89,18 @@ pub(crate) fn read_logs(
         .collect()
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn read_state_rlp_value(
     memory: &MemoryState,
     slice: &MemoryValues,
 ) -> Result<Vec<u8>, ProgramError> {
+    use super::mpt::MptAccount;
+
     let storage_trie: HashedPartialTrie =
         get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
             Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
         })?;
-    let account = AccountRlp {
+    let account = MptAccount {
         nonce: slice[0].unwrap_or_default(),
         balance: slice[1].unwrap_or_default(),
         storage_root: storage_trie.hash(),
@@ -130,6 +133,7 @@ pub(crate) fn read_receipt_rlp_value(
     Ok(bytes)
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn get_state_trie<N: PartialTrie>(
     memory: &MemoryState,
     ptr: usize,

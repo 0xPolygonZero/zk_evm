@@ -1,21 +1,27 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use ethereum_types::U256;
+use either::Either;
+use ethereum_types::{BigEndianHash, U256};
 use keccak_hash::{keccak, H256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
+use smt_trie::{code::hash_bytecode_h256, utils::hashout2u};
 
 use crate::cpu::kernel::{aggregator::KERNEL, interpreter::Interpreter};
 use crate::generation::{
     state::State, TrieInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
 };
 use crate::memory::segments::Segment;
+use crate::testing_utils::init_logger;
+#[cfg(feature = "eth_mainnet")]
 use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
+use crate::tries::{StateMpt, StorageTrie};
 use crate::witness::{memory::MemoryAddress, state::RegistersState};
+use crate::world::{StateWorld, Type1World};
 use crate::EMPTY_CONSOLIDATED_BLOCKHASH;
 use crate::{
     proof::{BlockHashes, BlockMetadata, TrieRoots},
@@ -44,36 +50,81 @@ fn test_init_exc_stop() {
         ..Default::default()
     };
 
-    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries().unwrap();
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    let state_trie_before = StateWorld::default();
+
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
-    let expected_state_trie_after = {
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
-            block_metadata.block_timestamp,
-            block_metadata.parent_beacon_block_root,
+    let mut expected_state_trie_after = StateWorld::default();
+    #[cfg(feature = "eth_mainnet")]
+    let (state_trie_before_hashed, storage_tries) =
+        preinitialized_state_and_storage_tries().unwrap();
+    #[cfg(feature = "eth_mainnet")]
+    {
+        let mut type1world = Type1World::new(
+            StateMpt::new_with_inner(state_trie_before_hashed),
+            BTreeMap::default(),
         )
         .unwrap();
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+        let mut init_storage = BTreeMap::default();
+        for (storage, v) in &storage_tries {
+            init_storage.insert(*storage, StorageTrie::new_with_trie(v.clone()));
+        }
+        type1world.set_storage(init_storage);
+    }
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after
-            .insert(
-                beacon_roots_account_nibbles(),
-                rlp::encode(&beacon_roots_account).to_vec(),
+    #[cfg(feature = "eth_mainnet")]
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    #[cfg(feature = "eth_mainnet")]
+    {
+        expected_state_trie_after = {
+            update_beacon_roots_account_storage(
+                &mut beacon_roots_account_storage,
+                block_metadata.block_timestamp,
+                block_metadata.parent_beacon_block_root,
             )
             .unwrap();
-        expected_state_trie_after
-    };
+            let beacon_roots_account =
+                beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+            let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+            expected_state_trie_after
+                .insert(
+                    beacon_roots_account_nibbles(),
+                    rlp::encode(&beacon_roots_account).to_vec(),
+                )
+                .unwrap();
+            let mut type1world = Type1World::new(
+                StateMpt::new_with_inner(expected_state_trie_after),
+                BTreeMap::default(),
+            )
+            .unwrap();
+            let mut init_storage = BTreeMap::default();
+            for (storage, v) in storage_tries {
+                init_storage.insert(storage, StorageTrie::new_with_trie(v));
+            }
+            type1world.set_storage(init_storage);
+            StateWorld {
+                state: Either::Left(type1world),
+            }
+        };
+    }
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
 
+    let contract_hash = if cfg!(feature = "eth_mainnet") {
+        keccak(vec![])
+    } else {
+        hash_bytecode_h256(&[])
+    };
+    contract_code.insert(contract_hash, vec![]);
+
+    let state_root = match &expected_state_trie_after.state {
+        Either::Left(type1world) => type1world.state_trie().hash(),
+        Either::Right(type2world) => H256::from_uint(&hashout2u(type2world.as_smt().root)),
+    };
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root,
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -86,7 +137,6 @@ fn test_init_exc_stop() {
             state_trie: state_trie_before,
             transactions_trie,
             receipts_trie,
-            storage_tries,
         },
         trie_roots_after,
         contract_code,

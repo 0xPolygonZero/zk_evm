@@ -61,16 +61,14 @@
 const _DEVELOPER_DOCS: () = ();
 
 mod interface;
-
 pub use interface::*;
 
 mod type1;
 mod type2;
 mod wire;
 
-pub use core::{entrypoint, WireDisposition};
-
 mod core;
+pub use core::{entrypoint, WireDisposition};
 
 /// Implementation of the observer for the trace decoder.
 pub mod observer;

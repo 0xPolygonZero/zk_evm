@@ -12,7 +12,7 @@ use evm_arithmetization::{
     generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
     tries::{MptKey, ReceiptTrie, StateMpt, StorageTrie, TransactionTrie},
-    world::{Hasher, KeccakHash, PoseidonHash, Type1World, Type2World, World},
+    world::{Hasher, KeccakHash, PoseidonHash, StateWorld, Type1World, Type2World, World},
     GenerationInputs,
 };
 use itertools::Itertools as _;
@@ -133,10 +133,6 @@ pub fn entrypoint(
                  after,
                  withdrawals,
              }| {
-                let (state, storage) = world
-                    .clone()
-                    .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
-                    .into_state_and_storage();
                 GenerationInputs {
                     txn_number_before: first_txn_ix.into(),
                     gas_used_before: running_gas_used.into(),
@@ -148,10 +144,11 @@ pub fn entrypoint(
                     withdrawals,
                     ger_data,
                     tries: TrieInputs {
-                        state_trie: state.into(),
+                        state_trie: StateWorld {
+                            state: world.clone(),
+                        },
                         transactions_trie: transaction.into(),
                         receipts_trie: receipt.into(),
-                        storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
                     },
                     trie_roots_after: after,
                     checkpoint_state_trie_root,
@@ -207,7 +204,7 @@ fn start(
                                     path.into_hash()
                                         .context("invalid path length in direct state trie")?,
                                     rlp::decode(&bytes)
-                                        .context("invalid AccountRlp in direct state trie")?,
+                                        .context("invalid Account in direct state trie")?,
                                 )?;
                             }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {

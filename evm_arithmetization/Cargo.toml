@@ -18,8 +18,11 @@ keywords.workspace = true
 alloy.workspace = true
 alloy-compat.workspace = true
 anyhow.workspace = true
+bitflags.workspace = true
 bitvec.workspace = true
 bytes.workspace = true
+ciborium.workspace = true
+ciborium-io.workspace = true
 copyvec.workspace = true
 either.workspace = true
 env_logger.workspace = true
@@ -34,6 +37,7 @@ log.workspace = true
 mpt_trie.workspace = true
 num.workspace = true
 num-bigint.workspace = true
+nunny.workspace = true
 once_cell.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
@@ -48,7 +52,8 @@ serde = { workspace = true, features = ["derive"] }
 serde-big-array.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-smt_trie = { workspace = true }
+smt_trie.workspace = true
+stackstack = "0.3.0"
 starky = { workspace = true, features = ["parallel"] }
 static_assertions.workspace = true
 thiserror.workspace = true
@@ -58,6 +63,7 @@ tower-lsp = "0.20.0"
 tracing.workspace = true
 u4.workspace = true
 url.workspace = true
+winnow.workspace = true
 zk_evm_common.workspace = true
 zk_evm_proc_macro.workspace = true
 

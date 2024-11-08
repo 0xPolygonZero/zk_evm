@@ -33,7 +33,10 @@ after_insert_all_slots:
     // stack: storage_ptr_ptr', key, root_ptr, account_ptr_ptr, retdest
     DUP4
     %increment
+global debug_account_ptr_ptr:
     MLOAD_GENERAL
+
+global debug_account_ptr:
     %stack
         (payload_ptr, storage_ptr_ptr_p, key, root_ptr, account_ptr_ptr) -> 
         (root_ptr, 64, key, payload_ptr, after_insert_account, account_ptr_ptr, storage_ptr_ptr_p)
@@ -119,7 +122,9 @@ global delete_removed_accounts:
     %add_const(2)
     MLOAD_GENERAL // get initial payload_ptr
     %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
+global debug_loading_storage_root_ptr:
     %mload_trie_data
+global debug_storage_root_ptr:
     // stack: storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     %increment
@@ -164,6 +169,7 @@ after_mpt_delete:
 // Pre stack: addr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr, storage_ptr_ptr'.
 delete_removed_slots:
+global debug_delete_removed_slots:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     MLOAD_GENERAL

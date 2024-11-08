@@ -11,15 +11,17 @@ use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_account_2};
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::MptAccount;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
+use crate::testing_utils::get_state_world;
 use crate::util::h2u;
 use crate::Node;
 
 #[test]
 fn mpt_delete_empty() -> Result<()> {
-    test_state_trie(Default::default(), nibbles_64(0xABC), test_account_2())
+    let test_account = test_account_2();
+    test_state_trie(Default::default(), nibbles_64(0xABC), test_account)
 }
 
 #[test]
@@ -85,18 +87,18 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
 fn test_state_trie(
     state_trie: HashedPartialTrie,
     k: Nibbles,
-    mut account: AccountRlp,
+    mut account: MptAccount,
 ) -> Result<()> {
     assert_eq!(k.count, 64);
 
     // Ignore any storage_root; see documentation note.
     account.storage_root = HashedPartialTrie::from(Node::Empty).hash();
 
+    let state_world = get_state_world(state_trie.clone(), vec![]);
     let trie_inputs = TrieInputs {
-        state_trie: state_trie.clone(),
+        state_trie: state_world,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let mpt_delete = KERNEL.global_labels["mpt_delete"];

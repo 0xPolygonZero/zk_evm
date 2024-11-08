@@ -90,6 +90,7 @@ fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
 }
 
 fn hash_bytes(bytes: &Bytes) -> [u8; 32] {
+    log::debug!("hashing bytes = {:?}", bytes.as_ref());
     keccak(bytes).0
 }
 

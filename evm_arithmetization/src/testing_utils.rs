@@ -14,17 +14,22 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::fri::FriConfig;
 use plonky2::plonk::circuit_data::CircuitConfig;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::smt::Smt;
 use starky::config::StarkConfig;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::generation::{TrieInputs, TrimmedGenerationInputs};
+use crate::generation::mpt::MptAccount;
 use crate::proof::TrieRoots;
 #[cfg(test)]
 use crate::witness::operation::Operation;
 use crate::{
-    generation::mpt::AccountRlp, proof::BlockMetadata, util::h2u, GenerationInputs,
-    GenerationSegmentData, SegmentDataIterator,
+    generation::{TrieInputs, TrimmedGenerationInputs},
+    world::StateWorld,
+};
+use crate::{
+    proof::BlockMetadata, util::h2u, GenerationInputs, GenerationSegmentData, SegmentDataIterator,
 };
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
@@ -88,6 +93,7 @@ fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) -> anyh
     let mut bytes = [0; 32];
     slot.to_big_endian(&mut bytes);
     let key = keccak(bytes);
+    log::debug!("slot key = {:?}", key);
     let nibbles = Nibbles::from_bytes_be(key.as_bytes()).unwrap();
     if value.is_zero() {
         trie.delete(nibbles)?;
@@ -118,13 +124,26 @@ pub fn update_beacon_roots_account_storage(
     let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.value;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
 
+    log::debug!(
+        "inseting timestamp = {:?} and root = {:?}",
+        timestamp,
+        h2u(parent_root)
+    );
+    log::debug!("initial storage trie = {:?}", storage_trie);
+
     insert_storage(storage_trie, timestamp_idx, timestamp)?;
-    insert_storage(storage_trie, root_idx, h2u(parent_root))
+    insert_storage(storage_trie, root_idx, h2u(parent_root))?;
+
+    log::debug!("storage trie = {:?}", storage_trie);
+
+    Ok(())
 }
 
 /// Returns the beacon roots contract account from its provided storage trie.
-pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+#[cfg(feature = "eth_mainnet")]
+pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount {
+    log::debug!("hashing beacon roots");
+    MptAccount {
         storage_root: storage_trie.hash(),
         ..BEACON_ROOTS_ACCOUNT
     }
@@ -132,6 +151,7 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> A
 
 /// Returns an initial state trie containing the beacon roots and global exit
 /// roots contracts, along with their storage tries.
+#[cfg(feature = "eth_mainnet")]
 pub fn preinitialized_state_and_storage_tries(
 ) -> anyhow::Result<(HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)> {
     let mut state_trie = HashedPartialTrie::from(Node::Empty);
@@ -199,15 +219,17 @@ pub fn update_scalable_account_storage(
     insert_storage(storage_trie, slot.into_uint(), h2u(initial_trie_hash))
 }
 
-pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+#[cfg(feature = "cdk_erigon")]
+pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount {
+    MptAccount {
         storage_root: storage_trie.hash(),
         ..GLOBAL_EXIT_ROOT_ACCOUNT
     }
 }
 
-pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
-    AccountRlp {
+#[cfg(feature = "cdk_erigon")]
+pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount {
+    MptAccount {
         storage_root: storage_trie.hash(),
         ..Default::default()
     }
@@ -229,13 +251,12 @@ fn empty_payload() -> Result<GenerationInputs> {
 
     // Initialize an empty state trie and storage tries
     let state_trie_before = HashedPartialTrie::from(crate::Node::Empty);
-    let storage_tries = Vec::new();
+
     let checkpoint_state_trie_root = state_trie_before.hash();
 
     // Prepare the tries without any transactions or receipts
     let tries_before = TrieInputs {
-        state_trie: state_trie_before.clone(),
-        storage_tries: storage_tries.clone(),
+        state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(crate::Node::Empty),
         receipts_trie: HashedPartialTrie::from(crate::Node::Empty),
     };
@@ -273,6 +294,34 @@ pub fn segment_with_empty_tables() -> Result<(
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
     Ok((trimmed_inputs, segment_data))
+}
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub fn get_state_world(
+    state: HashedPartialTrie,
+    storage_tries: Vec<(H256, HashedPartialTrie)>,
+) -> StateWorld {
+    use std::collections::BTreeMap;
+
+    use either::Either;
+    // `Type1World` expects full keys, so we manually expand the nibbles here.
+    use mpt_trie::utils::TryFromIterator as _;
+
+    use crate::{
+        tries::{StateMpt, StorageTrie},
+        world::Type1World,
+    };
+
+    let mut type1world =
+        Type1World::new(StateMpt::new_with_inner(state), BTreeMap::default()).unwrap();
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    StateWorld {
+        state: Either::Left(type1world),
+    }
 }
 
 #[cfg(test)]

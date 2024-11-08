@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::generation::mpt::MptAccount;
 use evm_arithmetization::tries::{MptKey, StateMpt, StorageTrie};
 use evm_arithmetization::world::{Hasher as _, Type1World, World};
 use keccak_hash::H256;
@@ -69,7 +69,7 @@ fn visit(
                     storage,
                     code,
                 }) => {
-                    let account = AccountRlp {
+                    let account = MptAccount {
                         nonce: nonce.into(),
                         balance,
                         storage_root: {

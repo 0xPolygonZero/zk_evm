@@ -243,7 +243,7 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
 
     let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: clock * NUM_CHANNELS + 1,
         input: input.clone(),
         len: input.len(),
     });
@@ -886,6 +886,7 @@ pub(crate) fn generate_mload_general<F: RichField, T: Transition<F>>(
 
     state.push_memory(log_read);
     state.push_cpu(row);
+
     Ok(())
 }
 

@@ -13,14 +13,16 @@ use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::smt::hash_serialize_u256;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
-use crate::generation::linked_list::LinkedListsPtrs;
-use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
+use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
+use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
@@ -117,8 +119,8 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-    pub(crate) access_lists_ptrs: LinkedListsPtrs,
-    pub(crate) state_ptrs: LinkedListsPtrs,
+    pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
+    pub(crate) state_ptrs: StateLinkedListsPtrs,
     pub(crate) next_txn_index: usize,
 }
 
@@ -236,32 +238,13 @@ impl<F: RichField> Interpreter<F> {
         // Set state's inputs. We trim unnecessary components.
         self.generation_state.inputs = inputs.trim();
 
-        // Initialize the MPT's pointers.
-        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut self.generation_state.state_ptrs.accounts,
-                &mut self.generation_state.state_ptrs.storage,
-                &inputs.tries,
-            )
-            .expect("Invalid MPT data for preinitialization");
+        log::debug!("interpreter");
+        let trie_root_ptrs = self
+            .generation_state
+            .preinitialize_trie_data_and_get_trie_ptrs(tries);
 
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
-
-        // Initialize the `TrieData` segment.
-        let preinit_trie_data_segment = MemorySegmentState { content: trie_data };
-        let preinit_accounts_ll_segment = MemorySegmentState {
-            content: state_leaves,
-        };
-        let preinit_storage_ll_segment = MemorySegmentState {
-            content: storage_leaves,
-        };
-        self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
-        self.insert_preinitialized_segment(
-            Segment::AccountsLinkedList,
-            preinit_accounts_ll_segment,
-        );
-        self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
@@ -317,7 +300,25 @@ impl<F: RichField> Interpreter<F> {
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
-                h2u(tries.state_trie.hash()),
+                // TODO: We should reuse the serialized trie in memory.
+                #[cfg(not(feature = "cdk_erigon"))]
+                h2u(tries
+                    .state_trie
+                    .state
+                    .clone()
+                    .expect_left("eth_mainnet expects MPTs.")
+                    .state_trie()
+                    .hash()),
+                #[cfg(feature = "cdk_erigon")]
+                hash_serialize_u256(
+                    &tries
+                        .state_trie
+                        .state
+                        .clone()
+                        .expect_right("cdk_erigon expects SMTs.")
+                        .as_smt()
+                        .to_vec(),
+                ),
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,
@@ -500,14 +501,6 @@ impl<F: RichField> Interpreter<F> {
         self.generation_state
             .memory
             .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
-    }
-
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        self.generation_state
-            .memory
-            .insert_preinitialized_segment(segment, values);
     }
 
     pub(crate) fn is_preinitialized_segment(&self, segment: usize) -> bool {

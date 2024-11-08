@@ -5,14 +5,11 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
-};
+use evm_arithmetization::testing_utils::*;
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
@@ -47,23 +44,24 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
 
-    let sender_account_before = AccountRlp {
+    let sender_account_before = MptAccount {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
         code_hash: keccak([]),
     };
-    let to_account_before = AccountRlp::default();
+    let to_account_before = MptAccount::default();
 
     let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        // storage_tries,
     };
 
     // Generated using a little py-evm script.
@@ -100,12 +98,14 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let sender_account_after = AccountRlp {
+        log::debug!("beacon roots expected account:: {:?}", beacon_roots_account);
+
+        let sender_account_after = MptAccount {
             balance: sender_account_before.balance - value - gas_used * 10,
             nonce: sender_account_before.nonce + 1,
             ..sender_account_before
         };
-        let to_account_after = AccountRlp {
+        let to_account_after = MptAccount {
             balance: value,
             ..to_account_before
         };

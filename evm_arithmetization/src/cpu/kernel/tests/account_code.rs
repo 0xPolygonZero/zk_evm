@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use either::Either;
+use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -9,6 +11,7 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
+use smt_trie::code::hash_bytecode_h256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
@@ -16,48 +19,104 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
+#[cfg(not(feature = "cdk_erigon"))]
+use crate::generation::mpt::load_linked_lists;
 use crate::generation::mpt::{
-    load_linked_lists_and_txn_and_receipt_mpts, load_state_mpt, AccountRlp,
+    load_receipts_mpt, load_state_mpt, load_transactions_mpt, Account, EitherAccount, MptAccount,
+    SmtAccount, TrieRootPtrs,
 };
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
+use crate::world::StateWorld;
 
 pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: &TrieInputs,
 ) {
+    #[cfg(feature = "cdk_erigon")]
+    {
+        interpreter
+            .generation_state
+            .preinitialize_linked_lists(trie_inputs);
+    }
+
     // Load all MPTs.
-    let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-        load_linked_lists_and_txn_and_receipt_mpts(
-            &mut interpreter.generation_state.state_ptrs.accounts,
-            &mut interpreter.generation_state.state_ptrs.storage,
+    #[cfg(not(feature = "cdk_erigon"))]
+    {
+        let (state_leaves, storage_leaves, mut trie_data) = load_linked_lists(
+            &mut interpreter
+                .generation_state
+                .state_pointers
+                .accounts_pointers,
+            &mut interpreter.generation_state.state_pointers.storage_pointers,
             trie_inputs,
         )
         .expect("Invalid MPT data for preinitialization");
 
-    interpreter.generation_state.memory.contexts[0].segments
-        [Segment::AccountsLinkedList.unscale()]
-    .content = state_leaves;
-    interpreter.generation_state.memory.contexts[0].segments
-        [Segment::StorageLinkedList.unscale()]
-    .content = storage_leaves;
-    interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-        trie_data.clone();
-    interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
+        let txn_root_ptr =
+            load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+        let receipt_root_ptr =
+            load_receipts_mpt(&trie_inputs.receipts_trie, &mut trie_data).unwrap();
 
-    if trie_root_ptrs.state_root_ptr.is_none() {
-        trie_root_ptrs.state_root_ptr = Some(
-            load_state_mpt(
-                &trie_inputs.trim(),
-                &mut interpreter.generation_state.memory.contexts[0].segments
-                    [Segment::TrieData.unscale()]
-                .content,
-            )
-            .expect("Invalid MPT data for preinitialization"),
-        );
+        let mut trie_root_ptrs = TrieRootPtrs {
+            state_root_ptr: None,
+            txn_root_ptr,
+            receipt_root_ptr,
+        };
+
+        log::debug!("trie data len after receipts {:?}", trie_data.len());
+
+        interpreter.generation_state.memory.contexts[0].segments
+            [Segment::AccountsLinkedList.unscale()]
+        .content = state_leaves;
+        interpreter.generation_state.memory.contexts[0].segments
+            [Segment::StorageLinkedList.unscale()]
+        .content = storage_leaves;
+        interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()]
+            .content = trie_data.clone();
+        interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
+
+        if trie_root_ptrs.state_root_ptr.is_none() {
+            trie_root_ptrs.state_root_ptr = Some(
+                load_state_mpt(
+                    &trie_inputs.trim(),
+                    &mut interpreter.generation_state.memory.contexts[0].segments
+                        [Segment::TrieData.unscale()]
+                    .content,
+                )
+                .expect("Invalid MPT data for preinitialization"),
+            );
+        }
+
+        let state_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
+        let txn_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into())
+                .unwrap();
+        let receipts_addr =
+            MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
+
+        let mut to_set = vec![];
+        if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
+            to_set.push((state_addr, state_root_ptr.into()));
+        }
+        to_set.extend([
+            (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
+            (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
+        ]);
+
+        interpreter.set_memory_multi_addresses(&to_set);
+
+        for (i, data) in trie_data.iter().enumerate() {
+            let trie_addr = MemoryAddress::new(0, Segment::TrieData, i);
+            interpreter
+                .generation_state
+                .memory
+                .set(trie_addr, data.unwrap_or_default());
+        }
     }
 
     let accounts_len = Segment::AccountsLinkedList as usize
@@ -106,32 +165,6 @@ pub(crate) fn initialize_mpts<F: RichField>(
         (initial_accounts_len_addr, accounts_len.into()),
         (initial_storage_len_addr, storage_len.into()),
     ]);
-
-    let state_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
-    let txn_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into()).unwrap();
-    let receipts_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
-
-    let mut to_set = vec![];
-    if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
-        to_set.push((state_addr, state_root_ptr.into()));
-    }
-    to_set.extend([
-        (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
-        (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
-    ]);
-
-    interpreter.set_memory_multi_addresses(&to_set);
-
-    for (i, data) in trie_data.iter().enumerate() {
-        let trie_addr = MemoryAddress::new(0, Segment::TrieData, i);
-        interpreter
-            .generation_state
-            .memory
-            .set(trie_addr, data.unwrap_or_default());
-    }
 }
 
 // Stolen from `tests/mpt/insert.rs`
@@ -139,16 +172,15 @@ pub(crate) fn initialize_mpts<F: RichField>(
 pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter: &mut Interpreter<F>,
     address: Address,
-    account: &AccountRlp,
+    account: &EitherAccount,
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
     let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
     let trie_inputs = TrieInputs {
-        state_trie: HashedPartialTrie::from(Node::Empty),
+        state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries: vec![],
     };
 
     initialize_mpts(interpreter, &trie_inputs);
@@ -166,13 +198,13 @@ pub(crate) fn prepare_interpreter<F: RichField>(
         trie_data.push(Some(0.into()));
     }
     let value_ptr = trie_data.len();
-    trie_data.push(Some(account.nonce));
-    trie_data.push(Some(account.balance));
+    trie_data.push(Some(account.get_nonce()));
+    trie_data.push(Some(account.get_balance()));
     // In memory, storage_root gets interpreted as a pointer to a storage trie,
     // so we have to ensure the pointer is valid. It's easiest to set it to 0,
     // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
     trie_data.push(Some(H256::zero().into_uint()));
-    trie_data.push(Some(account.code_hash.into_uint()));
+    trie_data.push(Some(account.get_code_hash_u256()));
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
     interpreter
@@ -220,7 +252,7 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
     // Now, execute `mpt_hash_state_trie`.
-    state_trie.insert(k, rlp::encode(account).to_vec())?;
+    state_trie.insert(k, account.rlp_encode().to_vec())?;
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
         GlobalMetadata::StateTrieRootDigestAfter,
@@ -250,12 +282,21 @@ pub(crate) fn prepare_interpreter<F: RichField>(
 }
 
 // Test account with a given code hash.
-fn test_account(code: &[u8]) -> AccountRlp {
-    AccountRlp {
-        nonce: U256::from(1111),
-        balance: U256::from(2222),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: keccak(code),
+fn test_account(code: &[u8]) -> EitherAccount {
+    if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: keccak(code),
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            code_hash: hash_bytecode_h256(&code).into_uint(),
+            code_length: code.len().into(),
+        }))
     }
 }
 
@@ -288,8 +329,12 @@ fn test_extcodesize() -> Result<()> {
     interpreter
         .push(U256::from_big_endian(address.as_bytes()))
         .expect("The stack should not overflow");
-    interpreter.generation_state.inputs.contract_code =
-        HashMap::from([(keccak(&code), code.clone())]);
+    interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
+        HashMap::from([(keccak(&code), code.clone())])
+    } else {
+        HashMap::from([(hash_bytecode_h256(&code), code.clone())])
+    };
+
     interpreter.run()?;
 
     assert_eq!(
@@ -362,8 +407,12 @@ fn test_extcodecopy() -> Result<()> {
     interpreter
         .push((0xDEADBEEFu64 + (1 << 32)).into())
         .expect("The stack should not overflow"); // kexit_info
-    interpreter.generation_state.inputs.contract_code =
-        HashMap::from([(keccak(&code), code.clone())]);
+    interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
+        HashMap::from([(keccak(&code), code.clone())])
+    } else {
+        HashMap::from([(hash_bytecode_h256(&code), code.clone())])
+    };
+
     interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
@@ -460,7 +509,11 @@ fn prepare_interpreter_all_accounts<F: RichField>(
 
 /// Tests an SSTORE within a code similar to the contract code in add11_yml.
 #[test]
+#[cfg(not(feature = "cdk_erigon"))]
 fn sstore() -> Result<()> {
+    use crate::testing_utils::get_state_world;
+
+    init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
@@ -471,21 +524,23 @@ fn sstore() -> Result<()> {
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
     let code_hash = keccak(code);
 
-    let account_before = AccountRlp {
+    let account_before = EitherAccount(Either::Left(MptAccount {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
-        ..AccountRlp::default()
-    };
+        ..MptAccount::default()
+    }));
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
-
+    state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
+    let state_trie = get_state_world(
+        state_trie_before,
+        vec![(addr_hashed, HashedPartialTrie::from(Node::Empty))],
+    );
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
+        state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -511,7 +566,7 @@ fn sstore() -> Result<()> {
 
     // The code should have added an element to the storage of `to_account`. We run
     // `mpt_hash_state_trie` to check that.
-    let account_after = AccountRlp {
+    let account_after = EitherAccount(Either::Left(MptAccount {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
         storage_root: HashedPartialTrie::from(Node::Leaf {
@@ -519,11 +574,11 @@ fn sstore() -> Result<()> {
             value: vec![2],
         })
         .hash(),
-        ..AccountRlp::default()
-    };
+        ..MptAccount::default()
+    }));
 
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec())?;
+    expected_state_trie_after.insert(addr_nibbles, account_after.rlp_encode().to_vec())?;
 
     let expected_state_trie_hash = expected_state_trie_after.hash();
 
@@ -543,6 +598,7 @@ fn sstore() -> Result<()> {
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
+    log::debug!("donde estas satanas");
     interpreter.run()?;
 
     Ok(())
@@ -550,7 +606,15 @@ fn sstore() -> Result<()> {
 
 /// Tests an SLOAD within a code similar to the contract code in add11_yml.
 #[test]
+#[cfg(not(feature = "cdk_erigon"))]
 fn sload() -> Result<()> {
+    use std::collections::BTreeMap;
+
+    use crate::{
+        tries::{StateMpt, StorageTrie},
+        world::Type1World,
+    };
+
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
     let addr_hashed = keccak(addr);
@@ -565,21 +629,34 @@ fn sload() -> Result<()> {
     ];
     let code_hash = keccak(code);
 
-    let account_before = AccountRlp {
+    let account_before = EitherAccount(Either::Left(MptAccount {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
-        ..AccountRlp::default()
-    };
+        ..MptAccount::default()
+    }));
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
+    state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
 
+    let mut type1world = Type1World::new(
+        StateMpt::new_with_inner(state_trie_before.clone()),
+        BTreeMap::default(),
+    )
+    .unwrap();
+    let storage_tries = vec![(addr_hashed, Node::Empty.into())];
+    let mut init_storage = BTreeMap::default();
+    for (storage, v) in storage_tries {
+        init_storage.insert(storage, StorageTrie::new_with_trie(v));
+    }
+    type1world.set_storage(init_storage);
+    let state_trie = StateWorld {
+        state: Either::Left(type1world),
+    };
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
+        state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -645,4 +722,8 @@ fn sload() -> Result<()> {
     let expected_state_trie_hash = state_trie_before.hash();
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
+}
+
+fn init_logger() {
+    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

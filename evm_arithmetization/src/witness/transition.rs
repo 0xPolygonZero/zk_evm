@@ -1,4 +1,6 @@
+use ethereum_types::U256;
 use log::log_enabled;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
@@ -6,14 +8,24 @@ use super::util::stack_pop_with_log_and_fill;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::MAX_CODE_SIZE;
 use crate::cpu::kernel::opcodes::get_opcode;
+#[cfg(test)]
+use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+#[cfg(all(test, not(feature = "cdk_erigon")))]
+use crate::cpu::kernel::tests::mpt::linked_list::{AccountsLinkedList, StorageLinkedList};
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
+use crate::generation::linked_list::testing::LinkedList;
 use crate::generation::state::State;
+#[cfg(not(feature = "cdk_erigon"))]
+use crate::generation::trie_extractor::get_state_trie;
 use crate::memory::segments::Segment;
+// TO REMOVE!
+use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
 use crate::witness::memory::MemoryAddress;
@@ -282,10 +294,11 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
 }
 
 pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, op: Operation) {
+    // TODO: Revert
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
-    if !log_enabled!(log::Level::Debug) {
-        return;
-    }
+    // if !log_enabled!(log::Level::Debug) {
+    //     return;
+    // }
 
     let pc = state.get_registers().program_counter;
     let is_interesting_offset = KERNEL
@@ -308,6 +321,85 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
             state.get_generation_state().stack(),
         ),
     );
+
+    #[cfg(all(test, not(feature = "cdk_erigon")))]
+    if KERNEL.offset_name(pc) == "mpt_hash_state_trie" || KERNEL.offset_name(pc) == "init" {
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::TrieData);
+        log::debug!(
+            "account nonce = {:?} balance {:?} code hash {:?}",
+            mem[5],
+            mem[6],
+            mem[8]
+        );
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!(
+            "accounts linked list = {:?}",
+            LinkedList::<4>::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
+
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::StorageLinkedList);
+        log::debug!(
+            "storage linked list = {:?}",
+            LinkedList::<5>::from_mem_and_segment(&mem, Segment::StorageLinkedList)
+        );
+
+        let state_trie_ptr = u256_to_usize(
+            state
+                .get_generation_state()
+                .memory
+                .read_global_metadata(GlobalMetadata::StateTrieRoot),
+        )
+        .unwrap();
+
+        let state_trie = get_state_trie::<HashedPartialTrie>(
+            &state.get_generation_state().memory,
+            state_trie_ptr,
+        )
+        .unwrap();
+
+        log::debug!("state trie ptr = {:?}", state_trie_ptr);
+        log::debug!("state trie {:?}", state_trie);
+    }
+
+    #[cfg(test)]
+    if KERNEL.offset_name(pc) == "hash_state_trie" || KERNEL.offset_name(pc) == "sys_sstore" {
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        #[cfg(test)]
+        log::debug!(
+            "state linked list = {:?}",
+            StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+        );
+        let root_ptr = u256_to_usize(
+            state
+                .get_generation_state()
+                .memory
+                .read_global_metadata(GlobalMetadata::StateTrieRoot),
+        )
+        .unwrap();
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::TrieData);
+        log::debug!(
+            "state smt data = {:?}",
+            mem[root_ptr..]
+                .iter()
+                .map(|x| x.unwrap_or_default())
+                .collect::<Vec<U256>>()
+        );
+    }
 
     let kernel_code =
         &state.get_generation_state().memory.contexts[0].segments[Segment::Code.unscale()].content;

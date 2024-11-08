@@ -3,6 +3,7 @@ use std::fmt::Display;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use itertools::Either;
 use keccak_hash::keccak;
 use log::error;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -13,6 +14,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
+use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
@@ -25,7 +27,9 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::{GenerationState, State};
-use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
+#[cfg(not(feature = "cdk_erigon"))]
+use crate::generation::trie_extractor::get_state_trie;
+use crate::generation::trie_extractor::{get_receipt_trie, get_txn_trie};
 use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES};
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
@@ -33,6 +37,7 @@ use crate::proof::{
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
+use crate::world::StateWorld;
 
 pub(crate) mod linked_list;
 pub mod mpt;
@@ -183,12 +188,19 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     pub block_hashes: BlockHashes,
 }
 
+#[cfg(feature = "cdk_erigon")]
+type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
+    /// transactions. In "eth_mainnet", it also contains the storage trie prior
+    /// to these transactions (including all storage tries, and nodes therein,
+    /// that will be accessed by these transactions). In "eth_mainnet", it also
+    /// includes a partial version of each storage trie prior to these
     /// transactions.
-    pub state_trie: HashedPartialTrie,
+    pub state_trie: StateWorld,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -199,33 +211,25 @@ pub struct TrieInputs {
     /// should include all nodes that will be accessed by these
     /// transactions.
     pub receipts_trie: HashedPartialTrie,
-
-    /// A partial version of each storage trie prior to these transactions. It
-    /// should include all storage tries, and nodes therein, that will be
-    /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrimmedTrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
-    /// transactions.
-    pub state_trie: HashedPartialTrie,
-    /// A partial version of each storage trie prior to these transactions. It
-    /// should include all storage tries, and nodes therein, that will be
-    /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    /// transactions. In "eth_mainnet", it also contains the storage trie prior
+    /// to these transactions.
+    pub state_trie: StateWorld,
 }
 
 impl TrieInputs {
     pub(crate) fn trim(&self) -> TrimmedTrieInputs {
         TrimmedTrieInputs {
             state_trie: self.state_trie.clone(),
-            storage_tries: self.storage_tries.clone(),
         }
     }
 }
+
 impl<F: RichField> GenerationInputs<F> {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
@@ -237,6 +241,14 @@ impl<F: RichField> GenerationInputs<F> {
             .map(|tx_bytes| keccak(&tx_bytes[..]))
             .collect();
 
+        let state_root = match &self.tries.state_trie.state {
+            Either::Left(trie) => trie.state_trie().hash(),
+            Either::Right(trie) => {
+                let smt_data = trie.as_smt().to_vec();
+                H256::from_uint(&hash_serialize_u256(&smt_data).into())
+            }
+        };
+
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),
             txn_number_before: self.txn_number_before,
@@ -244,7 +256,7 @@ impl<F: RichField> GenerationInputs<F> {
             gas_used_after: self.gas_used_after,
             txn_hashes,
             trie_roots_before: TrieRoots {
-                state_root: self.tries.state_trie.hash(),
+                state_root,
                 transactions_root: self.tries.transactions_trie.hash(),
                 receipts_root: self.tries.receipts_trie.hash(),
             },
@@ -440,7 +452,17 @@ pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
         &inputs.tries.transactions_trie
     );
     log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
-    log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
+    #[cfg(feature = "eth_mainnet")]
+    log::debug!(
+        "Input storage_tries: {:?}",
+        &inputs
+            .tries
+            .state_trie
+            .state
+            .clone()
+            .expect_left("eth_mainnet expects MPTs")
+            .get_storage()
+    );
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 
@@ -680,9 +702,13 @@ pub(crate) fn collect_debug_tries<F: RichField>(
     .inspect_err(|e| error!("failed to retrieve state trie pointer: {e:?}"))
     .ok()?;
 
+    #[cfg(not(feature = "cdk_erigon"))]
     let state_trie = get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
         .inspect_err(|e| error!("unable to retrieve state trie for debugging purposes: {e:?}"))
         .ok()?;
+
+    #[cfg(feature = "cdk_erigon")]
+    let state_trie = HashedPartialTrie::default();
 
     let txn_trie_ptr = u256_to_usize(
         state

@@ -4,16 +4,18 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{Account, EitherAccount, LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, get_state_world, init_logger,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::world::World;
 use evm_arithmetization::{AllStark, GenerationInputs, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -33,6 +35,7 @@ fn get_generation_inputs() -> GenerationInputs {
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
+    let rlp_default = EitherAccount::default();
     let beneficiary_state_key = keccak(beneficiary);
     let sender_state_key = keccak(sender);
     let to_hashed = keccak(to);
@@ -44,43 +47,54 @@ fn get_generation_inputs() -> GenerationInputs {
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
     let code_hash = keccak(code);
 
-    let beneficiary_account_before = AccountRlp {
+    let beneficiary_account_before = EitherAccount(Either::Left(MptAccount {
         nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-    let sender_account_before = AccountRlp {
+        ..*rlp_default.as_mpt_account()
+    }));
+    let sender_account_before = EitherAccount(Either::Left(MptAccount {
         balance: 0x0de0b6b3a7640000u64.into(),
-        ..AccountRlp::default()
-    };
-    let to_account_before = AccountRlp {
+        ..*rlp_default.as_mpt_account()
+    }));
+    let to_account_before = EitherAccount(Either::Left(MptAccount {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
-        ..AccountRlp::default()
-    };
+        ..*rlp_default.as_mpt_account()
+    }));
 
-    let (mut state_trie_before, mut storage_tries) =
+    let (mut state_trie_before_hashed, mut storage_tries) =
         preinitialized_state_and_storage_tries().unwrap();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before
+    state_trie_before_hashed
         .insert(
             beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_before).to_vec(),
+            beneficiary_account_before
+                .as_mpt_account()
+                .rlp_encode()
+                .to_vec(),
         )
         .unwrap();
-    state_trie_before
-        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+    state_trie_before_hashed
+        .insert(
+            sender_nibbles,
+            sender_account_before.as_mpt_account().rlp_encode().to_vec(),
+        )
         .unwrap();
-    state_trie_before
-        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+    state_trie_before_hashed
+        .insert(
+            to_nibbles,
+            to_account_before.as_mpt_account().rlp_encode().to_vec(),
+        )
         .unwrap();
 
     storage_tries.push((to_hashed, Node::Empty.into()));
+
+    let state_trie_before = get_state_world(state_trie_before_hashed, storage_tries);
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before.clone(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
+        // storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
@@ -112,16 +126,16 @@ fn get_generation_inputs() -> GenerationInputs {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let beneficiary_account_after = AccountRlp {
+        let beneficiary_account_after = EitherAccount(Either::Left(MptAccount {
             nonce: 1.into(),
-            ..AccountRlp::default()
-        };
-        let sender_account_after = AccountRlp {
+            ..*rlp_default.as_mpt_account()
+        }));
+        let sender_account_after = EitherAccount(Either::Left(MptAccount {
             balance: 0xde0b6b3a75be550u64.into(),
             nonce: 1.into(),
-            ..AccountRlp::default()
-        };
-        let to_account_after = AccountRlp {
+            ..*rlp_default.as_mpt_account()
+        }));
+        let to_account_after = EitherAccount(Either::Left(MptAccount {
             balance: 0xde0b6b3a76586a0u64.into(),
             code_hash,
             // Storage map: { 0 => 2 }
@@ -130,21 +144,30 @@ fn get_generation_inputs() -> GenerationInputs {
                 value: vec![2],
             })
             .hash(),
-            ..AccountRlp::default()
-        };
+            ..*rlp_default.as_mpt_account()
+        }));
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
-                rlp::encode(&beneficiary_account_after).to_vec(),
+                beneficiary_account_after
+                    .as_mpt_account()
+                    .rlp_encode()
+                    .to_vec(),
             )
             .unwrap();
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .insert(
+                sender_nibbles,
+                sender_account_after.as_mpt_account().rlp_encode().to_vec(),
+            )
             .unwrap();
         expected_state_trie_after
-            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .insert(
+                to_nibbles,
+                to_account_after.as_mpt_account().rlp_encode().to_vec(),
+            )
             .unwrap();
         expected_state_trie_after
             .insert(
@@ -189,7 +212,10 @@ fn get_generation_inputs() -> GenerationInputs {
         trie_roots_after,
         contract_code,
         block_metadata,
-        checkpoint_state_trie_root: state_trie_before.hash(),
+        checkpoint_state_trie_root: state_trie_before
+            .state
+            .expect_left("eth_mainnet expects MPTs.")
+            .root(),
         checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

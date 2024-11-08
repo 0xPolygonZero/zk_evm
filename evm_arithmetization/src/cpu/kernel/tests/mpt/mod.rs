@@ -1,17 +1,25 @@
+use either::Either;
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use mpt_trie::partial_trie::PartialTrie;
 
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::EitherAccount;
+use crate::generation::mpt::MptAccount;
+use crate::generation::mpt::{Account, SmtAccount};
 use crate::Node;
 
+#[cfg(not(feature = "cdk_erigon"))]
 mod delete;
+#[cfg(not(feature = "cdk_erigon"))]
 mod hash;
 mod hex_prefix;
+#[cfg(not(feature = "cdk_erigon"))]
 mod insert;
-mod linked_list;
+pub(crate) mod linked_list;
+#[cfg(not(feature = "cdk_erigon"))]
 mod load;
+#[cfg(not(feature = "cdk_erigon"))]
 mod read;
 
 pub(crate) fn nibbles_64<T: Into<U256>>(v: T) -> Nibbles {
@@ -30,8 +38,27 @@ pub(crate) fn nibbles_count<T: Into<U256>>(v: T, count: usize) -> Nibbles {
     }
 }
 
-pub(crate) fn test_account_1() -> AccountRlp {
-    AccountRlp {
+pub(crate) fn test_account_1_empty_storage() -> EitherAccount {
+    if cfg!(feature = "cdk_erigon") {
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            code_hash: U256::from(4444),
+            code_length: 0.into(),
+        }))
+    } else {
+        EitherAccount(Either::Left(MptAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: H256::from_uint(&U256::from(4444)),
+        }))
+    }
+}
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) fn test_account_1() -> MptAccount {
+    MptAccount {
         nonce: U256::from(1111),
         balance: U256::from(2222),
         storage_root: H256::from_uint(&U256::from(3333)),
@@ -39,25 +66,18 @@ pub(crate) fn test_account_1() -> AccountRlp {
     }
 }
 
-pub(crate) fn test_account_1_empty_storage() -> AccountRlp {
-    AccountRlp {
-        nonce: U256::from(1111),
-        balance: U256::from(2222),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: H256::from_uint(&U256::from(4444)),
-    }
-}
-
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn test_account_1_rlp() -> Vec<u8> {
-    rlp::encode(&test_account_1()).to_vec()
+    test_account_1().rlp_encode().to_vec()
 }
 
 pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
-    rlp::encode(&test_account_1_empty_storage()).to_vec()
+    test_account_1_empty_storage().rlp_encode().to_vec()
 }
 
-pub(crate) fn test_account_2() -> AccountRlp {
-    AccountRlp {
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) fn test_account_2() -> MptAccount {
+    MptAccount {
         nonce: U256::from(5555),
         balance: U256::from(6666),
         storage_root: H256::from_uint(&U256::from(7777)),
@@ -65,15 +85,19 @@ pub(crate) fn test_account_2() -> AccountRlp {
     }
 }
 
+#[cfg(not(feature = "cdk_erigon"))]
 pub(crate) fn test_account_2_rlp() -> Vec<u8> {
-    rlp::encode(&test_account_2()).to_vec()
+    test_account_2().rlp_encode().to_vec()
 }
 
 /// A `PartialTrie` where an extension node leads to a leaf node containing an
 /// account.
 pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
     Node::Extension {
-        nibbles: 0xABC_u64.into(),
+        nibbles: Nibbles {
+            count: 61,
+            packed: 0xABC_u64.into(),
+        },
         child: Node::Leaf {
             nibbles: Nibbles {
                 count: 3,

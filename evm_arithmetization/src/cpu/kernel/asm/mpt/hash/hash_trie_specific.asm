@@ -1,5 +1,15 @@
 // Hashing logic specific to a particular trie.
 
+#[cfg(not(feature = cdk_erigon))]
+{
+    %macro hash_state_trie
+        // stack: trie_len
+        PUSH @INITIAL_RLP_ADDR
+        // stack: rlp_start, dummy_trie_len
+        %mpt_hash_state_trie
+    %endmacro
+}
+
 global mpt_hash_state_trie:
     // stack: rlp_start, cur_len, retdest
     PUSH encode_account
@@ -78,6 +88,7 @@ global encode_account:
     // Now, we start the encoding.
     // stack: rlp_addr, value_ptr, cur_len, retdest
     DUP2 %mload_trie_data // nonce = value[0]
+global debug_the_nonce:
     %rlp_scalar_len
     // stack: nonce_rlp_len, rlp_addr, value_ptr, cur_len, retdest
     DUP3 %increment %mload_trie_data // balance = value[1]
@@ -112,6 +123,7 @@ global encode_account:
 
     // Hash storage trie.
     %mpt_hash_storage_trie
+global debug_storage_hash:
     // stack: storage_root_digest, new_len, rlp_pos_5, value_ptr, cur_len, retdest
     %stack(storage_root_digest, new_len, rlp_pos_five, value_ptr, cur_len) -> (rlp_pos_five, storage_root_digest, value_ptr, new_len)
     %encode_rlp_256

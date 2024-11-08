@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{BigEndianHash, H256, U256};
 use hex_literal::hex;
 use mpt_trie::nibbles::Nibbles;
@@ -13,6 +15,9 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
 use crate::generation::TrieInputs;
+use crate::testing_utils::get_state_world;
+use crate::tries::StateMpt;
+use crate::world::{StateWorld, Type1World};
 use crate::Node;
 
 #[test]
@@ -21,7 +26,6 @@ fn load_all_mpts_empty() -> Result<()> {
         state_trie: Default::default(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -50,15 +54,21 @@ fn load_all_mpts_empty() -> Result<()> {
 
 #[test]
 fn load_all_mpts_leaf() -> Result<()> {
-    let trie_inputs = TrieInputs {
-        state_trie: Node::Leaf {
-            nibbles: 0xABC_u64.into(),
+    let state_trie = get_state_world(
+        Node::Leaf {
+            nibbles: Nibbles {
+                count: 64,
+                packed: 0xABC_u64.into(),
+            },
             value: test_account_1_rlp(),
         }
         .into(),
+        vec![],
+    );
+    let trie_inputs = TrieInputs {
+        state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -78,7 +88,7 @@ fn load_all_mpts_leaf() -> Result<()> {
             test_account_1().code_hash.into_uint(),
             // Values used for hashing.
             type_leaf,
-            3.into(),
+            64.into(), // should be 3 nibbles but keys are extended for `Type1World`
             0xABC.into(),
             9.into(), // value ptr
             test_account_1().nonce,
@@ -106,11 +116,21 @@ fn load_all_mpts_leaf() -> Result<()> {
 #[test]
 fn load_all_mpts_hash() -> Result<()> {
     let hash = H256::random();
+
+    let state_trie = StateWorld {
+        state: Either::Left(
+            Type1World::new(
+                StateMpt::new_with_inner(Node::Hash(hash).into()),
+                BTreeMap::default(),
+            )
+            .unwrap(),
+        ),
+    };
+
     let trie_inputs = TrieInputs {
-        state_trie: Node::Hash(hash).into(),
+        state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -139,16 +159,25 @@ fn load_all_mpts_hash() -> Result<()> {
 #[test]
 fn load_all_mpts_empty_branch() -> Result<()> {
     let children = core::array::from_fn(|_| Node::Empty.into());
-    let state_trie = Node::Branch {
-        children,
-        value: vec![],
-    }
-    .into();
+    let state_trie = StateWorld {
+        state: Either::Left(
+            Type1World::new(
+                StateMpt::new_with_inner(
+                    Node::Branch {
+                        children,
+                        value: vec![],
+                    }
+                    .into(),
+                ),
+                BTreeMap::default(),
+            )
+            .unwrap(),
+        ),
+    };
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -197,10 +226,9 @@ fn load_all_mpts_empty_branch() -> Result<()> {
 #[test]
 fn load_all_mpts_ext_to_leaf() -> Result<()> {
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_trie: get_state_world(extension_to_leaf(test_account_1_rlp()), vec![]),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     let initial_stack = vec![];
@@ -221,11 +249,11 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
             test_account_1().code_hash.into_uint(),
             // Values used for hashing.
             type_extension,
-            3.into(),     // 3 nibbles
+            61.into(),    // The extension node has 61 nibbles
             0xABC.into(), // key part
             9.into(),     // Pointer to the leaf node immediately below.
             type_leaf,
-            3.into(),     // 3 nibbles
+            3.into(),     // The remaining 3 nibbles
             0xDEF.into(), // key part
             13.into(),    // value pointer
             test_account_1().nonce,
@@ -252,7 +280,6 @@ fn load_mpt_txn_trie() -> Result<()> {
             value: txn.clone(),
         }),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
     let initial_stack = vec![];

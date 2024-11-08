@@ -4,7 +4,9 @@ use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
-use ethereum_types::{BigEndianHash, H256, U256, U512};
+use either::Either;
+use ethereum_types::{BigEndianHash, H256};
+use ethereum_types::{U256, U512};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
@@ -12,9 +14,9 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
-use super::linked_list::{
-    LinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD, STORAGE_LINKED_LIST_NODE_SIZE,
-};
+#[cfg(not(feature = "cdk_erigon"))]
+use super::linked_list::STORAGE_LINKED_LIST_NODE_SIZE;
+use super::linked_list::{AccessLinkedListsPtrs, ACCOUNTS_LINKED_LIST_NODE_SIZE, DUMMYHEAD};
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
@@ -99,7 +101,27 @@ impl<F: RichField> GenerationState<F> {
                     || {
                         let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
 
-                        let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
+                        let n = if cfg!(feature = "cdk_erigon") {
+                            Ok(new_content.len())
+                        } else {
+                            load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)
+                        };
+                        match &self.inputs.trimmed_tries.state_trie.state {
+                            Either::Left(_) => (),
+                            Either::Right(type2trie) => {
+                                let mut smt_data = type2trie
+                                    .as_smt()
+                                    .to_vec_skip_empty_node_and_add_offset(new_content.len());
+                                log::debug!("smt bef = {:?}", smt_data);
+                                if smt_data.len() == 2 {
+                                    smt_data.extend([U256::zero(); 2]);
+                                }
+                                log::debug!("initial smt = {:?}", smt_data);
+                                log::debug!("smt len = {:?}", smt_data.len());
+                                let smt_data = smt_data.into_iter().map(|x| Some(x));
+                                new_content.extend(smt_data);
+                            }
+                        };
 
                         self.memory.insert_preinitialized_segment(
                             Segment::TrieData,
@@ -107,7 +129,8 @@ impl<F: RichField> GenerationState<F> {
                                 content: new_content,
                             },
                         );
-                        Ok(n)
+                        // }
+                        n
                     },
                     Ok,
                 )
@@ -213,20 +236,35 @@ impl<F: RichField> GenerationState<F> {
     /// Returns the length of the code.
     fn run_account_code(&mut self) -> Result<U256, ProgramError> {
         // stack: codehash, ctx, ...
-        let codehash = stack_peek(self, 0)?;
+        let codehash = H256::from_uint(&stack_peek(self, 0)?);
         let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
         let context = u256_to_usize(context)?;
         let mut address = MemoryAddress::new(context, Segment::Code, 0);
         let code = self
             .inputs
             .contract_code
-            .get(&H256::from_uint(&codehash))
+            .get(&codehash)
             .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
+        let mut code_len = code.len();
+
         for &byte in code {
             self.memory.set(address, byte.into());
             address.increment();
         }
-        Ok(code.len().into())
+
+        #[cfg(feature = "cdk_erigon")]
+        {
+            // Padding
+            self.memory.set(address, 1.into());
+            code_len = code_len + 1;
+            code_len = 56 * ((code_len + 55) / 56);
+            let last_byte_addr = MemoryAddress::new(context, Segment::Code, code_len - 1);
+            let mut last_byte = u256_to_usize(self.memory.get_with_init(last_byte_addr))?;
+            last_byte |= 0x80;
+            self.memory.set(last_byte_addr, last_byte.into());
+        }
+
+        Ok(code_len.into())
     }
 
     // Bignum modular multiplication.
@@ -333,13 +371,43 @@ impl<F: RichField> GenerationState<F> {
 
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
             "insert_account" | "search_account" => self.run_next_insert_account(input_fn),
+
             "remove_account" => self.run_next_remove_account(),
             "insert_slot" | "search_slot" => self.run_next_insert_slot(input_fn),
             "remove_slot" => self.run_next_remove_slot(),
             "remove_address_slots" => self.run_next_remove_address_slots(),
+            _ => Err(ProgramError::ProverInputError(InvalidInput)),
+        }
+    }
+
+    /// Generates either the next used jump address or the proof for the last
+    /// jump address.
+    #[cfg(feature = "cdk_erigon")]
+    fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        #[cfg(test)]
+        {
+            use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+
+            let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
+
+            log::debug!(
+                "state ll = {:?}",
+                StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+            );
+            log::debug!("state btree = {:#?}", self.inputs.trimmed_tries.state_trie);
+            log::debug!(
+                "input state popopo = {:?}",
+                self.inputs.trimmed_tries.state_trie.state
+            );
+        }
+
+        match input_fn.0[1].as_str() {
+            "insert_state" | "search_state" => self.run_next_insert_state(input_fn),
+            "remove_state" => self.run_next_remove_state(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -415,13 +483,13 @@ impl<F: RichField> GenerationState<F> {
 
         let (&pred_addr, &ptr) = self
             .access_lists_ptrs
-            .accounts
+            .accounts_pointers
             .range(..=addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
 
         if pred_addr != addr {
-            self.access_lists_ptrs.accounts.insert(
+            self.access_lists_ptrs.accounts_pointers.insert(
                 addr,
                 u256_to_usize(
                     self.memory
@@ -440,12 +508,12 @@ impl<F: RichField> GenerationState<F> {
 
         let (_, &ptr) = self
             .access_lists_ptrs
-            .accounts
+            .accounts_pointers
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccessedAddresses as usize)));
         self.access_lists_ptrs
-            .accounts
+            .accounts_pointers
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -460,12 +528,12 @@ impl<F: RichField> GenerationState<F> {
 
         let (&(pred_addr, pred_slot_key), &ptr) = self
             .access_lists_ptrs
-            .storage
+            .storage_pointers
             .range(..=(addr, key))
             .next_back()
             .unwrap_or((&DUMMYHEAD, &(Segment::AccessedStorageKeys as usize)));
         if pred_addr != addr || pred_slot_key != key {
-            self.access_lists_ptrs.storage.insert(
+            self.access_lists_ptrs.storage_pointers.insert(
                 (addr, key),
                 u256_to_usize(
                     self.memory
@@ -484,12 +552,12 @@ impl<F: RichField> GenerationState<F> {
 
         let (_, &ptr) = self
             .access_lists_ptrs
-            .storage
+            .storage_pointers
             .range(..(addr, key))
             .next_back()
             .unwrap_or((&DUMMYHEAD, &(Segment::AccessedStorageKeys as usize)));
         self.access_lists_ptrs
-            .storage
+            .storage_pointers
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -497,24 +565,24 @@ impl<F: RichField> GenerationState<F> {
     }
 
     fn run_reset(&mut self) -> Result<U256, ProgramError> {
-        self.access_lists_ptrs = LinkedListsPtrs::default();
+        self.access_lists_ptrs = AccessLinkedListsPtrs::default();
         Ok(U256::zero())
     }
 
     /// Returns a pointer to a node in the list such that
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_insert_account(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-
         let (&pred_addr, &pred_ptr) = self
-            .state_ptrs
-            .accounts
+            .state_pointers
+            .accounts_pointers
             .range(..=addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
 
         if pred_addr != addr && input_fn.0[1].as_str() == "insert_account" {
-            self.state_ptrs.accounts.insert(
+            self.state_pointers.accounts_pointers.insert(
                 addr,
                 u256_to_usize(
                     self.memory
@@ -522,7 +590,30 @@ impl<F: RichField> GenerationState<F> {
                 )?,
             );
         }
+        Ok(U256::from(pred_ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
+    }
 
+    /// Returns a pointer to a node in the list such that
+    /// `node[0] <= key < next_node[0]` and `key` is the top of the stack.
+    #[cfg(feature = "cdk_erigon")]
+    fn run_next_insert_state(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        let key = stack_peek(self, 0)?;
+        let (&pred_key, &pred_ptr) = self
+            .state_pointers
+            .state
+            .range(..=key)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+
+        if pred_key != key && input_fn.0[1].as_str() == "insert_state" {
+            self.state_pointers.state.insert(
+                key,
+                u256_to_usize(
+                    self.memory
+                        .read_global_metadata(GlobalMetadata::AccountsLinkedListNextAvailable),
+                )?,
+            );
+        }
         Ok(U256::from(pred_ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }
 
@@ -530,18 +621,19 @@ impl<F: RichField> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]`, or  node[0] == addr and `node[1] <=
     /// key < next_node[1]`, where `addr` and `key` are the elements at the top
     /// of the stack.
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_insert_slot(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
 
         let (&(pred_addr, pred_slot_key), &pred_ptr) = self
-            .state_ptrs
-            .storage
+            .state_pointers
+            .storage_pointers
             .range(..=(addr, key))
             .next_back()
             .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
         if (pred_addr != addr || pred_slot_key != key) && input_fn.0[1] == "insert_slot" {
-            self.state_ptrs.storage.insert(
+            self.state_pointers.storage_pointers.insert(
                 (addr, key),
                 u256_to_usize(
                     self.memory
@@ -555,21 +647,45 @@ impl<F: RichField> GenerationState<F> {
     }
 
     /// Returns a pointer `ptr` to a node of the form [..] -> [next_addr, ..]
-    /// list such that `next_addr = addr` and `addr` is the top of the stack.
-    /// If the element is not in the list, loops forever.
+    /// such that `next_addr = addr` and `addr` is the top of the stack.
+    /// If the element is not in the list, returns an error.
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &ptr) = self
-            .state_ptrs
-            .accounts
+            .state_pointers
+            .accounts_pointers
             .range(..addr)
             .next_back()
             .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
-        self.state_ptrs
-            .accounts
+        self.state_pointers
+            .accounts_pointers
             .remove(&addr)
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
+
+        Ok(U256::from(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
+    }
+
+    /// Returns a pointer `ptr` to a node of the form [..] -> [next_key, ..]
+    /// such that `next_key = addr` and `key` is the top of the stack.
+    /// If the element is not in the list, returns an error.
+    #[cfg(feature = "cdk_erigon")]
+    fn run_next_remove_state(&mut self) -> Result<U256, ProgramError> {
+        let addr = stack_peek(self, 0)?;
+
+        log::debug!(
+            "los que viene antes: = {:?}",
+            self.state_pointers.state.range(..addr).next_back()
+        );
+
+        let (_, &ptr) = self
+            .state_pointers
+            .state
+            .range(..addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+        self.state_pointers.state.remove(&addr);
 
         Ok(U256::from(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE))
     }
@@ -578,18 +694,19 @@ impl<F: RichField> GenerationState<F> {
     /// such that `next_addr == addr` and `next_key == key`,
     /// and `addr, key` are the elements at the top of the stack.
     /// If the element is not in the list, loops forever.
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_remove_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
 
         let (_, &ptr) = self
-            .state_ptrs
-            .storage
+            .state_pointers
+            .storage_pointers
             .range(..(addr, key))
             .next_back()
             .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
-        self.state_ptrs
-            .storage
+        self.state_pointers
+            .storage_pointers
             .remove(&(addr, key))
             .ok_or(ProgramError::ProverInputError(InvalidInput))?;
 
@@ -602,12 +719,13 @@ impl<F: RichField> GenerationState<F> {
     /// `next_addr = @U256_MAX`. This is used to determine the first storage
     /// node for the account at `addr`. `addr` is the element at the top of the
     /// stack.
+    #[cfg(not(feature = "cdk_erigon"))]
     fn run_next_remove_address_slots(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
 
         let (_, &pred_ptr) = self
-            .state_ptrs
-            .storage
+            .state_pointers
+            .storage_pointers
             .range(..(addr, U256::zero()))
             .next_back()
             .unwrap_or((&DUMMYHEAD, &(Segment::StorageLinkedList as usize)));
@@ -616,6 +734,8 @@ impl<F: RichField> GenerationState<F> {
             (pred_ptr - Segment::StorageLinkedList as usize) / STORAGE_LINKED_LIST_NODE_SIZE,
         ))
     }
+    // TODO: We're missing a cdk_erigon counterpart for
+    // `run_next_remove_address_slots`
 
     #[cfg(test)]
     pub(crate) fn get_addresses_access_list(
@@ -815,7 +935,7 @@ impl<F: RichField> GenerationState<F> {
         self.get_code(self.registers.context)
     }
 
-    fn get_code(&self, context: usize) -> Result<Vec<u8>, ProgramError> {
+    pub(crate) fn get_code(&self, context: usize) -> Result<Vec<u8>, ProgramError> {
         let code_len = self.get_code_len(context)?;
         let code = (0..code_len)
             .map(|i| {
@@ -828,7 +948,7 @@ impl<F: RichField> GenerationState<F> {
         Ok(code)
     }
 
-    fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
+    pub fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
         let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
             context,
             Segment::ContextMetadata,

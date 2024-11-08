@@ -76,8 +76,7 @@ global main:
 
 global store_initial:
     // Store the initial accounts and slots for hashing later
-    %store_initial_accounts
-    %store_initial_slots
+    %store_initial_state
    
 global after_store_initial:
     // Initialize the transaction and receipt trie root pointers.
@@ -89,20 +88,28 @@ global after_store_initial:
 global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
-    // The trie data segment is already written by the linked lists
 
-    // First, we compute the initial size of the trie data segment.
-    PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
-    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
-    SUB
-    // stack: accounts_ll_full_len, accounts_ll_node_size
-    DIV
-    %decrement
-    // stack: actual_nb_accounts
-    // The initial payloads are written twice, and each payload requires 4 elements.
-    PUSH 8 MUL
-    %increment
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        // First, we compute the initial size of the trie data segment.
+        PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
+        PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+        %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
+        SUB
+        // stack: accounts_ll_full_len, accounts_ll_node_size
+        DIV
+        %decrement
+        // stack: actual_nb_accounts
+        // The initial payloads are written twice, and each payload requires 4 elements.
+        PUSH 8 MUL
+        %increment
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        // The trie data segment contains only the empty node
+        PUSH 2
+    }
+    global debug_init_trie_data_len:
     // stack: init_trie_data_len
     PUSH @INITIAL_RLP_ADDR
     // stack: rlp_start, init_trie_data_len
@@ -113,6 +120,7 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     // Check that the trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+global debug_asdasdasd:
     %assert_eq
 
 global start_txns:
@@ -137,7 +145,7 @@ global start_txns:
     #[cfg(feature = cdk_erigon)]
     {
         // If txn_idx == 0, perform pre-state execution for CDK erigon.
-        DUP4
+        %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
         ISZERO
         %jumpi(pre_block_execution)
     }
@@ -188,7 +196,8 @@ global txn_loop_after:
 global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
-    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) %assert_eq
+    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER)
+    %assert_eq
     DUP3
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
     %pop3
@@ -226,9 +235,7 @@ global check_state_trie:
     %set_initial_state_trie
     // stack: trie_data_len
 
-    PUSH @INITIAL_RLP_ADDR
-    // stack: rlp_start, trie_data_len
-    %mpt_hash_state_trie
+    %hash_state_trie
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
@@ -243,9 +250,10 @@ global check_state_trie:
     PUSH 1
 global check_final_state_trie:
     %set_final_tries
-    PUSH @INITIAL_RLP_ADDR
-    // stack: rlp_start, dummy_trie_len
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
+
+    %hash_state_trie
+    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
+    %assert_eq
     // We don't need the trie data length here.
     POP
 

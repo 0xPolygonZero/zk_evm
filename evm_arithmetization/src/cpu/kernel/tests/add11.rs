@@ -1,8 +1,9 @@
-#![cfg(not(feature = "cdk_erigon"))]
+// #![cfg(feature = "eth_mainnet")]
 
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -10,16 +11,14 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
+use smt_trie::code::hash_bytecode_h256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use crate::generation::mpt::{Account, EitherAccount, LegacyReceiptRlp, MptAccount, SmtAccount};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-};
+use crate::testing_utils::*;
 use crate::{GenerationInputs, EMPTY_CONSOLIDATED_BLOCKHASH};
 
 #[test]
@@ -37,24 +36,54 @@ fn test_add11_yml() {
     let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
 
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
-    let code_hash = keccak(code);
+    let code_hash = if cfg!(feature = "eth_mainnet") {
+        keccak(code)
+    } else {
+        hash_bytecode_h256(&code)
+    };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
-    contract_code.insert(code_hash, code.to_vec());
+    if cfg!(feature = "eth_mainnet") {
+        contract_code.insert(keccak(vec![]), vec![]);
+        contract_code.insert(code_hash, code.to_vec());
+    }
 
-    let beneficiary_account_before = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
+    let beneficiary_account_before = if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            nonce: 1.into(),
+            ..MptAccount::default()
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: 1.into(),
+            ..SmtAccount::default()
+        }))
     };
-    let sender_account_before = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        ..AccountRlp::default()
+    let sender_account_before = if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..MptAccount::default()
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..SmtAccount::default()
+        }))
     };
-    let to_account_before = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        code_hash,
-        ..AccountRlp::default()
+
+    let to_account_before = if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash,
+            ..MptAccount::default()
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash: code_hash.into_uint(),
+            code_length: code.len().into(),
+            ..SmtAccount::default()
+        }))
     };
 
     let (mut state_trie_before, mut storage_tries) =
@@ -63,23 +92,24 @@ fn test_add11_yml() {
     state_trie_before
         .insert(
             beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_before).to_vec(),
+            beneficiary_account_before.rlp_encode().to_vec(),
         )
         .unwrap();
     state_trie_before
-        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .insert(sender_nibbles, sender_account_before.rlp_encode().to_vec())
         .unwrap();
     state_trie_before
-        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .insert(to_nibbles, to_account_before.rlp_encode().to_vec())
         .unwrap();
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 
+    let state_trie = get_state_world(state_trie_before, storage_tries);
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
+        // storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
@@ -100,26 +130,51 @@ fn test_add11_yml() {
     };
 
     let expected_state_trie_after = {
-        let beneficiary_account_after = AccountRlp {
-            nonce: 1.into(),
-            ..AccountRlp::default()
+        let beneficiary_account_after = if cfg!(feature = "eth_mainnet") {
+            EitherAccount(Either::Left(MptAccount {
+                nonce: 1.into(),
+                ..MptAccount::default()
+            }))
+        } else {
+            EitherAccount(Either::Right(SmtAccount {
+                nonce: 1.into(),
+                ..SmtAccount::default()
+            }))
         };
-        let sender_account_after = AccountRlp {
-            balance: 0xde0b6b3a75be550u64.into(),
-            nonce: 1.into(),
-            ..AccountRlp::default()
+        let sender_account_after = if cfg!(feature = "eth_mainnet") {
+            EitherAccount(Either::Left(MptAccount {
+                balance: 0xde0b6b3a75be550u64.into(),
+                nonce: 1.into(),
+                ..MptAccount::default()
+            }))
+        } else {
+            EitherAccount(Either::Right(SmtAccount {
+                balance: 0xde0b6b3a75be550u64.into(),
+                nonce: 1.into(),
+                ..SmtAccount::default()
+            }))
         };
-        let to_account_after = AccountRlp {
-            balance: 0xde0b6b3a76586a0u64.into(),
-            code_hash,
-            // Storage map: { 0 => 2 }
-            storage_root: HashedPartialTrie::from(Node::Leaf {
-                nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-                value: vec![2],
-            })
-            .hash(),
-            ..AccountRlp::default()
+
+        let to_account_after = if cfg!(feature = "eth_mainnet") {
+            EitherAccount(Either::Left(MptAccount {
+                balance: 0xde0b6b3a76586a0u64.into(),
+                code_hash,
+                // Storage map: { 0 => 2 }
+                storage_root: HashedPartialTrie::from(Node::Leaf {
+                    nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+                    value: vec![2],
+                })
+                .hash(),
+                ..MptAccount::default()
+            }))
+        } else {
+            EitherAccount(Either::Right(SmtAccount {
+                balance: 0xde0b6b3a76586a0u64.into(),
+                code_hash: code_hash.into_uint(),
+                ..SmtAccount::default()
+            }))
         };
+
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
@@ -133,19 +188,19 @@ fn test_add11_yml() {
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
-                rlp::encode(&beneficiary_account_after).to_vec(),
+                beneficiary_account_after.rlp_encode().to_vec(),
             )
             .unwrap();
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .insert(sender_nibbles, sender_account_after.rlp_encode().to_vec())
             .unwrap();
         expected_state_trie_after
-            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .insert(to_nibbles, to_account_after.rlp_encode().to_vec())
             .unwrap();
         expected_state_trie_after
             .insert(
                 beacon_roots_account_nibbles(),
-                rlp::encode(&beacon_roots_account).to_vec(),
+                beacon_roots_account.rlp_encode().to_vec(),
             )
             .unwrap();
         expected_state_trie_after
@@ -221,24 +276,53 @@ fn test_add11_yml_with_exception() {
     let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
 
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x8e, 0x00];
-    let code_hash = keccak(code);
+    let code_hash = if cfg!(feature = "eth_mainnet") {
+        keccak(code)
+    } else {
+        hash_bytecode_h256(&code)
+    };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
-    contract_code.insert(code_hash, code.to_vec());
+    if cfg!(feature = "eth_mainnet") {
+        contract_code.insert(keccak(vec![]), vec![]);
+        contract_code.insert(code_hash, code.to_vec());
+    }
 
-    let beneficiary_account_before = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
+    let beneficiary_account_before = if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            nonce: 1.into(),
+            ..MptAccount::default()
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: 1.into(),
+            ..SmtAccount::default()
+        }))
     };
-    let sender_account_before = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        ..AccountRlp::default()
+    let sender_account_before = if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..MptAccount::default()
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            ..SmtAccount::default()
+        }))
     };
-    let to_account_before = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        code_hash,
-        ..AccountRlp::default()
+    let to_account_before = if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash,
+            ..MptAccount::default()
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            balance: 0x0de0b6b3a7640000u64.into(),
+            code_hash: code_hash.into_uint(),
+            code_length: code.len().into(),
+            ..SmtAccount::default()
+        }))
     };
 
     let (mut state_trie_before, mut storage_tries) =
@@ -247,23 +331,24 @@ fn test_add11_yml_with_exception() {
     state_trie_before
         .insert(
             beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_before).to_vec(),
+            beneficiary_account_before.rlp_encode().to_vec(),
         )
         .unwrap();
     state_trie_before
-        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .insert(sender_nibbles, sender_account_before.rlp_encode().to_vec())
         .unwrap();
     state_trie_before
-        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .insert(to_nibbles, to_account_before.rlp_encode().to_vec())
         .unwrap();
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 
+    let state_trie = get_state_world(state_trie_before, storage_tries);
+
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_trie,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
@@ -289,11 +374,20 @@ fn test_add11_yml_with_exception() {
     let expected_state_trie_after = {
         let beneficiary_account_after = beneficiary_account_before;
         // This is the only account that changes: the nonce and the balance are updated.
-        let sender_account_after = AccountRlp {
-            balance: sender_account_before.balance - txn_gas_limit * gas_price,
-            nonce: 1.into(),
-            ..AccountRlp::default()
+        let sender_account_after = if cfg!(feature = "eth_mainnet") {
+            EitherAccount(Either::Left(MptAccount {
+                balance: sender_account_before.get_balance() - txn_gas_limit * gas_price,
+                nonce: 1.into(),
+                ..MptAccount::default()
+            }))
+        } else {
+            EitherAccount(Either::Right(SmtAccount {
+                balance: sender_account_before.get_balance() - txn_gas_limit * gas_price,
+                nonce: 1.into(),
+                ..SmtAccount::default()
+            }))
         };
+
         let to_account_after = to_account_before;
 
         update_beacon_roots_account_storage(
@@ -309,14 +403,14 @@ fn test_add11_yml_with_exception() {
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
-                rlp::encode(&beneficiary_account_after).to_vec(),
+                beneficiary_account_after.rlp_encode().to_vec(),
             )
             .unwrap();
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .insert(sender_nibbles, sender_account_after.rlp_encode().to_vec())
             .unwrap();
         expected_state_trie_after
-            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .insert(to_nibbles, to_account_after.rlp_encode().to_vec())
             .unwrap();
         expected_state_trie_after
             .insert(

@@ -1,16 +1,20 @@
 #![allow(clippy::needless_range_loop)]
 
+use core::fmt::Debug;
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::{Display, Formatter};
 
-use ethereum_types::U256;
+use ethereum_types::{H256, U256};
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
 use plonky2::plonk::config::Hasher;
+use serde::{Deserialize, Serialize};
 
 use crate::bits::Bits;
-use crate::db::Db;
+use crate::db::{Db, MemoryDb};
 use crate::utils::{
     f2limbs, get_unique_sibling, hash0, hash_key_hash, hashout2u, key2u, limbs2f, u2h, u2k,
 };
@@ -20,9 +24,10 @@ pub(crate) const INTERNAL_TYPE: u8 = 1;
 pub(crate) const LEAF_TYPE: u8 = 2;
 
 pub type F = GoldilocksField;
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Key(pub [F; 4]);
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Node(pub [F; 12]);
 pub type Hash = PoseidonHash;
 pub type HashOut = <PoseidonHash as Hasher<F>>::Hash;
@@ -82,7 +87,7 @@ impl Node {
 /// subtree. Internal nodes hold the hashes of their children.
 /// The root is the hash of the root internal node.
 /// Leaves are hashed using a prefix of 0, internal nodes using a prefix of 1.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Smt<D: Db> {
     pub db: D,
     pub kv_store: HashMap<Key, U256>,
@@ -404,6 +409,7 @@ impl<D: Db> Smt<D> {
     /// Serialize and prune the SMT into a vector of U256.
     /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical
     /// empty node. Therefore the root of the SMT is at `ptr=2`.
+    /// TODO: this convention changes with "hashing in the end".
     /// `keys` is a list of keys whose prefixes will not be hashed-out in the
     /// serialization.
     /// Serialization rules:
@@ -415,8 +421,9 @@ impl<D: Db> Smt<D> {
     pub fn serialize_and_prune<K: Borrow<Key>, I: IntoIterator<Item = K>>(
         &self,
         keys: I,
-    ) -> Vec<U256> {
-        let mut v = vec![U256::zero(); 2]; // For empty hash node.
+        v: &mut Vec<U256>,
+        offset: usize,
+    ) {
         let key = Key(self.root.elements);
 
         let mut keys_to_include = HashSet::new();
@@ -431,16 +438,70 @@ impl<D: Db> Smt<D> {
             }
         }
 
-        serialize(self, key, &mut v, Bits::empty(), &keys_to_include);
+        serialize(self, key, v, Bits::empty(), &keys_to_include, offset);
         if v.len() == 2 {
             v.extend([U256::zero(); 2]);
         }
+    }
+
+    pub fn load_linked_list_data<const OFFSET: usize>(
+        &self,
+        linked_list_mem: &mut Vec<Option<U256>>,
+        state_ptrs: &mut BTreeMap<U256, usize>,
+    ) {
+        let mut kv_sorted_by_k: Vec<(U256, U256)> = self
+            .kv_store
+            .iter()
+            .map(|(&key, &val)| (key2u(key), val))
+            .collect();
+        kv_sorted_by_k.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+        // The next node of the dummy node must be the first node. If the
+        // list is empty, this value is set to its original value after
+        // the loop
+        linked_list_mem[3] = Some(U256::from(OFFSET + 4));
+        for (i, &(key, value)) in kv_sorted_by_k.iter().enumerate() {
+            // The nibbles are the address.
+            linked_list_mem.push(Some(key));
+            log::debug!("setting linked_list_mem[i + 0] to {:?}", key);
+            // Set the value.
+            linked_list_mem.push(Some(value));
+            log::debug!("setting linked_list_mem[i + 1] to {:?}", value);
+            // Set the original value.
+            linked_list_mem.push(Some(value));
+            log::debug!("setting linked_list_mem[i + 2] to {:?}", value);
+            // Set the next node as the initial node.
+            linked_list_mem.push(Some(U256::from(OFFSET + 4 * (i + 2))));
+            log::debug!("setting linked_list_mem[i + 3] to {:?}", U256::from(OFFSET));
+
+            // Put the pointer in state_ptrs
+            state_ptrs.insert(key, OFFSET + 4 * (i + 1));
+        }
+        // the lats node must point to the initial node
+        let last_index = linked_list_mem.len() - 1;
+        linked_list_mem[last_index] = Some(U256::from(OFFSET));
+    }
+
+    pub fn to_vec(&self) -> Vec<U256> {
+        // Include all keys.
+        let mut v = vec![U256::zero(); 2]; // For empty hash node.
+        self.serialize_and_prune(self.kv_store.keys(), &mut v, 0);
         v
     }
 
-    pub fn serialize(&self) -> Vec<U256> {
+    pub fn to_vec_skip_empty_node_and_add_offset(&self, offset: usize) -> Vec<U256> {
         // Include all keys.
-        self.serialize_and_prune(self.kv_store.keys())
+        let mut v = vec![]; // No empty hash node.
+        self.serialize_and_prune(self.kv_store.keys(), &mut v, offset);
+        v
+    }
+}
+
+impl Display for Smt<MemoryDb> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        for (key, val) in self.kv_store.iter().map(|(&key, &val)| (key2u(key), val)) {
+            write!(f, "({:?}, {:?})\n", key, val)?;
+        }
+        Ok(())
     }
 }
 
@@ -450,6 +511,7 @@ fn serialize<D: Db>(
     v: &mut Vec<U256>,
     cur_bits: Bits,
     keys_to_include: &HashSet<Bits>,
+    offset: usize,
 ) -> usize {
     if key.0.iter().all(F::is_zero) {
         return 0; // `ptr=0` is an empty node.
@@ -459,7 +521,12 @@ fn serialize<D: Db>(
         let index = v.len();
         v.push(HASH_TYPE.into());
         v.push(key2u(key));
-        index
+        if index == 0 {
+            // Empty hash node is at the beggining of the segment
+            index
+        } else {
+            index + offset
+        }
     } else if let Some(node) = smt.db.get_node(&key) {
         if node.0.iter().all(F::is_zero) {
             panic!("wtf?");
@@ -476,7 +543,7 @@ fn serialize<D: Db>(
             v.push(LEAF_TYPE.into());
             v.push(key2u(rem_key));
             v.push(val);
-            index
+            index + offset
         } else {
             let key_left = Key(node.0[0..4].try_into().unwrap());
             let key_right = Key(node.0[4..8].try_into().unwrap());
@@ -484,13 +551,100 @@ fn serialize<D: Db>(
             v.push(INTERNAL_TYPE.into());
             v.push(U256::zero());
             v.push(U256::zero());
-            let i_left =
-                serialize(smt, key_left, v, cur_bits.add_bit(false), keys_to_include).into();
+            let i_left = serialize(
+                smt,
+                key_left,
+                v,
+                cur_bits.add_bit(false),
+                keys_to_include,
+                offset,
+            )
+            .into();
             v[index + 1] = i_left;
-            let i_right =
-                serialize(smt, key_right, v, cur_bits.add_bit(true), keys_to_include).into();
+            let i_right = serialize(
+                smt,
+                key_right,
+                v,
+                cur_bits.add_bit(true),
+                keys_to_include,
+                offset,
+            )
+            .into();
             v[index + 2] = i_right;
-            index
+            index + offset
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn _load_linked_list_data_with_key_and_bits<D: Db, const OFFSET: usize>(
+    smt: &Smt<D>,
+    key: Key,
+    cur_bits: Bits,
+    linked_list_mem: &mut Vec<Option<U256>>,
+    state_ptrs: &mut BTreeMap<U256, usize>,
+) {
+    if key.0.iter().all(F::is_zero) {
+        return;
+    }
+
+    if let Some(node) = smt.db.get_node(&key) {
+        if node.0.iter().all(F::is_zero) {
+            panic!("wtf?");
+        }
+
+        if node.is_one_siblings() {
+            let val_h = node.0[4..8].try_into().unwrap();
+            let val_a = smt.db.get_node(&Key(val_h)).unwrap().0[0..8]
+                .try_into()
+                .unwrap();
+            let rem_key = Key(node.0[0..4].try_into().unwrap());
+            let val = limbs2f(val_a);
+
+            // The last leaf must point to the new one.
+            let len = linked_list_mem.len();
+            linked_list_mem[len - 1] = Some(U256::from(OFFSET + len));
+            log::debug!(
+                "setting linked_list_mem[{len} - 1] to {:?}",
+                U256::from(OFFSET + len)
+            );
+            // The nibbles are the address.
+            linked_list_mem.push(Some(key2u(rem_key)));
+            log::debug!("setting linked_list_mem[{len}] to {:?}", key2u(rem_key));
+            // Set the value.
+            linked_list_mem.push(Some(val));
+            log::debug!("setting linked_list_mem[{len} + 1] to {:?}", val);
+            // Set the original value.
+            linked_list_mem.push(Some(val));
+            log::debug!("setting linked_list_mem[{len} + 2] to {:?}", val);
+            // Set the next node as the initial node.
+            linked_list_mem.push(Some(U256::from(OFFSET)));
+            log::debug!(
+                "setting linked_list_mem[{len} + 3] to {:?}",
+                U256::from(OFFSET)
+            );
+
+            // Put the pointer in state_ptrs
+            state_ptrs.insert(key2u(rem_key), OFFSET + len);
+        } else {
+            let key_left = Key(node.0[0..4].try_into().unwrap());
+            let key_right = Key(node.0[4..8].try_into().unwrap());
+
+            _load_linked_list_data_with_key_and_bits::<_, OFFSET>(
+                smt,
+                key_left,
+                cur_bits.add_bit(false),
+                linked_list_mem,
+                state_ptrs,
+            );
+            _load_linked_list_data_with_key_and_bits::<_, OFFSET>(
+                smt,
+                key_right,
+                cur_bits.add_bit(true),
+                linked_list_mem,
+                state_ptrs,
+            );
         }
     } else {
         unreachable!()
@@ -531,5 +685,11 @@ fn _hash_serialize(v: &[U256], ptr: usize) -> HashOut {
             F::poseidon(node.0)[0..4].try_into().unwrap()
         }
         _ => panic!("Should not happen"),
+    }
+}
+
+impl<D: Db> From<(HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)> for Smt<D> {
+    fn from(_: (HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)) -> Self {
+        todo!()
     }
 }

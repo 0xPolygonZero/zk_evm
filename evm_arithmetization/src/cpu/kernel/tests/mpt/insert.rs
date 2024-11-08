@@ -1,4 +1,7 @@
+use std::collections::BTreeMap;
+
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -12,10 +15,12 @@ use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{
     nibbles_64, nibbles_count, test_account_1_rlp, test_account_2,
 };
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::MptAccount;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
+use crate::tries::StateMpt;
 use crate::util::h2u;
+use crate::world::{StateWorld, Type1World};
 use crate::Node;
 
 #[test]
@@ -161,18 +166,27 @@ fn mpt_insert_branch_to_leaf_same_key() -> Result<()> {
 fn test_state_trie(
     mut state_trie: HashedPartialTrie,
     k: Nibbles,
-    mut account: AccountRlp,
+    mut account: MptAccount,
 ) -> Result<()> {
     assert_eq!(k.count, 64);
+
+    let state_trie_inputs = StateWorld {
+        state: Either::Left(
+            Type1World::new(
+                StateMpt::new_with_inner(state_trie.clone()),
+                BTreeMap::default(),
+            )
+            .unwrap(),
+        ),
+    };
 
     // Ignore any storage_root; see documentation note.
     account.storage_root = HashedPartialTrie::from(Node::Empty).hash();
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie.clone(),
+        state_trie: state_trie_inputs,
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];

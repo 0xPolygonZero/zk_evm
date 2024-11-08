@@ -172,7 +172,14 @@ after_constructor:
     %returndatasize
     PUSH @SEGMENT_RETURNDATA GET_CONTEXT %build_address_no_offset
     // stack: addr, len
-    KECCAK_GENERAL
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        KECCAK_GENERAL
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %poseidon_hash_code_unpadded
+    }
     // stack: codehash, leftover_gas, success, address, kexit_info
     %observe_new_contract
     DUP4
@@ -257,19 +264,48 @@ create_too_deep:
 // Pre stack: addr, codehash, redest
 // Post stack: (empty)
 global set_codehash:
-    // stack: addr, codehash, retdest
-    DUP1 %insert_touched_addresses
-    DUP1 %mpt_read_state_trie
-    // stack: account_ptr, addr, codehash, retdest
-    %add_const(3)
-    // stack: codehash_ptr, addr, codehash, retdest
-    DUP1 %mload_trie_data
-    // stack: prev_codehash, codehash_ptr, addr, codehash, retdest
-    DUP3 %journal_add_code_change // Add the code change to the journal.
-    %stack (codehash_ptr, addr, codehash) -> (codehash_ptr, codehash)
-    %mstore_trie_data
-    // stack: retdest
-    JUMP
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        // stack: addr, codehash, retdest
+        DUP1 %insert_touched_addresses
+        DUP1 %mpt_read_state_trie
+        // stack: account_ptr, addr, codehash, retdest
+        %add_const(3)
+        // stack: codehash_ptr, addr, codehash, retdest
+        DUP1 %mload_trie_data
+        // stack: prev_codehash, codehash_ptr, addr, codehash, retdest
+        DUP3 %journal_add_code_change // Add the code change to the journal.
+        %stack (codehash_ptr, addr, codehash) -> (codehash_ptr, codehash)
+        %mstore_trie_data
+        // stack: retdest
+        JUMP
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        // stack: addr, codehash, retdest
+        DUP1 %insert_touched_addresses
+        DUP1 
+        %read_code
+        // stack: prev_codehash, addr, codehash, retdest
+        DUP2
+        %read_code_length
+        %stack (prev_code_length, prev_codehash, addr) -> (addr, prev_codehash, prev_code_length, prev_code_length, addr)
+        %journal_add_code_change // Add the code change to the journal.
+        // stack: prev_code_length, addr, codehash, retdest
+        DUP3 DUP3
+        %set_code
+        // stack: prev_code_length, addr, codehash, retdest
+        %returndatasize 
+        SWAP1 DUP2 SUB
+        // stack: code_length - prev_code_length, code_length, addr, code_hash, retdest
+        %jumpi(code_length_changed)
+        %pop3 JUMP
+    code_length_changed:
+        DUP2
+        %set_code_length
+        // stack: addr, codehash, retdest
+        %pop2 JUMP
+    }
 
 // Check and charge gas cost for initcode size. See EIP-3860.
 // Pre stack: code_size, kexit_info

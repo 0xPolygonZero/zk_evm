@@ -1,13 +1,13 @@
 // Pre-stack: status, leftover_gas, prev_cum_gas, txn_nb, num_nibbles, retdest
 // Post stack: new_cum_gas, txn_nb
-// A receipt is stored in MPT_TRIE_DATA as:
+// A receipt is stored in TRIE_DATA as:
 // [payload_len, status, cum_gas_used, bloom, logs_payload_len, num_logs, [logs]]
 //
 // In this function, we:
 // - compute cum_gas, 
 // - check if the transaction failed and set number of logs to 0 if it is the case, 
 // - compute the bloom filter,
-// - write the receipt in MPT_TRIE_DATA ,
+// - write the receipt in TRIE_DATA ,
 // - insert a new node in receipt_trie,
 // - set the bloom filter back to 0
 global process_receipt:
@@ -51,7 +51,7 @@ process_receipt_after_bloom:
     %rlp_list_len
     ADD
     // stack: payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    // Now we can write the receipt in MPT_TRIE_DATA.
+    // Now we can write the receipt in TRIE_DATA.
     %get_trie_data_size
     // stack: receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     // Write transaction type if necessary.
@@ -103,7 +103,7 @@ process_receipt_after_type:
     DUP1 %append_to_trie_data
     PUSH 0
 
-// Each log is written in MPT_TRIE_DATA as:
+// Each log is written in TRIE_DATA as:
 // [payload_len, address, num_topics, [topics], data_len, [data]].
 process_receipt_logs_loop:
     // stack: i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest

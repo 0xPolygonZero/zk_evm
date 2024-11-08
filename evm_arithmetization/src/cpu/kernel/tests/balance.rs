@@ -1,4 +1,5 @@
 use anyhow::Result;
+use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
@@ -7,16 +8,27 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::prepare_interpreter;
-use crate::generation::mpt::AccountRlp;
+use crate::generation::mpt::EitherAccount;
+use crate::generation::mpt::MptAccount;
+use crate::generation::mpt::SmtAccount;
 use crate::Node;
 
 // Test account with a given code hash.
-fn test_account(balance: U256) -> AccountRlp {
-    AccountRlp {
-        nonce: U256::from(1111),
-        balance,
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: H256::from_uint(&U256::from(8888)),
+fn test_account(balance: U256) -> EitherAccount {
+    if cfg!(feature = "eth_mainnet") {
+        EitherAccount(Either::Left(MptAccount {
+            nonce: U256::from(1111),
+            balance,
+            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: H256::from_uint(&U256::from(8888)),
+        }))
+    } else {
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: U256::from(1111),
+            balance,
+            code_hash: U256::from(8888),
+            code_length: 0.into(),
+        }))
     }
 }
 

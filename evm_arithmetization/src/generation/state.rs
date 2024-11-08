@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
@@ -7,8 +7,8 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
+use smt_trie::code::hash_bytecode_h256;
 
-use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -16,7 +16,12 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
-use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
+#[cfg(feature = "cdk_erigon")]
+use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
+use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
+#[cfg(not(feature = "cdk_erigon"))]
+use crate::generation::mpt::load_linked_lists;
+use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
@@ -204,6 +209,31 @@ pub(crate) trait State<F: RichField> {
         let mut running = true;
         let mut final_clock = 0;
 
+        #[cfg(test)]
+        {
+            let mem = self
+                .get_generation_state()
+                .memory
+                .get_preinit_memory(Segment::AccountsLinkedList);
+            use crate::cpu::kernel::tests::mpt::linked_list::StateLinkedList;
+            log::debug!(
+                "initial state linked list = {:?}",
+                StateLinkedList::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
+            );
+            #[cfg(not(feature = "cdk_erigon"))]
+            {
+                use crate::cpu::kernel::tests::mpt::linked_list::StorageLinkedList;
+                let mem = self
+                    .get_generation_state()
+                    .memory
+                    .get_preinit_memory(Segment::StorageLinkedList);
+                log::debug!(
+                    "initial storage linked list = {:?}",
+                    StorageLinkedList::from_mem_and_segment(&mem, Segment::StorageLinkedList)
+                );
+            }
+        }
+
         loop {
             let registers = self.get_registers();
             let pc = registers.program_counter;
@@ -243,7 +273,6 @@ pub(crate) trait State<F: RichField> {
                     return Ok((final_registers, final_mem));
                 }
             }
-
             self.transition()?;
         }
     }
@@ -262,13 +291,11 @@ pub(crate) trait State<F: RichField> {
             ProgramError::StackOverflow => 5,
             _ => bail!("TODO: figure out what to do with this..."),
         };
-
         let checkpoint = self.checkpoint();
 
         let (row, _) = self.base_row();
         generate_exception(exc_code, self, row)
             .map_err(|e| anyhow!("Exception handling failed with error: {:?}", e))?;
-
         self.apply_ops(checkpoint);
 
         Ok(())
@@ -289,7 +316,6 @@ pub(crate) trait State<F: RichField> {
                 if might_overflow_op(op) {
                     self.get_mut_registers().check_overflow = true;
                 }
-
                 Ok(())
             }
             Err(e) => {
@@ -389,28 +415,55 @@ pub struct GenerationState<F: RichField> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 
     /// Provides quick access to pointers that reference the location
-    /// of either and account or a slot in the respective access list.
-    pub(crate) access_lists_ptrs: LinkedListsPtrs,
+    /// of either an account or a slot in the respective access list.
+    pub(crate) access_lists_ptrs: AccessLinkedListsPtrs,
 
-    /// Provides quick access to pointers that reference the memory location of
-    /// either and account or a slot in the respective access list.
-    pub(crate) state_ptrs: LinkedListsPtrs,
+    /// Provides quick access to pointers that reference the location
+    /// of either an account or a slot in the respective linked list.
+    pub(crate) state_pointers: StateLinkedListsPtrs,
 }
 
 impl<F: RichField> GenerationState<F> {
-    fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
+    pub(crate) fn preinitialize_trie_data_and_get_trie_ptrs(
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
+        self.preinitialize_linked_lists(trie_inputs);
+
+        let mut trie_data = self.memory.get_preinit_memory(Segment::TrieData);
+
+        log::debug!("trie data len after ll {:?}", trie_data.len());
+
+        let txn_root_ptr =
+            load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+
+        log::debug!("trie data len after txn {:?}", trie_data.len());
+        let receipt_root_ptr =
+            load_receipts_mpt(&trie_inputs.receipts_trie, &mut trie_data).unwrap();
+
+        log::debug!("trie data len after receipts {:?}", trie_data.len());
+        self.memory.insert_preinitialized_segment(
+            Segment::TrieData,
+            crate::witness::memory::MemorySegmentState { content: trie_data },
+        );
+        TrieRootPtrs {
+            state_root_ptr: None,
+            txn_root_ptr,
+            receipt_root_ptr,
+        }
+    }
+
+    #[cfg(not(feature = "cdk_erigon"))]
+    fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
-        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut generation_state.state_ptrs.accounts,
-                &mut generation_state.state_ptrs.storage,
+        let (state_leaves, storage_leaves, trie_data) =
+            load_linked_lists(
+                &mut generation_state.state_pointers.accounts_pointers,
+                &mut generation_state.state_pointers.storage_pointers,
                 trie_inputs,
             )
             .expect("Invalid MPT data for preinitialization");
-
+        log::debug!("accounts segment length {}", state_leaves.len());
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
@@ -427,8 +480,36 @@ impl<F: RichField> GenerationState<F> {
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },
         );
+    }
 
-        trie_roots_ptrs
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
+        let generation_state = self.get_mut_generation_state();
+        let mut smt_data = vec![Some(U256::zero()); 2]; // For empty hash node.
+        let mut state_linked_list_data =
+            empty_list_mem::<STATE_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList as usize)
+                .to_vec();
+        trie_inputs
+            .state_trie
+            .state
+            .clone()
+            .expect_right("cdk_erigon requires SMTs.")
+            .as_smt()
+            .load_linked_list_data::<{ Segment::AccountsLinkedList as usize }>(
+                &mut state_linked_list_data,
+                &mut self.state_pointers.state,
+            );
+
+        self.memory.insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            crate::witness::memory::MemorySegmentState {
+                content: state_linked_list_data,
+            },
+        );
+        self.memory.insert_preinitialized_segment(
+            Segment::TrieData,
+            crate::witness::memory::MemorySegmentState { content: smt_data },
+        );
     }
 
     pub(crate) fn new(
@@ -439,33 +520,70 @@ impl<F: RichField> GenerationState<F> {
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
         let bignum_modmul_result_limbs = Vec::new();
+        log::debug!("smt trie = {:?}", inputs.tries.state_trie);
 
-        let mut state = Self {
-            inputs: inputs.trim(),
-            registers: Default::default(),
-            memory: MemoryState::new(kernel_code),
-            traces: Traces::default(),
-            next_txn_index: 0,
-            stale_contexts: Vec::new(),
-            rlp_prover_inputs,
-            withdrawal_prover_inputs,
-            state_key_to_address: HashMap::new(),
-            bignum_modmul_result_limbs,
-            trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: Some(0),
-                txn_root_ptr: 0,
-                receipt_root_ptr: 0,
-            },
-            jumpdest_table: None,
-            access_lists_ptrs: LinkedListsPtrs::default(),
-            state_ptrs: LinkedListsPtrs::default(),
-            ger_prover_inputs,
-        };
-        let trie_root_ptrs =
-            state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
+        #[cfg(not(feature = "cdk_erigon"))]
+        {
+            let mut state = Self {
+                inputs: inputs.trim(),
+                registers: Default::default(),
+                memory: MemoryState::new(kernel_code),
+                traces: Traces::default(),
+                next_txn_index: 0,
+                stale_contexts: Vec::new(),
+                rlp_prover_inputs,
+                withdrawal_prover_inputs,
+                state_key_to_address: HashMap::new(),
+                bignum_modmul_result_limbs,
+                trie_root_ptrs: TrieRootPtrs {
+                    state_root_ptr: Some(0),
+                    txn_root_ptr: 0,
+                    receipt_root_ptr: 0,
+                },
+                jumpdest_table: None,
+                access_lists_ptrs: AccessLinkedListsPtrs::default(),
+                state_pointers: StateLinkedListsPtrs {
+                    accounts_pointers: BTreeMap::new(),
+                    storage_pointers: BTreeMap::new(),
+                },
+                ger_prover_inputs,
+            };
+            log::debug!("gen state");
+            let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
 
-        state.trie_root_ptrs = trie_root_ptrs;
-        Ok(state)
+            state.trie_root_ptrs = trie_root_ptrs;
+            Ok(state)
+        }
+        #[cfg(feature = "cdk_erigon")]
+        {
+            let mut state = Self {
+                inputs: inputs.trim(),
+                registers: Default::default(),
+                memory: MemoryState::new(kernel_code),
+                traces: Traces::default(),
+                next_txn_index: 0,
+                stale_contexts: Vec::new(),
+                rlp_prover_inputs,
+                withdrawal_prover_inputs,
+                state_key_to_address: HashMap::new(),
+                bignum_modmul_result_limbs,
+                trie_root_ptrs: TrieRootPtrs {
+                    state_root_ptr: Some(0),
+                    txn_root_ptr: 0,
+                    receipt_root_ptr: 0,
+                },
+                jumpdest_table: None,
+                access_lists_ptrs: AccessLinkedListsPtrs::default(),
+                state_pointers: StateLinkedListsPtrs {
+                    state: BTreeMap::new(),
+                },
+                ger_prover_inputs,
+            };
+            let trie_root_ptrs = state.preinitialize_trie_data_and_get_trie_ptrs(&inputs.tries);
+
+            state.trie_root_ptrs = trie_root_ptrs;
+            Ok(state)
+        }
     }
 
     pub(crate) fn new_with_segment_data(
@@ -474,8 +592,6 @@ impl<F: RichField> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: trimmed_inputs.clone(),
-            state_ptrs: segment_data.extra_data.state_ptrs.clone(),
-            access_lists_ptrs: segment_data.extra_data.access_lists_ptrs.clone(),
             ..Default::default()
         };
 
@@ -501,8 +617,8 @@ impl<F: RichField> GenerationState<F> {
             self.observe_address(tip_h160);
         } else if dst == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(self, 0)?;
-            let tip_h256 = H256::from_uint(&tip_u256);
-            self.observe_contract(tip_h256)?;
+            let tip = H256::from_uint(&tip_u256);
+            self.observe_contract(tip)?;
         }
 
         Ok(())
@@ -534,7 +650,12 @@ impl<F: RichField> GenerationState<F> {
             .iter()
             .map(|x| x.unwrap_or_default().low_u32() as u8)
             .collect::<Vec<_>>();
-        debug_assert_eq!(keccak(&code), codehash);
+        let hash = if cfg!(feature = "cdk_erigon") {
+            keccak(&code)
+        } else {
+            hash_bytecode_h256(&code)
+        };
+        debug_assert_eq!(hash, codehash);
 
         self.inputs.contract_code.insert(codehash, code);
 
@@ -574,7 +695,7 @@ impl<F: RichField> GenerationState<F> {
             },
             jumpdest_table: None,
             access_lists_ptrs: self.access_lists_ptrs.clone(),
-            state_ptrs: self.state_ptrs.clone(),
+            state_pointers: self.state_pointers.clone(),
         }
     }
 
@@ -591,7 +712,7 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
-        self.state_ptrs
+        self.state_pointers
             .clone_from(&segment_data.extra_data.state_ptrs);
         self.access_lists_ptrs
             .clone_from(&segment_data.extra_data.access_lists_ptrs);

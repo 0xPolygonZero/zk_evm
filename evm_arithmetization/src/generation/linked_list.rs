@@ -3,40 +3,66 @@ use std::collections::BTreeMap;
 use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 
-use crate::memory::segments::Segment;
-
 pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
+#[cfg(not(feature = "cdk_erigon"))]
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
+pub const STATE_LINKED_LIST_NODE_SIZE: usize = 4;
 
 pub const DUMMYHEAD: (U256, U256) = (U256::MAX, U256::zero());
 
 // Provides quick access to pointers that reference the memory location
 // of a storage or accounts linked list node, containing a specific key.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub(crate) struct LinkedListsPtrs {
+pub(crate) struct AccessLinkedListsPtrs {
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective
     /// node address in memory.
-    pub(crate) accounts: BTreeMap<U256, usize>,
+    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
     /// Each entry contains the pair ((account_key, slot_key), ptr) where
     /// account_key is the (hashed) key of an account, slot_key is the slot
     /// key, and ptr is the respective node address in memory.
-    pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
 }
 
-pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>; N] {
+// Provides quick access to pointers that reference the memory location
+// of state nodes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) struct StateLinkedListsPtrs {
+    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
+    /// of an account in the accounts linked list, and ptr is the respective
+    /// node address in memory.
+    pub(crate) accounts_pointers: BTreeMap<U256, usize>,
+    /// Each entry contains the pair ((account_key, slot_key), ptr) where
+    /// account_key is the (hashed) key of an account, slot_key is the slot
+    /// key, and ptr is the respective node address in memory.
+    pub(crate) storage_pointers: BTreeMap<(U256, U256), usize>,
+}
+
+// Provides quick access to pointers that reference the memory location
+// of state nodes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg(feature = "cdk_erigon")]
+pub(crate) struct StateLinkedListsPtrs {
+    /// Each entry contains the pair (key, ptr) where key is the (hashed) key
+    /// of an account in the accounts linked list, and ptr is the respective
+    /// node address in memory.
+    pub(crate) state: BTreeMap<U256, usize>,
+}
+
+pub(crate) fn empty_list_mem<const N: usize>(offset: usize) -> [Option<U256>; N] {
     std::array::from_fn(|i| {
         if i == 0 {
             Some(U256::MAX)
         } else if i == N - 1 {
-            Some((segment as usize).into())
+            Some(U256::from(offset))
         } else {
             Some(U256::zero())
         }
     })
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 pub(crate) mod testing {
     use std::fmt;
     use std::marker::PhantomData;
@@ -44,6 +70,7 @@ pub(crate) mod testing {
     use anyhow::Result;
 
     use super::*;
+    use crate::memory::segments::Segment;
     use crate::util::u256_to_usize;
     use crate::witness::errors::ProgramError;
     use crate::witness::errors::ProverInputError::InvalidInput;

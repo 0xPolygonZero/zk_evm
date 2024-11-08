@@ -25,14 +25,14 @@ set_initial_state_trie_after:
 // Post stack: new_root_ptr. // The value of new_root_ptr shouldn't change
 global insert_all_initial_accounts:
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
-    SWAP2
-    DUP3
-    MLOAD_GENERAL
-    // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    DUP4
+    DUP1
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
     EQ
     %jumpi(no_more_accounts)
+    // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
+    SWAP2
+    DUP3
+    MLOAD_GENERAL
     // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     PUSH after_mpt_read
     DUP2
@@ -46,6 +46,7 @@ after_mpt_read:
     %mload_trie_data
     %add_const(2)
     %mload_trie_data
+global debug_trie_storage_root:
     // stack: trie_storage_root, trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     SWAP1
     // stack: trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -76,8 +77,7 @@ after_insert_all_initial_slots:
     %jump(insert_all_initial_accounts)
 
 no_more_accounts:
-    // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    %stack (key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest) ->(retdest, root_ptr)
+    %stack (account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest) ->(retdest, root_ptr)
     JUMP
 
 // Insert all slots before the account key changes
@@ -127,3 +127,7 @@ after_insert_slot:
     SWAP1
     %jump(insert_all_initial_slots)
 
+%macro store_initial_state
+    %store_initial_accounts
+    %store_initial_slots
+%endmacro

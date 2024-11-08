@@ -22,19 +22,30 @@ extcodehash_dead:
     %stack (address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
+#[cfg(not(feature = cdk_erigon))]
+{
+global extcodehash:
+        // stack: address, retdest
+        %mpt_read_state_trie
+        // stack: account_ptr, retdest
+        DUP1 ISZERO %jumpi(retzero)
+        %add_const(3)
+        // stack: codehash_ptr, retdest
+        %mload_trie_data
+        // stack: codehash, retdest
+        SWAP1 JUMP
+    retzero:
+        %stack (account_ptr, retdest) -> (retdest, 0)
+        JUMP
+}
+#[cfg(feature = cdk_erigon)]
+{
 global extcodehash:
     // stack: address, retdest
-    %mpt_read_state_trie
-    // stack: account_ptr, retdest
-    DUP1 ISZERO %jumpi(retzero)
-    %add_const(3)
-    // stack: codehash_ptr, retdest
-    %mload_trie_data
+    %read_code
     // stack: codehash, retdest
     SWAP1 JUMP
-retzero:
-    %stack (account_ptr, retdest) -> (retdest, 0)
-    JUMP
+}
 
 %macro extcodehash
     %stack (address) -> (address, %%after)
@@ -44,7 +55,14 @@ retzero:
 
 %macro ext_code_empty
     %extcodehash
-    %eq_const(@EMPTY_STRING_HASH)
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        %eq_const(@EMPTY_STRING_KECCAK_HASH)
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %eq_const(@EMPTY_STRING_POSEIDON_HASH)
+    }
 %endmacro
 
 %macro extcodesize
@@ -100,6 +118,8 @@ load_code_ctd:
     DUP1 ISZERO %jumpi(load_code_non_existent_account)
     // Load the code non-deterministically in memory and return the length.
     PROVER_INPUT(account_code)
+#[cfg(not(feature = cdk_erigon))]
+{
     %stack (code_size, codehash, ctx, retdest) -> (ctx, code_size, codehash, retdest, code_size)
     // Check that the hash of the loaded code equals `codehash`.
     // ctx == DST, as SEGMENT_CODE == offset == 0.
@@ -108,6 +128,11 @@ load_code_ctd:
     %assert_eq
     // stack: retdest, code_size
     JUMP
+}
+#[cfg(feature = cdk_erigon)]
+{
+    %jump(poseidon_hash_code)
+}
 
 load_code_non_existent_account:
     // Write 0 at address 0 for soundness: SEGMENT_CODE == 0, hence ctx == addr.
@@ -138,3 +163,96 @@ load_code_padded_ctd:
     MSTORE_GENERAL
     // stack: retdest, code_size
     JUMP
+
+#[cfg(feature = cdk_erigon)]
+{
+    global poseidon_hash_code:
+    // stack: padded_code_size, codehash, ctx, retdest
+    // %stack (padded_code_size, codehash, ctx) -> (0, 0, padded_code_size, ctx, codehash)
+    %stack (padded_code_size, codehash, ctx) -> (ctx, padded_code_size, codehash, padded_code_size, ctx)
+    POSEIDON_GENERAL
+    %assert_eq
+    // stack: padded_code_size, ctx, retdest
+    %decrement
+    remove_padding_loop:
+        // stack: offset, ctx, retdest
+        DUP2 DUP2 ADD DUP1 MLOAD_GENERAL
+        // stack: code[offset], offset+ctx, offset, ctx, retdest
+        SWAP1 PUSH 0 MSTORE_GENERAL
+        // stack: code[offset], offset, ctx, retdest
+        %and_const(1) %jumpi(remove_padding_after)
+        // stack: offset, ctx, retdest
+        %decrement %jump(remove_padding_loop)
+
+    remove_padding_after:
+        %stack (offset, ctx, retdest) -> (retdest, offset)
+        JUMP
+
+    // Convenience macro to call poseidon_hash_code_unpadded and return where we left off.
+    %macro poseidon_hash_code_unpadded
+        %stack (addr, len) -> (addr, len, %%after)
+        %jump(poseidon_hash_code_unpadded)
+    %%after:
+    %endmacro
+
+    /// Applies the padding rule to the code located at the provided address before hashing it.
+    /// Memory cells after the last code byte will be overwritten.
+    global poseidon_hash_code_unpadded:
+        // stack: addr, len, retdest
+        DUP2 ISZERO %jumpi(poseidon_empty_code)
+        DUP2 DUP2 ADD
+        // stack: padding_addr, addr, len, retdest
+
+        // write 1 after the last code byte
+        DUP1 PUSH 1 MSTORE_GENERAL
+        // stack: padding_addr, addr, len, retdest
+        %increment
+        // stack: padding_addr, addr, len, retdest
+
+        // Pad with 0s until the length is a multiple of 56
+        PUSH 56
+        DUP4 %increment
+        MOD
+        DUP1 %jumpi(non_zero_padding)
+        %jump(padd)
+non_zero_padding:
+        // curr_len mod 56, padding_addr, addr, len, retdest
+        PUSH 56 SUB
+padd:
+        // stack: padding_len, padding_addr, addr, len, retdest
+        SWAP3 DUP4
+        // stack: padding_len, len, padding_addr, addr, padding_len, retdest
+        ADD
+        // stack: last_byte_offset, padding_addr, addr, padding_len, retdest
+        global debug_padding_len:
+        %stack (last_byte_offset, padding_addr, addr, padding_len)
+            -> (padding_addr, padding_len, after_padding, addr, last_byte_offset)
+        %jump(memset)
+    after_padding:
+        // stack: addr, last_byte_offset, retdest
+
+        // Xor the last element with 0x80
+        PUSH 1 DUP3 ADD
+        // stack: total_code_len, addr, last_byte_offset, retdest
+        SWAP2
+        // stack: last_byte_offset, addr, total_code_len, retdest
+        DUP2 ADD
+        // stack: last_byte_addr, addr, total_code_len, retdest
+        DUP1 MLOAD_GENERAL
+        // stack: last_byte, last_byte_addr, addr, total_code_len, retdest
+        PUSH 0x80 ADD
+        // stack: last_byte_updated, last_byte_addr, addr, total_code_len, retdest
+        MSTORE_GENERAL
+        // stack: addr, total_code_len, retdest
+
+        POSEIDON_GENERAL
+        // stack: codehash, retdest
+        SWAP1
+        JUMP
+
+    global poseidon_empty_code:
+        // stack: addr, len, retdest
+        %stack (addr, len, retdest) -> (retdest, @EMPTY_STRING_POSEIDON_HASH)
+        JUMP
+
+}

@@ -8,10 +8,7 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{
     BlockMetadata, FinalPublicValues, PublicValues, TrieRoots, EMPTY_CONSOLIDATED_BLOCKHASH,
 };
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
-};
+use evm_arithmetization::testing_utils::*;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -65,9 +62,11 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
         storage_tries[0].1 = beacon_roots_account_storage;
     }
 
+    let state_trie_before = get_state_world(state_trie_before, storage_tries);
+
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
-        storage_tries,
+        // storage_tries,
         ..Default::default()
     };
 

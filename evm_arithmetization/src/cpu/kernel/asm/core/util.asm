@@ -57,33 +57,79 @@
 // Returns 1 if the account is non-existent, 0 otherwise.
 %macro is_non_existent
     // stack: addr
-    %mpt_read_state_trie ISZERO
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        %mpt_read_state_trie ISZERO
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        %key_code %search_key ISZERO
+    }
 %endmacro
 
 // Returns 1 if the account is empty, 0 otherwise.
-%macro is_empty
-    // stack: addr
-    %mpt_read_state_trie
-    // stack: account_ptr
-    DUP1 ISZERO %jumpi(%%false)
-    // stack: account_ptr
-    DUP1 %mload_trie_data
-    // stack: nonce, account_ptr
-    ISZERO %not_bit %jumpi(%%false)
-    %increment DUP1 %mload_trie_data
-    // stack: balance, balance_ptr
-    ISZERO %not_bit %jumpi(%%false)
-    %add_const(2) %mload_trie_data
-    // stack: code_hash
-    PUSH @EMPTY_STRING_HASH
-    EQ
-    %jump(%%after)
-%%false:
-    // stack: account_ptr
-    POP
-    PUSH 0
-%%after:
-%endmacro
+#[cfg(not(feature = cdk_erigon))]
+{
+    %macro is_empty
+        // stack: addr
+        %mpt_read_state_trie
+        // stack: account_ptr
+        DUP1 ISZERO
+        %jumpi(%%false)
+
+        // stack: account_ptr
+        DUP1 %mload_trie_data
+        // stack: nonce, account_ptr
+        ISZERO %not_bit
+        %jumpi(%%false)
+
+        %increment DUP1 %mload_trie_data
+        // stack: balance, balance_ptr
+        ISZERO %not_bit 
+        %jumpi(%%false)
+
+        %add_const(2) %mload_trie_data
+        // stack: code_hash
+        %eq_const(@EMPTY_STRING_KECCAK_HASH)
+        %jump(%%after)
+
+    %%false:
+        // stack: account_ptr
+        POP
+        PUSH 0
+    %%after:
+    %endmacro
+}
+
+// Returns 1 if the account is empty, 0 otherwise.
+#[cfg(feature = cdk_erigon)]
+{
+    %macro is_empty
+        // stack: addr
+        DUP1 %read_nonce
+        // stack: nonce, addr
+        ISZERO %not_bit
+        %jumpi(%%false)
+
+        // stack: addr
+        DUP1 %read_balance
+        // stack: balance, addr
+        ISZERO %not_bit
+        %jumpi(%%false)
+
+        // stack: addr
+        %read_code
+        // stack: codehash
+        %eq_const(@EMPTY_STRING_POSEIDON_HASH)
+        %jump(%%after)
+
+    %%false:
+        // stack: account_ptr
+        POP
+        PUSH 0
+    %%after:
+    %endmacro
+}
 
 // Returns 1 if the account is dead (i.e., empty or non-existent), 0 otherwise.
 %macro is_dead

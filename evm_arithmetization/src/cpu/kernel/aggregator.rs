@@ -10,8 +10,10 @@ use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
 pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
-    157
-} else if cfg!(feature = "cdk_erigon") || cfg!(feature = "polygon_pos") {
+    158
+} else if cfg!(feature = "cdk_erigon") {
+    159
+} else if cfg!(feature = "polygon_pos") {
     154
 } else {
     // unreachable
@@ -21,6 +23,7 @@ pub const NUMBER_KERNEL_FILES: usize = if cfg!(feature = "eth_mainnet") {
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
     "global jumped_to_1: PANIC",
+    #[cfg(feature = "eth_mainnet")]
     include_str!("asm/beacon_roots.asm"),
     include_str!("asm/bignum/add.asm"),
     include_str!("asm/bignum/addmul.asm"),
@@ -36,7 +39,10 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/call_gas.asm"),
     include_str!("asm/core/create.asm"),
     include_str!("asm/core/create_addresses.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/core/create_contract_account.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/core/create_type2_contract_account.asm"),
     include_str!("asm/core/exception.asm"),
     include_str!("asm/core/create_receipt.asm"),
     include_str!("asm/core/gas.asm"),
@@ -47,7 +53,10 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/core/process_txn.asm"),
     include_str!("asm/core/syscall.asm"),
     include_str!("asm/core/terminate.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
     include_str!("asm/core/transfer.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/core/transfer_cdk_erigon.asm"),
     include_str!("asm/core/util.asm"),
     include_str!("asm/core/access_lists.asm"),
     include_str!("asm/core/log.asm"),
@@ -120,6 +129,20 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/hash/sha2/temp_words.asm"),
     include_str!("asm/hash/sha2/write_length.asm"),
     include_str!("asm/main.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
+    include_str!("asm/linked_list/accounts_linked_list.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
+    include_str!("asm/linked_list/storage_linked_list.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
+    include_str!("asm/linked_list/final_tries.asm"),
+    #[cfg(not(feature = "cdk_erigon"))]
+    include_str!("asm/linked_list/initial_tries.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/linked_list/type2/state_linked_list.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/linked_list/type2/final_tries.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/linked_list/type2/initial_tries.asm"),
     include_str!("asm/memory/core.asm"),
     include_str!("asm/memory/memcpy.asm"),
     include_str!("asm/memory/memset.asm"),
@@ -139,9 +162,6 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/mpt/insert/insert_extension.asm"),
     include_str!("asm/mpt/insert/insert_leaf.asm"),
     include_str!("asm/mpt/insert/insert_trie_specific.asm"),
-    include_str!("asm/mpt/linked_list/linked_list.asm"),
-    include_str!("asm/mpt/linked_list/final_tries.asm"),
-    include_str!("asm/mpt/linked_list/initial_tries.asm"),
     include_str!("asm/mpt/read.asm"),
     include_str!("asm/mpt/storage/storage_read.asm"),
     include_str!("asm/mpt/storage/storage_write.asm"),
@@ -155,6 +175,18 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/rlp/read_to_memory.asm"),
     include_str!("asm/shift.asm"),
     include_str!("asm/signed.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/hash.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/insert.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/keys.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/utils.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/delete.asm"),
+    #[cfg(feature = "cdk_erigon")]
+    include_str!("asm/smt/read.asm"),
     include_str!("asm/journal/journal.asm"),
     include_str!("asm/journal/account_loaded.asm"),
     include_str!("asm/journal/account_destroyed.asm"),

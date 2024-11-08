@@ -36,7 +36,8 @@ global process_normalized_txn:
     // stack: sender, retdest
 
     // Assert sender has no code.
-    DUP1 %ext_code_empty %assert_nonzero(invalid_txn_1)
+    DUP1 %ext_code_empty
+    %assert_nonzero(invalid_txn_1)
     // stack: sender, retdest
 
     // Assert sender balance >= gas_limit * gas_price + value.
@@ -212,8 +213,15 @@ process_contract_creation_txn_after_ef_check:
     PUSH @SEGMENT_RETURNDATA
     GET_CONTEXT
     %build_address_no_offset
-    // stack: addr, len
-    KECCAK_GENERAL
+    // stack: addr, len, leftover_gas, new_ctx, address, retdest, success
+    #[cfg(feature = cdk_erigon)]
+    {
+        %poseidon_hash_code_unpadded
+    }
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        KECCAK_GENERAL
+    }
     // stack: codehash, leftover_gas, new_ctx, address, retdest, success
     %observe_new_contract
     DUP4

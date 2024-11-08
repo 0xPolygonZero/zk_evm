@@ -86,16 +86,27 @@ global sys_selfdestruct:
     %stack (kexit_info, balance, address, recipient) -> (balance, address, recipient, kexit_info)
 
     // Set the balance of the address to 0.
-    // stack: balance, address, recipient, kexit_info
-    PUSH 0
-    // stack: 0, balance, address, recipient, kexit_info
-    DUP3 %mpt_read_state_trie
-    // stack: account_ptr, 0, balance, address, recipient, kexit_info
-    %add_const(1)
-    // stack: balance_ptr, 0, balance, address, recipient, kexit_info
-    %mstore_trie_data
+    #[cfg(not(feature = cdk_erigon))]
+    {
+        // stack: balance, address, recipient, kexit_info
+        PUSH 0
+        // stack: 0, balance, address, recipient, kexit_info
+        DUP3 %mpt_read_state_trie
+        // stack: account_ptr, 0, balance, address, recipient, kexit_info
+        %add_const(1)
+        // stack: balance_ptr, 0, balance, address, recipient, kexit_info
+        %mstore_trie_data
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
+        // Set the balance of the address to 0.
+        // stack: balance, address, recipient, kexit_info
+        DUP1 ISZERO %jumpi(selfdestruct_balance_is_zero)
+        DUP2 %remove_balance
+        // stack: balance, address, recipient, kexit_info
+    }
 
-
+selfdestruct_balance_is_zero:
     // EIP-6780: insert address into the selfdestruct set only if contract has been created
     // during the current transaction.
     // stack: balance, address, recipient, kexit_info
