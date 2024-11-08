@@ -147,7 +147,8 @@ impl BlockInterval {
         match self {
             BlockInterval::FollowFrom { start_block } => Ok(Box::pin(try_stream! {
                 let mut current = start_block;
-                 loop {
+                yield (current, false);
+                loop {
                     let last_block_number = provider.latest_block_number().await.map_err(|e| {
                         anyhow!("could not retrieve latest block number from the provider: {e}")
                     })?;
