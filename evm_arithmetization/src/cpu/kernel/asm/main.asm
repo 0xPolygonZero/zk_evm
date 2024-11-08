@@ -117,6 +117,7 @@ global hash_initial_tries:
         // The trie data segment contains only the empty node
         PUSH 2
     }
+    global debug_init_trie_data_len:
     // stack: init_trie_data_len
     PUSH @INITIAL_RLP_ADDR
     // stack: rlp_start, init_trie_data_len
@@ -127,6 +128,7 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     // Check that the trie data length is correct.
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+global debug_asdasdasd:
     %assert_eq
 
 global start_txns:

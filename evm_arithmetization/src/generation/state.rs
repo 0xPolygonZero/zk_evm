@@ -20,7 +20,7 @@ use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::linked_list::{empty_list_mem, STATE_LINKED_LIST_NODE_SIZE};
 use crate::generation::linked_list::{AccessLinkedListsPtrs, StateLinkedListsPtrs};
 #[cfg(not(feature = "cdk_erigon"))]
-use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
+use crate::generation::mpt::load_linked_lists;
 use crate::generation::mpt::{load_receipts_mpt, load_transactions_mpt};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
@@ -224,9 +224,9 @@ pub(crate) trait State<F: RichField> {
             {
                 use crate::cpu::kernel::tests::mpt::linked_list::StorageLinkedList;
                 let mem = self
-                .get_generation_state()
-                .memory
-                .get_preinit_memory(Segment::StorageLinkedList);
+                    .get_generation_state()
+                    .memory
+                    .get_preinit_memory(Segment::StorageLinkedList);
                 log::debug!(
                     "initial storage linked list = {:?}",
                     StorageLinkedList::from_mem_and_segment(&mem, Segment::StorageLinkedList)
@@ -362,13 +362,13 @@ pub(crate) trait State<F: RichField> {
     /// Logs `msg` in `debug` mode.
     #[inline]
     fn log_debug(&self, msg: String) {
-        // log::debug!("{}", msg);
+        log::debug!("{}", msg);
     }
 
     /// Logs `msg` at `level`.
     #[inline]
     fn log(&self, level: Level, msg: String) {
-        // log::log!(level, "{}", msg);
+        log::log!(level, "{}", msg);
     }
 }
 
@@ -432,10 +432,16 @@ impl<F: RichField> GenerationState<F> {
 
         let mut trie_data = self.memory.get_preinit_memory(Segment::TrieData);
 
+        log::debug!("trie data len after ll {:?}", trie_data.len());
+
         let txn_root_ptr =
             load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+
+        log::debug!("trie data len after txn {:?}", trie_data.len());
         let receipt_root_ptr =
             load_receipts_mpt(&trie_inputs.receipts_trie, &mut trie_data).unwrap();
+
+        log::debug!("trie data len after receipts {:?}", trie_data.len());
         self.memory.insert_preinitialized_segment(
             Segment::TrieData,
             crate::witness::memory::MemorySegmentState { content: trie_data },
@@ -450,8 +456,8 @@ impl<F: RichField> GenerationState<F> {
     #[cfg(not(feature = "cdk_erigon"))]
     fn preinitialize_linked_lists(&mut self, trie_inputs: &TrieInputs) {
         let generation_state = self.get_mut_generation_state();
-        let (_trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
+        let (state_leaves, storage_leaves, trie_data) =
+            load_linked_lists(
                 &mut generation_state.state_pointers.accounts_pointers,
                 &mut generation_state.state_pointers.storage_pointers,
                 trie_inputs,

@@ -20,8 +20,11 @@ use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
 #[cfg(not(feature = "cdk_erigon"))]
-use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
-use crate::generation::mpt::{load_state_mpt, Account, EitherAccount, MptAccount, SmtAccount};
+use crate::generation::mpt::load_linked_lists;
+use crate::generation::mpt::{
+    load_receipts_mpt, load_state_mpt, load_transactions_mpt, Account, EitherAccount, MptAccount,
+    SmtAccount, TrieRootPtrs,
+};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -43,16 +46,28 @@ pub(crate) fn initialize_mpts<F: RichField>(
     // Load all MPTs.
     #[cfg(not(feature = "cdk_erigon"))]
     {
-        let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(
-                &mut interpreter
-                    .generation_state
-                    .state_pointers
-                    .accounts_pointers,
-                &mut interpreter.generation_state.state_pointers.storage_pointers,
-                trie_inputs,
-            )
-            .expect("Invalid MPT data for preinitialization");
+        let (state_leaves, storage_leaves, mut trie_data) = load_linked_lists(
+            &mut interpreter
+                .generation_state
+                .state_pointers
+                .accounts_pointers,
+            &mut interpreter.generation_state.state_pointers.storage_pointers,
+            trie_inputs,
+        )
+        .expect("Invalid MPT data for preinitialization");
+
+        let txn_root_ptr =
+            load_transactions_mpt(&trie_inputs.transactions_trie, &mut trie_data).unwrap();
+        let receipt_root_ptr =
+            load_receipts_mpt(&trie_inputs.receipts_trie, &mut trie_data).unwrap();
+
+        let mut trie_root_ptrs = TrieRootPtrs {
+            state_root_ptr: None,
+            txn_root_ptr,
+            receipt_root_ptr,
+        };
+
+        log::debug!("trie data len after receipts {:?}", trie_data.len());
 
         interpreter.generation_state.memory.contexts[0].segments
             [Segment::AccountsLinkedList.unscale()]
@@ -518,7 +533,10 @@ fn sstore() -> Result<()> {
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
     state_trie_before.insert(addr_nibbles, account_before.rlp_encode().to_vec())?;
-    let state_trie = get_state_world(state_trie_before, vec![(addr_hashed, HashedPartialTrie::from(Node::Empty))]);
+    let state_trie = get_state_world(
+        state_trie_before,
+        vec![(addr_hashed, HashedPartialTrie::from(Node::Empty))],
+    );
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Node::Empty.into(),

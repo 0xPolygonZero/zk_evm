@@ -510,6 +510,7 @@ fn get_state_and_storage_leaves(
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
+    log::debug!("lee su trie data len a {:?}", trie_data.len());
     match trie.deref() {
         Node::Branch { children, value } => {
             if !value.is_empty() {
@@ -709,15 +710,10 @@ where
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type LinkedListsAndTrieData = (
-    TrieRootPtrs,
-    Vec<Option<U256>>,
-    Vec<Option<U256>>,
-    Vec<Option<U256>>,
-);
+type LinkedListsAndTrieData = (Vec<Option<U256>>, Vec<Option<U256>>, Vec<Option<U256>>);
 
 #[cfg(not(feature = "cdk_erigon"))]
-pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
+pub(crate) fn load_linked_lists(
     accounts_pointers: &mut BTreeMap<U256, usize>,
     storage_pointers: &mut BTreeMap<(U256, U256), usize>,
     trie_inputs: &TrieInputs,
@@ -743,14 +739,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         })
         .collect();
 
-    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
-        let mut parsed_txn = vec![U256::from(rlp.len())];
-        parsed_txn.extend(rlp.iter().copied().map(U256::from));
-        Ok(parsed_txn)
-    })?;
-
-    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
-
     get_state_and_storage_leaves(
         &mpt_state.state_trie(),
         empty_nibbles(),
@@ -762,16 +750,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &storage_tries_by_state_key,
     )?;
 
-    Ok((
-        TrieRootPtrs {
-            state_root_ptr: None,
-            txn_root_ptr,
-            receipt_root_ptr,
-        },
-        state_leaves,
-        storage_leaves,
-        trie_data,
-    ))
+    Ok((state_leaves, storage_leaves, trie_data))
 }
 
 pub(crate) fn load_state_mpt(
