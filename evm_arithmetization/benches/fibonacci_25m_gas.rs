@@ -26,7 +26,7 @@ use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
-use evm_arithmetization::world::StateWorld;
+use evm_arithmetization::world::{StateWorld, World};
 use evm_arithmetization::{Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -65,6 +65,8 @@ fn criterion_benchmark(c: &mut Criterion) {
 }
 
 fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
+    let state_world = StateWorld::default();
+
     let sender = hex!("8943545177806ED17B9F23F0a21ee5948eCaa776");
     let to = hex!("159271B89fea49aF29DFaf8b4eCE7D042D5d6f07");
 
@@ -97,7 +99,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         Either::Right(SmtAccount {
             nonce: 169.into(),
             balance: U256::from_dec_str("999999999998417410153631615")?,
-            code_hash: hash_bytecode_h256(&[]).into_uint(),
+            code_hash: state_world.hash_code(&[]).into_uint(),
             code_length: 0.into(),
         })
     } else {

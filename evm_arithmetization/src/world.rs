@@ -84,6 +84,11 @@ pub trait World {
     /// Creates a new account at `address` if it does not exist.
     fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()>;
 
+    /// Hash the provided code with this `World`'s [`CodeHasher`].
+    fn hash_code(&self, code: &[u8]) -> H256 {
+        Self::CodeHasher::hash(code)
+    }
+
     /// Update the code for the account at the given address.
     ///
     /// Creates a new account at `address` if it does not exist.
@@ -401,6 +406,129 @@ impl World for Type2World {
         let mut it = [0; 32];
         smt_trie::utils::hashout2u(self.as_smt().root).to_big_endian(&mut it);
         H256(it)
+    }
+}
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) type StateKey = MptKey;
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) type StateKey = SmtKey;
+
+#[cfg(not(feature = "cdk_erigon"))]
+pub(crate) type CodeHasher = KeccakHash;
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) type CodeHasher = PoseidonHash;
+
+impl World for StateWorld {
+    type SubtriePath = StateKey;
+    type CodeHasher = CodeHasher;
+
+    fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
+        match &mut self.state {
+            Either::Left(type1) => type1.contains(address),
+            Either::Right(type2) => type2.contains(address),
+        }
+    }
+    fn update_balance(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut U256),
+    ) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.update_balance(address, f),
+            Either::Right(type2) => type2.update_balance(address, f),
+        }
+    }
+    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.update_nonce(address, f),
+            Either::Right(type2) => type2.update_nonce(address, f),
+        }
+    }
+    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.set_code(address, code),
+            Either::Right(type2) => type2.set_code(address, code),
+        }
+    }
+    fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
+        // TODO: Find a way to revamp this
+        #[cfg(not(feature = "cdk_erigon"))]
+        match &mut self.state {
+            Either::Left(type1) => type1.reporting_destroy(address),
+            Either::Right(_type2) => unreachable!("Type2 is not supported."),
+        }
+        #[cfg(feature = "cdk_erigon")]
+        match &mut self.state {
+            Either::Left(_type1) => unreachable!("Type1 is not supported"),
+            Either::Right(type2) => type2.reporting_destroy(address),
+        }
+    }
+    fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.create_storage(address),
+            Either::Right(type2) => type2.create_storage(address),
+        }
+    }
+    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.destroy_storage(address),
+            Either::Right(type2) => type2.destroy_storage(address),
+        }
+    }
+    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.store_int(address, slot, value),
+            Either::Right(type2) => type2.store_int(address, slot, value),
+        }
+    }
+    fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.store_hash(address, hash, value),
+            Either::Right(type2) => type2.store_hash(address, hash, value),
+        }
+    }
+    fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256> {
+        match &mut self.state {
+            Either::Left(type1) => type1.load_int(address, slot),
+            Either::Right(type2) => type2.load_int(address, slot),
+        }
+    }
+    fn reporting_destroy_slot(
+        &mut self,
+        address: Address,
+        slot: U256,
+    ) -> anyhow::Result<Option<MptKey>> {
+        match &mut self.state {
+            Either::Left(type1) => type1.reporting_destroy_slot(address, slot),
+            Either::Right(type2) => type2.reporting_destroy_slot(address, slot),
+        }
+    }
+    fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()> {
+        match &mut self.state {
+            Either::Left(type1) => type1.mask_storage(masks),
+            Either::Right(type2) => type2.mask_storage(masks),
+        }
+    }
+    fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) -> anyhow::Result<()> {
+        #[cfg(not(feature = "cdk_erigon"))]
+        match &mut self.state {
+            Either::Left(type1) => type1.mask(paths),
+            Either::Right(_type2) => unreachable!("Type2 is not supported."),
+        }
+        #[cfg(feature = "cdk_erigon")]
+        match &mut self.state {
+            Either::Left(_type1) => unreachable!("Type1 is not supported"),
+            Either::Right(type2) => type2.mask(paths),
+        }
+    }
+    fn root(&mut self) -> H256 {
+        match &mut self.state {
+            Either::Left(type1) => type1.root(),
+            Either::Right(type2) => type2.root(),
+        }
     }
 }
 
