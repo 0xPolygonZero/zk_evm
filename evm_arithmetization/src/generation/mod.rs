@@ -37,7 +37,7 @@ use crate::proof::{
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
-use crate::world::world::StateWorld;
+use crate::world::StateWorld;
 
 pub(crate) mod linked_list;
 pub mod mpt;
@@ -122,7 +122,7 @@ pub struct GenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
+    pub contract_code: HashMap<H256, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -174,7 +174,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    pub contract_code: HashMap<Either<H256, U256>, Vec<u8>>,
+    pub contract_code: HashMap<H256, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,

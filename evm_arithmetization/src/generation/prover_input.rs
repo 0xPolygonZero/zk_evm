@@ -236,13 +236,7 @@ impl<F: RichField> GenerationState<F> {
     /// Returns the length of the code.
     fn run_account_code(&mut self) -> Result<U256, ProgramError> {
         // stack: codehash, ctx, ...
-
-        let codehash = stack_peek(self, 0)?;
-        let codehash = if cfg!(feature = "cdk_erigon") {
-            Either::Right(codehash)
-        } else {
-            Either::Left(H256::from_uint(&codehash))
-        };
+        let codehash = H256::from_uint(&stack_peek(self, 0)?);
         let context = stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR;
         let context = u256_to_usize(context)?;
         let mut address = MemoryAddress::new(context, Segment::Code, 0);

@@ -294,6 +294,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
 }
 
 pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, op: Operation) {
+    // TODO: Revert
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     // if !log_enabled!(log::Level::Debug) {
     //     return;

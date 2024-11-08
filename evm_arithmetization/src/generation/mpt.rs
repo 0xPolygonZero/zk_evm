@@ -24,35 +24,15 @@ use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
-#[derive(Clone)]
-pub enum CodeHashType {
-    Hash(H256),
-    Uint(U256),
-}
-
-pub fn get_h256_from_code_hash(code_hash: CodeHashType) -> Option<H256> {
-    match code_hash {
-        CodeHashType::Hash(h) => Some(h),
-        _ => None,
-    }
-}
-
-pub fn get_u256_from_code_hash(code_hash: CodeHashType) -> Option<U256> {
-    match code_hash {
-        CodeHashType::Uint(u) => Some(u),
-        _ => None,
-    }
-}
-
 #[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MptAccountRlp {
+pub struct MptAccount {
     pub nonce: U256,
     pub balance: U256,
     pub storage_root: H256,
     pub code_hash: H256,
 }
 
-impl AccountRlp for MptAccountRlp {
+impl Account for MptAccount {
     fn get_nonce(&self) -> U256 {
         self.nonce
     }
@@ -65,8 +45,8 @@ impl AccountRlp for MptAccountRlp {
     fn get_code_length(&self) -> U256 {
         panic!("No code length in an MPT's account.")
     }
-    fn get_code_hash(&self) -> CodeHashType {
-        CodeHashType::Hash(self.code_hash)
+    fn get_code_hash(&self) -> H256 {
+        self.code_hash
     }
     fn get_code_hash_u256(&self) -> U256 {
         self.code_hash.into_uint()
@@ -76,15 +56,15 @@ impl AccountRlp for MptAccountRlp {
     }
 }
 
-#[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SmtAccountRlp {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SmtAccount {
     pub nonce: U256,
     pub balance: U256,
     pub code_length: U256,
     pub code_hash: U256,
 }
 
-impl AccountRlp for SmtAccountRlp {
+impl Account for SmtAccount {
     fn get_nonce(&self) -> U256 {
         self.nonce
     }
@@ -97,109 +77,105 @@ impl AccountRlp for SmtAccountRlp {
     fn get_code_length(&self) -> U256 {
         self.code_length
     }
-    fn get_code_hash(&self) -> CodeHashType {
-        CodeHashType::Uint(self.code_hash)
+    fn get_code_hash(&self) -> H256 {
+        H256::from_uint(&self.code_hash)
     }
     fn get_code_hash_u256(&self) -> U256 {
         self.code_hash
     }
     fn rlp_encode(&self) -> BytesMut {
-        rlp::encode(self)
+        unimplemented!("SMTs do not support RLP encoding.")
     }
 }
 
-pub trait AccountRlp: Any {
+pub trait Account: Any {
     fn get_nonce(&self) -> U256;
     fn get_balance(&self) -> U256;
     fn get_storage_root(&self) -> H256;
     fn get_code_length(&self) -> U256;
-    fn get_code_hash(&self) -> CodeHashType;
+    fn get_code_hash(&self) -> H256;
     fn get_code_hash_u256(&self) -> U256;
     fn rlp_encode(&self) -> BytesMut;
 }
 
-pub struct EitherRlp {
-    pub account_rlp: Either<MptAccountRlp, SmtAccountRlp>,
-}
+pub struct EitherAccount(pub Either<MptAccount, SmtAccount>);
 
-impl EitherRlp {
+impl EitherAccount {
     #[cfg(test)]
     pub(crate) fn rlp_encode(&self) -> BytesMut {
-        match &self.account_rlp {
+        match &self.0 {
             Either::Left(mpt_acct) => mpt_acct.rlp_encode(),
             Either::Right(smt_acct) => smt_acct.rlp_encode(),
         }
     }
 
-    pub fn as_smt_account_rlp(&self) -> &SmtAccountRlp {
-        match &self.account_rlp {
+    pub fn as_smt_account(&self) -> &SmtAccount {
+        match &self.0 {
             Either::Left(_mpt_account_rlp) => panic!("cdk_erigon expects SMTs"),
             Either::Right(smt_account_rlp) => smt_account_rlp,
         }
     }
 
-    pub fn as_mpt_account_rlp(&self) -> &MptAccountRlp {
-        match &self.account_rlp {
+    pub fn as_mpt_account(&self) -> &MptAccount {
+        match &self.0 {
             Either::Left(mpt_account_rlp) => mpt_account_rlp,
             Either::Right(_smt_account_rlp) => panic!("eth_main expects MPTs"),
         }
     }
 }
 
-impl AccountRlp for EitherRlp {
+impl Account for EitherAccount {
     fn get_nonce(&self) -> U256 {
-        match self.account_rlp {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_nonce(),
             Either::Right(smt_rlp) => smt_rlp.get_nonce(),
         }
     }
     fn get_balance(&self) -> U256 {
-        match self.account_rlp {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_balance(),
             Either::Right(smt_rlp) => smt_rlp.get_balance(),
         }
     }
     fn get_storage_root(&self) -> H256 {
-        match self.account_rlp {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_storage_root(),
             Either::Right(smt_rlp) => smt_rlp.get_storage_root(),
         }
     }
     fn get_code_length(&self) -> U256 {
-        match self.account_rlp {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_code_length(),
             Either::Right(smt_rlp) => smt_rlp.get_code_length(),
         }
     }
-    fn get_code_hash(&self) -> CodeHashType {
-        match self.account_rlp {
+    fn get_code_hash(&self) -> H256 {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_code_hash(),
             Either::Right(smt_rlp) => smt_rlp.get_code_hash(),
         }
     }
     fn get_code_hash_u256(&self) -> U256 {
-        match self.account_rlp {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.get_code_hash_u256(),
             Either::Right(smt_rlp) => smt_rlp.get_code_hash_u256(),
         }
     }
     fn rlp_encode(&self) -> BytesMut {
-        match self.account_rlp {
+        match self.0 {
             Either::Left(mpt_rlp) => mpt_rlp.rlp_encode(),
             Either::Right(smt_rlp) => smt_rlp.rlp_encode(),
         }
     }
 }
 
-impl Default for EitherRlp {
+impl Default for EitherAccount {
     fn default() -> Self {
-        EitherRlp {
-            account_rlp: if cfg!(feature = "cdk_erigon") {
-                Either::Right(SmtAccountRlp::default())
-            } else {
-                Either::Left(MptAccountRlp::default())
-            },
-        }
+        EitherAccount(if cfg!(feature = "cdk_erigon") {
+            Either::Right(SmtAccount::default())
+        } else {
+            Either::Left(MptAccount::default())
+        })
     }
 }
 
@@ -210,7 +186,7 @@ pub struct TrieRootPtrs {
     pub receipt_root_ptr: usize,
 }
 
-impl Default for MptAccountRlp {
+impl Default for MptAccount {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
@@ -221,14 +197,14 @@ impl Default for MptAccountRlp {
     }
 }
 
-impl Default for SmtAccountRlp {
+impl Default for SmtAccount {
     fn default() -> Self {
-        use smt_trie::code::hash_bytecode_u256;
+        use smt_trie::code::hash_bytecode_h256;
 
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
-            code_hash: hash_bytecode_u256(vec![]),
+            code_hash: hash_bytecode_h256(&[]).into_uint(),
             code_length: U256::zero(),
         }
     }
@@ -474,9 +450,8 @@ fn load_state_trie(
             Ok(node_ptr)
         }
         Node::Leaf { nibbles, value } => {
-            let account: MptAccountRlp =
-                rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let MptAccountRlp {
+            let account: MptAccount = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let MptAccount {
                 nonce,
                 balance,
                 storage_root,
@@ -579,9 +554,8 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            let account: MptAccountRlp =
-                rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let MptAccountRlp {
+            let account: MptAccount = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let MptAccount {
                 nonce,
                 balance,
                 storage_root,

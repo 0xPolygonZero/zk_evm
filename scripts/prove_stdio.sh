@@ -41,6 +41,7 @@ export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 INPUT_FILE=$1
 TEST_ONLY=$2
+USE_TEST_CONFIG=$3
 
 if [[ $INPUT_FILE == "" ]]; then
     echo "Please provide witness json input file, e.g. artifacts/witness_b19240705.json"
@@ -117,12 +118,17 @@ fi
 
 cargo build --release --jobs "$num_procs"
 
-
 start_time=$(date +%s%N)
-"${REPO_ROOT}/target/release/leader" --runtime in-memory \
+
+cmd=("${REPO_ROOT}/target/release/leader" --runtime in-memory \
     --load-strategy on-demand -n 1 \
-    --block-batch-size "$BLOCK_BATCH_SIZE" \
-    --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" &> "$OUTPUT_LOG"
+    --block-batch-size "$BLOCK_BATCH_SIZE")
+
+if [[ "$USE_TEST_CONFIG" == "use_test_config" ]]; then
+    cmd+=("--use-test-config")
+fi
+
+"${cmd[@]}" --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" &> "$OUTPUT_LOG"
 end_time=$(date +%s%N)
 
 grep "Successfully wrote to disk proof file " "$OUTPUT_LOG" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"

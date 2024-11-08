@@ -5,12 +5,11 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
-use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -70,20 +69,20 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let code_hash = keccak(code);
 
     // Set accounts before the transaction.
-    let beneficiary_account_before = MptAccountRlp {
+    let beneficiary_account_before = MptAccount {
         nonce: 1.into(),
-        ..MptAccountRlp::default()
+        ..MptAccount::default()
     };
 
     let sender_balance_before = 5000000000000000u64;
-    let sender_account_before = MptAccountRlp {
+    let sender_account_before = MptAccount {
         balance: sender_balance_before.into(),
-        ..MptAccountRlp::default()
+        ..MptAccount::default()
     };
-    let to_account_before = MptAccountRlp {
+    let to_account_before = MptAccount {
         balance: 9000000000u64.into(),
         code_hash,
-        ..MptAccountRlp::default()
+        ..MptAccount::default()
     };
 
     // Initialize the state trie with three accounts.
@@ -152,33 +151,33 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
-    contract_code.insert(Either::Left(code_hash), code.to_vec());
+    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(code_hash, code.to_vec());
 
     // Update the state and receipt tries after the transaction, so that we have the
     // correct expected tries: Update accounts
     #[cfg(feature = "cdk_erigon")]
-    let beneficiary_account_after = AccountRlp {
+    let beneficiary_account_after = Account {
         nonce: 1.into(),
         balance: block_metadata.block_base_fee * gas_used,
-        ..AccountRlp::default()
+        ..Account::default()
     };
     #[cfg(feature = "eth_mainnet")]
-    let beneficiary_account_after = MptAccountRlp {
+    let beneficiary_account_after = MptAccount {
         nonce: 1.into(),
-        ..MptAccountRlp::default()
+        ..MptAccount::default()
     };
 
     let sender_balance_after = sender_balance_before - gas_used * txn_gas_price;
-    let sender_account_after = MptAccountRlp {
+    let sender_account_after = MptAccount {
         balance: sender_balance_after.into(),
         nonce: 1.into(),
-        ..MptAccountRlp::default()
+        ..MptAccount::default()
     };
-    let to_account_after = MptAccountRlp {
+    let to_account_after = MptAccount {
         balance: 9000000000u64.into(),
         code_hash,
-        ..MptAccountRlp::default()
+        ..MptAccount::default()
     };
 
     update_beacon_roots_account_storage(

@@ -19,7 +19,7 @@
     %add_const(3)
     // stack: existing_codehash_ptr, address
     DUP1 %mload_trie_data // codehash = account[3]
-    %eq_const(@EMPTY_STRING_HASH) ISZERO %jumpi(%%error_collision)
+    %eq_const(@EMPTY_STRING_KECCAK_HASH) ISZERO %jumpi(%%error_collision)
     // stack: existing_codehash_ptr, address
     %sub_const(2) %mload_trie_data // balance = account[1]
     %jump(%%do_insert)
@@ -41,7 +41,7 @@
         // stack: account_ptr, address
         PUSH 0 %append_to_trie_data // storage_root = nil
         // stack: account_ptr, address
-        PUSH @EMPTY_STRING_HASH %append_to_trie_data // code_hash = keccak('')
+        PUSH @EMPTY_STRING_KECCAK_HASH %append_to_trie_data // code_hash = keccak('')
         // stack: account_ptr, address
         SWAP1
         // stack: address, account_ptr

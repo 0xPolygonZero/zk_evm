@@ -57,7 +57,7 @@ global extcodehash:
 {
     %macro ext_code_empty
         %extcodehash
-        %eq_const(@EMPTY_STRING_HASH)
+        %eq_const(@EMPTY_STRING_KECCAK_HASH)
     %endmacro
 }
 #[cfg(feature = cdk_erigon)]

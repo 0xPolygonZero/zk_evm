@@ -9,9 +9,9 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
 use evm_arithmetization::testing_utils::*;
+use evm_arithmetization::tries::{StateMpt, StorageTrie};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::world::tries::{StateMpt, StorageTrie};
-use evm_arithmetization::world::world::{StateWorld, Type1World};
+use evm_arithmetization::world::{StateWorld, Type1World};
 use evm_arithmetization::{AllStark, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -59,7 +59,7 @@ type C = PoseidonGoldilocksConfig;
 //     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
 //     let mut contract_code = HashMap::new();
-//     contract_code.insert(Either::Left(keccak(vec![])), vec![]);
+//     contract_code.insert(keccak(vec![]), vec![]);
 
 //     let ger_data = Some((H256::random(), H256::random()));
 

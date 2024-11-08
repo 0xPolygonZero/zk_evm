@@ -118,7 +118,7 @@
     {
         %add_const(2) %mload_trie_data
         // stack: code_hash
-        PUSH @EMPTY_STRING_HASH
+        PUSH @EMPTY_STRING_KECCAK_HASH
         EQ
     }
      #[cfg(feature = cdk_erigon)]

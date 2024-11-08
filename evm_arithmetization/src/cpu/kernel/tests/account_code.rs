@@ -11,7 +11,7 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
-use smt_trie::code::hash_bytecode_u256;
+use smt_trie::code::hash_bytecode_h256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
@@ -21,13 +21,13 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
 #[cfg(not(feature = "cdk_erigon"))]
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
-use crate::generation::mpt::{load_state_mpt, AccountRlp, EitherRlp, MptAccountRlp, SmtAccountRlp};
+use crate::generation::mpt::{load_state_mpt, Account, EitherAccount, MptAccount, SmtAccount};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
-use crate::world::world::StateWorld;
+use crate::world::StateWorld;
 
 pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
@@ -157,7 +157,7 @@ pub(crate) fn initialize_mpts<F: RichField>(
 pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter: &mut Interpreter<F>,
     address: Address,
-    account: &EitherRlp,
+    account: &EitherAccount,
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
@@ -267,25 +267,21 @@ pub(crate) fn prepare_interpreter<F: RichField>(
 }
 
 // Test account with a given code hash.
-fn test_account(code: &[u8]) -> EitherRlp {
+fn test_account(code: &[u8]) -> EitherAccount {
     if cfg!(feature = "eth_mainnet") {
-        EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: U256::from(1111),
-                balance: U256::from(2222),
-                storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-                code_hash: keccak(code),
-            }),
-        }
+        EitherAccount(Either::Left(MptAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: keccak(code),
+        }))
     } else {
-        EitherRlp {
-            account_rlp: Either::Right(SmtAccountRlp {
-                nonce: U256::from(1111),
-                balance: U256::from(2222),
-                code_hash: hash_bytecode_u256(code.to_vec()),
-                code_length: code.len().into(),
-            }),
-        }
+        EitherAccount(Either::Right(SmtAccount {
+            nonce: U256::from(1111),
+            balance: U256::from(2222),
+            code_hash: hash_bytecode_h256(&code).into_uint(),
+            code_length: code.len().into(),
+        }))
     }
 }
 
@@ -319,12 +315,9 @@ fn test_extcodesize() -> Result<()> {
         .push(U256::from_big_endian(address.as_bytes()))
         .expect("The stack should not overflow");
     interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
-        HashMap::from([(Either::Left(keccak(&code)), code.clone())])
+        HashMap::from([(keccak(&code), code.clone())])
     } else {
-        HashMap::from([(
-            Either::Right(hash_bytecode_u256(code.clone())),
-            code.clone(),
-        )])
+        HashMap::from([(hash_bytecode_h256(&code), code.clone())])
     };
 
     interpreter.run()?;
@@ -400,12 +393,9 @@ fn test_extcodecopy() -> Result<()> {
         .push((0xDEADBEEFu64 + (1 << 32)).into())
         .expect("The stack should not overflow"); // kexit_info
     interpreter.generation_state.inputs.contract_code = if cfg!(feature = "eth_mainnet") {
-        HashMap::from([(Either::Left(keccak(&code)), code.clone())])
+        HashMap::from([(keccak(&code), code.clone())])
     } else {
-        HashMap::from([(
-            Either::Right(hash_bytecode_u256(code.clone())),
-            code.clone(),
-        )])
+        HashMap::from([(hash_bytecode_h256(&code), code.clone())])
     };
 
     interpreter.run()?;
@@ -519,13 +509,11 @@ fn sstore() -> Result<()> {
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
     let code_hash = keccak(code);
 
-    let account_before = EitherRlp {
-        account_rlp: Either::Left(MptAccountRlp {
-            balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash,
-            ..MptAccountRlp::default()
-        }),
-    };
+    let account_before = EitherAccount(Either::Left(MptAccount {
+        balance: 0x0de0b6b3a7640000u64.into(),
+        code_hash,
+        ..MptAccount::default()
+    }));
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
@@ -560,18 +548,16 @@ fn sstore() -> Result<()> {
 
     // The code should have added an element to the storage of `to_account`. We run
     // `mpt_hash_state_trie` to check that.
-    let account_after = EitherRlp {
-        account_rlp: Either::Left(MptAccountRlp {
-            balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash,
-            storage_root: HashedPartialTrie::from(Node::Leaf {
-                nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-                value: vec![2],
-            })
-            .hash(),
-            ..MptAccountRlp::default()
-        }),
-    };
+    let account_after = EitherAccount(Either::Left(MptAccount {
+        balance: 0x0de0b6b3a7640000u64.into(),
+        code_hash,
+        storage_root: HashedPartialTrie::from(Node::Leaf {
+            nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+            value: vec![2],
+        })
+        .hash(),
+        ..MptAccount::default()
+    }));
 
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
     expected_state_trie_after.insert(addr_nibbles, account_after.rlp_encode().to_vec())?;
@@ -606,7 +592,7 @@ fn sstore() -> Result<()> {
 fn sload() -> Result<()> {
     use std::collections::BTreeMap;
 
-    use crate::world::{
+    use crate::{
         tries::{StateMpt, StorageTrie},
         world::Type1World,
     };
@@ -625,13 +611,11 @@ fn sload() -> Result<()> {
     ];
     let code_hash = keccak(code);
 
-    let account_before = EitherRlp {
-        account_rlp: Either::Left(MptAccountRlp {
-            balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash,
-            ..MptAccountRlp::default()
-        }),
-    };
+    let account_before = EitherAccount(Either::Left(MptAccount {
+        balance: 0x0de0b6b3a7640000u64.into(),
+        code_hash,
+        ..MptAccount::default()
+    }));
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 

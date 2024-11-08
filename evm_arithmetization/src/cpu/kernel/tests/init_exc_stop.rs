@@ -6,7 +6,7 @@ use keccak_hash::{keccak, H256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
-use smt_trie::{code::hash_bytecode_u256, utils::hashout2u};
+use smt_trie::{code::hash_bytecode_h256, utils::hashout2u};
 
 use crate::cpu::kernel::{aggregator::KERNEL, interpreter::Interpreter};
 use crate::generation::{
@@ -19,9 +19,9 @@ use crate::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
 };
+use crate::tries::{StateMpt, StorageTrie};
 use crate::witness::{memory::MemoryAddress, state::RegistersState};
-use crate::world::tries::{StateMpt, StorageTrie};
-use crate::world::world::{StateWorld, Type1World};
+use crate::world::{StateWorld, Type1World};
 use crate::EMPTY_CONSOLIDATED_BLOCKHASH;
 use crate::{
     proof::{BlockHashes, BlockMetadata, TrieRoots},
@@ -113,9 +113,9 @@ fn test_init_exc_stop() {
     let mut contract_code = HashMap::new();
 
     let contract_hash = if cfg!(feature = "eth_mainnet") {
-        Either::Left(keccak(vec![]))
+        keccak(vec![])
     } else {
-        Either::Right(hash_bytecode_u256(vec![]))
+        hash_bytecode_h256(&[])
     };
     contract_code.insert(contract_hash, vec![]);
 

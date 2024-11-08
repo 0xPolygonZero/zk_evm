@@ -6,9 +6,7 @@ use std::time::Duration;
 
 use either::Either;
 use ethereum_types::{Address, BigEndianHash, H256};
-use evm_arithmetization::generation::mpt::{
-    AccountRlp, EitherRlp, LegacyReceiptRlp, MptAccountRlp,
-};
+use evm_arithmetization::generation::mpt::{Account, EitherAccount, LegacyReceiptRlp, MptAccount};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -17,7 +15,7 @@ use evm_arithmetization::testing_utils::{
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::world::world::World;
+use evm_arithmetization::world::World;
 use evm_arithmetization::{AllStark, GenerationInputs, Node, EMPTY_CONSOLIDATED_BLOCKHASH};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -37,7 +35,7 @@ fn get_generation_inputs() -> GenerationInputs {
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let rlp_default = EitherRlp::default();
+    let rlp_default = EitherAccount::default();
     let beneficiary_state_key = keccak(beneficiary);
     let sender_state_key = keccak(sender);
     let to_hashed = keccak(to);
@@ -49,25 +47,19 @@ fn get_generation_inputs() -> GenerationInputs {
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
     let code_hash = keccak(code);
 
-    let beneficiary_account_before = EitherRlp {
-        account_rlp: Either::Left(MptAccountRlp {
-            nonce: 1.into(),
-            ..*rlp_default.as_mpt_account_rlp()
-        }),
-    };
-    let sender_account_before = EitherRlp {
-        account_rlp: Either::Left(MptAccountRlp {
-            balance: 0x0de0b6b3a7640000u64.into(),
-            ..*rlp_default.as_mpt_account_rlp()
-        }),
-    };
-    let to_account_before = EitherRlp {
-        account_rlp: Either::Left(MptAccountRlp {
-            balance: 0x0de0b6b3a7640000u64.into(),
-            code_hash,
-            ..*rlp_default.as_mpt_account_rlp()
-        }),
-    };
+    let beneficiary_account_before = EitherAccount(Either::Left(MptAccount {
+        nonce: 1.into(),
+        ..*rlp_default.as_mpt_account()
+    }));
+    let sender_account_before = EitherAccount(Either::Left(MptAccount {
+        balance: 0x0de0b6b3a7640000u64.into(),
+        ..*rlp_default.as_mpt_account()
+    }));
+    let to_account_before = EitherAccount(Either::Left(MptAccount {
+        balance: 0x0de0b6b3a7640000u64.into(),
+        code_hash,
+        ..*rlp_default.as_mpt_account()
+    }));
 
     let (mut state_trie_before_hashed, mut storage_tries) =
         preinitialized_state_and_storage_tries().unwrap();
@@ -76,7 +68,7 @@ fn get_generation_inputs() -> GenerationInputs {
         .insert(
             beneficiary_nibbles,
             beneficiary_account_before
-                .as_mpt_account_rlp()
+                .as_mpt_account()
                 .rlp_encode()
                 .to_vec(),
         )
@@ -84,16 +76,13 @@ fn get_generation_inputs() -> GenerationInputs {
     state_trie_before_hashed
         .insert(
             sender_nibbles,
-            sender_account_before
-                .as_mpt_account_rlp()
-                .rlp_encode()
-                .to_vec(),
+            sender_account_before.as_mpt_account().rlp_encode().to_vec(),
         )
         .unwrap();
     state_trie_before_hashed
         .insert(
             to_nibbles,
-            to_account_before.as_mpt_account_rlp().rlp_encode().to_vec(),
+            to_account_before.as_mpt_account().rlp_encode().to_vec(),
         )
         .unwrap();
 
@@ -124,10 +113,8 @@ fn get_generation_inputs() -> GenerationInputs {
     };
 
     let mut contract_code = HashMap::new();
-    let empty_hash_code = Either::Left(keccak(vec![]));
-    let code_hash_either = Either::Left(code_hash);
-    contract_code.insert(empty_hash_code, vec![]);
-    contract_code.insert(code_hash_either, code.to_vec());
+    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(code_hash, code.to_vec());
 
     let expected_state_trie_after = {
         update_beacon_roots_account_storage(
@@ -139,39 +126,33 @@ fn get_generation_inputs() -> GenerationInputs {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let beneficiary_account_after = EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                nonce: 1.into(),
-                ..*rlp_default.as_mpt_account_rlp()
-            }),
-        };
-        let sender_account_after = EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: 0xde0b6b3a75be550u64.into(),
-                nonce: 1.into(),
-                ..*rlp_default.as_mpt_account_rlp()
-            }),
-        };
-        let to_account_after = EitherRlp {
-            account_rlp: Either::Left(MptAccountRlp {
-                balance: 0xde0b6b3a76586a0u64.into(),
-                code_hash,
-                // Storage map: { 0 => 2 }
-                storage_root: HashedPartialTrie::from(Node::Leaf {
-                    nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-                    value: vec![2],
-                })
-                .hash(),
-                ..*rlp_default.as_mpt_account_rlp()
-            }),
-        };
+        let beneficiary_account_after = EitherAccount(Either::Left(MptAccount {
+            nonce: 1.into(),
+            ..*rlp_default.as_mpt_account()
+        }));
+        let sender_account_after = EitherAccount(Either::Left(MptAccount {
+            balance: 0xde0b6b3a75be550u64.into(),
+            nonce: 1.into(),
+            ..*rlp_default.as_mpt_account()
+        }));
+        let to_account_after = EitherAccount(Either::Left(MptAccount {
+            balance: 0xde0b6b3a76586a0u64.into(),
+            code_hash,
+            // Storage map: { 0 => 2 }
+            storage_root: HashedPartialTrie::from(Node::Leaf {
+                nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
+                value: vec![2],
+            })
+            .hash(),
+            ..*rlp_default.as_mpt_account()
+        }));
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
                 beneficiary_account_after
-                    .as_mpt_account_rlp()
+                    .as_mpt_account()
                     .rlp_encode()
                     .to_vec(),
             )
@@ -179,16 +160,13 @@ fn get_generation_inputs() -> GenerationInputs {
         expected_state_trie_after
             .insert(
                 sender_nibbles,
-                sender_account_after
-                    .as_mpt_account_rlp()
-                    .rlp_encode()
-                    .to_vec(),
+                sender_account_after.as_mpt_account().rlp_encode().to_vec(),
             )
             .unwrap();
         expected_state_trie_after
             .insert(
                 to_nibbles,
-                to_account_after.as_mpt_account_rlp().rlp_encode().to_vec(),
+                to_account_after.as_mpt_account().rlp_encode().to_vec(),
             )
             .unwrap();
         expected_state_trie_after

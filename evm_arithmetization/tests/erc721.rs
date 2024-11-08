@@ -3,9 +3,8 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
-use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccountRlp};
+use evm_arithmetization::generation::mpt::{LegacyReceiptRlp, LogRlp, MptAccount};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -49,6 +48,10 @@ type C = KeccakGoldilocksConfig;
 /// `1337` from address `0x5B38Da6a701c568545dCfcB03FcB875f56beddC4` to address
 /// `0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2`.
 #[test]
+// This test is run in CI under the "Run Specific Ignored Tests in Release Mode" job.
+// It is marked as ignored to prevent it from running by default in debug mode due to its longer
+// execution time.
+#[ignore]
 fn test_erc721() -> anyhow::Result<()> {
     init_logger();
 
@@ -85,7 +88,7 @@ fn test_erc721() -> anyhow::Result<()> {
     let gas_used = 58_418.into();
 
     let contract_code = [contract_bytecode(), vec![]]
-        .map(|v| (Either::Left(keccak(v.clone())), v))
+        .map(|v| (keccak(v.clone()), v))
         .into();
 
     let logs = vec![LogRlp {
@@ -137,13 +140,13 @@ fn test_erc721() -> anyhow::Result<()> {
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let owner_account = owner_account();
-        let owner_account_after = MptAccountRlp {
+        let owner_account_after = MptAccount {
             nonce: owner_account.nonce + 1,
             balance: owner_account.balance - gas_used * 0xa,
             ..owner_account
         };
         state_trie_after.insert(owner_nibbles, rlp::encode(&owner_account_after).to_vec())?;
-        let contract_account_after = MptAccountRlp {
+        let contract_account_after = MptAccount {
             storage_root: contract_storage_after()?.hash(),
             ..contract_account()?
         };
@@ -270,8 +273,8 @@ fn contract_storage_after() -> anyhow::Result<HashedPartialTrie> {
     ])
 }
 
-fn owner_account() -> MptAccountRlp {
-    MptAccountRlp {
+fn owner_account() -> MptAccount {
+    MptAccount {
         nonce: 2.into(),
         balance: 0x1000000.into(),
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
@@ -279,8 +282,8 @@ fn owner_account() -> MptAccountRlp {
     }
 }
 
-fn contract_account() -> anyhow::Result<MptAccountRlp> {
-    Ok(MptAccountRlp {
+fn contract_account() -> anyhow::Result<MptAccount> {
+    Ok(MptAccount {
         nonce: 0.into(),
         balance: 0.into(),
         storage_root: contract_storage()?.hash(),

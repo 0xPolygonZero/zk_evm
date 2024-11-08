@@ -3,9 +3,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use either::Either;
 use ethereum_types::{H160, H256, U256};
-use evm_arithmetization::generation::mpt::MptAccountRlp;
+use evm_arithmetization::generation::mpt::MptAccount;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
@@ -44,7 +43,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(Either::Left(keccak(vec![])), vec![]);
+    contract_code.insert(keccak(vec![]), vec![]);
 
     // Just one withdrawal.
     let withdrawals = vec![(H160(random()), U256(random()))];
@@ -61,9 +60,9 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
         let addr_state_key = keccak(withdrawals[0].0);
         let addr_nibbles = Nibbles::from_bytes_be(addr_state_key.as_bytes()).unwrap();
-        let account = MptAccountRlp {
+        let account = MptAccount {
             balance: withdrawals[0].1,
-            ..MptAccountRlp::default()
+            ..MptAccount::default()
         };
         trie.insert(addr_nibbles, rlp::encode(&account).to_vec())?;
         trie.insert(

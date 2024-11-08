@@ -11,7 +11,7 @@ use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_account_2};
-use crate::generation::mpt::MptAccountRlp;
+use crate::generation::mpt::MptAccount;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::testing_utils::get_state_world;
@@ -87,7 +87,7 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
 fn test_state_trie(
     state_trie: HashedPartialTrie,
     k: Nibbles,
-    mut account: MptAccountRlp,
+    mut account: MptAccount,
 ) -> Result<()> {
     assert_eq!(k.count, 64);
 

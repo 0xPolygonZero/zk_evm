@@ -28,7 +28,7 @@ global sys_keccak256:
 sys_keccak256_empty:
     // stack: static_gas, kexit_info, offset, len
     %charge_gas
-    %stack (kexit_info, offset, len) -> (kexit_info, @EMPTY_STRING_HASH)
+    %stack (kexit_info, offset, len) -> (kexit_info, @EMPTY_STRING_KECCAK_HASH)
     EXIT_KERNEL
 
 // Computes Keccak256(input_word). Clobbers @SEGMENT_KERNEL_GENERAL.

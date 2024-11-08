@@ -67,7 +67,7 @@ pub enum SeparateTriePreImage {
 #[serde(rename_all = "snake_case")]
 pub struct CombinedPreImages {
     /// Compact combined state and storage tries.
-    #[serde(with = "evm_arithmetization::world::hex")]
+    #[serde(with = "crate::hex")]
     pub compact: Vec<u8>,
 }
 
@@ -100,13 +100,13 @@ pub struct TxnMeta {
     /// Txn byte code. This is also the raw RLP bytestring inserted into the txn
     /// trie by this txn. Note that the key is not included and this is only
     /// the rlped value of the node!
-    #[serde(with = "evm_arithmetization::world::hex")]
+    #[serde(with = "crate::hex")]
     pub byte_code: Vec<u8>,
 
     /// Rlped bytes of the new receipt value inserted into the receipt trie by
     /// this txn. Note that the key is not included and this is only the rlped
     /// value of the node!
-    #[serde(with = "evm_arithmetization::world::hex")]
+    #[serde(with = "crate::hex")]
     pub new_receipt_trie_node_byte: Vec<u8>,
 
     /// Gas used by this txn (Note: not cumulative gas used).
@@ -160,7 +160,7 @@ pub enum ContractCodeUsage {
 
     /// Contract was created (and these are the bytes). Note that this new
     /// contract code will not appear in the [`BlockTrace`] map.
-    Write(#[serde(with = "evm_arithmetization::world::hex")] Vec<u8>),
+    Write(#[serde(with = "crate::hex")] Vec<u8>),
 }
 
 /// Other data that is needed for proof gen.

@@ -20,13 +20,13 @@ use starky::config::StarkConfig;
 
 pub use crate::cpu::kernel::cancun_constants::*;
 pub use crate::cpu::kernel::constants::global_exit_root::*;
-use crate::generation::mpt::MptAccountRlp;
+use crate::generation::mpt::MptAccount;
 use crate::proof::TrieRoots;
 #[cfg(test)]
 use crate::witness::operation::Operation;
 use crate::{
     generation::{TrieInputs, TrimmedGenerationInputs},
-    world::world::StateWorld,
+    world::StateWorld,
 };
 use crate::{
     proof::BlockMetadata, util::h2u, GenerationInputs, GenerationSegmentData, SegmentDataIterator,
@@ -124,7 +124,11 @@ pub fn update_beacon_roots_account_storage(
     let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.value;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.value;
 
-    log::debug!("inseting timestamp = {:?} and root = {:?}", timestamp, h2u(parent_root));
+    log::debug!(
+        "inseting timestamp = {:?} and root = {:?}",
+        timestamp,
+        h2u(parent_root)
+    );
     log::debug!("initial storage trie = {:?}", storage_trie);
 
     insert_storage(storage_trie, timestamp_idx, timestamp)?;
@@ -137,9 +141,9 @@ pub fn update_beacon_roots_account_storage(
 
 /// Returns the beacon roots contract account from its provided storage trie.
 #[cfg(feature = "eth_mainnet")]
-pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
+pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount {
     log::debug!("hashing beacon roots");
-    MptAccountRlp {
+    MptAccount {
         storage_root: storage_trie.hash(),
         ..BEACON_ROOTS_ACCOUNT
     }
@@ -216,16 +220,16 @@ pub fn update_scalable_account_storage(
 }
 
 #[cfg(feature = "cdk_erigon")]
-pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
-    MptAccountRlp {
+pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount {
+    MptAccount {
         storage_root: storage_trie.hash(),
         ..GLOBAL_EXIT_ROOT_ACCOUNT
     }
 }
 
 #[cfg(feature = "cdk_erigon")]
-pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccountRlp {
-    MptAccountRlp {
+pub fn scalable_contract_from_storage(storage_trie: &HashedPartialTrie) -> MptAccount {
+    MptAccount {
         storage_root: storage_trie.hash(),
         ..Default::default()
     }
@@ -303,7 +307,7 @@ pub fn get_state_world(
     // `Type1World` expects full keys, so we manually expand the nibbles here.
     use mpt_trie::utils::TryFromIterator as _;
 
-    use crate::world::{
+    use crate::{
         tries::{StateMpt, StorageTrie},
         world::Type1World,
     };

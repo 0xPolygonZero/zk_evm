@@ -98,7 +98,7 @@ global add_eth_new_account:
     %append_to_trie_data // balance
     // stack: addr, new_account_ptr, retdest
     PUSH 0 %append_to_trie_data // storage root pointer
-    PUSH @EMPTY_STRING_HASH %append_to_trie_data // code hash
+    PUSH @EMPTY_STRING_KECCAK_HASH %append_to_trie_data // code hash
     // stack: addr, new_account_ptr, retdest
     %addr_to_state_key
     // stack: key, new_account_ptr, retdest
