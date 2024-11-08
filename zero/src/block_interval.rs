@@ -157,7 +157,8 @@ impl BlockInterval {
                         current += 1;
                         yield (current, false);
                     } else {
-                       info!("Waiting for the new blocks to be mined, requested block number: {current}, \
+                       let next = current + 1;
+                       info!("Waiting for the new blocks to be mined, expected block number: {next}, \
                        latest block number: {last_block_number}");
                         // No need to poll the node too frequently, waiting
                         // a block time interval for a block to be mined should be enough
