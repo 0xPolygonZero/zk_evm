@@ -4,7 +4,7 @@
 // Pre stack: key, value_ptr, retdest
 // Post stack: (empty)
 // TODO: Have this take an address and do %mpt_insert_state_trie? To match mpt_read_state_trie.
-#[cfg(feature = eth_mainnet)]
+#[cfg(not(feature = cdk_erigon))]
 {
     global mpt_insert_state_trie:
         // stack: key, value_ptr, retdest

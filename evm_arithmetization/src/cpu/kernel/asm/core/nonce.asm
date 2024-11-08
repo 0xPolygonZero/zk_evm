@@ -2,25 +2,10 @@
 // Pre stack: address, retdest
 // Post stack: (empty)
 global nonce:
-    #[cfg(feature = eth_mainnet)]
-    {
-        // stack: address, retdest
-        %mpt_read_state_trie
-        // stack: account_ptr, retdest
-        // The nonce is the first account field, so we deref the account pointer itself.
-        // Note: We don't need to handle account_ptr=0, as trie_data[0] = 0,
-        // so the deref will give 0 (the default nonce) as desired.
-        %mload_trie_data
-        // stack: nonce, retdest
-        SWAP1 JUMP
-    }
-    #[cfg(feature = cdk_erigon)]
-    {
-        // stack: address, retdest
-        %read_nonce
-        // stack: nonce, retdest
-        SWAP1 JUMP
-    }
+    // stack: address, retdest
+    %read_nonce
+    // stack: nonce, retdest
+    SWAP1 JUMP
 
 // Convenience macro to call nonce and return where we left off.
 %macro nonce
@@ -31,7 +16,7 @@ global nonce:
 
 // Increment the given account's nonce. Assumes the account already exists; panics otherwise.
 global increment_nonce:
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         // stack: address, retdest
         DUP1

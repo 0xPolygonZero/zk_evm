@@ -1,7 +1,7 @@
 // struct CodeChange { address, prev_codehash }
 
 %macro journal_add_code_change
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         %journal_add_2(@JOURNAL_ENTRY_CODE_CHANGE)
     }
@@ -12,7 +12,7 @@
 %endmacro
 
 global revert_code_change:
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         // stack: entry_ptr, ptr, retdest
         POP

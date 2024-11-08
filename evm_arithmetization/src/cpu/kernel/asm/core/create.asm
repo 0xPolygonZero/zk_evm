@@ -172,7 +172,7 @@ after_constructor:
     %returndatasize
     PUSH @SEGMENT_RETURNDATA GET_CONTEXT %build_address_no_offset
     // stack: addr, len
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         KECCAK_GENERAL
     }
@@ -264,7 +264,7 @@ create_too_deep:
 // Pre stack: addr, codehash, redest
 // Post stack: (empty)
 global set_codehash:
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         // stack: addr, codehash, retdest
         DUP1 %insert_touched_addresses

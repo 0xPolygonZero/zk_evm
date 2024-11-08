@@ -36,7 +36,7 @@ global process_normalized_txn:
     // stack: sender, retdest
 
     // Assert sender has no code.
-    DUP1 %ext_code_empty 
+    DUP1 %ext_code_empty
     %assert_nonzero(invalid_txn_1)
     // stack: sender, retdest
 
@@ -218,7 +218,7 @@ process_contract_creation_txn_after_ef_check:
     {
         %poseidon_hash_code_unpadded
     }
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         KECCAK_GENERAL
     }

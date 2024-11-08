@@ -23,7 +23,7 @@ mpt_delete_leaf:
     PUSH 0 // empty node ptr
     SWAP1 JUMP
 
-#[cfg(feature = eth_mainnet)]
+#[cfg(not(feature = cdk_erigon))]
 {
     global delete_account:
         %addr_to_state_key

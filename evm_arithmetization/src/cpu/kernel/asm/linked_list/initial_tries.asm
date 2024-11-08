@@ -127,3 +127,7 @@ after_insert_slot:
     SWAP1
     %jump(insert_all_initial_slots)
 
+%macro store_initial_state
+    %store_initial_accounts
+    %store_initial_slots
+%endmacro

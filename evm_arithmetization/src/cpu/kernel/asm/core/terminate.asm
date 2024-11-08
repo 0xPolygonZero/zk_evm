@@ -86,7 +86,7 @@ global sys_selfdestruct:
     %stack (kexit_info, balance, address, recipient) -> (balance, address, recipient, kexit_info)
 
     // Set the balance of the address to 0.
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         // stack: balance, address, recipient, kexit_info
         PUSH 0

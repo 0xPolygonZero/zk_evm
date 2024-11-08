@@ -1,5 +1,15 @@
 // Hashing logic specific to a particular trie.
 
+#[cfg(not(feature = cdk_erigon))]
+{
+    %macro hash_state_trie
+        // stack: trie_len
+        PUSH @INITIAL_RLP_ADDR
+        // stack: rlp_start, dummy_trie_len
+        %mpt_hash_state_trie
+    %endmacro
+}
+
 global mpt_hash_state_trie:
     // stack: rlp_start, cur_len, retdest
     PUSH encode_account

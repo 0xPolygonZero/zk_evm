@@ -22,7 +22,7 @@ extcodehash_dead:
     %stack (address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
-#[cfg(feature = eth_mainnet)]
+#[cfg(not(feature = cdk_erigon))]
 {
 global extcodehash:
         // stack: address, retdest
@@ -53,20 +53,17 @@ global extcodehash:
 %%after:
 %endmacro
 
-#[cfg(feature = eth_mainnet)]
-{
-    %macro ext_code_empty
-        %extcodehash
+%macro ext_code_empty
+    %extcodehash
+    #[cfg(not(feature = cdk_erigon))]
+    {
         %eq_const(@EMPTY_STRING_KECCAK_HASH)
-    %endmacro
-}
-#[cfg(feature = cdk_erigon)]
-{
-    %macro ext_code_empty
-        %extcodehash
+    }
+    #[cfg(feature = cdk_erigon)]
+    {
         %eq_const(@EMPTY_STRING_POSEIDON_HASH)
-    %endmacro
-}
+    }
+%endmacro
 
 %macro extcodesize
     %stack (address) -> (address, %%after)

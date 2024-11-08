@@ -420,3 +420,37 @@ remove_all_slots_end:
     %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE)
     // stack: next_node_ptr
 %endmacro
+
+%macro set_nonce
+    // stack: address, nonce
+    %read_account_from_addr
+    // stack: payload_ptr, nonce
+    DUP1 %assert_nonzero
+    // stack: nonce_ptr, nonce
+    %mstore_trie_data
+    // stack: (empty)
+%endmacro
+
+%macro read_nonce
+    // stack: address
+    %mpt_read_state_trie
+    // stack: account_ptr
+    // The nonce is the first account field, so we deref the account pointer itself.
+    // Note: We don't need to handle account_ptr=0, as trie_data[0] = 0,
+    // so the deref will give 0 (the default nonce) as desired.
+    %mload_trie_data
+    // stack: nonce
+%endmacro
+
+%macro read_balance
+    // stack: address
+    %mpt_read_state_trie
+    // stack: account_ptr
+    DUP1 ISZERO %jumpi(%%retzero) // If the account pointer is null, return 0.
+    %add_const(1)
+    // stack: balance_ptr
+    %mload_trie_data
+    // stack: balance
+%%retzero:
+    // stack: 0
+%endmacro

@@ -76,15 +76,7 @@ global main:
 
 global store_initial:
     // Store the initial accounts and slots for hashing later
-    #[cfg(feature = eth_mainnet)]
-    {
-        %store_initial_accounts
-        %store_initial_slots
-    }
-    #[cfg(feature = cdk_erigon)]
-    {
-        %store_initial_state
-    }
+    %store_initial_state
    
 global after_store_initial:
     // Initialize the transaction and receipt trie root pointers.
@@ -243,16 +235,7 @@ global check_state_trie:
     %set_initial_state_trie
     // stack: trie_data_len
 
-    #[cfg(feature = eth_mainnet)]
-    {
-        PUSH @INITIAL_RLP_ADDR
-        // stack: rlp_start, trie_data_len
-        %mpt_hash_state_trie
-    }
-    #[cfg(feature = cdk_erigon)]
-    {
-        %smt_hash_state
-    }
+    %hash_state_trie
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
@@ -268,17 +251,7 @@ global check_state_trie:
 global check_final_state_trie:
     %set_final_tries
 
-    #[cfg(feature = eth_mainnet)]
-    {
-        PUSH @INITIAL_RLP_ADDR
-        // stack: rlp_start, dummy_trie_len
-        %mpt_hash_state_trie 
-    }
-    #[cfg(feature = cdk_erigon)]
-    {
-        %smt_hash_state
-    }
-    
+    %hash_state_trie
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
     %assert_eq
     // We don't need the trie data length here.

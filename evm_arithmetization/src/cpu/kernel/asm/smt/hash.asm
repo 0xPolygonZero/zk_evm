@@ -1,11 +1,11 @@
-%macro smt_hash_state
+%macro hash_state_trie
     %stack (cur_len) -> (cur_len, %%after)
-    %jump(smt_hash_state)
+    %jump(hash_state_trie)
 %%after:
 %endmacro
 
 // Root hash of the state SMT.
-global smt_hash_state:
+global hash_state_trie:
     // stack: cur_len, retdest
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
 

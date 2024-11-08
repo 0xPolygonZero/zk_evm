@@ -12,7 +12,7 @@ global revert_account_destroyed:
     PUSH revert_account_destroyed_contd DUP2
     %jump(remove_selfdestruct_list)
 revert_account_destroyed_contd:
-    #[cfg(feature = eth_mainnet)]
+    #[cfg(not(feature = cdk_erigon))]
     {
         // stack: address, target, prev_balance, retdest
         SWAP1
