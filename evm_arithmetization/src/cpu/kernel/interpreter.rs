@@ -172,7 +172,7 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
     code_map: &HashMap<H256, Vec<u8>>,
     prev: usize,
 ) -> JumpDestTableProcessed {
-    let ctx_proofs = (*jumpdest_table_rpc)
+    let ctx_proofs = jumpdest_table_rpc
         .iter()
         .flat_map(|(code_addr, ctx_jumpdests)| {
             let code = if code_map.contains_key(code_addr) {
