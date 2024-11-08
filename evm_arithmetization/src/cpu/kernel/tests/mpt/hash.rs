@@ -1,5 +1,6 @@
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256};
+use mpt_trie::nibbles::Nibbles;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -62,7 +63,10 @@ fn mpt_hash_hash() -> Result<()> {
 fn mpt_hash_leaf() -> Result<()> {
     let state_trie = get_state_world(
         Node::Leaf {
-            nibbles: 0xABC_u64.into(),
+            nibbles: Nibbles{
+                count: 64,
+                packed: 0xABC_u64.into(),
+            },
             value: test_account_1_rlp(),
         }
         .into(),
@@ -90,7 +94,10 @@ fn mpt_hash_extension_to_leaf() -> Result<()> {
 #[test]
 fn mpt_hash_branch_to_leaf() -> Result<()> {
     let leaf = Node::Leaf {
-        nibbles: 0xABC_u64.into(),
+        nibbles: Nibbles {
+            count: 63,
+            packed: 0xABC_u64.into(),
+        },
         value: test_account_2_rlp(),
     }
     .into();

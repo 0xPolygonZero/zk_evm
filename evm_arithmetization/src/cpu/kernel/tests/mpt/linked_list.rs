@@ -124,16 +124,15 @@ fn test_list_iterator() -> Result<()> {
         let Some([addr, _key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
             return Err(anyhow::Error::msg("Couldn't get value"));
         };
+        assert_eq!(addr, U256::MAX);
+        assert_eq!(ptr, U256::zero());
+        assert_eq!(ptr_cpy, U256::zero());
+        assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
+        assert_eq!(addr, U256::MAX);
+        assert_eq!(ptr, U256::zero());
+        assert_eq!(ptr_cpy, U256::zero());
+        assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
     }
-
-    assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
-    assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
-    assert_eq!(addr, U256::MAX);
-    assert_eq!(ptr, U256::zero());
-    assert_eq!(ptr_cpy, U256::zero());
-    assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
 
     Ok(())
 }
@@ -244,7 +243,7 @@ fn test_insert_storage() -> Result<()> {
         (Segment::StorageLinkedList as usize + init_len).into(),
     );
 
-    let insert_account_label = KERNEL.global_labels["insert_slot"];
+    let insert_slot_label = KERNEL.global_labels["insert_slot"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
@@ -266,10 +265,10 @@ fn test_insert_storage() -> Result<()> {
     interpreter
         .push(U256::from(address.0.as_slice()))
         .expect("The stack should not overflow");
-    interpreter.generation_state.registers.program_counter = insert_account_label;
+    interpreter.generation_state.registers.program_counter = insert_slot_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr]);
+    assert_eq!(interpreter.stack(), &[]);
 
     let accounts_mem = interpreter
         .generation_state
@@ -277,6 +276,8 @@ fn test_insert_storage() -> Result<()> {
         .get_preinit_memory(Segment::StorageLinkedList);
     let mut list =
         StorageLinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
+
+    log::debug!("ll = {:?}", list);
 
     let Some([inserted_addr, inserted_key, ptr, ptr_cpy, _]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -293,7 +294,7 @@ fn test_insert_storage() -> Result<()> {
     assert_eq!(inserted_addr, U256::from(address.0.as_slice()));
     assert_eq!(inserted_key, U256::from(key.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
-    assert_eq!(ptr_cpy, U256::zero()); // ptr_cpy is zero because the trie data segment is empty
+    assert_eq!(ptr_cpy, payload_ptr);
     assert_eq!(
         scaled_next_pos,
         (Segment::StorageLinkedList as usize).into()
@@ -531,8 +532,6 @@ fn test_insert_and_delete_storage() -> Result<()> {
                 H160::from_low_u64_be(i as u64 + 6),
             ]
         })
-        .collect::<HashSet<_>>()
-        .into_iter()
         .collect::<Vec<[H160; 2]>>();
     let delta_ptr = 100;
     let addr_not_in_list = Address::from_low_u64_be(4);
@@ -560,16 +559,28 @@ fn test_insert_and_delete_storage() -> Result<()> {
             .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_slot_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            addr + delta_ptr
+        assert_eq!(interpreter.stack(), &[]);
+
+        let mem = interpreter
+            .generation_state
+            .memory
+            .get_preinit_memory(Segment::StorageLinkedList);
+        log::debug!(
+            "for i = {i} storage linked list = {:?}",
+            StorageLinkedList::from_mem_and_segment(&mem, Segment::StorageLinkedList)
         );
-        // The ptr_cpy must be 0
+
+        assert_eq!(
+            interpreter.generation_state.memory.get_with_init(
+                MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 2)).unwrap(),
+            ),
+            (addr + delta_ptr).into()
+        );
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 3)).unwrap(),
             ),
-            i.into()
+            (addr + delta_ptr).into()
         );
     }
 
@@ -603,15 +614,18 @@ fn test_insert_and_delete_storage() -> Result<()> {
         interpreter.generation_state.registers.program_counter = insert_slot_label;
         interpreter.run()?;
 
+        assert_eq!(interpreter.stack(), &[]);
         assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            addr_in_list + delta_ptr
+            interpreter.generation_state.memory.get_with_init(
+                MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 2)).unwrap(),
+            ),
+            (addr_in_list + delta_ptr).into()
         );
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 3)).unwrap(),
             ),
-            i.into()
+            (addr_in_list + delta_ptr).into()
         );
     }
 
@@ -632,10 +646,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
 
     interpreter.run()?;
 
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::from(addr_not_in_list.0.as_slice()) + delta_ptr
-    );
+    assert_eq!(interpreter.stack(), &[]);
 
     // Now the list of accounts have [4, 5]
     addresses_and_keys.push([addr_not_in_list, key_not_in_list]);

@@ -46,6 +46,7 @@ after_mpt_read:
     %mload_trie_data
     %add_const(2)
     %mload_trie_data
+global debug_trie_storage_root:
     // stack: trie_storage_root, trie_account_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     SWAP1
     // stack: trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
