@@ -44,7 +44,7 @@ pub(crate) struct Cli {
     pub(crate) prover_config: CliProverConfig,
 
     /// The previous proof output.
-    #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
+    #[arg(short = 'f', long, env="ZERO_BIN_PREVIOUS_PROOF", value_hint = ValueHint::FilePath)]
     previous_proof: Option<PathBuf>,
 }
 
