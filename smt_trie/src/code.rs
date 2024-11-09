@@ -1,6 +1,6 @@
 /// Functions to hash contract bytecode using Poseidon.
 /// See `hashContractBytecode()` in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt-utils.js for reference implementation.
-use alloy::primitives::U256;
+use alloy::primitives::B256;
 use plonky2::field::types::Field;
 use plonky2::hash::poseidon::{self, Poseidon};
 
@@ -43,7 +43,7 @@ pub fn poseidon_pad_byte_vec(bytes: &mut Vec<u8>) {
     *bytes.last_mut().unwrap() |= 0x80;
 }
 
-pub fn hash_bytecode_h256(code: &[u8]) -> H256 {
+pub fn hash_bytecode_h256(code: &[u8]) -> B256 {
     hashout2h(hash_contract_bytecode(code.to_vec()))
 }
 

@@ -18,7 +18,7 @@ pub struct KeccakHash;
 
 impl Hasher for PoseidonHash {
     fn hash(bytes: &[u8]) -> H256 {
-        hash_bytecode_h256(bytes)
+        hash_bytecode_h256(bytes).compat()
     }
 }
 
@@ -410,7 +410,7 @@ impl Type2World {
             );
         }
         for (
-            addr,
+            &addr,
             Type2Entry {
                 balance,
                 nonce,
@@ -429,15 +429,15 @@ impl Type2World {
                 (code_length, key_code_length),
             ] {
                 if let Some(value) = value {
-                    let addr = compat::address(*addr);
-                    let value = compat::u256(*value);
+                    let addr = compat::address(addr);
+                    let value = (*value).compat();
                     smt.set(key_fn(addr), value);
                 }
             }
-            for (slot, value) in storage {
-                let addr = compat::address(*addr);
-                let slot = compat::u256(*slot);
-                let value = compat::u256(*value);
+            for (&slot, &value) in storage {
+                let addr = compat::address(addr);
+                let slot = slot.compat();
+                let value = value.compat();
                 smt.set(key_storage(addr, slot), value);
             }
         }
@@ -457,13 +457,9 @@ impl Type2World {
 
 // TODO(@sergerad): Remove this module once this crate uses alloy types.
 mod compat {
-    use alloy::primitives::{Address, U256};
+    use alloy::primitives::Address;
 
     pub(crate) fn address(addr: ethereum_types::H160) -> Address {
         Address::from_slice(addr.as_bytes())
-    }
-
-    pub(crate) fn u256(value: ethereum_types::U256) -> U256 {
-        U256::from_limbs(value.0)
     }
 }

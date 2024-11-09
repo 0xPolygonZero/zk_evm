@@ -1,4 +1,4 @@
-use alloy::primitives::U256;
+use alloy::primitives::{B256, U256};
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::Poseidon;
 
@@ -52,11 +52,9 @@ pub fn hashout2u(h: HashOut) -> U256 {
     key2u(Key(h.elements))
 }
 
-/// Convert a `HashOut` to a `H256`.
-pub fn hashout2h(h: HashOut) -> H256 {
-    let mut it = [0; 32];
-    hashout2u(h).to_big_endian(&mut it);
-    H256(it)
+/// Convert a `HashOut` to a `B256`.
+pub fn hashout2h(h: HashOut) -> B256 {
+    B256::new(hashout2u(h).to_be_bytes())
 }
 
 /// Convert a `Key` to a `U256`.
