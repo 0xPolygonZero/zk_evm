@@ -429,13 +429,13 @@ impl Type2World {
                 (code_length, key_code_length),
             ] {
                 if let Some(value) = value {
-                    let addr = alloy::primitives::Address::from_slice(addr.as_bytes());
+                    let addr = addr.compat();
                     let value = (*value).compat();
                     smt.set(key_fn(addr), value);
                 }
             }
             for (&slot, &value) in storage {
-                let addr = alloy::primitives::Address::from_slice(addr.as_bytes());
+                let addr = addr.compat();
                 let slot = slot.compat();
                 let value = value.compat();
                 smt.set(key_storage(addr, slot), value);
