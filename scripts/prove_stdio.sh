@@ -41,6 +41,7 @@ export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 INPUT_FILE=$1
 TEST_ONLY=$2
+USE_TEST_CONFIG=$3
 
 if [[ $INPUT_FILE == "" ]]; then
     echo "Please provide witness json input file, e.g. artifacts/witness_b19240705.json"
@@ -95,62 +96,72 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --quiet --release --package zero --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $TEST_OUT_PATH
-    if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
+    cargo run --quiet --release --package zero --bin leader -- \
+      --test-only \
+      --runtime in-memory \
+      --load-strategy on-demand \
+      --block-batch-size "$BLOCK_BATCH_SIZE" \
+      --proof-output-dir "$PROOF_OUTPUT_DIR" \
+      stdio < "$INPUT_FILE" &> "$TEST_OUT_PATH"
+
+    if grep -q 'All proof witnesses have been generated successfully.' "$TEST_OUT_PATH"; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
-        rm $TEST_OUT_PATH
+        rm "$TEST_OUT_PATH"
         exit
     else
         # Some error occurred, display the logs and exit.
-        cat $OUT_LOG_PATH
-        echo "Failed to create proof witnesses. See $OUT_LOG_PATH for more details."
+        cat "$TEST_OUT_PATH"
+        echo "Failed to create proof witnesses. See $TEST_OUT_PATH for more details."
         exit 1
     fi
 fi
 
 cargo build --release --jobs "$num_procs"
 
-
 start_time=$(date +%s%N)
-"${REPO_ROOT}/target/release/leader" --runtime in-memory --load-strategy on-demand -n 1 --block-batch-size $BLOCK_BATCH_SIZE \
- --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
+
+cmd=("${REPO_ROOT}/target/release/leader" --runtime in-memory \
+    --load-strategy on-demand -n 1 \
+    --block-batch-size "$BLOCK_BATCH_SIZE")
+
+if [[ "$USE_TEST_CONFIG" == "use_test_config" ]]; then
+    cmd+=("--use-test-config")
+fi
+
+"${cmd[@]}" --proof-output-dir "$PROOF_OUTPUT_DIR" stdio < "$INPUT_FILE" &> "$OUTPUT_LOG"
 end_time=$(date +%s%N)
 
-cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+grep "Successfully wrote to disk proof file " "$OUTPUT_LOG" | awk '{print $NF}' | tee "$PROOFS_FILE_LIST"
 if [ ! -s "$PROOFS_FILE_LIST" ]; then
   # Some error occurred, display the logs and exit.
-  cat $OUTPUT_LOG
+  cat "$OUTPUT_LOG"
   echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
   exit 1
 fi
 
-cat $PROOFS_FILE_LIST | while read proof_file;
+while read -r proof_file;
 do
   echo "Verifying proof file $proof_file"
-  verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
-  "${REPO_ROOT}/target/release/verifier" -f $proof_file | tee $verify_file
-  if grep -q 'All proofs verified successfully!' $verify_file; then
+  verify_file=$PROOF_OUTPUT_DIR/verify_$(basename "$proof_file").out
+  "${REPO_ROOT}/target/release/verifier" -f "$proof_file" | tee "$verify_file"
+  if grep -q 'All proofs verified successfully!' "$verify_file"; then
       echo "Proof verification for file $proof_file successful";
-      rm $verify_file # we keep the generated proof for potential reuse
+      rm "$verify_file" # we keep the generated proof for potential reuse
   else
       # Some error occurred with verification, display the logs and exit.
-      cat $verify_file
+      cat "$verify_file"
       echo "There was an issue with proof verification. See $verify_file for more details.";
       exit 1
   fi
-done
+done < "$PROOFS_FILE_LIST"
 
 duration_ns=$((end_time - start_time))
 duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
 
 echo "Success!"
-echo "Proving duration:" $duration_sec " seconds"
+echo "Proving duration: $duration_sec seconds"
 echo "Note, this duration is inclusive of circuit handling and overall process initialization";
 
 # Clean up in case of success
-rm $OUTPUT_LOG
-
-
-
-
+rm "$OUTPUT_LOG"
 

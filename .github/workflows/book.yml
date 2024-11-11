@@ -1,3 +1,5 @@
+---   # MD Book generation and deployment workflow
+
 name: zkEVM mdbook
 
 on:
@@ -12,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -47,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Download built book
         uses: actions/download-artifact@v3

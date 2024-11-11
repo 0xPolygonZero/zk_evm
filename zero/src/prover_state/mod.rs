@@ -12,9 +12,12 @@
 //! - Global prover state management via the `P_STATE` static and the
 //!   [`p_state`] function.
 use std::borrow::Borrow;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
+use evm_arithmetization::testing_utils::TEST_STARK_CONFIG;
 use evm_arithmetization::{
     fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
     AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
@@ -207,25 +210,27 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        config: &StarkConfig,
+        abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues> {
-        let config = StarkConfig::standard_fast_config();
         let all_stark = AllStark::default();
 
         let all_proof = prove(
             &all_stark,
-            &config,
+            config,
             input,
             segment_data,
             &mut TimingTree::default(),
-            None,
+            abort_signal.clone(),
         )?;
 
-        let table_circuits = self.load_table_circuits(&config, &all_proof)?;
+        let table_circuits = self.load_table_circuits(config, &all_proof)?;
 
-        let proof_with_pvs =
-            p_state()
-                .state
-                .prove_segment_after_initial_stark(all_proof, &table_circuits, None)?;
+        let proof_with_pvs = p_state().state.prove_segment_after_initial_stark(
+            all_proof,
+            &table_circuits,
+            abort_signal,
+        )?;
 
         Ok(proof_with_pvs)
     }
@@ -236,14 +241,16 @@ impl ProverStateManager {
         &self,
         input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
+        config: &StarkConfig,
+        abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let p_out = p_state().state.prove_segment(
             &AllStark::default(),
-            &StarkConfig::standard_fast_config(),
+            config,
             input,
             segment_data,
             &mut TimingTree::default(),
-            None,
+            abort_signal,
         )?;
 
         let ProverOutputData {
@@ -267,17 +274,33 @@ impl ProverStateManager {
     pub fn generate_segment_proof(
         &self,
         input: (TrimmedGenerationInputs, GenerationSegmentData),
+        abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProofWithPublicValues> {
         let (generation_inputs, mut segment_data) = input;
+        let config = if self.circuit_config.use_test_config {
+            TEST_STARK_CONFIG
+        } else {
+            StarkConfig::standard_fast_config()
+        };
 
         match self.persistence {
             CircuitPersistence::None | CircuitPersistence::Disk(TableLoadStrategy::Monolithic) => {
                 info!("using monolithic circuit {:?}", self);
-                self.segment_proof_monolithic(generation_inputs, &mut segment_data)
+                self.segment_proof_monolithic(
+                    generation_inputs,
+                    &mut segment_data,
+                    &config,
+                    abort_signal,
+                )
             }
             CircuitPersistence::Disk(TableLoadStrategy::OnDemand) => {
                 info!("using on demand circuit {:?}", self);
-                self.segment_proof_on_demand(generation_inputs, &mut segment_data)
+                self.segment_proof_on_demand(
+                    generation_inputs,
+                    &mut segment_data,
+                    &config,
+                    abort_signal,
+                )
             }
         }
     }

@@ -26,6 +26,7 @@ hashbrown.workspace = true
 hex.workspace = true
 itertools.workspace = true
 keccak-hash.workspace = true
+lazy-regex = "3.3.0"
 lru.workspace = true
 mpt_trie.workspace = true
 num-traits.workspace = true
@@ -33,7 +34,6 @@ once_cell.workspace = true
 paladin-core.workspace = true
 plonky2.workspace = true
 plonky2_maybe_rayon.workspace = true
-regex = "1.5.4"
 rlp.workspace = true
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
 serde.workspace = true

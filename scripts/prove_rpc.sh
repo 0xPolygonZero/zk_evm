@@ -134,6 +134,7 @@ else
     echo "Proving blocks from ($START_BLOCK) to ($END_BLOCK)"
     command="cargo r --release --package zero --bin leader -- \
 --runtime in-memory \
+--use-test-config \
 --load-strategy on-demand \
 --proof-output-dir $PROOF_OUTPUT_DIR \
 --block-batch-size $BLOCK_BATCH_SIZE \

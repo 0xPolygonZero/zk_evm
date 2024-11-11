@@ -5,16 +5,16 @@ use std::collections::{BTreeMap, HashSet};
 
 use anyhow::{bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
+use evm_arithmetization::{
+    tries::SmtKey,
+    world::{Type2Entry, Type2World},
+};
 use itertools::EitherOrBoth;
 use keccak_hash::H256;
 use nunny::NonEmpty;
 use stackstack::Stack;
 
-use crate::{
-    tries::SmtKey,
-    wire::{Instruction, SmtLeaf, SmtLeafType},
-    world::{Type2Entry, Type2World},
-};
+use crate::wire::{Instruction, SmtLeaf, SmtLeafType};
 
 pub struct Frontend {
     pub world: Type2World,
@@ -155,8 +155,8 @@ fn visit(
                     collated.nonce = Some(value)
                 }
                 SmtLeafType::Code => {
-                    ensure!(collated.code.is_none());
-                    collated.code = Some(value)
+                    ensure!(collated.code_hash.is_none());
+                    collated.code_hash = Some(value)
                 }
                 SmtLeafType::Storage(slot) => {
                     ensure!(slot.len() <= 32);
@@ -175,7 +175,7 @@ fn visit(
 
 #[test]
 fn test_tries() {
-    use crate::world::World as _;
+    use evm_arithmetization::world::World as _;
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("cases/hermez_cdk_erigon.json"))
             .unwrap()

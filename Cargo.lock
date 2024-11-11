@@ -2030,9 +2030,14 @@ dependencies = [
 name = "evm_arithmetization"
 version = "0.4.0"
 dependencies = [
+ "alloy",
+ "alloy-compat",
  "anyhow",
+ "bitvec",
  "bytes",
+ "copyvec",
  "criterion",
+ "either",
  "env_logger 0.11.5",
  "ethereum-types",
  "hashbrown",
@@ -2068,6 +2073,7 @@ dependencies = [
  "tokio",
  "tower-lsp",
  "tracing",
+ "u4",
  "url",
  "zk_evm_common",
  "zk_evm_proc_macro",
@@ -2862,6 +2868,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy-regex"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d8e41c97e6bc7ecb552016274b99fbb5d035e8de288c582d9b933af6677bfda"
+dependencies = [
+ "lazy-regex-proc_macros",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "lazy-regex-proc_macros"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76e1d8b05d672c53cb9c7b920bbba8783845ae4f0b076e02a3db1d02c81b4163"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.77",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3398,8 +3427,7 @@ dependencies = [
 [[package]]
 name = "paladin-core"
 version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6343e2767eb6ac7f55ca8b869df03c2986b88f0b9ad09cada898b3770ac436e3"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3430,9 +3458,8 @@ dependencies = [
 
 [[package]]
 name = "paladin-opkind-derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bde85d55c108d4eef3404b4c88d1982a270dc11146a085f4f45c1548b4d2b4c"
+version = "0.4.4"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
 dependencies = [
  "quote",
  "syn 2.0.77",
@@ -5857,6 +5884,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5883,6 +5920,7 @@ dependencies = [
  "itertools 0.13.0",
  "jemallocator",
  "keccak-hash 0.10.0",
+ "lazy-regex",
  "lru",
  "mockall",
  "mpt_trie",
@@ -5892,7 +5930,6 @@ dependencies = [
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.12.2",
- "regex",
  "rlp",
  "ruint",
  "serde",
