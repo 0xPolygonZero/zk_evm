@@ -363,8 +363,6 @@ impl<F: RichField> GenerationState<F> {
 
         log::info!("CONTEXT {} NEXT {}", batch_context, self.next_txn_index);
 
-        let curr_txn_idx = self.next_txn_index - 1;
-
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
         }
@@ -830,16 +828,16 @@ impl<F: RichField> GenerationState<F> {
             self.next_txn_index - 1
         } else {
             0
-          };
+        };
         let rpcw = self.inputs.jumpdest_table[idx].clone();
         log::info!("{:#?}", &rpcw);
-        // let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
-        //     get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code,
-        // prev_max_wctx) });
-        // if rpcp.is_some() {
-        //     self.jumpdest_table = rpcp;
-        //     return Ok(());
-        // }
+        let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
+            get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev_max_wctx)
+        });
+        if rpcp.is_some() {
+            self.jumpdest_table = rpcp;
+            return Ok(());
+        }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_table = None;
@@ -851,11 +849,11 @@ impl<F: RichField> GenerationState<F> {
         log::info!("{:#?}", &simw);
         // log::info!("{:#?}", &simp);
 
-        // if rpcp.is_some() {
-        //     dbg!(rpcp.as_ref(), Some(&simp));
-        //     // assert!(simp.is_subset(rpcp.as_ref().unwrap()));
-        //     self.jumpdest_table = rpcp;
-        // }
+        if rpcp.is_some() {
+            dbg!(rpcp.as_ref(), Some(&simp));
+            // assert!(simp.is_subset(rpcp.as_ref().unwrap()));
+            self.jumpdest_table = rpcp;
+        }
         // self.jumpdest_table = rpcp;
         self.jumpdest_table = Some(simp);
         return Ok(());
