@@ -1,12 +1,17 @@
+---
+# Cron running every sunday at 12PM UTC which will run the integration and benchmarking tests for Jerigon Zero
+
 name: Jerigon Zero Testing
 
 on:
-  # Uncomment when ready to run on a schedule
+  # TODO @temaniarpit27 - Change this before merge
+  # # Uncomment when ready to run on a schedule
   # schedule:
-  #   # Run every Sunday at 12:00 AM (UTC)
-  #   - cron: "0 0 * * 0"
+  #   # Run every Sunday at 12:00 PM (UTC)
+  #   - cron: "0 12 * * SUN"
   push:
     branches: [develop]
+  # TODO @temaniarpit27 - Remove this before merge
   pull_request:
     branches:
       - "**"
@@ -21,22 +26,19 @@ env:
 jobs:
   jerigon_zero_testing:
     name: Jerigon Zero Testing - Integration and Benchmarking
-    runs-on: zero-ci
+    runs-on: zero-reg
+    timeout-minutes: 300
+    concurrency:
+      group: jerigon_zero_testing
+      cancel-in-progress: true
     steps:
-      - name: Checkout zk_evm code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust
 
-      - name: Setup Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Set up Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
+      # Build optimized for the native CPU with `lld` linker and allow detailed performance profiling.
       - name: Build the project
         run: |
-          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld -Copt-level=3' cargo build --release
+          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld' cargo build --release
           sudo sysctl kernel.perf_event_paranoid=0
 
       - name: Set up QEMU
@@ -52,9 +54,10 @@ jobs:
       - name: Run Erigon Network
         run: |
           cd ..
-          tar xf "$(pwd)/zk_evm/test_data/erigon-data.tar.gz" || {
-            echo "Failed to extract erigon-data.tar.gz"; exit 1;
-          }
+          curl -o erigon-test-data.tar.gz \
+          https://224d54070bdacdb423e0b7594ebdc231.ipfscdn.io/ipfs/bafybeigpm34mzhebd24uljuntmhulo6dpniqf75xtxcviztemb2fi5q74i \
+          || { echo "Failed to download erigon.tar.gz"; exit 1; }
+          tar xf ./erigon-test-data.tar.gz
           docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
           docker run -d --name erigon \
             -p 8545:8545 \
@@ -73,30 +76,28 @@ jobs:
         run: |
           export ETH_RPC_URL="http://localhost:8545"
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-          random_numbers=($(shuf -i 1-500 -n 5))
-          for number in "${random_numbers[@]}"; do
-            hex_number="0x$(echo "obase=16; $number" | bc)"
-            OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./scripts/prove_rpc.sh $hex_number $hex_number $ETH_RPC_URL jerigon true 3000 100
-          done
+          OUTPUT_TO_TERMINAL=true ./scripts/prove_rpc.sh 1000 1100 $ETH_RPC_URL jerigon 0 3000 100 test_only
 
       - name: Download Previous Results
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: cron_jerigon_zero_testing.yml
           workflow_conclusion: success
-          name: jerigon_zero_benchmark
+          name: jerigon_zero_testing
           path: ./
           if_no_artifact_found: ignore
 
       - name: Run the Benchmark Script
         run: |
           export ETH_RPC_URL="http://localhost:8545"
-          ./scripts/jerigon_zero_benchmark.sh
+          ./scripts/jerigon_zero_benchmark.bash
 
       - name: Upload New Results
         uses: actions/upload-artifact@v4
         with:
-          name: jerigon_zero_benchmark
-          path: ./jerigon_zero_output.log
+          name: jerigon_zero_testing
+          path: |
+            ./jerigon_zero_benchmark.log
+            ./jerigon_zero_error.log
           retention-days: 90
           overwrite: true
