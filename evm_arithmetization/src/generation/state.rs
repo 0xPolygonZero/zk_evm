@@ -398,8 +398,6 @@ pub struct GenerationState<F: RichField> {
     /// Provides quick access to pointers that reference the memory location of
     /// either and account or a slot in the respective access list.
     pub(crate) state_ptrs: LinkedListsPtrs,
-
-    pub(crate) max_wctx: Vec<usize>,
 }
 
 impl<F: RichField> GenerationState<F> {
@@ -465,7 +463,6 @@ impl<F: RichField> GenerationState<F> {
             access_lists_ptrs: LinkedListsPtrs::default(),
             state_ptrs: LinkedListsPtrs::default(),
             ger_prover_inputs,
-            max_wctx: vec![],
         };
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
@@ -581,7 +578,6 @@ impl<F: RichField> GenerationState<F> {
             jumpdest_table: self.jumpdest_table.clone(),
             access_lists_ptrs: self.access_lists_ptrs.clone(),
             state_ptrs: self.state_ptrs.clone(),
-            max_wctx: self.max_wctx.clone(),
         }
     }
 

@@ -373,20 +373,9 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        // if [2, 3, 4].contains(&batch_context) {
-        //     return Ok(U256::zero());
-        // }
-
         if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&batch_context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
-            // if curr_txn_idx + 1 != self.max_wctx.len() {
-            //     self.max_wctx.push(0)
-            // }
-            // self.max_wctx[curr_txn_idx] = std::cmp::max(
-            //     self.max_wctx[curr_txn_idx],
-            //     jumpdest_table.largest_witness_ctx,
-            // );
             Ok((next_jumpdest_address + 1).into())
         } else {
             jumpdest_table.remove_ctx(&batch_context);
