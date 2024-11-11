@@ -375,20 +375,20 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if [2, 3, 4].contains(&batch_context) {
-            return Ok(U256::zero());
-        }
+        // if [2, 3, 4].contains(&batch_context) {
+        //     return Ok(U256::zero());
+        // }
 
         if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&batch_context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
-            if curr_txn_idx + 1 != self.max_wctx.len() {
-                self.max_wctx.push(0)
-            }
-            self.max_wctx[curr_txn_idx] = std::cmp::max(
-                self.max_wctx[curr_txn_idx],
-                jumpdest_table.largest_witness_ctx,
-            );
+            // if curr_txn_idx + 1 != self.max_wctx.len() {
+            //     self.max_wctx.push(0)
+            // }
+            // self.max_wctx[curr_txn_idx] = std::cmp::max(
+            //     self.max_wctx[curr_txn_idx],
+            //     jumpdest_table.largest_witness_ctx,
+            // );
             Ok((next_jumpdest_address + 1).into())
         } else {
             jumpdest_table.remove_ctx(&batch_context);
@@ -806,12 +806,36 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        let prev_max_wctx = self.max_wctx.last().copied().unwrap_or(0);
-        let rpcw = self.inputs.jumpdest_table.clone();
+        // let prev_max_wctx = self.max_wctx.last().copied().unwrap_or(0);
+        let prev_max_wctx: usize = 0;
+        //  self
+        //     .inputs
+        //     .jumpdest_table
+        //     .get(self.next_txn_index - 1)
+        //     .map(|x| x.as_ref())
+        //     .flatten()
+        //     .map(|jdt| {
+        //         jdt.iter()
+        //             .map(|(_h, jdt)| jdt.keys().max().copied().unwrap_or(0))
+        //             .max()
+        //             .unwrap_or(0)
+        //     })
+        //     .unwrap_or(0)
+        //     + 4;
+        let tx_batch_order = self.next_txn_index;
+        log::info!("TXNUM: {}", self.next_txn_index);
+        log::info!("TXLEN: {}", self.inputs.txn_hashes.len());
+        log::info!("TX: {}", self.inputs.txn_number_before);
+        let idx = if 0 < self.next_txn_index {
+            self.next_txn_index - 1
+        } else {
+            0
+          };
+        let rpcw = self.inputs.jumpdest_table[idx].clone();
         log::info!("{:#?}", &rpcw);
-        let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
-            get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev_max_wctx)
-        });
+        // let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
+        //     get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code,
+        // prev_max_wctx) });
         // if rpcp.is_some() {
         //     self.jumpdest_table = rpcp;
         //     return Ok(());
@@ -823,16 +847,17 @@ impl<F: RichField> GenerationState<F> {
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
         // self.jumpdest_table = Some(simp.clone());
         log::info!("{:#?}", &rpcw);
-        log::info!("{:#?}", &rpcp);
+        // log::info!("{:#?}", &rpcp);
         log::info!("{:#?}", &simw);
-        log::info!("{:#?}", &simp);
+        // log::info!("{:#?}", &simp);
 
         // if rpcp.is_some() {
         //     dbg!(rpcp.as_ref(), Some(&simp));
         //     // assert!(simp.is_subset(rpcp.as_ref().unwrap()));
         //     self.jumpdest_table = rpcp;
         // }
-        self.jumpdest_table = rpcp;
+        // self.jumpdest_table = rpcp;
+        self.jumpdest_table = Some(simp);
         return Ok(());
     }
 

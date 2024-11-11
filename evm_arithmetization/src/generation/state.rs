@@ -355,6 +355,7 @@ pub struct GenerationState<F: RichField> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
+    /// In the batch / block??
     pub(crate) next_txn_index: usize,
 
     /// Memory used by stale contexts can be pruned so proving segments can be

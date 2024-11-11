@@ -86,44 +86,53 @@ impl JumpDestTableProcessed {
     }
 
     pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut Vec<usize>> {
-        log::info!(
-            "START: batch_ctx {} :: max_b {} :: max-w {} {:#?}",
-            batch_ctx,
-            self.largest_batch_ctx,
-            self.largest_witness_ctx,
-            self.index
-        );
-
-        if *batch_ctx <= self.largest_batch_ctx {
-            let witness_ctx = self.index[batch_ctx];
-            return self.witness_contexts.get_mut(&witness_ctx);
-        }
-        self.largest_batch_ctx = *batch_ctx;
-
-        let mut new_witness_ctx = self.largest_witness_ctx;
-        for i in (self.largest_witness_ctx + 1).. {
-            if self.witness_contexts.contains_key(&i) {
-                new_witness_ctx = i;
-                break;
-            }
-        }
-
-        self.largest_witness_ctx = new_witness_ctx;
-        self.index.insert(*batch_ctx, new_witness_ctx);
-        log::info!(
-            "END:{} {}->{} {:#?}",
-            batch_ctx,
-            self.largest_batch_ctx,
-            self.largest_witness_ctx,
-            self.index
-        );
-
-        self.witness_contexts.get_mut(&new_witness_ctx)
+        log::info!("query_ctx {}", batch_ctx,);
+        self.witness_contexts.get_mut(batch_ctx)
     }
 
+    // pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut
+    // Vec<usize>> {     log::info!(
+    //         "START: batch_ctx {} :: max_b {} :: max-w {} {:#?}",
+    //         batch_ctx,
+    //         self.largest_batch_ctx,
+    //         self.largest_witness_ctx,
+    //         self.index
+    //     );
+
+    //     if *batch_ctx <= self.largest_batch_ctx {
+    //         let witness_ctx = self.index[batch_ctx];
+    //         return self.witness_contexts.get_mut(&witness_ctx);
+    //     }
+    //     self.largest_batch_ctx = *batch_ctx;
+
+    //     let mut new_witness_ctx = self.largest_witness_ctx;
+    //     for i in (self.largest_witness_ctx + 1).. {
+    //         if self.witness_contexts.contains_key(&i) {
+    //             new_witness_ctx = i;
+    //             break;
+    //         }
+    //     }
+
+    //     self.largest_witness_ctx = new_witness_ctx;
+    //     self.index.insert(*batch_ctx, new_witness_ctx);
+    //     log::info!(
+    //         "END:{} {}->{} {:#?}",
+    //         batch_ctx,
+    //         self.largest_batch_ctx,
+    //         self.largest_witness_ctx,
+    //         self.index
+    //     );
+
+    //     self.witness_contexts.get_mut(&new_witness_ctx)
+    // }
+
+    // pub fn remove_ctx(&mut self, batch_ctx: &usize) {
+    //     let witness_index = self.index[batch_ctx];
+    //     self.witness_contexts.remove(&witness_index);
+    // }
+
     pub fn remove_ctx(&mut self, batch_ctx: &usize) {
-        let witness_index = self.index[batch_ctx];
-        self.witness_contexts.remove(&witness_index);
+        self.witness_contexts.remove(&batch_ctx);
     }
 
     // pub fn last_ctx(self) -> usize {

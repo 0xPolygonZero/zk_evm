@@ -2,6 +2,7 @@ use core::{convert::Into as _, option::Option::None};
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
+    iter::repeat,
     mem,
 };
 
@@ -211,12 +212,17 @@ pub fn entrypoint(
                         // the whole batch. There is an optimization opportunity
                         // here.
                         dbg!(&jumpdest_tables);
-                        let res = jumpdest_tables
-                            .into_iter()
-                            .collect::<Option<Vec<_>>>()
-                            .map(|jdt| JumpDestTableWitness::merge(jdt.iter()).0);
-                        dbg!(&res);
-                        res
+                        // let res = jumpdest_tables
+                        //     .into_iter()
+                        //     .collect::<Option<Vec<_>>>()
+                        //     .map(|jdt| JumpDestTableWitness::merge(jdt.iter()).0);
+                        // dbg!(&res);
+
+                        if jumpdest_tables.iter().any(Option::is_none) {
+                            repeat(None).take(jumpdest_tables.len()).collect::<Vec<_>>()
+                        } else {
+                            jumpdest_tables
+                        }
                     },
                 }
             },

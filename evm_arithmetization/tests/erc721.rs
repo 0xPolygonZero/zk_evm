@@ -199,7 +199,7 @@ fn test_erc721() -> anyhow::Result<()> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
-        jumpdest_table: None,
+        jumpdest_table: vec![None],
     };
 
     let max_cpu_len_log = 20;
