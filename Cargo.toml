@@ -2,7 +2,7 @@
 members = [
   "common",
   "compat",
-  "evm_arithmetization",
+  "evm_arithmetization", "hermez-smt",
   "mpt_trie",
   "proc_macro",
   "scripts",
