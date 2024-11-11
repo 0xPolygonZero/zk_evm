@@ -18,7 +18,7 @@ pub struct KeccakHash;
 
 impl Hasher for PoseidonHash {
     fn hash(bytes: &[u8]) -> H256 {
-        hash_bytecode_h256(bytes)
+        hash_bytecode_h256(bytes).compat()
     }
 }
 
@@ -367,9 +367,8 @@ impl World for Type2World {
         Ok(())
     }
     fn root(&mut self) -> H256 {
-        let mut it = [0; 32];
-        smt_trie::utils::hashout2u(self.as_smt().root).to_big_endian(&mut it);
-        H256(it)
+        let root = smt_trie::utils::hashout2u(self.as_smt().root);
+        H256::from(root.to_be_bytes())
     }
 }
 
@@ -411,7 +410,7 @@ impl Type2World {
             );
         }
         for (
-            addr,
+            &addr,
             Type2Entry {
                 balance,
                 nonce,
@@ -430,11 +429,16 @@ impl Type2World {
                 (code_length, key_code_length),
             ] {
                 if let Some(value) = value {
-                    smt.set(key_fn(*addr), *value);
+                    let addr = addr.compat();
+                    let value = (*value).compat();
+                    smt.set(key_fn(addr), value);
                 }
             }
-            for (slot, value) in storage {
-                smt.set(key_storage(*addr, *slot), *value);
+            for (&slot, &value) in storage {
+                let addr = addr.compat();
+                let slot = slot.compat();
+                let value = value.compat();
+                smt.set(key_storage(addr, slot), value);
             }
         }
         smt
