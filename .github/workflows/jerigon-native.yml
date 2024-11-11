@@ -1,3 +1,5 @@
+---   # Run and populate blockchain with transactions and generate proofs using native tracer
+
 name: Jerigon Integration
 
 on:
@@ -19,7 +21,6 @@ jobs:
     name: Native tracer proof generation
     runs-on: zero-ci
     timeout-minutes: 30
-    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -52,16 +53,17 @@ jobs:
         run: |
           echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
           sudo apt update
-          sudo apt install kurtosis-cli
+          sudo apt install kurtosis-cli=1.3.1
 
-      #It is much easier to use cast tool in scripts so install foundry
+      # It is much easier to use cast tool in scripts so install foundry
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run cancun test network
         run: |
           docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
-          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.0.0 --args-file jerigon-test-network/network_params.yml
+          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.0.0 \
+            --args-file jerigon-test-network/network_params.yml
 
       - name: Generate blocks with transactions
         run: |
@@ -74,14 +76,14 @@ jobs:
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           ulimit -n 8192
-          OUTPUT_TO_TERMINAL=true ./scripts/prove_rpc.sh 0x1 0xf $ETH_RPC_URL native true 3000 100 test_only
+          OUTPUT_TO_TERMINAL=true ./scripts/prove_rpc.sh 1 15 $ETH_RPC_URL native 0 3000 100 test_only
           echo "Proving blocks in test_only mode finished"
 
       - name: Run prove blocks with native tracer in real mode
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./scripts/prove_rpc.sh 0x4 0x7 $ETH_RPC_URL native true 3000 100
+          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./scripts/prove_rpc.sh 4 7 $ETH_RPC_URL native 3 3000 100
           echo "Proving blocks in real mode finished"
 
       - name: Shut down network

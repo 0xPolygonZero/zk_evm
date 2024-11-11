@@ -1,0 +1,26 @@
+---  # Workflow to run shellckeck on all shell scripts
+
+name: Shellcheck
+on:
+  pull_request:
+    paths:
+      - '**/*.sh'
+      - 'scripts/**'
+  workflow_dispatch:
+    branches:
+      - "**"
+
+jobs:
+  shellcheck_scripts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install shellcheck=0.8.0-2
+
+      - name: Run shellcheck
+        run: |
+          cd scripts
+          shellcheck ./*.sh

@@ -425,13 +425,13 @@ For testing proof generation for blocks, the `testing` branch should be used.
 If you want to generate a full block proof, you can use `tools/prove_rpc.sh`:
 
 ```sh
-./prove_rpc.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT> <RPC_TYPE> <IGNORE_PREVIOUS_PROOFS>
+./prove_rpc.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT> <RPC_TYPE> <CHECKPOINT_BLOCK>
 ```
 
 Which may look like this:
 
 ```sh
-./prove_rpc.sh 17 18 http://127.0.0.1:8545 jerigon false
+./prove_rpc.sh 17 18 http://127.0.0.1:8545 jerigon
 ```
 
 Which will attempt to generate proofs for blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
@@ -439,7 +439,7 @@ Which will attempt to generate proofs for blocks `17` & `18` consecutively and i
 A few other notes:
 
 - Proving blocks is very resource intensive in terms of both CPU and memory. You can also only generate the witness for a block instead (see [Generating Witnesses Only](#generating-witnesses-only)) to significantly reduce the CPU and memory requirements.
-- Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you can also disable this requirement by passing `true` for `<IGNORE_PREVIOUS_PROOFS>` (which internally just sets the current checkpoint height to the previous block height).
+- Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you must specify a `<CHECKPOINT_BLOCK>`. The above example omits this argument which causes the command to treat block `16` as the checkpoint.
 - When proving multiple blocks concurrently, one may need to increase the system resource usage limit because of the number of RPC connections opened simultaneously, in particular when running a native tracer. For Linux systems, it is recommended to set `ulimit` to 8192.
 
 ### Generating Witnesses Only
@@ -447,13 +447,13 @@ A few other notes:
 If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/prove_rpc.sh` in the `test_only` mode:
 
 ```sh
-./prove_rpc.sh <START_BLOCK> <END_BLOCK> <FULL_NODE_ENDPOINT> <RPC_TYPE> <IGNORE_PREVIOUS_PROOFS> <BACKOFF> <RETRIES> test_only
+./prove_rpc.sh <START_BLOCK> <END_BLOCK> <FULL_NODE_ENDPOINT> <RPC_TYPE> <CHECKPOINT_BLOCK> <BACKOFF> <RETRIES> test_only
 ```
 
 Filled in:
 
 ```sh
-./prove_rpc.sh 18299898 18299899 http://34.89.57.138:8545 jerigon true 0 0 test_only
+./prove_rpc.sh 18299898 18299899 http://34.89.57.138:8545 jerigon 18299897 0 0 test_only
 ```
 
 Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.
@@ -477,6 +477,18 @@ echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false
 ```
 
 Move the generated files to the appropriate subdirectory, and they will be automatically included in the test run.
+
+
+### Proving blocks using docker compose setup and leader-worker amqp communication
+
+To prove blocks using the docker compose setup and independent container leader and worker execution, you can use the `prove_stdio_docker_compose.sh` script:
+
+```sh
+cd scripts
+prove_stdio_docker_compose.sh ../path/to/block_witness.json
+```
+
+Check the script and `docker-compose.yml` file to further customize the setup (e.g. number of workers).
 
 ## License
 

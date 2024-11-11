@@ -1,3 +1,5 @@
+---   # Rust lint related checks
+
 name: lint
 
 on:
@@ -19,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/rust
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo clippy --all-targets --no-default-features --features cdk_erigon -- -D warnings
@@ -27,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/rust
       - uses: taiki-e/install-action@v2
         with:
@@ -38,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/rust
       - run: RUSTDOCFLAGS='-D warnings -A rustdoc::private_intra_doc_links' cargo doc --all --no-deps
       # TODO(zero): https://github.com/0xPolygonZero/zk_evm/issues/718
@@ -53,16 +55,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/rust
       - run: cargo fmt --check
   taplo-fmt:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/rust
       - uses: taiki-e/install-action@v2
         with:
           tool: taplo-cli
       - run: taplo fmt --check
+  outdated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-outdated
+      - run: cargo xtask outdated

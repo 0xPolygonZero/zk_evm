@@ -1,0 +1,50 @@
+---  # Docker compose setup for running the leader and worker with amqp communication
+version: "3"
+services:
+
+  leader:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: bash -c "leader --runtime amqp \
+      --load-strategy on-demand \
+      --proof-output-dir ./proofs \
+      --block-batch-size ${LEADER_BLOCK_BATCH_SIZE} stdio < /witness"
+    environment:
+      - RUST_LOG=info
+      - AMQP_URI=amqp://rabbitmq:5672
+    volumes:
+      - ${PROOF_OUTPUT_DIR}:/proofs/:rw
+      - ${LEADER_INPUT_JSON_FILE}:/witness:ro
+
+  worker:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=info
+      - AMQP_URI=amqp://rabbitmq:5672
+      - ZK_EVM_CACHE_DIR=/zk_evm_circuit_cache
+    command: worker
+    volumes:
+      - ${DOCKER_CIRCUITS_CACHE_DIR}/worker:/zk_evm_circuit_cache:rw
+    deploy:
+      mode: replicated
+      replicas: 2
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 30s
+      retries: 3

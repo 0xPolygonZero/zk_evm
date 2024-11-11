@@ -391,30 +391,3 @@ mcopy_empty:
     %jump(memcpy_bytes)
 %endmacro
 
-// Adds stale_ctx to the list of stale contexts. You need to return to a previous, older context with
-// a SET_CONTEXT instruction. By assumption, stale_ctx is greater than the current context.
-%macro prune_context
-    // stack: stale_ctx
-    GET_CONTEXT
-    // stack: curr_ctx, stale_ctx
-    // When we go to stale_ctx, we want its stack to contain curr_ctx so that we can immediately
-    // call SET_CONTEXT. For that, we need a stack length of 1, and store curr_ctx in Segment::Stack[0].
-    PUSH @SEGMENT_STACK
-    DUP3 ADD
-    // stack: stale_ctx_stack_addr, curr_ctx, stale_ctx
-    DUP2
-    // stack: curr_ctx, stale_ctx_stack_addr, curr_ctx, stale_ctx
-    MSTORE_GENERAL
-    // stack: curr_ctx, stale_ctx
-    PUSH @CTX_METADATA_STACK_SIZE
-    DUP3 ADD
-    // stack: stale_ctx_stack_size_addr, curr_ctx, stale_ctx
-    PUSH 1
-    MSTORE_GENERAL
-    // stack: curr_ctx, stale_ctx
-    POP
-    SET_CONTEXT
-    // We're now in stale_ctx, with stack: curr_ctx
-    %set_and_prune_ctx
-    // We're now in curr_ctx, with an empty stack.
-%endmacro

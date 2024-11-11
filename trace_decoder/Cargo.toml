@@ -11,15 +11,14 @@ keywords.workspace = true
 
 [dependencies]
 alloy.workspace = true
-alloy-compat = "0.1.0"
+alloy-compat.workspace = true
 anyhow.workspace = true
 bitflags.workspace = true
 bitvec.workspace = true
-build-array = "0.1.2"
 bytes.workspace = true
 ciborium.workspace = true
 ciborium-io.workspace = true
-copyvec = "0.2.0"
+copyvec.workspace = true
 either.workspace = true
 enum-as-inner.workspace = true
 ethereum-types.workspace = true
@@ -44,7 +43,7 @@ zk_evm_common.workspace = true
 
 [dev-dependencies]
 alloy.workspace = true
-alloy-compat = "0.1.0"
+alloy-compat.workspace = true
 assert2 = "0.3.15"
 camino = "1.1.9"
 clap.workspace = true

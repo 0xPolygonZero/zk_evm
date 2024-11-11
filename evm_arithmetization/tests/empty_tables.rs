@@ -2,9 +2,11 @@
 
 use std::time::Duration;
 
-use evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits;
+use evm_arithmetization::fixed_recursive_verifier::{AllRecursiveCircuits, RecursionConfig};
 use evm_arithmetization::prover::prove;
-use evm_arithmetization::testing_utils::{init_logger, segment_with_empty_tables};
+use evm_arithmetization::testing_utils::{
+    init_logger, segment_with_empty_tables, TEST_STARK_CONFIG,
+};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::AllStark;
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -12,10 +14,13 @@ use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::timed;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
-use starky::config::StarkConfig;
 
 /// This test focuses on testing zkVM proofs with some empty tables.
 #[test]
+// This test is run in CI under the "Run Specific Ignored Tests in Release Mode" job.
+// It is marked as ignored to prevent it from running by default in debug mode due to its longer
+// execution time.
+#[ignore]
 fn empty_tables() -> anyhow::Result<()> {
     type F = GoldilocksField;
     const D: usize = 2;
@@ -24,7 +29,7 @@ fn empty_tables() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
     let timing = &mut TimingTree::new("Empty Table Test", log::Level::Info);
 
     // Generate segment data
@@ -58,7 +63,7 @@ fn empty_tables() -> anyhow::Result<()> {
         AllRecursiveCircuits::<F, C, D>::new(
             &all_stark,
             &[16..17, 8..9, 7..8, 4..6, 8..9, 4..5, 16..17, 16..17, 16..17],
-            &config,
+            RecursionConfig::test_config(),
         )
     );
 
