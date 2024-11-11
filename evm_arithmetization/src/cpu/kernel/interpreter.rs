@@ -59,7 +59,8 @@ pub(crate) struct Interpreter<F: RichField> {
     /// halt_context
     pub(crate) halt_context: Option<usize>,
     /// A table of call contexts and the JUMPDEST offsets that they jumped to.
-    jumpdest_table: HashMap<usize, BTreeSet<usize>>,
+    // todo
+    jumpdest_table_interpreter: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
     /// Holds the value of the clock: the clock counts the number of operations
@@ -80,8 +81,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     state: &GenerationState<F>,
 ) -> Option<(JumpDestTableProcessed, JumpDestTableWitness)> {
     match state.jumpdest_table {
-        Some(_) => Default::default(),
-        None => {
+        _ => {
             let halt_pc = KERNEL.global_labels[final_label];
             let initial_context = state.registers.context;
             let mut interpreter = Interpreter::new_with_state_and_halt_condition(
@@ -95,19 +95,22 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             let _ = interpreter.run();
 
-            log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
+            log::trace!(
+                "jumpdest table = {:?}",
+                interpreter.jumpdest_table_interpreter
+            );
 
             let clock = interpreter.get_clock();
 
             let (jdtp, jdtw) = interpreter
                 .generation_state
-                .get_jumpdest_analysis_inputs(interpreter.jumpdest_table.clone());
+                .get_jumpdest_analysis_inputs(interpreter.jumpdest_table_interpreter.clone());
 
             log::debug!(
                 "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
                 clock
             );
-            interpreter.generation_state.jumpdest_table = Some(jdtp.clone());
+            // interpreter.generation_state.jumpdest_table = Some(jdtp.clone());
             Some((jdtp, jdtw))
         }
     }
@@ -121,6 +124,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
+    // todo
     pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
     pub(crate) access_lists_ptrs: LinkedListsPtrs,
     pub(crate) state_ptrs: LinkedListsPtrs,
@@ -178,6 +182,7 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
             let code = if code_map.contains_key(code_addr) {
                 &code_map[code_addr]
             } else {
+                panic!("code not found");
                 &vec![]
             };
             prove_context_jumpdests(code, ctx_jumpdests)
@@ -239,7 +244,8 @@ impl<F: RichField> Interpreter<F> {
             halt_context: None,
             #[cfg(test)]
             opcode_count: HashMap::new(),
-            jumpdest_table: HashMap::new(),
+            // todo
+            jumpdest_table_interpreter: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
@@ -271,7 +277,8 @@ impl<F: RichField> Interpreter<F> {
             halt_context: Some(halt_context),
             #[cfg(test)]
             opcode_count: HashMap::new(),
-            jumpdest_table: HashMap::new(),
+            // check
+            jumpdest_table_interpreter: HashMap::new(),
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
@@ -530,14 +537,15 @@ impl<F: RichField> Interpreter<F> {
             .content
     }
 
+    // what happens here?
     pub(crate) fn add_jumpdest_offset(&mut self, offset: usize) {
         if let Some(jumpdest_table) = self
-            .jumpdest_table
+            .jumpdest_table_interpreter
             .get_mut(&self.generation_state.registers.context)
         {
             jumpdest_table.insert(offset);
         } else {
-            self.jumpdest_table.insert(
+            self.jumpdest_table_interpreter.insert(
                 self.generation_state.registers.context,
                 BTreeSet::from([offset]),
             );

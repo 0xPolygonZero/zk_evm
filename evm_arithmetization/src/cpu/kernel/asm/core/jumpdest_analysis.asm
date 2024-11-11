@@ -5,10 +5,10 @@
 global verify_path_and_write_jumpdest_table:
     SWAP2
     DUP2
-    ADD // final_addr
+    ADD // final_addr = final_pos + ctx, i = init_pos
     // stack: final_addr, ctx, i, retdest
     SWAP2
-    ADD // init_addr
+    ADD // init_addr = i + ctx
 loop:
     // stack: i, final_pos, retdest
     DUP2 DUP2 EQ // i == final_pos
@@ -235,6 +235,7 @@ global jumpdest_analysis_end:
     %pop2
     JUMP
 check_proof:
+    // stack: address + 1, ctx, code_len, retdest
     // stack: address, ctx, code_len, retdest
     DUP3 DUP2 %assert_le
     %decrement

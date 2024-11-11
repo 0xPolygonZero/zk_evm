@@ -23,6 +23,7 @@
 //! [`JUMPDEST`]: https://www.evm.codes/?fork=cancun#5b
 
 use std::cmp::max;
+use std::ops::Not as _;
 use std::{
     collections::{BTreeSet, HashMap},
     fmt::Display,
@@ -45,8 +46,8 @@ pub(crate) struct JumpDestTableProcessed {
     witness_contexts: HashMap<usize, Vec<usize>>,
     /// Translates batch index to a wittness index
     index: HashMap<usize, usize>,
-    largest_batch_index: usize,
-    largest_witness_index: usize,
+    largest_batch_ctx: usize,
+    pub largest_witness_ctx: usize,
 }
 
 /// Map `CodeHash -> (Context -> [JumpDests])`
@@ -69,8 +70,8 @@ impl JumpDestTableProcessed {
             witness_contexts: ctx_map,
             // mapping from batch indices to witness indices
             index: Default::default(),
-            largest_batch_index: 0,
-            largest_witness_index: 0,
+            largest_batch_ctx: 0,
+            largest_witness_ctx: 0,
         }
     }
 
@@ -79,41 +80,45 @@ impl JumpDestTableProcessed {
             witness_contexts: ctx_map,
             // mapping from batch indices to witness indices
             index: Default::default(),
-            largest_batch_index: 0,
-            largest_witness_index: start_ctx,
+            largest_batch_ctx: 0,
+            largest_witness_ctx: start_ctx,
         }
     }
 
     pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut Vec<usize>> {
         log::info!(
-            "START: {}->{} {:#?}",
-            self.largest_batch_index,
-            self.largest_witness_index,
+            "START: batch_ctx {} :: max_b {} :: max-w {} {:#?}",
+            batch_ctx,
+            self.largest_batch_ctx,
+            self.largest_witness_ctx,
             self.index
         );
-        if *batch_ctx <= self.largest_batch_index {
-            let witness_index = self.index[batch_ctx];
-            return self.witness_contexts.get_mut(&witness_index);
-        }
-        self.largest_batch_index = *batch_ctx;
 
-        let mut new_witness_index = self.largest_witness_index;
-        for i in new_witness_index + 1..=*batch_ctx {
+        if *batch_ctx <= self.largest_batch_ctx {
+            let witness_ctx = self.index[batch_ctx];
+            return self.witness_contexts.get_mut(&witness_ctx);
+        }
+        self.largest_batch_ctx = *batch_ctx;
+
+        let mut new_witness_ctx = self.largest_witness_ctx;
+        for i in (self.largest_witness_ctx + 1).. {
             if self.witness_contexts.contains_key(&i) {
-                new_witness_index = i;
+                new_witness_ctx = i;
                 break;
             }
         }
 
-        self.largest_witness_index = new_witness_index;
-        self.index.insert(*batch_ctx, new_witness_index);
+        self.largest_witness_ctx = new_witness_ctx;
+        self.index.insert(*batch_ctx, new_witness_ctx);
         log::info!(
-            "END: {}->{} {:#?}",
-            self.largest_batch_index,
-            self.largest_witness_index,
+            "END:{} {}->{} {:#?}",
+            batch_ctx,
+            self.largest_batch_ctx,
+            self.largest_witness_ctx,
             self.index
         );
-        self.witness_contexts.get_mut(&new_witness_index)
+
+        self.witness_contexts.get_mut(&new_witness_ctx)
     }
 
     pub fn remove_ctx(&mut self, batch_ctx: &usize) {
@@ -121,13 +126,22 @@ impl JumpDestTableProcessed {
         self.witness_contexts.remove(&witness_index);
     }
 
-    pub fn last_ctx(self) -> usize {
-        self.witness_contexts
-            .keys()
-            .max()
-            .copied()
-            .unwrap_or_default()
-    }
+    // pub fn last_ctx(self) -> usize {
+    //     self.witness_contexts
+    //         .keys()
+    //         .max()
+    //         .copied()
+    //         .unwrap_or_default()
+    // }
+
+    // pub fn is_subset(&self, other: &Self) -> bool {
+    //     for (k, v) in self.witness_contexts.iter() {
+    //         if other.witness_contexts.contains_key(k).not() || v !=
+    // &other.witness_contexts[k] {             return false;
+    //         }
+    //     }
+    //     true
+    // }
 }
 
 impl JumpDestTableWitness {

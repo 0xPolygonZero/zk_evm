@@ -86,7 +86,7 @@ impl<F: RichField> GenerationState<F> {
 
     fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
         // Reset the jumpdest table before the next transaction.
-        self.jumpdest_table = None;
+        // self.jumpdest_table = None;
         let end = self.next_txn_index == self.inputs.txn_hashes.len();
         if end {
             Ok(U256::one())
@@ -357,22 +357,17 @@ impl<F: RichField> GenerationState<F> {
             .ok_or(ProgramError::ProverInputError(OutOfGerData))
     }
 
-    /// Returns the next used jump address.
+    /// Returns the next used jumpdest address.
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
-        let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
+        let batch_context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
-        log::info!("CONTEXT {} NEXT {}", context, self.next_txn_index);
+        log::info!("CONTEXT {} NEXT {}", batch_context, self.next_txn_index);
 
-        let curr_idx = self.next_txn_index - 1;
+        let curr_txn_idx = self.next_txn_index - 1;
 
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
         }
-        let prev = self.max_ctx.get(curr_idx - 1).copied().unwrap_or(0);
-        if curr_idx == self.max_ctx.len() {
-            self.max_ctx.push(prev + context)
-        }
-        self.max_ctx[curr_idx] = std::cmp::max(self.max_ctx[curr_idx], prev + context);
 
         let Some(jumpdest_table) = &mut self.jumpdest_table else {
             return Err(ProgramError::ProverInputError(
@@ -380,12 +375,23 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&context)
+        if [2, 3, 4].contains(&batch_context) {
+            return Ok(U256::zero());
+        }
+
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&batch_context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
+            if curr_txn_idx + 1 != self.max_wctx.len() {
+                self.max_wctx.push(0)
+            }
+            self.max_wctx[curr_txn_idx] = std::cmp::max(
+                self.max_wctx[curr_txn_idx],
+                jumpdest_table.largest_witness_ctx,
+            );
             Ok((next_jumpdest_address + 1).into())
         } else {
-            jumpdest_table.remove_ctx(&context);
+            jumpdest_table.remove_ctx(&batch_context);
             Ok(U256::zero())
         }
     }
@@ -800,22 +806,34 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        let prev = self.max_ctx.last().copied().unwrap_or(0);
+        let prev_max_wctx = self.max_wctx.last().copied().unwrap_or(0);
         let rpcw = self.inputs.jumpdest_table.clone();
-        let rpcp: Option<JumpDestTableProcessed> = rpcw
-            .as_ref()
-            .map(|jdt| get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev));
-        if rpcp.is_some() {
-            self.jumpdest_table = rpcp;
-            return Ok(());
-        }
+        log::info!("{:#?}", &rpcw);
+        let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
+            get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev_max_wctx)
+        });
+        // if rpcp.is_some() {
+        //     self.jumpdest_table = rpcp;
+        //     return Ok(());
+        // }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_table = None;
-        let (simp, _simw) = simulate_cpu_and_get_user_jumps("terminate_common", self)
+        let (simp, simw) = simulate_cpu_and_get_user_jumps("terminate_common", &*self)
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
-        self.jumpdest_table = Some(simp);
-        Ok(())
+        // self.jumpdest_table = Some(simp.clone());
+        log::info!("{:#?}", &rpcw);
+        log::info!("{:#?}", &rpcp);
+        log::info!("{:#?}", &simw);
+        log::info!("{:#?}", &simp);
+
+        // if rpcp.is_some() {
+        //     dbg!(rpcp.as_ref(), Some(&simp));
+        //     // assert!(simp.is_subset(rpcp.as_ref().unwrap()));
+        //     self.jumpdest_table = rpcp;
+        // }
+        self.jumpdest_table = rpcp;
+        return Ok(());
     }
 
     /// Given a HashMap containing the contexts and the jumpdest addresses,
