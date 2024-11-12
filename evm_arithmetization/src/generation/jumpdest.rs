@@ -55,12 +55,16 @@ pub(crate) struct JumpDestTableProcessed {
 pub struct JumpDestTableWitness(HashMap<H256, Context>);
 
 impl Context {
-    pub fn insert(&mut self, ctx: usize, offset: usize) {
-        self.entry(ctx).or_default().insert(offset);
-    }
-
     pub fn get(&self, ctx: usize) -> Option<&BTreeSet<usize>> {
         self.0.get(&ctx)
+    }
+
+    pub fn insert(&mut self, ctx: usize, offset_opt: Option<usize>) {
+        let context = self.entry(ctx).or_default();
+
+        if let Some(offset) = offset_opt {
+            context.insert(offset);
+        };
     }
 }
 
@@ -160,8 +164,11 @@ impl JumpDestTableWitness {
 
     /// Insert `offset` into `ctx` under the corresponding `code_hash`.
     /// Creates the required `ctx` keys and `code_hash`. Idempotent.
-    pub fn insert(&mut self, code_hash: H256, ctx: usize, offset: usize) {
-        (*self).entry(code_hash).or_default().insert(ctx, offset);
+    pub fn insert(&mut self, code_hash: H256, ctx: usize, offset_opt: Option<usize>) {
+        (*self)
+            .entry(code_hash)
+            .or_default()
+            .insert(ctx, offset_opt);
     }
 
     pub fn extend(mut self, other: &Self, prev_max_ctx: usize) -> (Self, usize) {
@@ -173,7 +180,7 @@ impl JumpDestTableWitness {
                 curr_max_ctx = max(curr_max_ctx, batch_ctx);
 
                 for offset in jumpdests {
-                    self.insert(*code_hash, batch_ctx, *offset);
+                    self.insert(*code_hash, batch_ctx, Some(*offset));
                 }
             }
         }
@@ -229,7 +236,7 @@ impl FromIterator<(H256, usize, usize)> for JumpDestTableWitness {
     fn from_iter<T: IntoIterator<Item = (H256, usize, usize)>>(iter: T) -> Self {
         let mut jdtw = JumpDestTableWitness::default();
         for (code_hash, ctx, offset) in iter.into_iter() {
-            jdtw.insert(code_hash, ctx, offset);
+            jdtw.insert(code_hash, ctx, Some(offset));
         }
         jdtw
     }
@@ -237,9 +244,12 @@ impl FromIterator<(H256, usize, usize)> for JumpDestTableWitness {
 
 #[cfg(test)]
 mod test {
+    use std::collections::{BTreeSet, HashMap};
+
     use keccak_hash::H256;
 
     use super::JumpDestTableWitness;
+    use crate::jumpdest::Context;
 
     #[test]
     fn test_extend_from_iter() {
@@ -271,5 +281,21 @@ mod test {
 
         assert_eq!(86, max_ctx);
         assert_eq!(expected, actual)
+    }
+
+    #[test]
+    fn test_create_context() {
+        let code_hash = H256::default();
+        let mut table1 = JumpDestTableWitness::default();
+        table1.insert(code_hash, 42, None);
+
+        let offsets = BTreeSet::<usize>::default();
+        let mut ctx = HashMap::<usize, _>::default();
+        ctx.insert(42, offsets);
+        let mut contexts = HashMap::<H256, _>::default();
+        contexts.insert(code_hash, Context(ctx));
+        let table2 = JumpDestTableWitness(contexts);
+
+        assert_eq!(table1, table2);
     }
 }

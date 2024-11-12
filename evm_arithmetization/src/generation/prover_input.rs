@@ -858,7 +858,7 @@ impl<F: RichField> GenerationState<F> {
                 let code = self.get_code(ctx).unwrap();
                 let code_hash = keccak(code.clone());
                 for offset in jumpdest_table.clone() {
-                    jdtw.insert(code_hash, ctx, offset);
+                    jdtw.insert(code_hash, ctx, Some(offset));
                 }
                 if let Some(&largest_address) = jumpdest_table.last() {
                     let proofs = get_proofs_and_jumpdests(&code, largest_address, jumpdest_table);

@@ -148,6 +148,8 @@ pub(crate) fn generate_jumpdest_table<'a>(
             "Call stack was unexpectedly empty."
         );
         let (code_hash, ctx) = call_stack.last().unwrap();
+        tracing::info!("INSERT {} {}", *code_hash, *ctx);
+        jumpdest_table.insert(*code_hash, *ctx, None);
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
@@ -250,7 +252,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
                     continue;
                 }
                 ensure!(jumpdest_offset.unwrap() < 24576);
-                jumpdest_table.insert(*code_hash, *ctx, jumpdest_offset.unwrap());
+                jumpdest_table.insert(*code_hash, *ctx, Some(jumpdest_offset.unwrap()));
             }
             "EXTCODECOPY" | "EXTCODESIZE" => {
                 prev_jump = None;
