@@ -37,7 +37,7 @@ use crate::proof::{
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
-use crate::world::StateWorld;
+use crate::world::{Type1World, World};
 
 pub(crate) mod linked_list;
 pub mod mpt;
@@ -84,7 +84,7 @@ impl<E> ErrorWithTries<E> {
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(bound = "")]
-pub struct GenerationInputs<F: RichField> {
+pub struct GenerationInputs<F: RichField, State: World> {
     /// The index of the transaction being proven within its block.
     pub txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
@@ -107,7 +107,7 @@ pub struct GenerationInputs<F: RichField> {
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
 
-    pub tries: TrieInputs,
+    pub tries: TrieInputs<State>,
     /// Expected trie roots after the transactions are executed.
     pub trie_roots_after: TrieRoots,
 
@@ -142,8 +142,8 @@ pub struct GenerationInputs<F: RichField> {
 /// post pre-initialization processing.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(bound = "")]
-pub struct TrimmedGenerationInputs<F: RichField> {
-    pub trimmed_tries: TrimmedTrieInputs,
+pub struct TrimmedGenerationInputs<F: RichField, State: World> {
+    pub trimmed_tries: TrimmedTrieInputs<State>,
     /// The index of the first transaction in this payload being proven within
     /// its block.
     pub txn_number_before: U256,
@@ -192,7 +192,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 type SmtTrie = smt_trie::smt::Smt<smt_trie::db::MemoryDb>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct TrieInputs {
+pub struct TrieInputs<State: World> {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions. In "eth_mainnet", it also contains the storage trie prior
@@ -200,7 +200,7 @@ pub struct TrieInputs {
     /// that will be accessed by these transactions). In "eth_mainnet", it also
     /// includes a partial version of each storage trie prior to these
     /// transactions.
-    pub state_trie: StateWorld,
+    pub state_trie: State,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -214,40 +214,34 @@ pub struct TrieInputs {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct TrimmedTrieInputs {
+pub struct TrimmedTrieInputs<State: World> {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions. In "eth_mainnet", it also contains the storage trie prior
     /// to these transactions.
-    pub state_trie: StateWorld,
+    pub state_trie: State,
 }
 
-impl TrieInputs {
-    pub(crate) fn trim(&self) -> TrimmedTrieInputs {
+impl<State: World> TrieInputs<State> {
+    pub(crate) fn trim(&self) -> TrimmedTrieInputs<State> {
         TrimmedTrieInputs {
             state_trie: self.state_trie.clone(),
         }
     }
 }
 
-impl<F: RichField> GenerationInputs<F> {
+impl<F: RichField, State: World> GenerationInputs<F, State> {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
-    pub(crate) fn trim(&self) -> TrimmedGenerationInputs<F> {
+    pub(crate) fn trim(&self) -> TrimmedGenerationInputs<F, State> {
         let txn_hashes = self
             .signed_txns
             .iter()
             .map(|tx_bytes| keccak(&tx_bytes[..]))
             .collect();
 
-        let state_root = match &self.tries.state_trie.state {
-            Either::Left(trie) => trie.state_trie().hash(),
-            Either::Right(trie) => {
-                let smt_data = trie.as_smt().to_vec();
-                H256::from_uint(&hash_serialize_u256(&smt_data).into())
-            }
-        };
+        let state_root = self.tries.state_trie.root();
 
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),
@@ -280,9 +274,9 @@ pub struct DebugOutputTries {
     pub receipt_trie: HashedPartialTrie,
 }
 
-fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
+fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, State: World, const D: usize>(
     state: &mut GenerationState<F>,
-    inputs: &TrimmedGenerationInputs<F>,
+    inputs: &TrimmedGenerationInputs<F, State>,
     registers_before: &RegistersData,
     registers_after: &RegistersData,
 ) {
@@ -444,7 +438,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
-pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
+pub(crate) fn debug_inputs<F: RichField, State: World>(inputs: &GenerationInputs<F, State>) {
     log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
     log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
@@ -455,13 +449,7 @@ pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
     #[cfg(feature = "eth_mainnet")]
     log::debug!(
         "Input storage_tries: {:?}",
-        &inputs
-            .tries
-            .state_trie
-            .state
-            .clone()
-            .expect_left("eth_mainnet expects MPTs")
-            .get_storage()
+        &inputs.tries.state_trie.get_storage()
     );
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
@@ -515,9 +503,9 @@ pub struct TablesWithPVs<F: RichField> {
     pub public_values: PublicValues<F>,
 }
 
-pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
+pub fn generate_traces<F: RichField + Extendable<D>, State: World, const D: usize>(
     all_stark: &AllStark<F, D>,
-    inputs: &TrimmedGenerationInputs<F>,
+    inputs: &TrimmedGenerationInputs<F, State>,
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,

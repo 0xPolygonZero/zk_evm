@@ -7,7 +7,7 @@ use ethereum_types::{Address, BigEndianHash as _, U256};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
-use smt_trie::code::hash_bytecode_h256;
+use smt_trie::{code::hash_bytecode_h256, smt::hash_serialize_u256};
 
 use crate::tries::{MptKey, SmtKey, StateMpt, StorageTrie};
 
@@ -32,30 +32,30 @@ impl Hasher for KeccakHash {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct StateWorld {
-    pub state: Either<Type1World, Type2World>,
-}
+// #[derive(Clone, Debug, Deserialize, Serialize)]
+// pub struct StateWorld {
+//     pub state: Either<Type1World, Type2World>,
+// }
 
-impl Default for StateWorld {
-    fn default() -> Self {
-        if cfg!(feature = "cdk_erigon") {
-            StateWorld {
-                state: Either::Right(Type2World::default()),
-            }
-        } else {
-            StateWorld {
-                state: Either::Left(Type1World::default()),
-            }
-        }
-    }
-}
+// impl Default for StateWorld {
+//     fn default() -> Self {
+//         if cfg!(feature = "cdk_erigon") {
+//             StateWorld {
+//                 state: Either::Right(Type2World::default()),
+//             }
+//         } else {
+//             StateWorld {
+//                 state: Either::Left(Type1World::default()),
+//             }
+//         }
+//     }
+// }
 
 /// The `core` module of the `trace_decoder` crate is agnostic over state and
 /// storage representations.
 ///
 /// This is the common interface to those data structures.
-pub trait World {
+pub trait World: Sized + Clone + std::fmt::Debug {
     /// (State) subtries may be _hashed out.
     /// This type is a key which may identify a subtrie.
     type SubtriePath;
@@ -105,6 +105,9 @@ pub trait World {
     /// Storage operations
     //////////////////////
 
+    /// Returns the storage tries for Type1. Panics for Type2.
+    fn get_storage(&self) -> Vec<(H256, &HashedPartialTrie)>;
+
     /// Create an account at the given address.
     ///
     /// It may not be an error if the address already exists.
@@ -139,7 +142,7 @@ pub trait World {
     fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) -> anyhow::Result<()>;
 
     /// Return an identifier for the world.
-    fn root(&mut self) -> H256;
+    fn root(&self) -> H256;
 }
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize)]
@@ -181,13 +184,6 @@ impl Type1World {
         self.storage
             .get_mut(&keccak_hash::keccak(address))
             .context("no such storage")
-    }
-    pub(crate) fn get_storage(&self) -> Vec<(H256, &HashedPartialTrie)> {
-        // TODO(Robin)
-        self.storage
-            .iter()
-            .map(|(key, value)| (*key, value.as_hashed_partial_trie()))
-            .collect::<Vec<_>>()
     }
     fn on_storage<T>(
         &mut self,
@@ -244,7 +240,7 @@ impl World for Type1World {
     ) -> anyhow::Result<()> {
         self.state.mask(addresses)
     }
-    fn root(&mut self) -> H256 {
+    fn root(&self) -> H256 {
         self.state.root()
     }
     fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
@@ -305,6 +301,14 @@ impl World for Type1World {
             }
         }
         Ok(())
+    }
+
+    fn get_storage(&self) -> Vec<(H256, &HashedPartialTrie)> {
+        // TODO(Robin)
+        self.storage
+            .iter()
+            .map(|(key, value)| (*key, value.as_hashed_partial_trie()))
+            .collect::<Vec<_>>()
     }
 }
 
@@ -402,10 +406,13 @@ impl World for Type2World {
         let _ = paths;
         Ok(())
     }
-    fn root(&mut self) -> H256 {
-        let mut it = [0; 32];
-        smt_trie::utils::hashout2u(self.as_smt().root).to_big_endian(&mut it);
-        H256(it)
+    fn root(&self) -> H256 {
+        let smt_data = self.as_smt().to_vec();
+        H256::from_uint(&hash_serialize_u256(&smt_data).into())
+    }
+
+    fn get_storage(&self) -> Vec<(H256, &HashedPartialTrie)> {
+        panic!("Type2 don't have storage tries.");
     }
 }
 
@@ -421,116 +428,116 @@ pub(crate) type CodeHasher = KeccakHash;
 #[cfg(feature = "cdk_erigon")]
 pub(crate) type CodeHasher = PoseidonHash;
 
-impl World for StateWorld {
-    type SubtriePath = StateKey;
-    type CodeHasher = CodeHasher;
+// impl World for StateWorld {
+//     type SubtriePath = StateKey;
+//     type CodeHasher = CodeHasher;
 
-    fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
-        match &mut self.state {
-            Either::Left(type1) => type1.contains(address),
-            Either::Right(type2) => type2.contains(address),
-        }
-    }
-    fn update_balance(
-        &mut self,
-        address: Address,
-        f: impl FnOnce(&mut U256),
-    ) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.update_balance(address, f),
-            Either::Right(type2) => type2.update_balance(address, f),
-        }
-    }
-    fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256)) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.update_nonce(address, f),
-            Either::Right(type2) => type2.update_nonce(address, f),
-        }
-    }
-    fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.set_code(address, code),
-            Either::Right(type2) => type2.set_code(address, code),
-        }
-    }
-    fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
-        // TODO: Find a way to revamp this
-        #[cfg(not(feature = "cdk_erigon"))]
-        match &mut self.state {
-            Either::Left(type1) => type1.reporting_destroy(address),
-            Either::Right(_type2) => unreachable!("Type2 is not supported."),
-        }
-        #[cfg(feature = "cdk_erigon")]
-        match &mut self.state {
-            Either::Left(_type1) => unreachable!("Type1 is not supported"),
-            Either::Right(type2) => type2.reporting_destroy(address),
-        }
-    }
-    fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.create_storage(address),
-            Either::Right(type2) => type2.create_storage(address),
-        }
-    }
-    fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.destroy_storage(address),
-            Either::Right(type2) => type2.destroy_storage(address),
-        }
-    }
-    fn store_int(&mut self, address: Address, slot: U256, value: U256) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.store_int(address, slot, value),
-            Either::Right(type2) => type2.store_int(address, slot, value),
-        }
-    }
-    fn store_hash(&mut self, address: Address, hash: H256, value: H256) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.store_hash(address, hash, value),
-            Either::Right(type2) => type2.store_hash(address, hash, value),
-        }
-    }
-    fn load_int(&mut self, address: Address, slot: U256) -> anyhow::Result<U256> {
-        match &mut self.state {
-            Either::Left(type1) => type1.load_int(address, slot),
-            Either::Right(type2) => type2.load_int(address, slot),
-        }
-    }
-    fn reporting_destroy_slot(
-        &mut self,
-        address: Address,
-        slot: U256,
-    ) -> anyhow::Result<Option<MptKey>> {
-        match &mut self.state {
-            Either::Left(type1) => type1.reporting_destroy_slot(address, slot),
-            Either::Right(type2) => type2.reporting_destroy_slot(address, slot),
-        }
-    }
-    fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) -> anyhow::Result<()> {
-        match &mut self.state {
-            Either::Left(type1) => type1.mask_storage(masks),
-            Either::Right(type2) => type2.mask_storage(masks),
-        }
-    }
-    fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) -> anyhow::Result<()> {
-        #[cfg(not(feature = "cdk_erigon"))]
-        match &mut self.state {
-            Either::Left(type1) => type1.mask(paths),
-            Either::Right(_type2) => unreachable!("Type2 is not supported."),
-        }
-        #[cfg(feature = "cdk_erigon")]
-        match &mut self.state {
-            Either::Left(_type1) => unreachable!("Type1 is not supported"),
-            Either::Right(type2) => type2.mask(paths),
-        }
-    }
-    fn root(&mut self) -> H256 {
-        match &mut self.state {
-            Either::Left(type1) => type1.root(),
-            Either::Right(type2) => type2.root(),
-        }
-    }
-}
+//     fn contains(&mut self, address: Address) -> anyhow::Result<bool> {
+//         match &mut self.state {
+//             Either::Left(type1) => type1.contains(address),
+//             Either::Right(type2) => type2.contains(address),
+//         }
+//     }
+//     fn update_balance(
+//         &mut self,
+//         address: Address,
+//         f: impl FnOnce(&mut U256),
+//     ) -> anyhow::Result<()> {
+//         match &mut self.state {
+//             Either::Left(type1) => type1.update_balance(address, f),
+//             Either::Right(type2) => type2.update_balance(address, f),
+//         }
+//     }
+//     fn update_nonce(&mut self, address: Address, f: impl FnOnce(&mut U256))
+// -> anyhow::Result<()> {         match &mut self.state {
+//             Either::Left(type1) => type1.update_nonce(address, f),
+//             Either::Right(type2) => type2.update_nonce(address, f),
+//         }
+//     }
+//     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) ->
+// anyhow::Result<()> {         match &mut self.state {
+//             Either::Left(type1) => type1.set_code(address, code),
+//             Either::Right(type2) => type2.set_code(address, code),
+//         }
+//     }
+//     fn reporting_destroy(&mut self, address: Address) ->
+// anyhow::Result<Option<Self::SubtriePath>> {         // TODO: Find a way to
+// revamp this         #[cfg(not(feature = "cdk_erigon"))]
+//         match &mut self.state {
+//             Either::Left(type1) => type1.reporting_destroy(address),
+//             Either::Right(_type2) => unreachable!("Type2 is not supported."),
+//         }
+//         #[cfg(feature = "cdk_erigon")]
+//         match &mut self.state {
+//             Either::Left(_type1) => unreachable!("Type1 is not supported"),
+//             Either::Right(type2) => type2.reporting_destroy(address),
+//         }
+//     }
+//     fn create_storage(&mut self, address: Address) -> anyhow::Result<()> {
+//         match &mut self.state {
+//             Either::Left(type1) => type1.create_storage(address),
+//             Either::Right(type2) => type2.create_storage(address),
+//         }
+//     }
+//     fn destroy_storage(&mut self, address: Address) -> anyhow::Result<()> {
+//         match &mut self.state {
+//             Either::Left(type1) => type1.destroy_storage(address),
+//             Either::Right(type2) => type2.destroy_storage(address),
+//         }
+//     }
+//     fn store_int(&mut self, address: Address, slot: U256, value: U256) ->
+// anyhow::Result<()> {         match &mut self.state {
+//             Either::Left(type1) => type1.store_int(address, slot, value),
+//             Either::Right(type2) => type2.store_int(address, slot, value),
+//         }
+//     }
+//     fn store_hash(&mut self, address: Address, hash: H256, value: H256) ->
+// anyhow::Result<()> {         match &mut self.state {
+//             Either::Left(type1) => type1.store_hash(address, hash, value),
+//             Either::Right(type2) => type2.store_hash(address, hash, value),
+//         }
+//     }
+//     fn load_int(&mut self, address: Address, slot: U256) ->
+// anyhow::Result<U256> {         match &mut self.state {
+//             Either::Left(type1) => type1.load_int(address, slot),
+//             Either::Right(type2) => type2.load_int(address, slot),
+//         }
+//     }
+//     fn reporting_destroy_slot(
+//         &mut self,
+//         address: Address,
+//         slot: U256,
+//     ) -> anyhow::Result<Option<MptKey>> {
+//         match &mut self.state {
+//             Either::Left(type1) => type1.reporting_destroy_slot(address,
+// slot),             Either::Right(type2) =>
+// type2.reporting_destroy_slot(address, slot),         }
+//     }
+//     fn mask_storage(&mut self, masks: BTreeMap<Address, BTreeSet<MptKey>>) ->
+// anyhow::Result<()> {         match &mut self.state {
+//             Either::Left(type1) => type1.mask_storage(masks),
+//             Either::Right(type2) => type2.mask_storage(masks),
+//         }
+//     }
+//     fn mask(&mut self, paths: impl IntoIterator<Item = Self::SubtriePath>) ->
+// anyhow::Result<()> {         #[cfg(not(feature = "cdk_erigon"))]
+//         match &mut self.state {
+//             Either::Left(type1) => type1.mask(paths),
+//             Either::Right(_type2) => unreachable!("Type2 is not supported."),
+//         }
+//         #[cfg(feature = "cdk_erigon")]
+//         match &mut self.state {
+//             Either::Left(_type1) => unreachable!("Type1 is not supported"),
+//             Either::Right(type2) => type2.mask(paths),
+//         }
+//     }
+//     fn root(&mut self) -> H256 {
+//         match &mut self.state {
+//             Either::Left(type1) => type1.root(),
+//             Either::Right(type2) => type2.root(),
+//         }
+//     }
+// }
 
 // Having optional fields here is an odd decision,
 // but without the distinction,

@@ -20,7 +20,7 @@ use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::tries::StateMpt;
 use crate::util::h2u;
-use crate::world::{StateWorld, Type1World};
+use crate::world::Type1World;
 use crate::Node;
 
 #[test]
@@ -170,15 +170,11 @@ fn test_state_trie(
 ) -> Result<()> {
     assert_eq!(k.count, 64);
 
-    let state_trie_inputs = StateWorld {
-        state: Either::Left(
-            Type1World::new(
-                StateMpt::new_with_inner(state_trie.clone()),
-                BTreeMap::default(),
-            )
-            .unwrap(),
-        ),
-    };
+    let state_trie_inputs = Type1World::new(
+        StateMpt::new_with_inner(state_trie.clone()),
+        BTreeMap::default(),
+    )
+    .unwrap();
 
     // Ignore any storage_root; see documentation note.
     account.storage_root = HashedPartialTrie::from(Node::Empty).hash();
