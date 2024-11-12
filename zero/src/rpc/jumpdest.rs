@@ -24,7 +24,7 @@ use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::rpc::H256;
 
@@ -147,8 +147,8 @@ pub(crate) fn generate_jumpdest_table<'a>(
             call_stack.is_empty().not(),
             "Call stack was unexpectedly empty."
         );
-        let (code_hash, ctx) = call_stack.last().unwrap();
-        tracing::info!("INSERT {} {}", *code_hash, *ctx);
+        let (ref code_hash, ref ctx) = call_stack.last().unwrap().clone();
+        info!("INSERT {} {}", *code_hash, *ctx);
         jumpdest_table.insert(*code_hash, *ctx, None);
 
         match op {
@@ -193,6 +193,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 // exception or not. But this is of no consequence to the
                 // generated Jumpdest table, so we can ignore the case.
 
+                jumpdest_table.insert(*code_hash, next_ctx_available, None);
                 next_ctx_available += 1;
             }
             "CREATE" | "CREATE2" => {
@@ -263,6 +264,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
             }
         }
     }
+    info!("RETURN {}", &jumpdest_table);
     Ok(jumpdest_table)
 }
 
