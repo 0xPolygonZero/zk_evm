@@ -24,15 +24,15 @@ BLOCKS_TESTED=0
 function legend() {
   printf "\n\nTable of exit codes\n" | tee -a $RESULTS
   echo     "------------------------------------------------------------------------------------------"    | tee -a $RESULTS
-  echo "0 is success" | tee -a $RESULTS
-  echo "1 [unexpected] is other errors" | tee -a $RESULTS
-  echo "2 [unexpected] is undecided" | tee -a $RESULTS
-  echo "4 [expected] is Attempted to collapse an extension node" | tee -a $RESULTS
-  echo "5 [unexpected] is non-matching jumpdest tables" | tee -a $RESULTS
-  echo "6 [expected] is empty witness. Possibly due to Error: Failed to get proof for account" | tee -a $RESULTS
-  echo "7 [expected] is Found a Hash node during an insert in a PartialTrie" | tee -a $RESULTS
-  echo "8 [expected] is Attempted to delete a value that ended up inside a hash node" | tee -a $RESULTS
-  echo "9 [expected] is Memory allocation failed.  Increase RAM" | tee -a $RESULTS
+  echo "  0 [expected] is success" | tee -a $RESULTS
+  echo "  1 [unexpected] is other errors" | tee -a $RESULTS
+  echo "  2 [unexpected] is undecided" | tee -a $RESULTS
+  echo "  4 [expected] is Attempted to collapse an extension node" | tee -a $RESULTS
+  echo "  5 [unexpected] is non-matching jumpdest tables" | tee -a $RESULTS
+  echo "  6 [expected] is empty witness. Possibly due to Error: Failed to get proof for account" | tee -a $RESULTS
+  echo "  7 [expected] is Found a Hash node during an insert in a PartialTrie" | tee -a $RESULTS
+  echo "  8 [expected] is Attempted to delete a value that ended up inside a hash node" | tee -a $RESULTS
+  echo "  9 [expected] is Memory allocation failed.  Increase RAM" | tee -a $RESULTS
   echo "124 [undecided] is timeout.  Try increasing the proving timeout." | tee -a $RESULTS
 }
 
@@ -60,24 +60,24 @@ function statistics() {
   legend
 
   printf "\n\nStatistics\n" | tee -a $RESULTS
-  echo   "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
-  echo "Total blocks: " $BLOCKS_TESTED | tee -a $RESULTS
-  echo "Total transactions: " $SUMTOTAL | tee -a $RESULTS
-  echo "Transactions without prefetched JUMPDEST table: "$SUMFAIL | tee -a $RESULTS
-  echo "Failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%") | tee -a $RESULTS
-  echo "Success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%") | tee -a $RESULTS
-  echo "Zeroes: " $ZEROES | tee -a $RESULTS
-  echo "Ones: " $ONES | tee -a $RESULTS
-  echo "Twos: " $TWOS | tee -a $RESULTS
-  echo "Threes: " $THREES | tee -a $RESULTS
-  echo "Fours: " $FOURS | tee -a $RESULTS
-  echo "Fives: " $FIVES | tee -a $RESULTS
-  echo "Sixes: " $SIXES | tee -a $RESULTS
-  echo "Sevens: " $SEVENS | tee -a $RESULTS
-  echo "Eights: " $EIGHTS | tee -a $RESULTS
-  echo "Nines: " $NINES | tee -a $RESULTS
-  echo "Timeouts: " $TIMEOUTS | tee -a $RESULTS
-  echo "End of statistics" | tee -a $RESULTS
+  echo "---------------------------------------------------------------------------------------"    | tee -a $RESULTS
+  printf "%10s Total blocks: " $BLOCKS_TESTED | tee -a $RESULTS
+  printf "%10s Total transactions: " $SUMTOTAL | tee -a $RESULTS
+  printf "%10s Transactions without prefetched JUMPDEST table: "$SUMFAIL | tee -a $RESULTS
+  printf "%10s Prefetch JDT failure rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMFAIL * 100 / $SUMTOTAL))%") | tee -a $RESULTS
+  printf "%10s Prefetch JDT success rate: " $([[ $SUMTOTAL -eq 0 ]] && echo "0" || echo "$(($SUMOK * 100 / $SUMTOTAL))%") | tee -a $RESULTS
+  printf "%10s Zeroes: " $ZEROES | tee -a $RESULTS
+  printf "%10s Ones: " $ONES | tee -a $RESULTS
+  printf "%10s Twos: " $TWOS | tee -a $RESULTS
+  printf "%10s Threes: " $THREES | tee -a $RESULTS
+  printf "%10s Fours: " $FOURS | tee -a $RESULTS
+  printf "%10s Fives: " $FIVES | tee -a $RESULTS
+  printf "%10s Sixes: " $SIXES | tee -a $RESULTS
+  printf "%10s Sevens: " $SEVENS | tee -a $RESULTS
+  printf "%10s Eights: " $EIGHTS | tee -a $RESULTS
+  printf "%10s Nines: " $NINES | tee -a $RESULTS
+  printf "%10s Timeouts: " $TIMEOUTS | tee -a $RESULTS
+  printf "End of statistics" | tee -a $RESULTS
   exit 0
 }
 trap statistics EXIT # INT QUIT # HUP TERM
