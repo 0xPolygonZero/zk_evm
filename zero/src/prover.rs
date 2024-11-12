@@ -211,6 +211,9 @@ impl BlockProverInput {
                     let mut segment_counter = 0;
                     let mut segment_proving_tasks = Vec::new();
                     while let Some(segment_data) = segment_rx.recv().await {
+                        if segment_data.is_none() {
+                            break;
+                        }
                         let seg_prove_ops = seg_prove_ops.clone();
                         let proof_runtime = proof_runtime.clone();
                         let segment_proof_tx = segment_proof_tx.clone();
@@ -245,6 +248,7 @@ impl BlockProverInput {
                         segment_proving_tasks.push(segment_proving_task);
                         segment_counter += 1;
                     }
+                    drop(segment_proof_tx);
                     // Wait for all the segment proving tasks of one batch to finish.
                     while let Some((segment_idx, segment_aggregatable_proof)) = segment_proof_rx.recv().await {
                         batch_segment_aggregatable_proofs.push((segment_idx, segment_aggregatable_proof));
