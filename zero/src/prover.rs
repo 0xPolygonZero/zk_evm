@@ -206,13 +206,12 @@ impl BlockProverInput {
                         // Prove the segment.
                         if let Some(segment_data) = segment_data {
                             debug!("proving the batch {batch_idx} segment data {segment_counter}");
-                            let seg_aggregatable_proof = Directive::map(
-                                IndexedStream::from([segment_data]),
-                                &seg_prove_ops,
-                            )
-                            .run(&proof_runtime.heavy_proof)
-                            .await?;
-                            let seg_aggregatable_proof = seg_aggregatable_proof.into_values_sorted().await?;
+                            let seg_aggregatable_proof =
+                                Directive::map(IndexedStream::from([segment_data]), &seg_prove_ops)
+                                    .run(&proof_runtime.heavy_proof)
+                                    .await?
+                                    .into_values_sorted()
+                                    .await?;
                             batch_segment_aggregatable_proofs.extend(seg_aggregatable_proof);
                         }
                         segment_counter += 1;
