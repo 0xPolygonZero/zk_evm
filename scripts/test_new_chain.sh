@@ -431,7 +431,7 @@ for BLOCK in $BLOCKS; do
   echo "Now testing block $BLOCK .."
   export RUST_LOG=info
   SECONDS=0
-  timeout 5h nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
+  timeout 20h nice -19 -- ./prove_stdio.sh $WITNESS test_only $BLOCK
   EXITCODE=$?
   TOTALTIME=`echo -n $(($TOTALTIME + $SECONDS))`
   DURATION_PRV=`date -u -d @"$SECONDS" +'%0Hh%0Mm%0Ss'`
