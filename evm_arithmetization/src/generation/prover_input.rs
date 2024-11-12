@@ -361,7 +361,11 @@ impl<F: RichField> GenerationState<F> {
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let batch_context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
-        log::info!("CONTEXT {} NEXT {}", batch_context, self.next_txn_index);
+        log::info!(
+            "Current ctx {}  current tx {}",
+            batch_context,
+            self.next_txn_index - 1
+        );
 
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
@@ -793,50 +797,43 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        // let prev_max_wctx = self.max_wctx.last().copied().unwrap_or(0);
-        let prev_max_wctx: usize = 0;
-        //  self
-        //     .inputs
-        //     .jumpdest_table
-        //     .get(self.next_txn_index - 1)
-        //     .map(|x| x.as_ref())
-        //     .flatten()
-        //     .map(|jdt| {
-        //         jdt.iter()
-        //             .map(|(_h, jdt)| jdt.keys().max().copied().unwrap_or(0))
-        //             .max()
-        //             .unwrap_or(0)
-        //     })
-        //     .unwrap_or(0)
-        //     + 4;
-        let tx_batch_order = self.next_txn_index;
+        let tx_in_batch_idx = self.next_txn_index - 1;
+        let prev_max_wctx: usize = self
+            .inputs
+            .jumpdest_table
+            .get(tx_in_batch_idx - 1)
+            .map(|x| x.as_ref())
+            .flatten()
+            .map(|jdt| {
+                jdt.iter()
+                    .map(|(_h, jdt)| jdt.keys().max().copied().unwrap_or(0))
+                    .max()
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0)
+            + 6;
+        log::info!("TXOFFSET: {}", tx_in_batch_idx);
         log::info!("TXNUM: {}", self.next_txn_index);
         log::info!("TXLEN: {}", self.inputs.txn_hashes.len());
         log::info!("TX: {}", self.inputs.txn_number_before);
-        let idx = if 0 < self.next_txn_index {
-            self.next_txn_index - 1
-        } else {
-            0
-        };
-        let rpcw = self.inputs.jumpdest_table[idx].clone();
-        log::info!("{:#?}", &rpcw);
+        let rpcw = self.inputs.jumpdest_table[tx_in_batch_idx].clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
             get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev_max_wctx)
         });
-        if rpcp.is_some() {
-            self.jumpdest_table = rpcp;
-            return Ok(());
-        }
+        log::info!("RPCW {:#?}", &rpcw);
+        log::info!("RPCP {:#?}", &rpcp);
+        // if rpcp.is_some() {
+        //     self.jumpdest_table = rpcp;
+        //     return Ok(());
+        // }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_table = None;
         let (simp, simw) = simulate_cpu_and_get_user_jumps("terminate_common", &*self)
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
         // self.jumpdest_table = Some(simp.clone());
-        log::info!("{:#?}", &rpcw);
-        // log::info!("{:#?}", &rpcp);
-        log::info!("{:#?}", &simw);
-        // log::info!("{:#?}", &simp);
+        log::info!("SIMW {:#?}", &simw);
+        log::info!("SIMP {:#?}", &simp);
 
         if rpcp.is_some() {
             dbg!(rpcp.as_ref(), Some(&simp));

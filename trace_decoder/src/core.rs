@@ -204,7 +204,7 @@ pub fn entrypoint(
                     block_metadata: b_meta.clone(),
                     block_hashes: b_hashes.clone(),
                     burn_addr,
-                    jumpdest_table: {
+                    batch_jumpdest_tables: {
                         // TODO(einar-polygon): <https://github.com/0xPolygonZero/zk_evm/issues/653>
                         // Note that this causes any batch containing just a
                         // single `None` to collapse into a `None`, which

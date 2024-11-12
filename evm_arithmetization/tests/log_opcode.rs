@@ -266,7 +266,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
-        jumpdest_table: vec![None],
+        batch_jumpdest_tables: vec![None],
     };
 
     let max_cpu_len_log = 20;

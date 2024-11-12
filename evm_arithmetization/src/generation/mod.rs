@@ -136,7 +136,7 @@ pub struct GenerationInputs<F: RichField> {
 
     /// A table listing each JUMPDESTs reached in each call context under
     /// associated code hash.
-    pub jumpdest_table: Vec<Option<JumpDestTableWitness>>,
+    pub batch_jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
@@ -265,7 +265,7 @@ impl<F: RichField> GenerationInputs<F> {
             burn_addr: self.burn_addr,
             block_metadata: self.block_metadata.clone(),
             block_hashes: self.block_hashes.clone(),
-            jumpdest_table: self.jumpdest_table.clone(),
+            jumpdest_table: self.batch_jumpdest_tables.clone(),
         }
     }
 }
