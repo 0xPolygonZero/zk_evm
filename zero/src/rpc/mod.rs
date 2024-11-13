@@ -2,16 +2,15 @@ zk_evm_common::check_chain_features!();
 
 use std::sync::Arc;
 
-use __compat_primitive_types::{H256, U256};
 use alloy::{
-    primitives::{Address, Bytes, FixedBytes, B256},
+    primitives::{Address, Bloom, Bytes, FixedBytes, B256, U256},
     providers::Provider,
     rpc::types::eth::{BlockId, BlockTransactionsKind, Withdrawal},
     transports::Transport,
 };
+use alloy_compat::Compat as _;
 use anyhow::{anyhow, Context as _};
 use clap::ValueEnum;
-use compat::Compat;
 use evm_arithmetization::{
     proof::{consolidate_hashes, BlockHashes, BlockMetadata},
     Field, Hasher,
@@ -264,7 +263,17 @@ where
                         .into()
                 },
                 block_gas_used: target_block.header.gas_used.into(),
-                block_bloom: target_block.header.logs_bloom.compat(),
+                block_bloom: {
+                    const CHUNK: usize = 32;
+                    let Bloom(FixedBytes(bytes)) = target_block.header.logs_bloom;
+                    let chunks = bytes.chunks_exact(CHUNK);
+                    assert!(chunks.remainder().is_empty());
+                    let mut array = [U256::ZERO; 8];
+                    for (ix, chunk) in chunks.enumerate() {
+                        array[ix] = U256::from_le_bytes::<CHUNK>(chunk.try_into().unwrap());
+                    }
+                    array.map(alloy_compat::Compat::compat)
+                },
                 parent_beacon_block_root: if cfg!(feature = "eth_mainnet") {
                     target_block
                         .header
@@ -272,7 +281,7 @@ where
                         .context("target block is missing field `parent_beacon_block_root`")?
                         .compat()
                 } else {
-                    H256::zero()
+                    Default::default()
                 },
                 block_blob_gas_used: if cfg!(feature = "eth_mainnet") {
                     target_block
@@ -281,7 +290,7 @@ where
                         .context("target block is missing field `blob_gas_used`")?
                         .into()
                 } else {
-                    U256::zero()
+                    Default::default()
                 },
                 block_excess_blob_gas: if cfg!(feature = "eth_mainnet") {
                     target_block
@@ -290,7 +299,7 @@ where
                         .context("target block is missing field `excess_blob_gas`")?
                         .into()
                 } else {
-                    U256::zero()
+                    Default::default()
                 },
             },
             b_hashes: BlockHashes {

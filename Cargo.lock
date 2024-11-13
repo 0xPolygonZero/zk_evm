@@ -86,9 +86,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-compat"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6216c5ab5502a6824ec87a7bcd5c52ca14137f00b37dea3ab321a1656ff46383"
+checksum = "1bdc9136288101eb70d3b6baf9781ad810589fde773e356c5efa92cce3b9c6da"
 dependencies = [
  "alloy-primitives",
  "ethereum-types",
@@ -1331,14 +1331,6 @@ name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
-
-[[package]]
-name = "compat"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "primitive-types 0.12.2",
-]
 
 [[package]]
 name = "concurrent-queue"
@@ -5910,7 +5902,6 @@ dependencies = [
  "axum",
  "cfg-if",
  "clap",
- "compat",
  "directories",
  "dotenvy",
  "evm_arithmetization",
@@ -5929,7 +5920,6 @@ dependencies = [
  "paladin-core",
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "primitive-types 0.12.2",
  "rlp",
  "ruint",
  "serde",

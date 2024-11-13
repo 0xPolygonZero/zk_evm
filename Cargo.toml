@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "common",
-  "compat",
   "evm_arithmetization",
   "mpt_trie",
   "proc_macro",
@@ -21,7 +20,6 @@ keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
 categories = ["cryptography::cryptocurrencies"]
 
 [workspace.dependencies]
-__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 alloy = { version = '0.3.0', default-features = false, features = [
   "consensus",
   "reqwest",
@@ -105,7 +103,6 @@ url = "2.5.2"
 winnow = "0.6.13"
 
 # local dependencies
-compat = { path = "compat" }
 evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0", default-features = false }
 mpt_trie = { path = "mpt_trie", version = "0.4.1" }
 smt_trie = { path = "smt_trie", version = "0.1.1" }

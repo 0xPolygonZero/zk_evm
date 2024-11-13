@@ -1,26 +1,23 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use __compat_primitive_types::{H256, U256};
 use alloy::{
-    primitives::{keccak256, Address, B256},
+    primitives::{keccak256, Address, B256, U256},
     providers::{
         ext::DebugApi as _,
         network::{eip2718::Encodable2718, Ethereum, Network},
         Provider,
     },
     rpc::types::{
-        eth::Transaction,
-        eth::{AccessList, Block},
+        eth::{AccessList, Block, Transaction},
         trace::geth::{
-            AccountState, DiffMode, GethDebugBuiltInTracerType, GethTrace, PreStateConfig,
-            PreStateFrame, PreStateMode,
+            AccountState, DiffMode, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingOptions, GethTrace, PreStateConfig, PreStateFrame, PreStateMode,
         },
-        trace::geth::{GethDebugTracerType, GethDebugTracingOptions},
     },
     transports::Transport,
 };
+use alloy_compat::Compat;
 use anyhow::Context as _;
-use compat::Compat;
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
@@ -123,7 +120,7 @@ where
 }
 
 /// Parse the access list data into a hashmap.
-fn parse_access_list(access_list: Option<&AccessList>) -> HashMap<Address, HashSet<H256>> {
+fn parse_access_list(access_list: Option<&AccessList>) -> HashMap<Address, HashSet<B256>> {
     let mut result = HashMap::new();
 
     if let Some(access_list) = access_list {
@@ -131,7 +128,7 @@ fn parse_access_list(access_list: Option<&AccessList>) -> HashMap<Address, HashS
             result
                 .entry(item.address)
                 .or_insert_with(HashSet::new)
-                .extend(item.storage_keys.into_iter().map(Compat::compat));
+                .extend(item.storage_keys);
         }
     }
 
@@ -140,7 +137,7 @@ fn parse_access_list(access_list: Option<&AccessList>) -> HashMap<Address, HashS
 
 /// Processes the transaction traces and updates the accounts state.
 async fn process_tx_traces(
-    mut access_list: HashMap<Address, HashSet<H256>>,
+    mut access_list: HashMap<Address, HashSet<B256>>,
     read_trace: PreStateMode,
     diff_trace: DiffMode,
 ) -> anyhow::Result<(CodeDb, BTreeMap<Address, TxnTrace>)> {
@@ -166,7 +163,7 @@ async fn process_tx_traces(
         let pre_state = pre_trace.get(&address);
         let post_state = post_trace.get(&address);
 
-        let balance = post_state.and_then(|x| x.balance.map(Compat::compat));
+        let balance = post_state.and_then(|x| x.balance);
         let (storage_read, storage_written) = process_storage(
             access_list.remove(&address).unwrap_or_default(),
             read_state,
@@ -178,10 +175,13 @@ async fn process_tx_traces(
         let self_destructed = process_self_destruct(post_state, pre_state);
 
         let result = TxnTrace {
-            balance,
-            nonce,
-            storage_read,
-            storage_written,
+            balance: balance.map(Compat::compat),
+            nonce: nonce.map(Compat::compat),
+            storage_read: storage_read.into_iter().map(Compat::compat).collect(),
+            storage_written: storage_written
+                .into_iter()
+                .map(|(k, v)| (k.compat(), v.compat()))
+                .collect(),
             code_usage: code,
             self_destructed,
         };
@@ -200,7 +200,7 @@ fn process_nonce(
     code_usage: &Option<ContractCodeUsage>,
 ) -> Option<U256> {
     post_state
-        .and_then(|x| x.nonce.map(Into::into))
+        .and_then(|x| x.nonce.map(U256::from))
         .or_else(|| {
             if let Some(ContractCodeUsage::Write(_)) = code_usage.as_ref() {
                 Some(U256::from(1))
@@ -239,23 +239,23 @@ fn process_self_destruct(
 /// Returns the storage read and written for the given account in the
 /// transaction and updates the storage keys.
 fn process_storage(
-    access_list: HashSet<__compat_primitive_types::H256>,
+    access_list: HashSet<B256>,
     acct_state: Option<&AccountState>,
     post_acct: Option<&AccountState>,
     pre_acct: Option<&AccountState>,
-) -> (BTreeSet<H256>, BTreeMap<H256, U256>) {
+) -> (BTreeSet<B256>, BTreeMap<B256, U256>) {
     let mut storage_read = BTreeSet::from_iter(access_list);
     storage_read.extend(
         acct_state
             .into_iter()
-            .flat_map(|acct| acct.storage.keys().copied().map(Compat::compat)),
+            .flat_map(|acct| acct.storage.keys().copied()),
     );
 
-    let mut storage_written: BTreeMap<H256, U256> = post_acct
+    let mut storage_written: BTreeMap<B256, U256> = post_acct
         .map(|x| {
             x.storage
                 .iter()
-                .map(|(k, v)| ((*k).compat(), U256::from_big_endian(&v.0)))
+                .map(|(k, v)| (*k, U256::from_le_bytes((*v).into())))
                 .collect()
         })
         .unwrap_or_default();
@@ -263,7 +263,7 @@ fn process_storage(
     // Add the deleted keys to the storage written
     if let Some(pre_acct) = pre_acct {
         for key in pre_acct.storage.keys() {
-            storage_written.entry((*key).compat()).or_default();
+            storage_written.entry(*key).or_default();
         }
     };
 
