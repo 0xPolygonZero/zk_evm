@@ -6,23 +6,34 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
-use super::dup_swap::{constrain_channel_ext_circuit, constrain_channel_packed};
+use super::dup_swap::{
+    channels_equal_ext_circuit, channels_equal_packed, constrain_channel_ext_circuit,
+    constrain_channel_packed,
+};
 use crate::cpu::columns::CpuColumnsView;
 
-/// Evaluates the constraints for the DUP and SWAP opcodes.
+/// Evaluates the constraints for the INCR opcodes.
 pub(crate) fn eval_packed<P: PackedField>(
     lv: &CpuColumnsView<P>,
     nv: &CpuColumnsView<P>,
     yield_constr: &mut ConstraintConsumer<P>,
 ) {
-    let filter = lv.op.incr;
+    let base_filter = lv.op.incr;
 
-    let n = lv.opcode_bits[0]
-        + lv.opcode_bits[1] * P::Scalar::from_canonical_u64(2)
-        + lv.opcode_bits[2] * P::Scalar::from_canonical_u64(4);
+    // Constrain the helper column
+    yield_constr.constraint(
+        base_filter
+            * (lv.general.incr().is_not_incr1 - lv.opcode_bits[0])
+            * (lv.general.incr().is_not_incr1 - lv.opcode_bits[1]),
+    );
 
-    // Disable the partial channel.
-    yield_constr.constraint(lv.op.incr * lv.partial_channel.used);
+    let filter = base_filter * lv.general.incr().is_not_incr1;
+    let filter_incr1 = base_filter * (lv.general.incr().is_not_incr1 - P::ONES);
+
+    let n = lv.opcode_bits[0] + lv.opcode_bits[1] * P::Scalar::from_canonical_u64(2);
+
+    // Disable the partial channel for all instructions.
+    yield_constr.constraint(base_filter * lv.partial_channel.used);
 
     // Constrain the input channel's address, `is_read` and `used` fields.
     let read_channel = &lv.mem_channels[1];
@@ -32,30 +43,55 @@ pub(crate) fn eval_packed<P: PackedField>(
     let write_channel = &lv.mem_channels[2];
     constrain_channel_packed(false, filter, n, write_channel, lv, yield_constr);
 
-    // Constrain the unchanged stack len.
-    yield_constr.constraint_transition(filter * (nv.stack_len - lv.stack_len));
+    // Constrain the unchanged stack len for all instructions.
+    yield_constr.constraint_transition(base_filter * (nv.stack_len - lv.stack_len));
+
+    // Constrain the unchanged stack top for INCR2-INCR4.
+    channels_equal_packed(
+        filter,
+        &lv.mem_channels[0],
+        &nv.mem_channels[0],
+        yield_constr,
+    );
+
+    // Disable regular read and write channels for INCR1.
+    yield_constr.constraint(filter_incr1 * lv.mem_channels[1].used);
+    yield_constr.constraint(filter_incr1 * lv.mem_channels[2].used);
 }
 
 /// Circuit version of `eval_packed`.
-/// Evaluates the constraints for the DUP and SWAP opcodes.
+/// Evaluates the constraints for the INCR opcodes.
 pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     lv: &CpuColumnsView<ExtensionTarget<D>>,
     nv: &CpuColumnsView<ExtensionTarget<D>>,
     yield_constr: &mut RecursiveConstraintConsumer<F, D>,
 ) {
-    let filter = lv.op.incr;
+    let base_filter = lv.op.incr;
 
-    let n = lv.opcode_bits[..3].iter().enumerate().fold(
+    // Constrain the helper column
+    {
+        let diff_bit1 = builder.sub_extension(lv.general.incr().is_not_incr1, lv.opcode_bits[0]);
+        let diff_bit2 = builder.sub_extension(lv.general.incr().is_not_incr1, lv.opcode_bits[1]);
+        let constr = builder.mul_extension(base_filter, diff_bit1);
+        let constr = builder.mul_extension(constr, diff_bit2);
+        yield_constr.constraint(builder, constr);
+    }
+
+    let filter = builder.mul_extension(base_filter, lv.general.incr().is_not_incr1);
+    let filter_incr1 =
+        builder.mul_sub_extension(base_filter, lv.general.incr().is_not_incr1, base_filter);
+
+    let n = lv.opcode_bits[..2].iter().enumerate().fold(
         builder.zero_extension(),
         |cumul, (i, &bit)| {
             builder.mul_const_add_extension(F::from_canonical_u64(1 << i), bit, cumul)
         },
     );
 
-    // Disable the partial channel.
+    // Disable the partial channel for all instructions.
     {
-        let constr = builder.mul_extension(lv.op.incr, lv.partial_channel.used);
+        let constr = builder.mul_extension(base_filter, lv.partial_channel.used);
         yield_constr.constraint(builder, constr);
     }
 
@@ -67,10 +103,25 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     let write_channel = &lv.mem_channels[2];
     constrain_channel_ext_circuit(builder, false, filter, n, write_channel, lv, yield_constr);
 
-    // Constrain the unchanged stack len.
+    // Constrain the unchanged stack len for all instructions.
     {
         let diff = builder.sub_extension(nv.stack_len, lv.stack_len);
-        let constr = builder.mul_extension(filter, diff);
+        let constr = builder.mul_extension(base_filter, diff);
         yield_constr.constraint_transition(builder, constr);
     }
+
+    // Constrain the unchanged stack top for INCR2-INCR4.
+    channels_equal_ext_circuit(
+        builder,
+        filter,
+        &lv.mem_channels[0],
+        &nv.mem_channels[0],
+        yield_constr,
+    );
+
+    // Disable regular read and write channels for INCR1.
+    let constr = builder.mul_extension(filter_incr1, lv.mem_channels[1].used);
+    yield_constr.constraint(builder, constr);
+    let constr = builder.mul_extension(filter_incr1, lv.mem_channels[2].used);
+    yield_constr.constraint(builder, constr);
 }

@@ -156,12 +156,9 @@ modmul_check_loop:
     SWAP1
     %decrement
     // stack: n-1, base_addr, i, j, retdest
-    INCR3
-    SWAP2
-    // stack: i+1, base_addr, n-1, j, retdest
-    INCR4
-    // stack: i+1, base_addr, n-1, j+1, retdest
-    %stack (i, addr, n) -> (n, addr, n, i)
+    INCR3 INCR4
+    // stack: n-1, base_addr, i+1, j+1, retdest
+    %stack (n, addr) -> (n, addr, n)
     // stack: n-1, base_addr, n-1, i+1, j+1, retdest
     %jumpi(modmul_check_loop)
 // end of modmul_check_loop

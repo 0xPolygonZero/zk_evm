@@ -121,8 +121,6 @@ buffer_update:
     // stack:           get  , set  , times  , retdest
     INCR1
     INCR2
-    SWAP1 
-    SWAP1
     SWAP2
     %decrement
     SWAP2

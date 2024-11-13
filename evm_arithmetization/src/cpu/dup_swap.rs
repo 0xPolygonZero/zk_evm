@@ -11,7 +11,7 @@ use crate::cpu::columns::{CpuColumnsView, MemoryChannelView};
 use crate::memory::segments::Segment;
 
 /// Constrain two channels to have equal values.
-fn channels_equal_packed<P: PackedField>(
+pub(crate) fn channels_equal_packed<P: PackedField>(
     filter: P,
     ch_a: &MemoryChannelView<P>,
     ch_b: &MemoryChannelView<P>,
@@ -23,7 +23,7 @@ fn channels_equal_packed<P: PackedField>(
 }
 
 /// Constrain two channels to have equal values.
-fn channels_equal_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn channels_equal_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     filter: ExtensionTarget<D>,
     ch_a: &MemoryChannelView<ExtensionTarget<D>>,

@@ -132,7 +132,52 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
 }
 
 /// Returns the `TableWithColumns` for the CPU rows calling arithmetic
-/// `ADD` operations through the `INCR` privileged instructions.
+/// `ADD` operations through the `INCR1` privileged instruction.
+///
+/// It requires a different CTL than `INCR2`-`INCR4` as it does not incur any
+/// memory reads.
+pub(crate) fn ctl_arithmetic_incr1_op<F: Field>() -> TableWithColumns<F> {
+    // Instead of taking single columns, we reconstruct the entire opcode value
+    // directly.
+    let mut columns = vec![Column::constant(F::from_canonical_u8(get_opcode("ADD")))];
+
+    // Read value: current top of the stack
+    columns.extend(Column::singles(COL_MAP.mem_channels[0].value));
+
+    // Fixed second operand (`U256::one()`)
+    {
+        columns.push(Column::constant(F::ONE));
+        for _ in 1..VALUE_LIMBS {
+            columns.push(Column::constant(F::ZERO));
+        }
+    }
+
+    // Ignored third operand, `ADD` is a binary operation
+    for _ in 0..VALUE_LIMBS {
+        columns.push(Column::constant(F::ZERO));
+    }
+
+    // Returned value: next top of the stack
+    columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
+
+    TableWithColumns::new(
+        *Table::Cpu,
+        columns,
+        Filter::new(
+            vec![(
+                Column::single(COL_MAP.op.incr),
+                Column::linear_combination_with_constant(
+                    [(COL_MAP.general.incr().is_not_incr1, -F::ONE)],
+                    F::ONE,
+                ),
+            )],
+            vec![],
+        ),
+    )
+}
+
+/// Returns the `TableWithColumns` for the CPU rows calling arithmetic
+/// `ADD` operations through the `INCR2`-`INCR4` privileged instructions.
 pub(crate) fn ctl_arithmetic_incr_op<F: Field>() -> TableWithColumns<F> {
     // Instead of taking single columns, we reconstruct the entire opcode value
     // directly.
@@ -160,7 +205,13 @@ pub(crate) fn ctl_arithmetic_incr_op<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Cpu,
         columns,
-        Filter::new_simple(Column::single(COL_MAP.op.incr)),
+        Filter::new(
+            vec![(
+                Column::single(COL_MAP.op.incr),
+                Column::single(COL_MAP.general.incr().is_not_incr1),
+            )],
+            vec![],
+        ),
     )
 }
 

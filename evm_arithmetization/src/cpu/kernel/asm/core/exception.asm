@@ -420,7 +420,7 @@ min_stack_len_for_opcode:
     BYTES 3  // 0xe2, INCR3
     BYTES 4  // 0xe3, INCR4
 
-    %rep 12 // 0xe5-0xef, invalid
+    %rep 12 // 0xe4-0xef, invalid
         BYTES 0
     %endrep
 
