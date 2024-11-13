@@ -380,8 +380,18 @@ impl<F: RichField> GenerationState<F> {
         if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&batch_context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
+            log::info!(
+                "run_next_jumpdest_table_address,     ctx {:>5}, address {:>5}",
+                batch_context,
+                next_jumpdest_address + 1
+            );
             Ok((next_jumpdest_address + 1).into())
         } else {
+            log::info!(
+                "run_next_jumpdest_table_address,     ctx {:>5}, address {:>5}",
+                batch_context,
+                0
+            );
             jumpdest_table.remove_ctx(&batch_context);
             Ok(U256::zero())
         }
@@ -399,6 +409,11 @@ impl<F: RichField> GenerationState<F> {
         if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
+            log::info!(
+                "run_next_jumpdest_table_proof,       ctx {:>5},   proof {:>5}",
+                context,
+                next_jumpdest_proof
+            );
             Ok(next_jumpdest_proof.into())
         } else {
             Err(ProgramError::ProverInputError(
@@ -415,8 +430,18 @@ impl<F: RichField> GenerationState<F> {
         let address = u256_to_usize(stack_peek(self, 0)?)?;
         let closest_opcode_addr = get_closest_opcode_address(&code, address);
         Ok(if closest_opcode_addr < 32 {
+            log::info!(
+                "run_next_non_jumpdest_proof address {:>5}, closest_opcode_addr {:>5}, returns 0",
+                address,
+                closest_opcode_addr,
+            );
             U256::zero()
         } else {
+            log::info!(
+                "run_next_non_jumpdest_proof address,        {:>5}, closest_opcode_addr {:>5}",
+                address,
+                closest_opcode_addr,
+            );
             closest_opcode_addr.into()
         })
     }
