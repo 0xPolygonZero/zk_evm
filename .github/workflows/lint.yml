@@ -1,4 +1,4 @@
----   # Rust lint related checks
+--- # Rust lint related checks
 
 name: lint
 
@@ -47,7 +47,6 @@ jobs:
       - run: >
           RUSTDOCFLAGS='-D warnings -A rustdoc::private_intra_doc_links' cargo doc --no-deps --document-private-items
           --package trace_decoder
-          --package compat
           --package smt_trie
           --package zk_evm_proc_macro
           --package zk_evm_common
