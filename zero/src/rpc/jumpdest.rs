@@ -193,7 +193,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 // exception or not. But this is of no consequence to the
                 // generated Jumpdest table, so we can ignore the case.
 
-                jumpdest_table.insert(*code_hash, next_ctx_available, None);
+                // jumpdest_table.insert(*code_hash, next_ctx_available, None);
                 next_ctx_available += 1;
             }
             "CREATE" | "CREATE2" => {

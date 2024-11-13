@@ -18,7 +18,9 @@ use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 impl<F: RichField> Interpreter<F> {
     pub(crate) fn set_jumpdest_analysis_inputs(&mut self, jumps: HashMap<usize, BTreeSet<usize>>) {
         let (jdtp, _jdtw) = self.generation_state.get_jumpdest_analysis_inputs(jumps);
-        self.generation_state.jumpdest_table = Some(jdtp);
+
+        let tx_in_batch_idx = self.generation_state.next_txn_index - 1;
+        self.generation_state.jumpdest_tables[tx_in_batch_idx] = Some(jdtp);
     }
 
     pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
@@ -103,9 +105,10 @@ fn test_jumpdest_analysis() -> Result<()> {
         ),
     )]));
 
+    let tx_in_batch_idx = interpreter.generation_state.next_txn_index - 1;
     // TODO The `set_jumpdest_analysis_inputs` method is never used.
     assert_eq!(
-        interpreter.generation_state.jumpdest_table,
+        interpreter.generation_state.jumpdest_tables[tx_in_batch_idx],
         // Context 3 has jumpdest 1, 5, 7. All have proof 0 and hence
         // the list [proof_0, jumpdest_0, ... ] is [0, 1, 0, 5, 0, 7, 8, 40]
         Some(JumpDestTableProcessed::new(HashMap::from([(
@@ -126,11 +129,10 @@ fn test_jumpdest_analysis() -> Result<()> {
         .push(U256::from(CONTEXT) << CONTEXT_SCALING_FACTOR)
         .expect("The stack should not overflow");
 
+    let tx_in_batch_idx = interpreter.generation_state.next_txn_index - 1;
     // We need to manually pop the jumpdest_table and push its value on the top of
     // the stack
-    interpreter
-        .generation_state
-        .jumpdest_table
+    interpreter.generation_state.jumpdest_tables[tx_in_batch_idx]
         .as_mut()
         .unwrap()
         .try_get_ctx_mut(&CONTEXT)
@@ -180,9 +182,10 @@ fn test_packed_verification() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
     interpreter.set_code(CONTEXT, code.clone());
-    interpreter.generation_state.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from(
-        [(3, vec![1, 33])],
-    )));
+    let tx_in_batch_idx = interpreter.generation_state.next_txn_index - 1;
+    interpreter.generation_state.jumpdest_tables[tx_in_batch_idx] = Some(
+        JumpDestTableProcessed::new(HashMap::from([(3, vec![1, 33])])),
+    );
 
     interpreter.run()?;
 
@@ -195,9 +198,10 @@ fn test_packed_verification() -> Result<()> {
         let mut interpreter: Interpreter<F> =
             Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
         interpreter.set_code(CONTEXT, code.clone());
-        interpreter.generation_state.jumpdest_table = Some(JumpDestTableProcessed::new(
-            HashMap::from([(3, vec![1, 33])]),
-        ));
+        let tx_in_batch_idx = interpreter.generation_state.next_txn_index - 1;
+        interpreter.generation_state.jumpdest_tables[tx_in_batch_idx] = Some(
+            JumpDestTableProcessed::new(HashMap::from([(3, vec![1, 33])])),
+        );
 
         assert!(interpreter.run().is_err());
 

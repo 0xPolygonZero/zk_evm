@@ -390,7 +390,7 @@ pub struct GenerationState<F: RichField> {
     /// the code (not necessarily pointing to an opcode) such that for every
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     // jumpdest_table: Option<JumpDestTableProcessed>,
-    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
+    pub(crate) jumpdest_tables: Vec<Option<JumpDestTableProcessed>>,
     /// Provides quick access to pointers that reference the location
     /// of either and account or a slot in the respective access list.
     pub(crate) access_lists_ptrs: LinkedListsPtrs,
@@ -459,7 +459,7 @@ impl<F: RichField> GenerationState<F> {
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
-            jumpdest_table: None,
+            jumpdest_tables: vec![],
             access_lists_ptrs: LinkedListsPtrs::default(),
             state_ptrs: LinkedListsPtrs::default(),
             ger_prover_inputs,
@@ -575,7 +575,7 @@ impl<F: RichField> GenerationState<F> {
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
-            jumpdest_table: self.jumpdest_table.clone(),
+            jumpdest_tables: self.jumpdest_tables.clone(),
             access_lists_ptrs: self.access_lists_ptrs.clone(),
             state_ptrs: self.state_ptrs.clone(),
         }
@@ -593,7 +593,7 @@ impl<F: RichField> GenerationState<F> {
         self.trie_root_ptrs
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         // todo verify
-        self.jumpdest_table
+        self.jumpdest_tables
             .clone_from(&segment_data.extra_data.jumpdest_table);
         self.state_ptrs
             .clone_from(&segment_data.extra_data.state_ptrs);

@@ -66,6 +66,10 @@ impl Context {
             context.insert(offset);
         };
     }
+
+    pub fn max_ctx(&self) -> usize {
+        self.keys().max().copied().unwrap_or(0)
+    }
 }
 
 impl JumpDestTableProcessed {
@@ -90,7 +94,7 @@ impl JumpDestTableProcessed {
     }
 
     pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut Vec<usize>> {
-        log::info!("query_ctx {}", batch_ctx,);
+        // log::info!("query_ctx {}", batch_ctx,);
         self.witness_contexts.get_mut(batch_ctx)
     }
 
@@ -191,6 +195,10 @@ impl JumpDestTableWitness {
     pub fn merge<'a>(jdts: impl IntoIterator<Item = &'a JumpDestTableWitness>) -> (Self, usize) {
         jdts.into_iter()
             .fold((Default::default(), 0), |(acc, cnt), t| acc.extend(t, cnt))
+    }
+
+    pub fn max_ctx(&self) -> usize {
+        self.values().map(|ctx| ctx.max_ctx()).max().unwrap_or(0)
     }
 }
 

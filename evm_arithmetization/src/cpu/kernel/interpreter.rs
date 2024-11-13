@@ -80,7 +80,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     final_label: &str,
     state: &GenerationState<F>,
 ) -> Option<(JumpDestTableProcessed, JumpDestTableWitness)> {
-    match state.jumpdest_table {
+    match state.jumpdest_tables {
         _ => {
             let halt_pc = KERNEL.global_labels[final_label];
             let initial_context = state.registers.context;
@@ -125,7 +125,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     // todo
-    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
+    pub(crate) jumpdest_table: Vec<Option<JumpDestTableProcessed>>,
     pub(crate) access_lists_ptrs: LinkedListsPtrs,
     pub(crate) state_ptrs: LinkedListsPtrs,
     pub(crate) next_txn_index: usize,
@@ -226,6 +226,7 @@ impl<F: RichField> Interpreter<F> {
         debug_inputs(inputs);
 
         let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
+        result.generation_state.jumpdest_tables = vec![None; inputs.batch_jumpdest_tables.len()];
         result.initialize_interpreter_state(inputs);
         result
     }

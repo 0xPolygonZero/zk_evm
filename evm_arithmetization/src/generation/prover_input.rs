@@ -366,12 +366,13 @@ impl<F: RichField> GenerationState<F> {
             batch_context,
             self.next_txn_index - 1
         );
+        let tx_in_batch_idx = self.next_txn_index - 1;
 
-        if self.jumpdest_table.is_none() {
+        if self.jumpdest_tables[tx_in_batch_idx].is_none() {
             self.generate_jumpdest_table()?;
         }
 
-        let Some(jumpdest_table) = &mut self.jumpdest_table else {
+        let Some(jumpdest_table) = &mut self.jumpdest_tables[tx_in_batch_idx] else {
             return Err(ProgramError::ProverInputError(
                 ProverInputError::InvalidJumpdestSimulation,
             ));
@@ -400,7 +401,8 @@ impl<F: RichField> GenerationState<F> {
     /// Returns the proof for the last jump address.
     fn run_next_jumpdest_table_proof(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR)?;
-        let Some(jumpdest_table) = &mut self.jumpdest_table else {
+        let tx_in_batch_idx = self.next_txn_index - 1;
+        let Some(jumpdest_table) = &mut self.jumpdest_tables[tx_in_batch_idx] else {
             return Err(ProgramError::ProverInputError(
                 ProverInputError::InvalidJumpdestSimulation,
             ));
@@ -438,7 +440,7 @@ impl<F: RichField> GenerationState<F> {
             U256::zero()
         } else {
             log::info!(
-                "run_next_non_jumpdest_proof address,        {:>5}, closest_opcode_addr {:>5}",
+                "run_next_non_jumpdest_proof address,     {:>5}, closest_opcode_addr {:>5}",
                 address,
                 closest_opcode_addr,
             );
@@ -829,14 +831,8 @@ impl<F: RichField> GenerationState<F> {
             .get(tx_in_batch_idx - 1)
             .map(|x| x.as_ref())
             .flatten()
-            .map(|jdt| {
-                jdt.iter()
-                    .map(|(_h, jdt)| jdt.keys().max().copied().unwrap_or(0))
-                    .max()
-                    .unwrap_or(0)
-            })
-            .unwrap_or(0)
-            + 0;
+            .map(|x| x.max_ctx())
+            .unwrap_or(0);
         log::info!("Maximum CTX in previous tx: {}", prev_max_wctx);
         log::info!("TXIDX: {}", tx_in_batch_idx);
         log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
@@ -853,7 +849,7 @@ impl<F: RichField> GenerationState<F> {
         // }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
-        self.jumpdest_table = None;
+        self.jumpdest_tables[tx_in_batch_idx] = None;
         let (simp, simw) = simulate_cpu_and_get_user_jumps("terminate_common", &*self)
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
         // self.jumpdest_table = Some(simp.clone());
@@ -863,10 +859,10 @@ impl<F: RichField> GenerationState<F> {
         if rpcp.is_some() {
             dbg!(rpcp.as_ref(), Some(&simp));
             // assert!(simp.is_subset(rpcp.as_ref().unwrap()));
-            self.jumpdest_table = rpcp;
+            self.jumpdest_tables[tx_in_batch_idx] = rpcp;
         }
         // self.jumpdest_table = rpcp;
-        self.jumpdest_table = Some(simp);
+        self.jumpdest_tables[tx_in_batch_idx] = Some(simp);
         return Ok(());
     }
 
