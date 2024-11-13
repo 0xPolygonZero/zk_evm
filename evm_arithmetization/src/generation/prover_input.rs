@@ -812,6 +812,7 @@ impl<F: RichField> GenerationState<F> {
             })
             .unwrap_or(0)
             + 0;
+        log::info!("Maximum CTX in previous tx: {}", prev_max_wctx);
         log::info!("TXIDX: {}", tx_in_batch_idx);
         log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
         log::info!("TXN_NUM_BEFORE: {}", self.inputs.txn_number_before);
