@@ -811,11 +811,10 @@ impl<F: RichField> GenerationState<F> {
                     .unwrap_or(0)
             })
             .unwrap_or(0)
-            + 6;
-        log::info!("TXOFFSET: {}", tx_in_batch_idx);
-        log::info!("TXNUM: {}", self.next_txn_index);
-        log::info!("TXLEN: {}", self.inputs.txn_hashes.len());
-        log::info!("TX: {}", self.inputs.txn_number_before);
+            + 0;
+        log::info!("TXIDX: {}", tx_in_batch_idx);
+        log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
+        log::info!("TXN_NUM_BEFORE: {}", self.inputs.txn_number_before);
         let rpcw = self.inputs.jumpdest_table[tx_in_batch_idx].clone();
         let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
             get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev_max_wctx)
