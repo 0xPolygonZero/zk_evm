@@ -36,7 +36,7 @@ modmul_remainder_loop:
     DUP4 ADD // out_addr_i
     %swap_mstore
     // stack: i, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
-    %increment
+    INCR1
     DUP3
     DUP2
     // stack: i+1, len, i+1, base_addr, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
@@ -89,7 +89,7 @@ modmul_quotient_loop:
     DUP4 ADD // s1_addr_i
     %swap_mstore
     // stack: i, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
-    %increment
+    INCR1
     DUP3
     DUP2
     // stack: i+1, 2*len, i+1, base_addr, 2*len, len, a_loc, b_loc, m_loc, out_loc, s1, s2, s3, retdest
@@ -156,13 +156,9 @@ modmul_check_loop:
     SWAP1
     %decrement
     // stack: n-1, base_addr, i, j, retdest
-    SWAP2
-    %increment
-    // stack: i+1, base_addr, n-1, j, retdest
-    SWAP3
-    %increment
-    // stack: j+1, base_addr, n-1, i+1, retdest
-    %stack (j, addr, n, i) -> (n, addr, n, i, j)
+    INCR3 INCR4
+    // stack: n-1, base_addr, i+1, j+1, retdest
+    %stack (n, addr) -> (n, addr, n)
     // stack: n-1, base_addr, n-1, i+1, j+1, retdest
     %jumpi(modmul_check_loop)
 // end of modmul_check_loop

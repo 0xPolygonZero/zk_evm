@@ -100,7 +100,7 @@ global _sys_signextend:
     PUSH 31
     %min
     // Stack: min(31, N), value, return_info
-    %increment
+    INCR1
     %mul_const(8)
     // Stack: 8*(N + 1), value, return_info
     PUSH 256

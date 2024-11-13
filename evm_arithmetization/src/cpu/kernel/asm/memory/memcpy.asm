@@ -18,11 +18,9 @@ global memcpy:
     // stack: DST, SRC, count, retdest
 
     // Increment dst_addr.
-    %increment
+    INCR1
     // Increment src_addr.
-    SWAP1
-    %increment
-    SWAP1
+    INCR2
     // Decrement count.
     PUSH 1 DUP4 SUB SWAP3 POP
 

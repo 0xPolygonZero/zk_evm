@@ -39,6 +39,8 @@ pub(crate) struct OpsColumnsView<T: Copy> {
     pub m_op_general: T,
     /// Combines PC and PUSH0
     pub pc_push0: T,
+    /// Flag for INCR_N instructions.
+    pub incr: T,
 
     /// Flag for syscalls.
     pub syscall: T,

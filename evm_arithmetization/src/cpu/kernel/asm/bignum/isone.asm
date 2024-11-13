@@ -28,8 +28,6 @@ starts_with_one:
     // Starts with one, so check that the remaining limbs are zero.
     // stack: len, start_loc, retdest
     %decrement
-    SWAP1
-    %increment
-    SWAP1
+    INCR2
     // stack: len-1, start_loc+1, retdest
     %jump(iszero_bignum)

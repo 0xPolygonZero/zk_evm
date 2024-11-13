@@ -1,4 +1,3 @@
-
 global set_initial_state_trie:
     // stack: retdest
     PUSH set_initial_state_trie_after
@@ -101,7 +100,7 @@ global insert_all_initial_slots:
 insert_next_slot:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     DUP2
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: key, addr, storage_ptr_ptr, root_ptr, retdest
     DUP3

@@ -15,14 +15,14 @@ use starky::lookup::{Column, Filter};
 use starky::stark::Stark;
 
 use super::columns::CpuColumnsView;
-use super::halt;
 use super::kernel::constants::context_metadata::ContextMetadata;
+use super::kernel::opcodes::get_opcode;
 use super::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::cpu::columns::{COL_MAP, NUM_CPU_COLUMNS};
 use crate::cpu::{
-    byte_unpacking, clock, contextops, control_flow, decode, dup_swap, gas, jumps, membus, memio,
-    modfp254, pc, push0, shift, simple_logic, stack, syscalls_exceptions,
+    byte_unpacking, clock, contextops, control_flow, decode, dup_swap, gas, halt, incr, jumps,
+    membus, memio, modfp254, pc, push0, shift, simple_logic, stack, syscalls_exceptions,
 };
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
@@ -127,6 +127,90 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
                 COL_MAP.op.syscall,
                 COL_MAP.op.exception,
             ])],
+        ),
+    )
+}
+
+/// Returns the `TableWithColumns` for the CPU rows calling arithmetic
+/// `ADD` operations through the `INCR1` privileged instruction.
+///
+/// It requires a different CTL than `INCR2`-`INCR4` as it does not incur any
+/// memory reads.
+pub(crate) fn ctl_arithmetic_incr1_op<F: Field>() -> TableWithColumns<F> {
+    // Instead of taking single columns, we reconstruct the entire opcode value
+    // directly.
+    let mut columns = vec![Column::constant(F::from_canonical_u8(get_opcode("ADD")))];
+
+    // Read value: current top of the stack
+    columns.extend(Column::singles(COL_MAP.mem_channels[0].value));
+
+    // Fixed second operand (`U256::one()`)
+    {
+        columns.push(Column::constant(F::ONE));
+        for _ in 1..VALUE_LIMBS {
+            columns.push(Column::constant(F::ZERO));
+        }
+    }
+
+    // Ignored third operand, `ADD` is a binary operation
+    for _ in 0..VALUE_LIMBS {
+        columns.push(Column::constant(F::ZERO));
+    }
+
+    // Returned value: next top of the stack
+    columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
+
+    TableWithColumns::new(
+        *Table::Cpu,
+        columns,
+        Filter::new(
+            vec![(
+                Column::single(COL_MAP.op.incr),
+                Column::linear_combination_with_constant(
+                    [(COL_MAP.general.incr().is_not_incr1, -F::ONE)],
+                    F::ONE,
+                ),
+            )],
+            vec![],
+        ),
+    )
+}
+
+/// Returns the `TableWithColumns` for the CPU rows calling arithmetic
+/// `ADD` operations through the `INCR2`-`INCR4` privileged instructions.
+pub(crate) fn ctl_arithmetic_incr_op<F: Field>() -> TableWithColumns<F> {
+    // Instead of taking single columns, we reconstruct the entire opcode value
+    // directly.
+    let mut columns = vec![Column::constant(F::from_canonical_u8(get_opcode("ADD")))];
+
+    // Read value
+    columns.extend(Column::singles(COL_MAP.mem_channels[1].value));
+
+    // Fixed second operand (`U256::one()`)
+    {
+        columns.push(Column::constant(F::ONE));
+        for _ in 1..VALUE_LIMBS {
+            columns.push(Column::constant(F::ZERO));
+        }
+    }
+
+    // Ignored third operand, `ADD` is a binary operation
+    for _ in 0..VALUE_LIMBS {
+        columns.push(Column::constant(F::ZERO));
+    }
+
+    // Returned value
+    columns.extend(Column::singles(COL_MAP.mem_channels[2].value));
+
+    TableWithColumns::new(
+        *Table::Cpu,
+        columns,
+        Filter::new(
+            vec![(
+                Column::single(COL_MAP.op.incr),
+                Column::single(COL_MAP.general.incr().is_not_incr1),
+            )],
+            vec![],
         ),
     )
 }
@@ -612,6 +696,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for CpuStark<F, D
         dup_swap::eval_packed(local_values, next_values, yield_constr);
         gas::eval_packed(local_values, next_values, yield_constr);
         halt::eval_packed(local_values, next_values, yield_constr);
+        incr::eval_packed(local_values, next_values, yield_constr);
         jumps::eval_packed(local_values, next_values, yield_constr);
         membus::eval_packed(local_values, yield_constr);
         memio::eval_packed(local_values, next_values, yield_constr);
@@ -647,6 +732,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for CpuStark<F, D
         dup_swap::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         gas::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         halt::eval_ext_circuit(builder, local_values, next_values, yield_constr);
+        incr::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         jumps::eval_ext_circuit(builder, local_values, next_values, yield_constr);
         membus::eval_ext_circuit(builder, local_values, yield_constr);
         memio::eval_ext_circuit(builder, local_values, next_values, yield_constr);

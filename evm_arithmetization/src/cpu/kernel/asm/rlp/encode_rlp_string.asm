@@ -26,7 +26,7 @@ global encode_rlp_string_small:
     // stack: first_byte, rlp_addr, rlp_addr, ADDR, len, retdest
     MSTORE_GENERAL
     // stack: rlp_addr, ADDR, len, retdest
-    %increment
+    INCR1
     // stack: rlp_addr', ADDR, len, retdest
     DUP3 DUP2 ADD // rlp_addr'' = rlp_addr' + len
     // stack: rlp_addr'', rlp_addr', ADDR, len, retdest
@@ -42,7 +42,7 @@ global encode_rlp_string_small_single_byte:
     DUP2 SWAP1
     MSTORE_GENERAL
     // stack: rlp_addr, retdest
-    %increment
+    INCR1
     SWAP1
     // stack: retdest, rlp_addr'
     JUMP
@@ -59,7 +59,7 @@ global encode_rlp_string_large:
     // stack: first_byte, rlp_addr, rlp_addr, len_of_len, ADDR, len, retdest
     MSTORE_GENERAL
     // stack: rlp_addr, len_of_len, ADDR, len, retdest
-    %increment
+    INCR1
     // stack: rlp_addr', len_of_len, ADDR, len, retdest
     %stack (rlp_addr, len_of_len, ADDR, len)
         -> (rlp_addr, len, len_of_len, encode_rlp_string_large_after_writing_len, ADDR, len)

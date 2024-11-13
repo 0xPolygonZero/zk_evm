@@ -174,8 +174,15 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
 /// `CrossTableLookup` for `ArithmeticStark`, to connect it with the `Cpu`
 /// module.
 fn ctl_arithmetic<F: Field>() -> CrossTableLookup<F> {
+    let cpu_arithmetic_looking = cpu_stark::ctl_arithmetic_base_rows();
+    let cpu_incr1_looking = cpu_stark::ctl_arithmetic_incr1_op();
+    let cpu_incr_other_looking = cpu_stark::ctl_arithmetic_incr_op();
     CrossTableLookup::new(
-        vec![cpu_stark::ctl_arithmetic_base_rows()],
+        vec![
+            cpu_arithmetic_looking,
+            cpu_incr1_looking,
+            cpu_incr_other_looking,
+        ],
         arithmetic_stark::ctl_arithmetic_rows(),
     )
 }

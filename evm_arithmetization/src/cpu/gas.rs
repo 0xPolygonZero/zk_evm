@@ -37,6 +37,7 @@ const SIMPLE_OPCODES: OpsColumnsView<Option<u32>> = OpsColumnsView {
     m_op_32bytes: KERNEL_ONLY_INSTR,
     exit_kernel: None,
     m_op_general: KERNEL_ONLY_INSTR,
+    incr: KERNEL_ONLY_INSTR,
     syscall: None,
     exception: None,
 };

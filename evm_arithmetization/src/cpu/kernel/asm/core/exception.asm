@@ -228,7 +228,7 @@ global exc_stop:
     DUP3 %shr_const(32)
     MOD
     // stack: is_kernel_mode, addr_registers, trap_info
-    DUP2 %increment
+    DUP2 INCR1
     MLOAD_GENERAL
     %assert_eq
 
@@ -415,7 +415,12 @@ min_stack_len_for_opcode:
         BYTES 4
     %endrep
     
-    %rep 16 // 0xe0-0xef, invalid
+    BYTES 1  // 0xe0, INCR1
+    BYTES 2  // 0xe1, INCR2
+    BYTES 3  // 0xe2, INCR3
+    BYTES 4  // 0xe3, INCR4
+
+    %rep 12 // 0xe4-0xef, invalid
         BYTES 0
     %endrep
 

@@ -156,6 +156,7 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
             Err(ProgramError::KernelPanic)
         }
         (0xc0..=0xdf, true) => Ok(Operation::Mstore32Bytes(opcode - 0xc0 + 1)),
+        (0xe0..=0xe3, true) => Ok(Operation::Incr(opcode & 0x3)),
         (0xee, true) => Ok(Operation::ProverInput),
         (0xf0, _) => Ok(Operation::Syscall(opcode, 3, false)), // CREATE
         (0xf1, _) => Ok(Operation::Syscall(opcode, 7, false)), // CALL
@@ -202,6 +203,7 @@ pub(crate) fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>)
         Operation::Pc | Operation::Push(0) => &mut flags.pc_push0,
         Operation::GetContext | Operation::SetContext => &mut flags.context_op,
         Operation::Mload32Bytes | Operation::Mstore32Bytes(_) => &mut flags.m_op_32bytes,
+        Operation::Incr(_) => &mut flags.incr,
         Operation::ExitKernel => &mut flags.exit_kernel,
         Operation::MloadGeneral | Operation::MstoreGeneral => &mut flags.m_op_general,
     } = F::ONE;
@@ -235,6 +237,7 @@ pub(crate) const fn get_op_special_length(op: Operation) -> Option<usize> {
         Operation::Jumpi => JUMPI_OP,
         Operation::GetContext | Operation::SetContext => None,
         Operation::Mload32Bytes | Operation::Mstore32Bytes(_) => STACK_BEHAVIORS.m_op_32bytes,
+        Operation::Incr(_) => STACK_BEHAVIORS.incr,
         Operation::ExitKernel => STACK_BEHAVIORS.exit_kernel,
         Operation::MloadGeneral | Operation::MstoreGeneral => STACK_BEHAVIORS.m_op_general,
     };
@@ -276,6 +279,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
         Operation::Pc | Operation::Push(0) => MIGHT_OVERFLOW.pc_push0,
         Operation::GetContext | Operation::SetContext => MIGHT_OVERFLOW.context_op,
         Operation::Mload32Bytes | Operation::Mstore32Bytes(_) => MIGHT_OVERFLOW.m_op_32bytes,
+        Operation::Incr(_) => MIGHT_OVERFLOW.incr,
         Operation::ExitKernel => MIGHT_OVERFLOW.exit_kernel,
         Operation::MloadGeneral | Operation::MstoreGeneral => MIGHT_OVERFLOW.m_op_general,
     }
@@ -571,6 +575,7 @@ where
             Operation::SetContext => generate_set_context(self, row),
             Operation::Mload32Bytes => generate_mload_32bytes(self, row),
             Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, self, row),
+            Operation::Incr(n) => generate_incr(n, self, row),
             Operation::ExitKernel => generate_exit_kernel(self, row),
             Operation::MloadGeneral => generate_mload_general(self, row),
             Operation::MstoreGeneral => generate_mstore_general(self, row),

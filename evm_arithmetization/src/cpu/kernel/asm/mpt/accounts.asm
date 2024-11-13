@@ -7,19 +7,19 @@
     // Balance
     %mload_trie_data
     %append_to_trie_data
-    %increment
+    INCR1
     // Nonce
-    %increment
+    INCR1
     DUP1
     %mload_trie_data
     %append_to_trie_data
     // Storage trie root
-    %increment
+    INCR1
     DUP1
     %mload_trie_data
     %append_to_trie_data
     // Codehash 
-    %increment
+    INCR1
     %mload_trie_data
     %append_to_trie_data
     // stack: cloned_account_ptr

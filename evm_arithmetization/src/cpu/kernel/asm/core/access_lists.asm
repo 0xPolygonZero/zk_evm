@@ -21,13 +21,13 @@ global init_access_lists:
     DUP1
     %mstore_u256_max
     // Store @SEGMENT_ACCESSED_ADDRESSES at address 1
-    %increment
+    INCR1
     DUP1
     PUSH @SEGMENT_ACCESSED_ADDRESSES
     MSTORE_GENERAL
 
     // Store the segment scaled length
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN)
     // stack: (empty)
 
@@ -43,7 +43,7 @@ global init_access_lists:
     MSTORE_GENERAL
     
     // Store the segment scaled length
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
     
     // Reset the access lists pointers in the `GenerationState`
@@ -117,7 +117,7 @@ global insert_accessed_addresses:
     
     // stack: pred_ptr, addr, retdest
     // Check that this is not a deleted node
-    %increment
+    INCR1
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, address_found)
     // We should have found the address.
@@ -131,7 +131,7 @@ insert_new_address:
     // stack: pred_addr, pred_ptr, addr, retdest
     POP
     // get the value of the next address
-    %increment
+    INCR1
     // stack: next_ptr_ptr, addr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN)
     DUP2
@@ -158,13 +158,13 @@ insert_new_address:
     DUP4
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr, retdest
-    %increment
+    INCR1
     DUP1
     // stack: new_next_ptr, new_next_ptr, next_ptr, addr, retdest
     SWAP2
     MSTORE_GENERAL
     // stack: new_next_ptr, addr, retdest
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN)
     // stack: addr, retdest
     %journal_add_account_loaded
@@ -185,7 +185,7 @@ global remove_accessed_addresses:
     // stack: pred_ptr/2, addr, retdest
     %get_valid_addr_ptr
     // stack: pred_ptr, addr, retdest
-    %increment
+    INCR1
     // stack: next_ptr_ptr, addr, retdest
     DUP1
     MLOAD_GENERAL
@@ -196,7 +196,7 @@ global remove_accessed_addresses:
     DUP4
     %assert_eq
     // stack: next_ptr, next_ptr_ptr, addr, retdest
-    %increment
+    INCR1
     // stack: next_next_ptr_ptr, next_ptr_ptr, addr, retdest
     DUP1
     MLOAD_GENERAL
@@ -255,7 +255,7 @@ global insert_accessed_storage_keys:
     %assert_eq
     // stack: pred_ptr, addr, key, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: pred_key, pred_ptr, addr, key, retdest
     DUP1 DUP5
@@ -308,7 +308,7 @@ insert_storage_key:
     SWAP2
     EQ
     // stack: next_val == addr, addr < next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
-    DUP3 %increment
+    DUP3 INCR1
     MLOAD_GENERAL
     DUP8
     LT
@@ -325,17 +325,17 @@ insert_storage_key:
     DUP4
     MSTORE_GENERAL // store addr
     // stack: new_ptr, next_ptr, addr, key, retdest
-    %increment
+    INCR1
     DUP1
     // stack: new_ptr+1, new_ptr+1, next_ptr, addr, key, retdest
     DUP5
     // stack: key, new_ptr+1, new_ptr+1, next_ptr, addr, key, retdest
     MSTORE_GENERAL // store key
     // stack: new_ptr+1, next_ptr, addr, key, retdest
-    %increment
+    INCR1
     DUP1
     // stack: new_ptr+2, value_ptr, next_ptr, addr, key, retdest
-    %increment
+    INCR1
     DUP1
     // stack: new_next_ptr, new_next_ptr, value_ptr, next_ptr, addr, key, retdest
     SWAP3
@@ -344,7 +344,7 @@ insert_storage_key:
     // stack: value_ptr, new_next_ptr, addr, key, retdest
     SWAP1
     // stack: new_next_ptr, value_ptr, addr, key, retdest
-    %increment
+    INCR1
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
     // stack: value_ptr, addr, key, retdest
     %stack (value_ptr, addr, key, retdest) -> (addr, key, retdest, 1, value_ptr)
@@ -365,7 +365,7 @@ global remove_accessed_storage_keys:
     MLOAD_GENERAL
     // stack: next_ptr, next_ptr_ptr, addr, key, retdest
     DUP1
-    %increment
+    INCR1
     MLOAD_GENERAL
     // stack: next_key, next_ptr, next_ptr_ptr, addr, key, retdest
     DUP5

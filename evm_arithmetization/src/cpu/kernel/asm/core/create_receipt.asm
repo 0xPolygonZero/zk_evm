@@ -122,14 +122,14 @@ process_receipt_logs_loop:
     %append_to_trie_data
     // stack: log_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     // Write address.
-    %increment
+    INCR1
     // stack: addr_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     DUP1
     MLOAD_GENERAL
     %append_to_trie_data
     // stack: addr_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     // Write num_topics.
-    %increment
+    INCR1
     // stack: num_topics_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     DUP1
     MLOAD_GENERAL
@@ -137,7 +137,7 @@ process_receipt_logs_loop:
     DUP1
     %append_to_trie_data
     // stack: num_topics, num_topics_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    SWAP1 %increment SWAP1
+    INCR2
     // stack: num_topics, topics_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     PUSH 0
 
@@ -155,7 +155,7 @@ process_receipt_topics_loop:
     MLOAD_GENERAL
     %append_to_trie_data
     // stack: j, num_topics, topics_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    %increment
+    INCR1
     %jump(process_receipt_topics_loop)
 
 process_receipt_topics_end:
@@ -170,7 +170,7 @@ process_receipt_topics_end:
     DUP1
     %append_to_trie_data
     // stack: data_len, data_len_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    SWAP1 %increment SWAP1
+    INCR2
     // stack: data_len, data_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     PUSH 0
 
@@ -188,13 +188,13 @@ process_receipt_data_loop:
     MLOAD_GENERAL
     %append_to_trie_data
     // stack: j, data_len, data_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    %increment
+    INCR1
     %jump(process_receipt_data_loop)
 
 process_receipt_data_end:
     // stack: data_len, data_len, data_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
+    INCR4
     %pop3
-    %increment
     %jump(process_receipt_logs_loop)
 
 process_receipt_after_write:

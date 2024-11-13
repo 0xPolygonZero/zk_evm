@@ -46,10 +46,10 @@ use crate::witness::util::mem_write_log;
 
 /// Number of cycles to go after having reached the halting state. It is
 /// equal to the number of cycles in `exc_stop` + 1.
-pub const NUM_EXTRA_CYCLES_AFTER: usize = 82;
+pub const NUM_EXTRA_CYCLES_AFTER: usize = 81;
 /// Number of cycles to go before starting the execution: it is the number of
 /// cycles in `init`.
-pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
+pub const NUM_EXTRA_CYCLES_BEFORE: usize = 63;
 /// Memory values used to initialize `MemBefore`.
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 

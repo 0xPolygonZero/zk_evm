@@ -57,17 +57,17 @@ loop:
     DUP1 %eq_const(16) %jumpi(loop_end)
     DUP1 DUP5 ADD %mload_trie_data %mload_trie_data ISZERO ISZERO %jumpi(loop_non_empty)
     // stack: i, updated_child_ptr, first_nibble, node_payload_ptr, retdest
-    %increment %jump(loop)
+    INCR1 %jump(loop)
 loop_eq_first_nibble:
     // stack: i, updated_child_ptr, first_nibble, node_payload_ptr, retdest
-    %increment %jump(loop)
+    INCR1 %jump(loop)
 loop_non_empty:
     // stack: i, updated_child_ptr, first_nibble, node_payload_ptr, retdest
-    %mload_kernel_no_offset(@SEGMENT_KERNEL_GENERAL) %increment %mstore_kernel_no_offset(@SEGMENT_KERNEL_GENERAL)
+    %mload_kernel_no_offset(@SEGMENT_KERNEL_GENERAL) INCR1 %mstore_kernel_no_offset(@SEGMENT_KERNEL_GENERAL)
     PUSH 1 PUSH @SEGMENT_KERNEL_GENERAL %build_kernel_address
     DUP2
     MSTORE_GENERAL
-    %increment %jump(loop)
+    INCR1 %jump(loop)
 loop_end:
     // stack: i, updated_child_ptr, first_nibble, node_payload_ptr, retdest
     POP
@@ -109,7 +109,7 @@ maybe_normalize_branch_branchhash:
 // For that, return the modified child as the new node.
 maybe_normalize_branch_leafext:
     // stack: only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr, retdest
-    DUP1 %increment %mload_trie_data
+    DUP1 INCR1 %mload_trie_data
     // stack: child_len, only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr, retdest
     DUP2 %add_const(2) %mload_trie_data
     // stack: child_key, child_len, only_child_ptr, updated_child_ptr, first_nibble, node_payload_ptr, retdest
@@ -122,7 +122,7 @@ maybe_normalize_branch_leafext:
     // stack: node_ptr, len, key, only_child_ptr, retdest
     SWAP1 DUP2
     // stack: node_ptr, len, node_ptr, key, only_child_ptr, retdest
-    %increment %mstore_trie_data // Change len in the child node
+    INCR1 %mstore_trie_data // Change len in the child node
     // stack: node_ptr, key, only_child_ptr, retdest
     %add_const(2) %mstore_trie_data // Change key in the child node
     // stack: node_ptr, retdest

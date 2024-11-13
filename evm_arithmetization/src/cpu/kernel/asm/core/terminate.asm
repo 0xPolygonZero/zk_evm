@@ -91,7 +91,7 @@ global sys_selfdestruct:
     // stack: 0, balance, address, recipient, kexit_info
     DUP3 %mpt_read_state_trie
     // stack: account_ptr, 0, balance, address, recipient, kexit_info
-    %add_const(1)
+    INCR1
     // stack: balance_ptr, 0, balance, address, recipient, kexit_info
     %mstore_trie_data
 
@@ -287,7 +287,7 @@ global terminate_common:
     // stack: addr, addr_created_contract, i, nb_created_contracts, addr
     EQ %jumpi(%%contract_just_created_true)
     // stack: i, nb_created_contracts, addr
-    %increment
+    INCR1
     %jump(%%contract_just_created_loop)
 %%contract_just_created_true:
     // stack: i, nb_created_contracts, addr

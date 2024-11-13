@@ -58,6 +58,7 @@ pub(crate) enum Operation {
     SetContext,
     Mload32Bytes,
     Mstore32Bytes(u8),
+    Incr(u8),
     ExitKernel,
     MloadGeneral,
     MstoreGeneral,
@@ -561,6 +562,7 @@ pub(crate) fn generate_dup<F: RichField, T: Transition<F>>(
     } else {
         mem_read_gp_with_log_and_fill(2, other_addr, generation_state, &mut row)
     };
+
     push_no_write(generation_state, val);
     state.push_memory(log_push);
     state.push_memory(log_read);
@@ -594,6 +596,50 @@ pub(crate) fn generate_swap<F: RichField, T: Transition<F>>(
     state.push_memory(log_in1);
     state.push_memory(log_out0);
     state.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_incr<F: RichField, T: Transition<F>>(
+    n: u8,
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    let generation_state = state.get_mut_generation_state();
+
+    let val = if n == 0 {
+        let val = generation_state.registers.stack_top;
+
+        // Manually increment the top of the stack if calling INCR1.
+        generation_state.registers.stack_top += U256::one();
+
+        val
+    } else {
+        let offset = generation_state
+            .registers
+            .stack_len
+            .checked_sub(1 + (n as usize))
+            .ok_or(ProgramError::StackUnderflow)?;
+        let addr = MemoryAddress::new(generation_state.registers.context, Segment::Stack, offset);
+
+        let (val, log_in0) = mem_read_gp_with_log_and_fill(1, addr, generation_state, &mut row);
+        let new_val = val.overflowing_add(1.into()).0;
+
+        // Write the read value, incremented by 1.
+        let log_out0 = mem_write_gp_log_and_fill(2, addr, generation_state, &mut row, new_val);
+
+        // Set the general helper column.
+        row.general.incr_mut().is_not_incr1 = F::ONE;
+
+        state.push_memory(log_in0);
+        state.push_memory(log_out0);
+
+        val
+    };
+
+    let operation = arithmetic::Operation::binary(BinaryOperator::Add, val, U256::one());
+    state.push_arithmetic(operation);
+    state.push_cpu(row);
+
     Ok(())
 }
 

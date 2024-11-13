@@ -35,10 +35,9 @@ decode_rlp_string_len_medium:
     // stack: first_byte, rlp_addr, retdest
     %sub_const(0x80)
     // stack: len, rlp_addr, retdest
-    SWAP1
-    %increment
-    // stack: rlp_addr', len, retdest
-    %stack (rlp_addr, len, retdest) -> (retdest, rlp_addr, len)
+    INCR2
+    // stack: len, rlp_addr', retdest
+    SWAP2
     JUMP
 
 decode_rlp_string_len_large:
@@ -46,8 +45,8 @@ decode_rlp_string_len_large:
     // stack: first_byte, rlp_addr, retdest
     %sub_const(0xb7)
     // stack: len_of_len, rlp_addr, retdest
+    INCR2
     SWAP1
-    %increment
     // stack: rlp_addr', len_of_len, retdest
     %jump(decode_int_given_len)
 
@@ -91,9 +90,7 @@ global decode_rlp_list_len:
     DUP1
     MLOAD_GENERAL
     // stack: first_byte, rlp_addr, retdest
-    SWAP1
-    %increment // increment rlp_addr
-    SWAP1
+    INCR2 // increment rlp_addr
     // stack: first_byte, rlp_addr', retdest
     // If first_byte is >= 0xf8, it's a > 55 byte list, and
     // first_byte - 0xf7 is the length of the length.

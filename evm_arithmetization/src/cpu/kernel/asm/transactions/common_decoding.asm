@@ -300,7 +300,8 @@ sload_with_addr:
         // stack: hash, store_addr, store_addr, end_rlp_addr, rlp_addr
         MSTORE_GENERAL
         // stack: store_addr, end_rlp_addr, rlp_addr
-        %increment SWAP2
+        SWAP2
+        INCR3
         // stack: rlp_addr, end_rlp_addr, store_addr' 
         %jump(decode_and_store_blob_versioned_hashes_loop)
     decode_and_store_blob_versioned_hashes_finish:

@@ -73,7 +73,7 @@ if ! [[ $TEST_ONLY == "test_only" ]]; then
         export KECCAK_CIRCUIT_SIZE="4..13"
         export KECCAK_SPONGE_CIRCUIT_SIZE="8..9"
         export LOGIC_CIRCUIT_SIZE="4..14"
-        export MEMORY_CIRCUIT_SIZE="17..22"
+        export MEMORY_CIRCUIT_SIZE="16..22"
         export MEMORY_BEFORE_CIRCUIT_SIZE="16..18"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
         export POSEIDON_CIRCUIT_SIZE="4..8"

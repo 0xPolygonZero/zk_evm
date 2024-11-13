@@ -62,17 +62,16 @@ global encode_or_hash_node:
     // If we got here, node_type == @MPT_NODE_HASH.
     // Load the hash and return (hash, 32).
     // stack: node_type, node_ptr, rlp_start, encode_value, cur_len, retdest
+    INCR2 // Skip over node type prefix
     POP
-    
-    // stack: node_ptr, rlp_start, encode_value, cur_len, retdest
-    %increment // Skip over node type prefix
     // stack: hash_ptr, rlp_start, encode_value, cur_len, retdest
     %mload_trie_data
     // stack: hash, rlp_start, encode_value, cur_len, retdest
     // Update the length of the `TrieData` segment: there are only two 
     // elements in a hash node.
-    SWAP3 %add_const(2)
-    %stack (cur_len, rlp_start, encode_value, hash, retdest) -> (retdest, hash, 32, cur_len)
+    INCR4
+    INCR4
+    %stack (hash, rlp_start, encode_value, cur_len, retdest) -> (retdest, hash, 32, cur_len)
     JUMP
 encode_or_hash_concrete_node:
     %stack (node_type, node_ptr, rlp_start, encode_value, cur_len) -> (node_type, node_ptr, rlp_start, encode_value, cur_len, maybe_hash_node)
@@ -104,7 +103,7 @@ after_packed_small_rlp:
 encode_node:
     // stack: node_type, node_ptr, rlp_start, encode_value, cur_len, retdest
     // Increment node_ptr, so it points to the node payload instead of its type.
-    SWAP1 %increment SWAP1
+    INCR2
     // stack: node_type, node_payload_ptr, rlp_start, encode_value, cur_len, retdest
 
     DUP1 %eq_const(@MPT_NODE_EMPTY)     %jumpi(encode_node_empty)
@@ -158,7 +157,7 @@ global encode_node_branch:
     %stack (value_ptr, rlp_pos, rlp_start, encode_value) -> (0x80, rlp_pos, rlp_pos, rlp_start)
     MSTORE_GENERAL
     // stack: rlp_pos', rlp_start, cur_len, retdest
-    %increment
+    INCR1
     // stack: rlp_pos'', rlp_start, cur_len, retdest
     %jump(encode_node_branch_prepend_prefix)
 encode_node_branch_with_value:
@@ -198,7 +197,7 @@ encode_node_branch_prepend_prefix:
     DUP4 // rlp_pos
     PUSH 160
     MSTORE_GENERAL
-    SWAP3 %increment SWAP3 // rlp_pos += 1
+    INCR4 // rlp_pos += 1
 %%unpack:
     %stack (result_len, result, cur_len, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, retdest)
         -> (rlp_pos, result, result_len, %%after_unpacking,
@@ -225,7 +224,7 @@ encode_node_extension_after_encode_child:
     PUSH encode_node_extension_after_hex_prefix // retdest
     PUSH 0 // terminated
     // stack: terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, retdest
-    DUP6 %increment %mload_trie_data // Load the packed_nibbles field, which is at index 1.
+    DUP6 INCR1 %mload_trie_data // Load the packed_nibbles field, which is at index 1.
     // stack: packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, retdest
     DUP7 %mload_trie_data // Load the num_nibbles field, which is at index 0.
     // stack: num_nibbles, packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, retdest
@@ -241,7 +240,7 @@ encode_node_extension_after_hex_prefix:
     DUP1 // rlp_pos
     PUSH 160
     MSTORE_GENERAL
-    %increment // rlp_pos += 1
+    INCR1 // rlp_pos += 1
 encode_node_extension_unpack:
     %stack (rlp_pos, rlp_start, result, result_len, node_payload_ptr, cur_len)
         -> (rlp_pos, result, result_len, encode_node_extension_after_unpacking, rlp_start, cur_len)
@@ -264,7 +263,7 @@ global encode_node_leaf:
     PUSH encode_node_leaf_after_hex_prefix // retdest
     PUSH 1 // terminated
     // stack: terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
-    DUP4 %increment %mload_trie_data // Load the packed_nibbles field, which is at index 1.
+    DUP4 INCR1 %mload_trie_data // Load the packed_nibbles field, which is at index 1.
     // stack: packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
     DUP5 %mload_trie_data // Load the num_nibbles field, which is at index 0.
     // stack: num_nibbles, packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
