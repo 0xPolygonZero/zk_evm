@@ -136,9 +136,8 @@ impl BlockProverInput {
         };
 
         // Generate channels to communicate segments of each batch to a batch proving
-        // task. We generate a segment and send it to the proving task, then
-        // wait for it to be proved before we send another segment. This is done
-        // to avoid memory exhaustion.
+        // task. We generate segments and send them to the proving task, where they
+        // are proven in parallel.
         let (segment_senders, segment_receivers): (Vec<_>, Vec<_>) = (0..batch_count)
             .map(|_idx| {
                 let (segment_tx, segment_rx) =
@@ -220,7 +219,7 @@ impl BlockProverInput {
                         // Prove one segment in a dedicated async task.
                         let segment_proving_task = tokio::spawn(async move {
                             if let Some(segment_data) = segment_data {
-                                debug!("proving the batch {batch_idx} segment data {segment_counter}");
+                                debug!("proving the batch {batch_idx} segment nr. {segment_counter}");
                                 let seg_aggregatable_proof= Directive::map(
                                     IndexedStream::from([segment_data]),
                                     &seg_prove_ops,
