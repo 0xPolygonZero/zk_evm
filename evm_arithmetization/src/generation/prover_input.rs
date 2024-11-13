@@ -129,7 +129,6 @@ impl<F: RichField> GenerationState<F> {
                                 content: new_content,
                             },
                         );
-                        // }
                         n
                     },
                     Ok,

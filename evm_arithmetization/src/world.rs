@@ -94,6 +94,15 @@ pub trait World {
     /// Creates a new account at `address` if it does not exist.
     fn set_code(&mut self, address: Address, code: Either<&[u8], H256>) -> anyhow::Result<()>;
 
+    /// Update the code and code length for the account at the give address.
+    ///
+    /// Creates a new account at `address` if it does not exist.
+    fn set_code_and_hash(
+        &mut self,
+        address: Address,
+        code: Either<H256, U256>,
+        code_length: Option<U256>,
+    );
     /// The `core` module of the `trace_decoder` crate tracks required subtries
     /// for proving.
     ///
@@ -170,6 +179,9 @@ impl Type1World {
     pub fn state_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.state.as_hashed_partial_trie()
     }
+    pub fn state_trie_mut(&mut self) -> &mut mpt_trie::partial_trie::HashedPartialTrie {
+        self.state.as_mut_hashed_partial_trie()
+    }
     pub fn into_state_and_storage(self) -> (StateMpt, BTreeMap<H256, StorageTrie>) {
         let Self { state, storage } = self;
         (state, storage)
@@ -234,6 +246,16 @@ impl World for Type1World {
         let mut acct = self.state.get(key).unwrap_or_default();
         acct.code_hash = code.right_or_else(Self::CodeHasher::hash);
         self.state.insert(key, acct)
+    }
+    fn set_code_and_hash(
+        &mut self,
+        address: Address,
+        code: Either<H256, U256>,
+        _code_length: Option<U256>,
+    ) {
+        let key = keccak_hash::keccak(address);
+        let mut acct = self.state.get(key).unwrap_or_default();
+        acct.code_hash = code.expect_left("MPTs store hashes as H256.");
     }
     fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
         self.state.reporting_remove(address)
@@ -344,6 +366,16 @@ impl World for Type2World {
         };
         Ok(())
     }
+    fn set_code_and_hash(
+        &mut self,
+        address: Address,
+        code: Either<H256, U256>,
+        code_length: Option<U256>,
+    ) {
+        let acct = self.accounts.entry(address).or_default();
+        acct.code_hash = Some(code.expect_right("SMTs store hashes as U256."));
+        acct.code_length = code_length;
+    }
     fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {
         self.accounts.remove(&address);
         Ok(None)
@@ -451,6 +483,17 @@ impl World for StateWorld {
         match &mut self.state {
             Either::Left(type1) => type1.set_code(address, code),
             Either::Right(type2) => type2.set_code(address, code),
+        }
+    }
+    fn set_code_and_hash(
+        &mut self,
+        address: Address,
+        code_hash: Either<H256, U256>,
+        code_length: Option<U256>,
+    ) {
+        match &mut self.state {
+            Either::Left(type1) => type1.set_code_and_hash(address, code_hash, code_length),
+            Either::Right(type2) => type2.set_code_and_hash(address, code_hash, code_length),
         }
     }
     fn reporting_destroy(&mut self, address: Address) -> anyhow::Result<Option<Self::SubtriePath>> {

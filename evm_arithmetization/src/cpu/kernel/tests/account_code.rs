@@ -12,6 +12,8 @@ use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
 use smt_trie::code::hash_bytecode_h256;
+#[cfg(feature = "cdk_erigon")]
+use smt_trie::utils::key2u;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
@@ -174,9 +176,14 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     address: Address,
     account: &EitherAccount,
 ) -> Result<()> {
-    let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
+    let insert_state_trie = if cfg!(feature = "cdk_erigon") {
+        KERNEL.global_labels["insert_key"]
+    } else {
+        KERNEL.global_labels["insert_account_with_overwrite"]
+    };
     let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
-    let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
+    let mut state_trie = StateWorld::default();
+    let expected_state_trie_hash = set_account(&mut state_trie, address, &account);
     let trie_inputs = TrieInputs {
         state_trie: StateWorld::default(),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
@@ -190,34 +197,80 @@ pub(crate) fn prepare_interpreter<F: RichField>(
         keccak(address.to_fixed_bytes()).as_bytes(),
     ));
     // Next, execute mpt_insert_state_trie.
-    interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
+    interpreter.generation_state.registers.program_counter = insert_state_trie;
     let trie_data = interpreter.get_trie_data_mut();
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
         // Since we don't explicitly set it to 0, we need to do so here.
         trie_data.push(Some(0.into()));
     }
-    let value_ptr = trie_data.len();
-    trie_data.push(Some(account.get_nonce()));
-    trie_data.push(Some(account.get_balance()));
-    // In memory, storage_root gets interpreted as a pointer to a storage trie,
-    // so we have to ensure the pointer is valid. It's easiest to set it to 0,
-    // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
-    trie_data.push(Some(H256::zero().into_uint()));
-    trie_data.push(Some(account.get_code_hash_u256()));
-    let trie_data_len = trie_data.len().into();
-    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
-    interpreter
-        .push(0xDEADBEEFu32.into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push(value_ptr.into())
-        .expect("The stack should not overflow"); // value_ptr
-    interpreter
-        .push(k.try_into().unwrap())
-        .expect("The stack should not overflow"); // key
 
-    interpreter.run()?;
+    #[cfg(feature = "cdk_erigon")]
+    {
+        let right_state_trie = state_trie
+            .state
+            .expect_right("cdk_erigon expects SMTs.")
+            .as_smt();
+        let mut kv_sorted_by_k: Vec<(U256, U256)> = right_state_trie
+            .kv_store
+            .iter()
+            .map(|(&key, &val)| (key2u(key), val))
+            .collect();
+        kv_sorted_by_k.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+        trie_data.extend(
+            right_state_trie
+                .to_vec_skip_empty_node_and_add_offset(2)
+                .iter()
+                .map(|v| Some(*v)),
+        );
+
+        let trie_data_len = trie_data.len().into();
+        interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
+        let accounts_list_next_pointer = Segment::AccountsLinkedList as usize + 4;
+        interpreter.set_global_metadata_field(
+            GlobalMetadata::AccountsLinkedListNextAvailable,
+            accounts_list_next_pointer.into(),
+        );
+
+        for (key, v) in kv_sorted_by_k {
+            interpreter.generation_state.registers.program_counter = insert_state_trie;
+
+            interpreter
+                .push(0xDEADBEEFu32.into())
+                .expect("The stack should not overflow");
+            interpreter.push(v).expect("The stack should not overflow"); // value
+            interpreter
+                .push(key)
+                .expect("The stack should not overflow"); // key
+            interpreter.run()?;
+        }
+    }
+    #[cfg(not(feature = "cdk_erigon"))]
+    {
+        let value_ptr = trie_data.len();
+        trie_data.push(Some(account.get_nonce()));
+        trie_data.push(Some(account.get_balance()));
+        // In memory, storage_root gets interpreted as a pointer to a storage trie,
+        // so we have to ensure the pointer is valid. It's easiest to set it to 0,
+        // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
+        trie_data.push(Some(H256::zero().into_uint()));
+        trie_data.push(Some(account.get_code_hash_u256()));
+        let trie_data_len = trie_data.len().into();
+        interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
+
+        interpreter
+            .push(0xDEADBEEFu32.into())
+            .expect("The stack should not overflow");
+        interpreter
+            .push(value_ptr.into())
+            // .push(0.into())
+            .expect("The stack should not overflow"); // value_ptr
+        interpreter
+            .push(k.try_into().unwrap())
+            .expect("The stack should not overflow"); // key
+        interpreter.run()?;
+    }
 
     assert_eq!(
         interpreter.stack().len(),
@@ -230,39 +283,25 @@ pub(crate) fn prepare_interpreter<F: RichField>(
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::StorageLinkedList as usize + 5).into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
-        .unwrap();
-    interpreter
-        .push((Segment::AccountsLinkedList as usize + 4).into())
-        .expect("The stack should not overflow");
 
     // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["insert_all_initial_accounts"];
+        KERNEL.global_labels["store_initial_state"];
 
     interpreter.run()?;
 
-    assert_eq!(interpreter.stack_len(), 1);
+    assert_eq!(interpreter.stack_len(), 0);
 
-    let state_root = interpreter.pop().expect("The stack should not be empty");
-    interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
-
-    // Now, execute `mpt_hash_state_trie`.
-    state_trie.insert(k, account.rlp_encode().to_vec())?;
-    let expected_state_trie_hash = state_trie.hash();
+    // Now, hash the initial state trie.
     interpreter.set_global_metadata_field(
-        GlobalMetadata::StateTrieRootDigestAfter,
-        h2u(expected_state_trie_hash),
+        GlobalMetadata::StateTrieRootDigestBefore,
+        expected_state_trie_hash,
     );
 
     interpreter.generation_state.registers.program_counter = check_state_trie;
     interpreter
         .halt_offsets
-        .push(KERNEL.global_labels["check_txn_trie"]);
+        .push(KERNEL.global_labels["check_final_state_trie"]);
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
@@ -726,4 +765,51 @@ fn sload() -> Result<()> {
 
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
+}
+
+fn set_account(world: &mut StateWorld, addr: Address, account: &EitherAccount) -> U256 {
+    use plonky2::field::types::PrimeField64;
+    use smt_trie::{
+        keys::{key_balance, key_code_length},
+        utils::hashout2u,
+    };
+
+    use crate::world::World;
+
+    match &mut world.state {
+        Either::Left(type1world) => {
+            let state_trie = type1world.state_trie_mut();
+            let k = nibbles_64(U256::from_big_endian(
+                keccak(addr.to_fixed_bytes()).as_bytes(),
+            ));
+            let _ = state_trie.insert(k, account.as_mpt_account().rlp_encode().to_vec());
+            h2u(state_trie.hash())
+        }
+        Either::Right(type2world) => {
+            let acct = account.as_smt_account();
+            let key = key_balance(addr);
+            log::debug!(
+                "setting {:?} balance to {:?}, the key is {:?}",
+                addr,
+                account.get_balance(),
+                U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+            );
+            let _ = type2world.update_balance(addr, |b| *b = account.get_balance());
+
+            let _ = type2world.update_balance(addr, |b| *b = account.get_balance());
+            let _ = type2world.update_nonce(addr, |n| *n = account.get_nonce());
+            type2world.set_code_and_hash(
+                addr,
+                Either::Right(acct.code_hash),
+                Some(acct.code_length),
+            );
+            let key = key_code_length(addr);
+            log::debug!(
+                "setting {:?} code length, the key is {:?}",
+                addr,
+                U256(std::array::from_fn(|i| key.0[i].to_canonical_u64()))
+            );
+            hashout2u(type2world.as_smt().root)
+        }
+    }
 }

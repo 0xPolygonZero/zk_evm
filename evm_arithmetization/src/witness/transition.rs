@@ -322,54 +322,6 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
         ),
     );
 
-    #[cfg(all(test, not(feature = "cdk_erigon")))]
-    if KERNEL.offset_name(pc) == "mpt_hash_state_trie" || KERNEL.offset_name(pc) == "init" {
-        let mem = state
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::TrieData);
-        log::debug!(
-            "account nonce = {:?} balance {:?} code hash {:?}",
-            mem[5],
-            mem[6],
-            mem[8]
-        );
-        let mem = state
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!(
-            "accounts linked list = {:?}",
-            LinkedList::<4>::from_mem_and_segment(&mem, Segment::AccountsLinkedList)
-        );
-
-        let mem = state
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::StorageLinkedList);
-        log::debug!(
-            "storage linked list = {:?}",
-            LinkedList::<5>::from_mem_and_segment(&mem, Segment::StorageLinkedList)
-        );
-
-        let state_trie_ptr = u256_to_usize(
-            state
-                .get_generation_state()
-                .memory
-                .read_global_metadata(GlobalMetadata::StateTrieRoot),
-        )
-        .unwrap();
-
-        let state_trie = get_state_trie::<HashedPartialTrie>(
-            &state.get_generation_state().memory,
-            state_trie_ptr,
-        )
-        .unwrap();
-
-        log::debug!("state trie ptr = {:?}", state_trie_ptr);
-        log::debug!("state trie {:?}", state_trie);
-    }
-
     #[cfg(test)]
     if KERNEL.offset_name(pc) == "hash_state_trie" || KERNEL.offset_name(pc) == "sys_sstore" {
         let mem = state

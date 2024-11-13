@@ -128,6 +128,14 @@ after_insert_slot:
     %jump(insert_all_initial_slots)
 
 %macro store_initial_state
+    // stack: (empty)
+    PUSH %%after
+    %jump(store_initial_state)
+%%after:
+%endmacro
+
+global store_initial_state:
+    // stack: retdest
     %store_initial_accounts
     %store_initial_slots
-%endmacro
+    JUMP
