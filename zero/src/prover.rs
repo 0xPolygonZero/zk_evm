@@ -10,10 +10,11 @@ use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use evm_arithmetization::Field;
 use evm_arithmetization::SegmentDataIterator;
-use futures::future::try_join_all;
 use futures::{
-    future, future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt,
-    TryStreamExt,
+    future::BoxFuture,
+    future::{self, try_join, try_join_all},
+    stream::FuturesUnordered,
+    FutureExt as _, StreamExt as _, TryFutureExt as _, TryStreamExt as _,
 };
 use hashbrown::HashMap;
 use num_traits::ToPrimitive as _;
@@ -175,19 +176,20 @@ impl BlockProverInput {
                         .send(None)
                         .await
                         .context(format!("failed to send end segment data indicator for batch {batch_idx}"))?;
-                    Ok::<(), anyhow::Error>(())
+                    anyhow::Ok(())
                 });
             }
             while let Some(it) = batch_segment_futures.next().await {
                 // In case of an error, propagate the error to the main task
                 it?;
             }
-            Ok::<(), anyhow::Error>(())
+            let () = batch_segment_futures.try_collect().await?;
+            anyhow::Ok(())
         });
 
         let proof_runtime_ = proof_runtime.clone();
         let batches_proving_task = tokio::spawn(async move {
-            let mut batch_proving_futures: FuturesUnordered<_> = FuturesUnordered::new();
+            let mut batch_proving_futures = FuturesUnordered::new();
             // Span a proving subtask for each batch where we generate segment proofs
             // and aggregate them to batch proof.
             for (batch_idx, mut segment_rx) in segment_receivers.into_iter().enumerate() {
@@ -209,39 +211,34 @@ impl BlockProverInput {
                     // The segment proof worker task will prove the segment and send it back.
                     let mut segment_counter = 0;
                     let mut segment_proving_tasks = Vec::new();
-                    while let Some(segment_data) = segment_rx.recv().await {
-                        if segment_data.is_none() {
-                            break;
-                        }
+                    while let Some(Some(segment_data)) = segment_rx.recv().await {
                         let seg_prove_ops = seg_prove_ops.clone();
                         let proof_runtime = proof_runtime.clone();
                         let segment_proof_tx = segment_proof_tx.clone();
                         // Prove one segment in a dedicated async task.
                         let segment_proving_task = tokio::spawn(async move {
-                            if let Some(segment_data) = segment_data {
-                                debug!("proving the batch {batch_idx} segment nr. {segment_counter}");
-                                let seg_aggregatable_proof= Directive::map(
-                                    IndexedStream::from([segment_data]),
-                                    &seg_prove_ops,
-                                )
-                                    .run(&proof_runtime.heavy_proof)
-                                    .await?
-                                    .into_values_sorted()
-                                    .await?
-                                    .into_iter()
-                                    .next()
-                                    .context(format!(
-                                        "failed to get segment proof, batch: {batch_idx}, segment: {segment_counter}"
-                                    ))?;
+                            debug!(%batch_idx, %segment_counter, "proving batch segment");
+                            let seg_aggregatable_proof= Directive::map(
+                                IndexedStream::from([segment_data]),
+                                &seg_prove_ops,
+                            )
+                                .run(&proof_runtime.heavy_proof)
+                                .await?
+                                .into_values_sorted()
+                                .await?
+                                .into_iter()
+                                .next()
+                                .context(format!(
+                                    "failed to get segment proof, batch: {batch_idx}, segment: {segment_counter}"
+                                ))?;
 
-                                segment_proof_tx
-                                    .send((segment_counter, seg_aggregatable_proof))
-                                    .await
-                                    .context(format!(
-                                        "unable to send segment proof, batch: {batch_idx}, segment: {segment_counter}"
-                                    ))?;
-                            };
-                            Ok::<(), anyhow::Error>(())
+                            segment_proof_tx
+                                .send((segment_counter, seg_aggregatable_proof))
+                                .await
+                                .context(format!(
+                                    "unable to send segment proof, batch: {batch_idx}, segment: {segment_counter}"
+                                ))?;
+                            anyhow::Ok(())
                         });
 
                         segment_proving_tasks.push(segment_proving_task);
@@ -254,7 +251,7 @@ impl BlockProverInput {
                     }
                     try_join_all(segment_proving_tasks).await?;
                     batch_segment_aggregatable_proofs.sort_by(|(a, _), (b, _)| a.cmp(b));
-                    debug!(block_number=%block_number, batch=%batch_idx, "finished proving all segments");
+                    debug!(%block_number, batch=%batch_idx, "finished proving all segments");
                     // We have proved all the segments in a batch,
                     // now we need to aggregate them to the batch proof.
                     // Fold the segment aggregated proof stream into a single batch proof.
@@ -276,18 +273,18 @@ impl BlockProverInput {
                             })
                             .await?
                     };
-                    debug!(block_number=%block_number, batch=%batch_idx, "generated batch proof for block");
+                    debug!(%block_number, batch=%batch_idx, "generated batch proof for block");
                     batch_proof_tx.send(batch_proof).await.context(format!(
                         "unable to send batch proof, block: {block_number}, batch: {batch_idx}"
                     ))?;
-                    Ok::<(), anyhow::Error>(())
+                    anyhow::Ok(())
                 });
             }
             // Wait for all the batch proving tasks to finish. Exit early on error.
             while let Some(it) = batch_proving_futures.next().await {
                 it?;
             }
-            Ok::<(), anyhow::Error>(())
+            anyhow::Ok(())
         });
 
         // Collect all the batch proofs.
@@ -295,10 +292,10 @@ impl BlockProverInput {
         while let Some((batch_idx, batch_proof)) = batch_proof_rx.recv().await {
             batch_proofs.push((batch_idx, batch_proof));
         }
-        debug!(block_number=%block_number, "collected all batch proofs");
+        debug!(%block_number, "collected all batch proofs");
 
         // Wait for the segment generation and proving tasks to finish.
-        try_join_all([segment_generation_task, batches_proving_task]).await?;
+        let _ = try_join(segment_generation_task, batches_proving_task).await?;
 
         batch_proofs.sort_by(|(a, _), (b, _)| a.cmp(b));
 
