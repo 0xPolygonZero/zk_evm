@@ -30,7 +30,6 @@ use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 use tracing::{debug, warn};
 
 use crate::rpc::jumpdest::get_block_normalized_structlogs;
-// use crate::rpc::Compat;
 use crate::rpc::{
     jumpdest::{self},
     JumpdestSrc,

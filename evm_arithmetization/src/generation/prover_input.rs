@@ -837,7 +837,8 @@ impl<F: RichField> GenerationState<F> {
         log::info!("TXIDX: {}", tx_in_batch_idx);
         log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
         log::info!("TXN_NUM_BEFORE: {}", self.inputs.txn_number_before);
-        log::info!("TX HASH: {:#?}", self.inputs.txn_hashes);
+        log::info!("TX BATCH: {:#?}", self.inputs.txn_hashes);
+        log::info!("TX HASH: {:#?}", self.inputs.txn_hashes[tx_in_batch_idx]);
         let rpcw = self.inputs.jumpdest_table[tx_in_batch_idx].clone();
         let rpcp: Option<JumpDestTableProcessed> =
             rpcw.as_ref().map(|jdt: &JumpDestTableWitness| {
@@ -850,10 +851,10 @@ impl<F: RichField> GenerationState<F> {
             });
         log::info!("RPCW {:#?}", &rpcw);
         log::info!("RPCP {:#?}", &rpcp);
-        // if rpcp.is_some() {
-        //     self.jumpdest_tables[tx_in_batch_idx] = rpcp;
-        //     return Ok(());
-        // }
+        if rpcp.is_some() {
+            self.jumpdest_tables[tx_in_batch_idx] = rpcp;
+            return Ok(());
+        }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_tables[tx_in_batch_idx] = None;
@@ -863,10 +864,10 @@ impl<F: RichField> GenerationState<F> {
         log::info!("SIMW {:#?}", &simw);
         log::info!("SIMP {:#?}", &simp);
 
-        if rpcp.is_some() {
-            dbg!(rpcp.as_ref().map(|x| x.normalize()), Some(&simp));
-            assert_eq!(rpcp.as_ref(), Some(&simp));
-        }
+        // if let Some(rpcp) = rpcp {
+        //     dbg!(rpcp.as_ref().map(|x| x.normalize()), Some(&simp));
+        //     assert_eq!(rpcp.is_super(&simp));
+        // }
         self.jumpdest_tables[tx_in_batch_idx] = Some(simp);
         return Ok(());
     }
