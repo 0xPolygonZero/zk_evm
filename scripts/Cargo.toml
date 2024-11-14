@@ -10,6 +10,7 @@ categories.workspace = true
 publish = false
 
 [dependencies]
+alloy.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }

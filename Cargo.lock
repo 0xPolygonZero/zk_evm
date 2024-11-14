@@ -5879,6 +5879,7 @@ dependencies = [
 name = "xtask"
 version = "0.0.0"
 dependencies = [
+ "alloy",
  "anyhow",
  "clap",
  "serde",
