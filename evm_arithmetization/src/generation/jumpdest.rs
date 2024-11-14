@@ -23,7 +23,6 @@
 //! [`JUMPDEST`]: https://www.evm.codes/?fork=cancun#5b
 
 use std::cmp::max;
-use std::ops::Not as _;
 use std::{
     collections::{BTreeSet, HashMap},
     fmt::Display,
@@ -44,10 +43,7 @@ pub struct Context(pub HashMap<usize, BTreeSet<usize>>);
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JumpDestTableProcessed {
     witness_contexts: HashMap<usize, Vec<usize>>,
-    /// Translates batch index to a wittness index
-    index: HashMap<usize, usize>,
-    largest_batch_ctx: usize,
-    pub largest_witness_ctx: usize,
+    largest_witness_ctx: usize,
 }
 
 /// Map `CodeHash -> (Context -> [JumpDests])`
@@ -76,19 +72,12 @@ impl JumpDestTableProcessed {
     pub fn new(ctx_map: HashMap<usize, Vec<usize>>) -> Self {
         Self {
             witness_contexts: ctx_map,
-            // mapping from batch indices to witness indices
-            index: Default::default(),
-            largest_batch_ctx: 0,
-            largest_witness_ctx: 0,
         }
     }
 
     pub fn new_with_start(ctx_map: HashMap<usize, Vec<usize>>, start_ctx: usize) -> Self {
         Self {
             witness_contexts: ctx_map,
-            // mapping from batch indices to witness indices
-            index: Default::default(),
-            largest_batch_ctx: 0,
             largest_witness_ctx: start_ctx,
         }
     }
@@ -98,67 +87,9 @@ impl JumpDestTableProcessed {
         self.witness_contexts.get_mut(batch_ctx)
     }
 
-    // pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut
-    // Vec<usize>> {     log::info!(
-    //         "START: batch_ctx {} :: max_b {} :: max-w {} {:#?}",
-    //         batch_ctx,
-    //         self.largest_batch_ctx,
-    //         self.largest_witness_ctx,
-    //         self.index
-    //     );
-
-    //     if *batch_ctx <= self.largest_batch_ctx {
-    //         let witness_ctx = self.index[batch_ctx];
-    //         return self.witness_contexts.get_mut(&witness_ctx);
-    //     }
-    //     self.largest_batch_ctx = *batch_ctx;
-
-    //     let mut new_witness_ctx = self.largest_witness_ctx;
-    //     for i in (self.largest_witness_ctx + 1).. {
-    //         if self.witness_contexts.contains_key(&i) {
-    //             new_witness_ctx = i;
-    //             break;
-    //         }
-    //     }
-
-    //     self.largest_witness_ctx = new_witness_ctx;
-    //     self.index.insert(*batch_ctx, new_witness_ctx);
-    //     log::info!(
-    //         "END:{} {}->{} {:#?}",
-    //         batch_ctx,
-    //         self.largest_batch_ctx,
-    //         self.largest_witness_ctx,
-    //         self.index
-    //     );
-
-    //     self.witness_contexts.get_mut(&new_witness_ctx)
-    // }
-
-    // pub fn remove_ctx(&mut self, batch_ctx: &usize) {
-    //     let witness_index = self.index[batch_ctx];
-    //     self.witness_contexts.remove(&witness_index);
-    // }
-
     pub fn remove_ctx(&mut self, batch_ctx: &usize) {
         self.witness_contexts.remove(&batch_ctx);
     }
-
-    // pub fn last_ctx(self) -> usize {
-    //     self.witness_contexts
-    //         .keys()
-    //         .max()
-    //         .copied()
-    //         .unwrap_or_default()
-    // }
-
-    // pub fn is_subset(&self, other: &Self) -> bool {
-    //     for (k, v) in self.witness_contexts.iter() {
-    //         if other.witness_contexts.contains_key(k).not() || v !=
-    // &other.witness_contexts[k] {             return false;
-    //         }
-    //     }
-    //     true
-    // }
 }
 
 impl JumpDestTableWitness {
@@ -197,6 +128,7 @@ impl JumpDestTableWitness {
             .fold((Default::default(), 0), |(acc, cnt), t| acc.extend(t, cnt))
     }
 
+    /// Obtain the context within any `code_hash` with maximal numeric value.
     pub fn max_ctx(&self) -> usize {
         self.values().map(|ctx| ctx.max_ctx()).max().unwrap_or(0)
     }

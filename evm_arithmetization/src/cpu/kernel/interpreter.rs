@@ -182,7 +182,6 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
             let code = if code_map.contains_key(code_addr) {
                 &code_map[code_addr]
             } else {
-                panic!("code not found");
                 &vec![]
             };
             prove_context_jumpdests(code, ctx_jumpdests)
