@@ -2,7 +2,7 @@
 
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
-    extract_block_final_public_values, extract_two_to_one_block_hash,
+    extract_block_final_public_values, extract_two_to_one_block_hash, RecursionConfig,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{
@@ -10,7 +10,7 @@ use evm_arithmetization::proof::{
 };
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, TEST_STARK_CONFIG,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -161,19 +161,22 @@ fn get_test_block_proof(
     Ok(wrapped_block_proof)
 }
 
-#[ignore]
 #[test]
+// This test is run in CI under the "Run Specific Ignored Tests in Release Mode" job.
+// It is marked as ignored to prevent it from running by default in debug mode due to its longer
+// execution time.
+#[ignore]
 fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     init_logger();
     let some_timestamps = [127, 42, 65, 43];
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = TEST_STARK_CONFIG;
 
     let all_circuits = AllRecursiveCircuits::new(
         &all_stark,
         &[16..17, 8..9, 12..13, 8..9, 8..9, 6..7, 17..18, 16..17, 7..8],
-        &config,
+        RecursionConfig::test_config(),
     );
 
     let bp = some_timestamps

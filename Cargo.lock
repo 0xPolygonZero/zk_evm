@@ -86,9 +86,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-compat"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6216c5ab5502a6824ec87a7bcd5c52ca14137f00b37dea3ab321a1656ff46383"
+checksum = "1bdc9136288101eb70d3b6baf9781ad810589fde773e356c5efa92cce3b9c6da"
 dependencies = [
  "alloy-primitives",
  "ethereum-types",
@@ -1333,14 +1333,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
 
 [[package]]
-name = "compat"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "primitive-types 0.12.2",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2030,10 +2022,15 @@ dependencies = [
 name = "evm_arithmetization"
 version = "0.4.0"
 dependencies = [
+ "alloy",
+ "alloy-compat",
  "anyhow",
+ "bitvec",
  "bytes",
+ "copyvec",
  "criterion",
  "derive_more",
+ "either",
  "env_logger 0.11.5",
  "ethereum-types",
  "hashbrown",
@@ -2069,6 +2066,7 @@ dependencies = [
  "tokio",
  "tower-lsp",
  "tracing",
+ "u4",
  "url",
  "zk_evm_common",
  "zk_evm_proc_macro",
@@ -3422,8 +3420,7 @@ dependencies = [
 [[package]]
 name = "paladin-core"
 version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6343e2767eb6ac7f55ca8b869df03c2986b88f0b9ad09cada898b3770ac436e3"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3454,9 +3451,8 @@ dependencies = [
 
 [[package]]
 name = "paladin-opkind-derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bde85d55c108d4eef3404b4c88d1982a270dc11146a085f4f45c1548b4d2b4c"
+version = "0.4.4"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
 dependencies = [
  "quote",
  "syn 2.0.77",
@@ -4679,7 +4675,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 name = "smt_trie"
 version = "0.1.1"
 dependencies = [
- "ethereum-types",
+ "alloy",
  "hex-literal",
  "plonky2",
  "rand",
@@ -5922,7 +5918,6 @@ dependencies = [
  "axum",
  "cfg-if",
  "clap",
- "compat",
  "directories",
  "dotenvy",
  "evm_arithmetization",
@@ -5941,7 +5936,6 @@ dependencies = [
  "paladin-core",
  "plonky2",
  "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "primitive-types 0.12.2",
  "rlp",
  "ruint",
  "serde",

@@ -7,12 +7,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization::tries::{MptKey, StateMpt, StorageTrie};
+use evm_arithmetization::world::{Hasher as _, Type1World, World};
 use keccak_hash::H256;
 use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::tries::{MptKey, StateMpt, StorageTrie};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone, Default)]
@@ -85,11 +86,11 @@ fn visit(
                             match code {
                                 Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
                                 Some(Either::Right(Code { code })) => {
-                                    let hash = keccak_hash::keccak(&code);
+                                    let hash = <Type1World as World>::CodeHasher::hash(&code);
                                     frontend.code.insert(code);
                                     hash
                                 }
-                                None => keccak_hash::keccak([]),
+                                None => <Type1World as World>::CodeHasher::hash(&[]),
                             }
                         },
                     };

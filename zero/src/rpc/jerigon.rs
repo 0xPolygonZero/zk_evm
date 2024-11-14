@@ -8,8 +8,8 @@ use alloy::{
     rpc::types::{eth::BlockId, Block, BlockTransactionsKind},
     transports::Transport,
 };
+use alloy_primitives::Address;
 use anyhow::Context as _;
-use compat::Compat;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use serde::Deserialize;
 use serde_json::json;
@@ -20,6 +20,12 @@ use super::{fetch_other_block_data, JumpdestSrc};
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
 use crate::rpc::jumpdest::{generate_jumpdest_table, get_block_normalized_structlogs};
+
+const WITNESS_ENDPOINT: &str = if cfg!(feature = "cdk_erigon") {
+    "zkevm_getWitness"
+} else {
+    "eth_getWitness"
+};
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
@@ -57,7 +63,7 @@ where
     let block_witness = cached_provider
         .get_provider()
         .await?
-        .raw_request::<_, String>("eth_getWitness".into(), vec![target_block_id])
+        .raw_request::<_, String>(WITNESS_ENDPOINT.into(), vec![target_block_id])
         .await?;
 
     let block: Block = cached_provider
@@ -103,7 +109,9 @@ where
         block_trace: BlockTrace {
             trie_pre_images: BlockTraceTriePreImages::Combined(CombinedPreImages {
                 compact: hex::decode(block_witness.strip_prefix("0x").unwrap_or(&block_witness))
-                    .context("invalid hex returned from call to eth_getWitness")?,
+                    .context(format!(
+                        "invalid hex returned from call to {WITNESS_ENDPOINT}"
+                    ))?,
             }),
             txn_info,
             code_db: Default::default(),
@@ -131,9 +139,11 @@ where
     )
     .await?;
 
-    let tx_traces = tx_results
-        .iter()
-        .map(|tx| tx.traces.iter().map(|(h, t)| (h.compat(), t)));
+    let tx_traces = tx_results.iter().map(|tx| {
+        tx.traces
+            .iter()
+            .map(|(h, t)| (Address::from(h.as_fixed_bytes()), t))
+    });
 
     let block_jumpdest_tables = block
         .transactions

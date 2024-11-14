@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::ops::Not as _;
 use std::time::Duration;
 
-use ::compat::Compat;
+// use ::compat::Compat;
 use alloy::eips::BlockNumberOrTag;
 use alloy::primitives::Address;
 use alloy::providers::ext::DebugApi;
@@ -14,19 +14,19 @@ use alloy::rpc::types::trace::geth::{
     GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace, StructLog, TraceResult,
 };
 use alloy::transports::Transport;
+use alloy_compat::Compat as _;
 use alloy_primitives::{TxHash, U256};
 use anyhow::bail;
 use anyhow::ensure;
 use evm_arithmetization::jumpdest::JumpDestTableWitness;
-use keccak_hash::keccak;
-use ruint::Uint;
+use keccak_hash::{keccak, H256};
 use tokio::time::timeout;
 use trace_decoder::is_precompile;
 use trace_decoder::ContractCodeUsage;
 use trace_decoder::TxnTrace;
 use tracing::{info, warn};
 
-use crate::rpc::H256;
+// use crate::rpc::H256;
 
 #[derive(Debug, Clone)]
 pub struct TxStructLogs(pub Option<TxHash>, pub Vec<StructLog>);
@@ -285,8 +285,8 @@ pub(crate) fn generate_jumpdest_table<'a>(
     Ok(jumpdest_table)
 }
 
-fn stack_value_to_address(operand: &Uint<256, 4>) -> Address {
-    let all_bytes: [u8; 32] = operand.compat().into();
+fn stack_value_to_address(operand: &U256) -> Address {
+    let all_bytes: [u8; 32] = operand.to_be_bytes();
     let mut lower_20_bytes = [0u8; 20];
     // Based on `__compat_primitive_types::H160::from(H256::from(all_bytes)).
     // into()`.

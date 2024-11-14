@@ -1,0 +1,64 @@
+---   # Proof generation benchmarking workflow
+
+name: Benchmark proving
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    branches:
+      - "**"
+
+env:
+  BENCHMARK_WITNESS: artifacts/witness_b1000_b1019.json
+
+jobs:
+  benchmark_proving:
+    name: Benchmark proving for representative blocks
+    runs-on: zero-reg
+    timeout-minutes: 300
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Build the project
+        run: |
+          RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld' cargo build --release
+          sudo sysctl kernel.perf_event_paranoid=0
+
+      - name: Download previous results
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: benchmark.yml
+          workflow_conclusion: success
+          name: proving_benchmark
+          path: ./
+          if_no_artifact_found: ignore
+
+      - name: Run the script
+        run: |
+          echo "Benchmarking proving with $BENCHMARK_WITNESS"
+          ./scripts/benchmark_input.sh $BENCHMARK_WITNESS | tee benchmark_output.log
+          MEASURED_PROVING_TIME_SEC=`cat benchmark_output.log | grep 'Proving duration:' | tail -1 | awk '{ print $3}'`
+          PERF_TIME=`cat output.log | grep "seconds time elapsed" |  tail -1 | awk '{ print ($1)}'`
+          PERF_USER_TIME=`cat output.log | grep "seconds user" |  tail -1 | awk '{ print ($1)}'`
+          PERF_SYS_TIME=`cat output.log | grep "seconds sys" |  tail -1 | awk '{ print ($1)}'`
+          echo "RUN_ID=${{ github.run_id }} MEASURED_PROVING_TIME_SEC=$MEASURED_PROVING_TIME_SEC \
+            PERF_TIME=$PERF_TIME PERF_USER_TIME=$PERF_USER_TIME \
+            PERF_SYS_TIME=$PERF_SYS_TIME FILE=$BENCHMARK_WITNESS"
+          printf '%12s     %-12s     %-24s    %-20s    %-20s    %-20s    %-s\n' \
+            `date --utc +%y-%m-%d-%H:%M:%S` ${{ github.run_id }} \
+            $MEASURED_PROVING_TIME_SEC $PERF_TIME $PERF_USER_TIME \
+            $PERF_SYS_TIME $BENCHMARK_WITNESS >> proving_benchmark_results.txt
+
+      - name: Upload new results
+        uses: actions/upload-artifact@v4
+        with:
+          name: proving_benchmark
+          path: |
+            ./proving_benchmark_results.txt
+            ./output.log
+          retention-days: 90
+          overwrite: true

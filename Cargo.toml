@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "common",
-  "compat",
   "evm_arithmetization",
   "mpt_trie",
   "proc_macro",
@@ -21,7 +20,6 @@ keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
 categories = ["cryptography::cryptocurrencies"]
 
 [workspace.dependencies]
-__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 alloy = { version = '0.3.0', default-features = false, features = [
   "consensus",
   "reqwest",
@@ -47,7 +45,8 @@ bytes = "1.6.0"
 ciborium = "0.2.2"
 ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
-compat = { path = "compat" }
+alloy-compat = "0.1.0"
+copyvec = "0.2.0"
 criterion = "0.5.1"
 derive_more = { version = "1.0.0", features = ["deref", "deref_mut"] }
 dotenvy = "0.15.7"
@@ -73,7 +72,8 @@ num-bigint = "0.4.5"
 num-traits = "0.2.19"
 nunny = "0.2.1"
 once_cell = "1.19.0"
-paladin-core = "0.4.3"
+# TODO: update when paladin is released to 0.4.4 with abort signal support
+paladin-core = { git = "https://github.com/0xPolygonZero/paladin.git", branch = "main" }
 parking_lot = "0.12.3"
 pest = "2.7.10"
 pest_derive = "2.7.10"
