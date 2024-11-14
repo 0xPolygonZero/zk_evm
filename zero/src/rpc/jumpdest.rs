@@ -133,7 +133,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
     next_ctx_available += 1;
 
     let mut stuctlog_iter = structlog.iter().enumerate().peekable();
-    while let Some((_step, entry)) = stuctlog_iter.next() {
+    while let Some((step, entry)) = stuctlog_iter.next() {
         let op = entry.op.as_str();
         let curr_depth: usize = entry.depth.try_into().unwrap();
 
@@ -150,6 +150,22 @@ pub(crate) fn generate_jumpdest_table<'a>(
         let (ref code_hash, ref ctx) = call_stack.last().unwrap().clone();
         info!("INSERT {} {}", *code_hash, *ctx);
         jumpdest_table.insert(*code_hash, *ctx, None);
+
+        // REVIEW: will be removed before merge
+        tracing::info!(
+            step,
+            curr_depth,
+            tx_hash = ?tx.hash,
+            ?code_hash,
+            ctx,
+            next_ctx_available,
+            pc = entry.pc,
+            pc_hex = format!("{:08x?}", entry.pc),
+            gas = entry.gas,
+            gas_cost = entry.gas_cost,
+            op,
+            ?entry,
+        );
 
         match op {
             "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
@@ -193,7 +209,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
                 // exception or not. But this is of no consequence to the
                 // generated Jumpdest table, so we can ignore the case.
 
-                // jumpdest_table.insert(*code_hash, next_ctx_available, None);
+                jumpdest_table.insert(*code_hash, next_ctx_available, None);
                 next_ctx_available += 1;
             }
             "CREATE" | "CREATE2" => {
@@ -257,6 +273,7 @@ pub(crate) fn generate_jumpdest_table<'a>(
             }
             "EXTCODECOPY" | "EXTCODESIZE" => {
                 prev_jump = None;
+                jumpdest_table.insert(*code_hash, next_ctx_available, None);
                 next_ctx_available += 1;
             }
             _ => {

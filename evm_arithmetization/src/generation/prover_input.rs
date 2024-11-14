@@ -378,7 +378,7 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&batch_context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_batch_ctx_mut(&batch_context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
             log::info!(
@@ -393,7 +393,7 @@ impl<F: RichField> GenerationState<F> {
                 batch_context,
                 0
             );
-            jumpdest_table.remove_ctx(&batch_context);
+            jumpdest_table.remove_batch_ctx(&batch_context);
             Ok(U256::zero())
         }
     }
@@ -408,7 +408,7 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_ctx_mut(&context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_batch_ctx_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
             log::info!(
@@ -825,26 +825,33 @@ impl<F: RichField> GenerationState<F> {
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
         let tx_in_batch_idx = self.next_txn_index - 1;
-        let prev_max_wctx: usize = self
+        let prev_max_witness_ctx: usize = self
             .inputs
             .jumpdest_table
             .get(tx_in_batch_idx - 1)
             .map(|x| x.as_ref())
             .flatten()
-            .map(|x| x.max_ctx())
+            .map(|x| x.max_batch_ctx())
             .unwrap_or(0);
-        log::info!("Maximum CTX in previous tx: {}", prev_max_wctx);
+        log::info!("Maximum CTX in previous tx: {}", prev_max_witness_ctx);
         log::info!("TXIDX: {}", tx_in_batch_idx);
         log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
         log::info!("TXN_NUM_BEFORE: {}", self.inputs.txn_number_before);
+        log::info!("TX HASH: {:#?}", self.inputs.txn_hashes);
         let rpcw = self.inputs.jumpdest_table[tx_in_batch_idx].clone();
-        let rpcp: Option<JumpDestTableProcessed> = rpcw.as_ref().map(|jdt| {
-            get_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code, prev_max_wctx)
-        });
+        let rpcp: Option<JumpDestTableProcessed> =
+            rpcw.as_ref().map(|jdt: &JumpDestTableWitness| {
+                get_jumpdest_analysis_inputs_rpc(
+                    jdt,
+                    &self.inputs.contract_code,
+                    prev_max_witness_ctx,
+                )
+                .normalize()
+            });
         log::info!("RPCW {:#?}", &rpcw);
         log::info!("RPCP {:#?}", &rpcp);
         // if rpcp.is_some() {
-        //     self.jumpdest_table = rpcp;
+        //     self.jumpdest_tables[tx_in_batch_idx] = rpcp;
         //     return Ok(());
         // }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
@@ -857,11 +864,9 @@ impl<F: RichField> GenerationState<F> {
         log::info!("SIMP {:#?}", &simp);
 
         if rpcp.is_some() {
-            dbg!(rpcp.as_ref(), Some(&simp));
-            // assert!(simp.is_subset(rpcp.as_ref().unwrap()));
-            self.jumpdest_tables[tx_in_batch_idx] = rpcp;
+            dbg!(rpcp.as_ref().map(|x| x.normalize()), Some(&simp));
+            assert_eq!(rpcp.as_ref(), Some(&simp));
         }
-        // self.jumpdest_table = rpcp;
         self.jumpdest_tables[tx_in_batch_idx] = Some(simp);
         return Ok(());
     }

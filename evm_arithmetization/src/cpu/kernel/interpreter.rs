@@ -174,7 +174,7 @@ pub(crate) fn set_registers_and_run<F: RichField>(
 pub(crate) fn get_jumpdest_analysis_inputs_rpc(
     jumpdest_table_rpc: &JumpDestTableWitness,
     code_map: &HashMap<H256, Vec<u8>>,
-    prev: usize,
+    prev_max_batch_ctx: usize,
 ) -> JumpDestTableProcessed {
     let ctx_proofs = jumpdest_table_rpc
         .iter()
@@ -187,7 +187,7 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
             prove_context_jumpdests(code, ctx_jumpdests)
         })
         .collect();
-    JumpDestTableProcessed::new_with_start(ctx_proofs, prev)
+    JumpDestTableProcessed::new_with_ctx_offset(ctx_proofs, prev_max_batch_ctx)
 }
 
 /// Orchestrates the proving of all contexts in a specific bytecode.
@@ -202,8 +202,7 @@ pub(crate) fn get_jumpdest_analysis_inputs_rpc(
 /// Returns a [`HashMap`] from `ctx` to [`Vec`] of proofs. Each proofs ia a
 /// pair.
 fn prove_context_jumpdests(code: &[u8], ctx: &Context) -> HashMap<usize, Vec<usize>> {
-    ctx.0
-        .iter()
+    ctx.iter()
         .map(|(&ctx, jumpdests)| {
             let proofs = jumpdests.last().map_or(Vec::default(), |&largest_address| {
                 get_proofs_and_jumpdests(code, largest_address, jumpdests.clone())

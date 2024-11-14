@@ -135,7 +135,7 @@ fn test_jumpdest_analysis() -> Result<()> {
     interpreter.generation_state.jumpdest_tables[tx_in_batch_idx]
         .as_mut()
         .unwrap()
-        .try_get_ctx_mut(&CONTEXT)
+        .try_get_batch_ctx_mut(&CONTEXT)
         .unwrap()
         .pop();
     interpreter

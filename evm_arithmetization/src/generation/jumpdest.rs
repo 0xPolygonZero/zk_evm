@@ -43,7 +43,7 @@ pub struct Context(pub HashMap<usize, BTreeSet<usize>>);
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JumpDestTableProcessed {
     witness_contexts: HashMap<usize, Vec<usize>>,
-    largest_witness_ctx: usize,
+    ctx_offset: usize,
 }
 
 /// Map `CodeHash -> (Context -> [JumpDests])`
@@ -51,9 +51,9 @@ pub(crate) struct JumpDestTableProcessed {
 pub struct JumpDestTableWitness(HashMap<H256, Context>);
 
 impl Context {
-    pub fn get(&self, ctx: usize) -> Option<&BTreeSet<usize>> {
-        self.0.get(&ctx)
-    }
+    // pub fn get(&self, ctx: usize) -> Option<&BTreeSet<usize>> {
+    //     self.get(&ctx)
+    // }
 
     pub fn insert(&mut self, ctx: usize, offset_opt: Option<usize>) {
         let context = self.entry(ctx).or_default();
@@ -63,7 +63,7 @@ impl Context {
         };
     }
 
-    pub fn max_ctx(&self) -> usize {
+    pub fn max_batch_ctx(&self) -> usize {
         self.keys().max().copied().unwrap_or(0)
     }
 }
@@ -72,23 +72,39 @@ impl JumpDestTableProcessed {
     pub fn new(ctx_map: HashMap<usize, Vec<usize>>) -> Self {
         Self {
             witness_contexts: ctx_map,
+            ctx_offset: 0,
         }
     }
 
-    pub fn new_with_start(ctx_map: HashMap<usize, Vec<usize>>, start_ctx: usize) -> Self {
+    pub fn new_with_ctx_offset(ctx_map: HashMap<usize, Vec<usize>>, ctx_offset: usize) -> Self {
         Self {
             witness_contexts: ctx_map,
-            largest_witness_ctx: start_ctx,
+            ctx_offset,
         }
     }
 
-    pub fn try_get_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut Vec<usize>> {
-        // log::info!("query_ctx {}", batch_ctx,);
-        self.witness_contexts.get_mut(batch_ctx)
+    pub fn normalize(&self) -> Self {
+        let witness_contexts = self
+            .witness_contexts
+            .iter()
+            .map(|(ctx, offsets)| (ctx + self.ctx_offset, offsets.clone()))
+            .collect();
+
+        Self {
+            witness_contexts,
+            ctx_offset: 0,
+        }
     }
 
-    pub fn remove_ctx(&mut self, batch_ctx: &usize) {
-        self.witness_contexts.remove(&batch_ctx);
+    pub fn try_get_batch_ctx_mut(&mut self, batch_ctx: &usize) -> Option<&mut Vec<usize>> {
+        log::info!("query_ctx {}", batch_ctx,);
+        let witness_context = *batch_ctx - self.ctx_offset;
+        self.witness_contexts.get_mut(&witness_context)
+    }
+
+    pub fn remove_batch_ctx(&mut self, batch_ctx: &usize) {
+        let witness_context = *batch_ctx - self.ctx_offset;
+        self.witness_contexts.remove(&witness_context);
     }
 }
 
@@ -129,8 +145,11 @@ impl JumpDestTableWitness {
     }
 
     /// Obtain the context within any `code_hash` with maximal numeric value.
-    pub fn max_ctx(&self) -> usize {
-        self.values().map(|ctx| ctx.max_ctx()).max().unwrap_or(0)
+    pub fn max_batch_ctx(&self) -> usize {
+        self.values()
+            .map(|ctx| ctx.max_batch_ctx())
+            .max()
+            .unwrap_or(0)
     }
 }
 
