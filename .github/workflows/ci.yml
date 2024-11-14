@@ -95,6 +95,26 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  run_ignored_tests:
+    name: Slow evm_arithmetization tests in release mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Run specific ignored tests in release mode
+        run: |
+          cargo test --release \
+          --test empty_tables --test erc721 --test two_to_one_block -- --ignored
+
   test_zero_bin:
     name: Test zero_bin
     runs-on: ubuntu-latest
@@ -148,7 +168,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
@@ -159,7 +179,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
         run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json test_only
@@ -170,7 +190,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json
+        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json "" use_test_config

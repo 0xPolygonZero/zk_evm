@@ -123,8 +123,8 @@ run_constructor:
     // stack: new_ctx, address, kexit_info
 
     // All but 1/64 of the sender's remaining gas goes to the constructor.
-    SWAP2
-    // stack: kexit_info, address, new_ctx
+    %stack(new_ctx, address, kexit_info) -> (kexit_info, new_ctx, address, new_ctx)
+    // stack: kexit_info, new_ctx, address, new_ctx
     %drain_all_but_one_64th_gas
     %stack (kexit_info, drained_gas, address, new_ctx) -> (drained_gas, new_ctx, address, kexit_info)
     %set_new_ctx_gas_limit_no_check
@@ -211,22 +211,30 @@ nonce_overflow:
     %stack (sender, address, value, code_offset, code_len, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
+// stack: new_ctx, address, kexit_info
 create_collision:
     %revert_checkpoint
     %mstore_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 0)
-    %stack (new_ctx, address, kexit_info) -> (kexit_info, 0)
+    // Collisions are checked when running the constructor and prior entering the new context
+    // (but after writing some values in the new context), contrary to the other checks here. 
+    // This is why we need to prune the new context.
+    %prune_context
+    %stack (address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
+// stack: new_ctx, leftover_gas, success, address, kexit_info
 create_first_byte_ef:
     %revert_checkpoint
     %stack (leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
+// stack: code_size, new_ctx, leftover_gas, success, address, kexit_info
 create_code_too_large:
     %revert_checkpoint
     %stack (code_size, leftover_gas, success, address, kexit_info) -> (kexit_info, 0)
     EXIT_KERNEL
 
+// stack: code_size_cost, new_ctx, leftover_gas, success, address, kexit_info
 create_oog:
     %revert_checkpoint
     %mstore_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 0)
