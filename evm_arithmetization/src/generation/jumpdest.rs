@@ -106,6 +106,10 @@ impl JumpDestTableProcessed {
         let witness_context = *batch_ctx - self.ctx_offset;
         self.witness_contexts.remove(&witness_context);
     }
+
+    pub fn max_batch_ctx(&self) -> usize {
+        self.witness_contexts.keys().max().copied().unwrap_or(0)
+    }
 }
 
 impl JumpDestTableWitness {

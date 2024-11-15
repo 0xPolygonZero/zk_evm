@@ -826,18 +826,17 @@ impl<F: RichField> GenerationState<F> {
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
         let tx_in_batch_idx = self.next_txn_index - 1;
         let prev_max_witness_ctx: usize = self
-            .inputs
-            .jumpdest_table
+            .jumpdest_tables
             .get(tx_in_batch_idx - 1)
             .map(|x| x.as_ref())
             .flatten()
             .map(|x| x.max_batch_ctx())
             .unwrap_or(0);
-        log::info!("Maximum CTX in previous tx: {}", prev_max_witness_ctx);
-        log::info!("TXIDX: {}", tx_in_batch_idx);
+        log::info!("TX BATCH: {:#?}", self.inputs.txn_hashes);
         log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
         log::info!("TXN_NUM_BEFORE: {}", self.inputs.txn_number_before);
-        log::info!("TX BATCH: {:#?}", self.inputs.txn_hashes);
+        log::info!("Maximum CTX in previous tx: {}", prev_max_witness_ctx);
+        log::info!("TXIDX: {}", tx_in_batch_idx);
         log::info!("TX HASH: {:#?}", self.inputs.txn_hashes[tx_in_batch_idx]);
         let rpcw = self.inputs.jumpdest_table[tx_in_batch_idx].clone();
         let rpcp: Option<JumpDestTableProcessed> =
@@ -860,14 +859,16 @@ impl<F: RichField> GenerationState<F> {
         self.jumpdest_tables[tx_in_batch_idx] = None;
         let (simp, simw) = simulate_cpu_and_get_user_jumps("terminate_common", &*self)
             .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
-        // self.jumpdest_table = Some(simp.clone());
         log::info!("SIMW {:#?}", &simw);
         log::info!("SIMP {:#?}", &simp);
 
-        // if let Some(rpcp) = rpcp {
-        //     dbg!(rpcp.as_ref().map(|x| x.normalize()), Some(&simp));
-        //     assert_eq!(rpcp.is_super(&simp));
-        // }
+        if let Some(rpcp) = rpcp {
+            if &rpcp != &simp {
+                log::warn!("MISMATCH");
+                dbg!(Some(&rpcp), Some(&simp));
+            }
+        }
+
         self.jumpdest_tables[tx_in_batch_idx] = Some(simp);
         return Ok(());
     }

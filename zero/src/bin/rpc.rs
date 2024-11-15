@@ -237,6 +237,7 @@ async fn main() -> anyhow::Result<()> {
                 // With the default configuration trace information is written
                 // to stdout, but we already use stdout to write our payload (the witness).
                 .with_writer(std::io::stderr)
+                // .json()
                 .with_ansi(false)
                 .with_filter(EnvFilter::from_default_env()),
         )
