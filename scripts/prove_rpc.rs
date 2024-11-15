@@ -1,14 +1,15 @@
 use std::{
     env::set_var,
     fmt::Display,
-    fs::{create_dir_all, File},
+    fs::create_dir_all,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
 };
 
 use alloy::{eips::BlockId, transports::http::reqwest::Url};
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use clap::{arg, Args, ValueEnum, ValueHint};
+
+use crate::runner::Runner;
 
 #[derive(ValueEnum, Clone)]
 enum RpcType {
@@ -80,19 +81,6 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
     // See also .cargo/config.toml.
     set_var("RUSTFLAGS", "-C target-cpu=native -Zlinker-features=-lld");
 
-    // TODO: move this logic below when full match is done
-    if let RunMode::Test = args.mode {
-        set_var("ARITHMETIC_CIRCUIT_SIZE", "16..21");
-        set_var("BYTE_PACKING_CIRCUIT_SIZE", "8..21");
-        set_var("CPU_CIRCUIT_SIZE", "8..21");
-        set_var("KECCAK_CIRCUIT_SIZE", "4..20");
-        set_var("KECCAK_SPONGE_CIRCUIT_SIZE", "8..17");
-        set_var("LOGIC_CIRCUIT_SIZE", "4..21");
-        set_var("MEMORY_CIRCUIT_SIZE", "17..24");
-        set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
-        set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
-    }
-
     // Handle optional block inputs.
     let start_block = args.start_block;
     let end_block = args.end_block.unwrap_or(start_block);
@@ -114,18 +102,16 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
     if !proof_output_dirpath.exists() {
         create_dir_all(proof_output_dirpath)?;
     }
-    let output_log_path =
-        proof_output_dirpath.join(format!("b{}_{}.log", args.start_block, end_block));
-    let log_out = File::create(&output_log_path).context("couldn't create log file")?;
-    let log_err = log_out.try_clone().context("couldn't clone log file")?;
-
     /// Set file handle limit.
     const RECOMMENDED_FILE_LIMIT: isize = 8192;
     if !sysinfo::set_open_files_limit(RECOMMENDED_FILE_LIMIT) {
         eprintln!("WARNING: Unable to set file descriptor limit to recommended value: {RECOMMENDED_FILE_LIMIT}.");
     }
 
-    let runner = Runner::new("cargo")
+    let log_output_filepath =
+        proof_output_dirpath.join(format!("b{}_{}.log", start_block, end_block));
+
+    let proof_runner = Runner::new("cargo")
         .args(&[
             "run",
             "--release",
@@ -154,54 +140,40 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             "--max-retries",
             &args.max_retries.to_string(),
         ])
-        .out(log_out)
-        .err(log_err);
+        .out(log_output_filepath)?;
     match args.mode {
-        RunMode::Test => runner.args(&["--use-test-config"]).run(),
-        RunMode::Prove => todo!(),
-        RunMode::Verify => todo!(),
-    }
-}
-
-struct Runner {
-    cmd: String,
-    args: Vec<String>,
-    out: Stdio,
-    err: Stdio,
-}
-
-impl Runner {
-    fn new(cmd: impl Into<String>) -> Self {
-        Self {
-            cmd: cmd.into(),
-            args: vec![],
-            out: Stdio::piped(),
-            err: Stdio::piped(),
+        RunMode::Test => {
+            set_var("ARITHMETIC_CIRCUIT_SIZE", "16..21");
+            set_var("BYTE_PACKING_CIRCUIT_SIZE", "8..21");
+            set_var("CPU_CIRCUIT_SIZE", "8..21");
+            set_var("KECCAK_CIRCUIT_SIZE", "4..20");
+            set_var("KECCAK_SPONGE_CIRCUIT_SIZE", "8..17");
+            set_var("LOGIC_CIRCUIT_SIZE", "4..21");
+            set_var("MEMORY_CIRCUIT_SIZE", "17..24");
+            set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
+            set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
+            proof_runner.args(&["--test-only"]).run()
         }
-    }
+        RunMode::Prove => proof_runner.args(&["--use-test-config"]).run(),
+        RunMode::Verify => {
+            // Generate the proof.
+            proof_runner.args(&["--use-test-config"]).run()?;
 
-    fn args(mut self, args: &[&str]) -> Self {
-        self.args.extend(args.iter().map(|s| s.to_string()));
-        self
-    }
-
-    fn out(mut self, out: impl Into<Stdio>) -> Self {
-        self.out = out.into();
-        self
-    }
-
-    fn err(mut self, err: impl Into<Stdio>) -> Self {
-        self.err = err.into();
-        self
-    }
-
-    fn run(self) -> Result<()> {
-        let output = Command::new(&self.cmd)
-            .args(&self.args)
-            .stdout(self.out)
-            .stderr(self.err)
-            .output()
-            .context(format!("couldn't exec `{}`", &self.cmd))?;
-        todo!()
+            // Verify the proof.
+            let proof_filepath = proof_output_dirpath.join(format!("b{end_block}.proof"));
+            let verify_output_filepath = proof_output_dirpath.join("verify.out");
+            let verify_runner = Runner::new("cargo")
+                .args(&[
+                    "run",
+                    "--release",
+                    "--package=zero",
+                    "--bin=verifier",
+                    "--",
+                    "-f",
+                    proof_filepath.to_str().unwrap(),
+                ])
+                .out(verify_output_filepath)?;
+            verify_runner.run()
+        }
     }
 }

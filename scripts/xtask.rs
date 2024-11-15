@@ -2,6 +2,7 @@
 
 mod outdated;
 mod prove_rpc;
+mod runner;
 
 use anyhow::Result;
 use clap::Parser;
