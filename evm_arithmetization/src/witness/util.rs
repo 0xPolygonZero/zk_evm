@@ -1,7 +1,8 @@
 use ethereum_types::U256;
 use plonky2::hash::hash_types::RichField;
 
-use super::memory::DUMMY_MEMOP;
+use super::memory::{MemOpMetadata, DUMMY_MEMOP};
+use super::operation::Operation;
 use super::transition::Transition;
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
@@ -90,6 +91,7 @@ pub(crate) fn push_with_write<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
     val: U256,
+    metadata: MemOpMetadata,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     if !generation_state.registers.is_kernel
@@ -111,6 +113,7 @@ pub(crate) fn push_with_write<F: RichField, T: Transition<F>>(
             generation_state,
             row,
             generation_state.registers.stack_top,
+            metadata
         );
         Some(res)
     };
@@ -126,6 +129,7 @@ pub(crate) fn mem_read_with_log<F: RichField>(
     channel: MemoryChannel,
     address: MemoryAddress,
     state: &GenerationState<F>,
+    metadata: MemOpMetadata
 ) -> (U256, MemoryOp) {
     let val = state.memory.get_with_init(address);
     let op = MemoryOp::new(
@@ -134,6 +138,7 @@ pub(crate) fn mem_read_with_log<F: RichField>(
         address,
         MemoryOpKind::Read,
         val,
+        metadata,
     );
     (val, op)
 }
@@ -144,6 +149,7 @@ pub(crate) fn mem_write_log<F: RichField>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     val: U256,
+    metadata: MemOpMetadata
 ) -> MemoryOp {
     MemoryOp::new(
         channel,
@@ -151,6 +157,7 @@ pub(crate) fn mem_write_log<F: RichField>(
         address,
         MemoryOpKind::Write,
         val,
+        metadata,
     )
 }
 
@@ -158,8 +165,9 @@ pub(crate) fn mem_read_code_with_log_and_fill<F: RichField>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
+    metadata: MemOpMetadata,
 ) -> (u8, MemoryOp) {
-    let (val, op) = mem_read_with_log(MemoryChannel::Code, address, state);
+    let (val, op) = mem_read_with_log(MemoryChannel::Code, address, state, metadata);
 
     let val_u8 = to_byte_checked(val);
     row.opcode_bits = to_bits_le(val_u8);
@@ -172,8 +180,9 @@ pub(crate) fn mem_read_gp_with_log_and_fill<F: RichField>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
+    metadata: MemOpMetadata,
 ) -> (U256, MemoryOp) {
-    let (val, op) = mem_read_with_log(MemoryChannel::GeneralPurpose(n), address, state);
+    let (val, op) = mem_read_with_log(MemoryChannel::GeneralPurpose(n), address, state, metadata);
     let val_limbs: [u64; 4] = val.0;
 
     let channel = &mut row.mem_channels[n];
@@ -197,8 +206,9 @@ pub(crate) fn mem_write_gp_log_and_fill<F: RichField>(
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
     val: U256,
+    metadata: MemOpMetadata,
 ) -> MemoryOp {
-    let op = mem_write_log(MemoryChannel::GeneralPurpose(n), address, state, val);
+    let op = mem_write_log(MemoryChannel::GeneralPurpose(n), address, state, val, metadata);
     let val_limbs: [u64; 4] = val.0;
 
     let channel = &mut row.mem_channels[n];
@@ -221,8 +231,9 @@ pub(crate) fn mem_write_partial_log_and_fill<F: RichField>(
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
     val: U256,
+    metadata: MemOpMetadata
 ) -> MemoryOp {
-    let op = mem_write_log(MemoryChannel::PartialChannel, address, state, val);
+    let op = mem_write_log(MemoryChannel::PartialChannel, address, state, val, metadata);
 
     let channel = &mut row.partial_channel;
     assert!(channel.used.is_zero());
@@ -241,6 +252,7 @@ pub(crate) fn mem_write_partial_log_and_fill<F: RichField>(
 pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: RichField>(
     state: &mut GenerationState<F>,
     row: &mut CpuColumnsView<F>,
+    metadata: MemOpMetadata
 ) -> Result<[(U256, MemoryOp); N], ProgramError> {
     if state.registers.stack_len < N {
         return Err(ProgramError::StackUnderflow);
@@ -262,7 +274,7 @@ pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: RichField>(
                 state.registers.stack_len - 1 - i,
             );
 
-            mem_read_gp_with_log_and_fill(i, address, state, row)
+            mem_read_gp_with_log_and_fill(i, address, state, row, metadata)
         }
     });
 
@@ -309,6 +321,7 @@ pub(crate) fn keccak_sponge_log<F: RichField, T: Transition<F>>(
                 address,
                 MemoryOpKind::Read,
                 byte.into(),
+                MemOpMetadata::Some(Operation::KeccakGeneral)
             ));
             address.increment();
         }
@@ -324,6 +337,7 @@ pub(crate) fn keccak_sponge_log<F: RichField, T: Transition<F>>(
             address,
             MemoryOpKind::Read,
             byte.into(),
+            MemOpMetadata::Some(Operation::KeccakGeneral)
         ));
         address.increment();
     }
@@ -351,6 +365,7 @@ pub(crate) fn byte_packing_log<F: RichField, T: Transition<F>>(
     state: &mut T,
     base_address: MemoryAddress,
     bytes: Vec<u8>,
+    metadata: MemOpMetadata,
 ) {
     if bytes.is_empty() {
         // No-op
@@ -367,6 +382,7 @@ pub(crate) fn byte_packing_log<F: RichField, T: Transition<F>>(
             address,
             MemoryOpKind::Read,
             byte.into(),
+            metadata
         ));
         address.increment();
     }
@@ -384,6 +400,7 @@ pub(crate) fn byte_unpacking_log<F: RichField, T: Transition<F>>(
     base_address: MemoryAddress,
     val: U256,
     len: usize,
+    metadata: MemOpMetadata
 ) {
     let clock = state.get_clock();
 
@@ -400,6 +417,7 @@ pub(crate) fn byte_unpacking_log<F: RichField, T: Transition<F>>(
             address,
             MemoryOpKind::Write,
             byte.into(),
+            metadata,
         ));
         address.increment();
     }

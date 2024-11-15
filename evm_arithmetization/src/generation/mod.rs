@@ -31,7 +31,7 @@ use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
 use crate::util::{h2u, u256_to_usize};
-use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
+use crate::witness::memory::{MemOpMetadata, MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
 
 pub(crate) mod linked_list;
@@ -362,6 +362,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
                 MemoryAddress::new_bundle(U256::from(field as usize)).unwrap(),
                 state,
                 val,
+                MemOpMetadata::Initialization
             )
         })
         .to_vec();
@@ -373,6 +374,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             MemoryAddress::new(0, Segment::GlobalBlockBloom, i),
             state,
             metadata.block_bloom[i],
+            MemOpMetadata::Initialization
         )
     }));
 
@@ -385,6 +387,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
                     MemoryAddress::new(0, Segment::BlockHashes, i),
                     state,
                     h2u(inputs.block_hashes.prev_hashes[i]),
+                    MemOpMetadata::Initialization
                 )
             })
             .collect::<Vec<_>>(),
@@ -405,6 +408,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             MemoryAddress::new(0, Segment::RegistersStates, i),
             state,
             registers_before[i],
+            MemOpMetadata::Initialization
         )
     }));
 
@@ -425,6 +429,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             MemoryAddress::new(0, Segment::RegistersStates, length + i),
             state,
             registers_after[i],
+            MemOpMetadata::Initialization
         )
     }));
 

@@ -2,6 +2,7 @@ use core::marker::PhantomData;
 use std::borrow::Borrow;
 
 use ethereum_types::U256;
+use hashbrown::HashMap;
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -25,7 +26,7 @@ use crate::all_stark::{EvmStarkFrame, Table};
 use crate::memory::columns::NUM_COLUMNS;
 use crate::memory::VALUE_LIMBS;
 use crate::witness::memory::MemoryOpKind::{self, Read};
-use crate::witness::memory::{MemoryAddress, MemoryOp};
+use crate::witness::memory::{MemOpMetadata, MemoryAddress, MemoryOp};
 
 /// Creates the vector of `Columns` corresponding to:
 /// - the memory operation type,
@@ -215,6 +216,24 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 
         memory_ops.sort_by_key(MemoryOp::sorting_key);
 
+        let freqs = memory_ops.clone().into_iter().fold(
+            HashMap::new(),
+            |mut freqs,
+             MemoryOp {
+                 address: MemoryAddress { segment, .. },
+                 metadata: operation,
+                 ..
+             }| {
+                freqs
+                    .entry((segment, operation))
+                    .and_modify(|frq| *frq += 1)
+                    .or_insert(1);
+                freqs
+            },
+        );
+
+        log::info!("fequencies = {:?}", freqs);
+
         Self::pad_memory_ops(&mut memory_ops);
 
         // fill_gaps may have added operations at the end which break the order, so sort
@@ -226,6 +245,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             .map(|op| op.into_row())
             .collect::<Vec<_>>();
         generate_first_change_flags_and_rc(&mut trace_rows);
+
         (trace_rows, unpadded_length)
     }
 
@@ -310,6 +330,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                     address: dummy_addr,
                     kind: MemoryOpKind::Read,
                     value: 0.into(),
+                    metadata: MemOpMetadata::FillGaps,
                 },
             );
         }
@@ -374,6 +395,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             address: padding_addr,
             timestamp: last_op.timestamp + 1,
             value: U256::zero(),
+            metadata: MemOpMetadata::Padding,
         };
         let num_ops = memory_ops.len();
         // We want at least one padding row, so that the last real operation can have
@@ -419,6 +441,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                 address,
                 kind: crate::witness::memory::MemoryOpKind::Write,
                 value,
+                metadata: MemOpMetadata::MemBefore,
             });
         }
         // Generate most of the trace in row-major form.

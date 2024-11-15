@@ -62,10 +62,8 @@ pub(crate) struct Interpreter<F: RichField> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
-
-    #[cfg(test)]
     // Counts the number of appearances of each opcode. For debugging purposes.
-    pub(crate) opcode_count: HashMap<Operation, usize>,
+    pub(crate) opcode_count: (HashMap<Operation, usize>, Vec<Operation>),
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -180,8 +178,8 @@ impl<F: RichField> Interpreter<F> {
             // while the label `halt` is the halting label in the kernel.
             halt_offsets: vec![DEFAULT_HALT_OFFSET, KERNEL.global_labels["halt_final"]],
             halt_context: None,
-            #[cfg(test)]
-            opcode_count: HashMap::new(),
+            // #[cfg(test)]
+            opcode_count: (HashMap::new(), vec![]),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
@@ -212,8 +210,8 @@ impl<F: RichField> Interpreter<F> {
             generation_state: state.soft_clone(),
             halt_offsets: vec![halt_offset],
             halt_context: Some(halt_context),
-            #[cfg(test)]
-            opcode_count: HashMap::new(),
+            // #[cfgx(test)]
+            opcode_count: (HashMap::new(), vec![]),
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
             clock: 0,
@@ -432,9 +430,9 @@ impl<F: RichField> Interpreter<F> {
         self.max_cpu_len_log
     }
 
-    #[cfg(test)]
+    // #[cfg(test)]
     pub(crate) fn reset_opcode_counts(&mut self) {
-        self.opcode_count = HashMap::new();
+        self.opcode_count = (HashMap::new(), vec![]);
     }
 
     pub(crate) fn code(&self) -> &MemorySegmentState {
@@ -674,10 +672,12 @@ impl<F: RichField> State<F> for Interpreter<F> {
 
         let op = decode(registers, opcode)?;
 
-        #[cfg(test)]
+        // #[cfg(test)]
         {
             // Increment the opcode count
-            *self.opcode_count.entry(op).or_insert(0) += 1;
+            let (opcode_count, opcode_sequence) = &mut self.opcode_count;
+            *opcode_count.entry(op).or_insert(0) += 1;
+            opcode_sequence.push(op);
         }
 
         fill_op_flag(op, &mut row);

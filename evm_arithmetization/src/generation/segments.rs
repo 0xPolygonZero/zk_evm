@@ -1,7 +1,7 @@
 //! Module defining the logic around proof segmentation into chunks,
 //! which allows what is commonly known as zk-continuations.
 
-#[cfg(test)]
+// #[cfg(test)]
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -14,7 +14,7 @@ use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, I
 use crate::generation::state::State;
 use crate::generation::{collect_debug_tries, debug_inputs, ErrorWithTries, GenerationInputs};
 use crate::witness::memory::MemoryState;
-#[cfg(test)]
+// #[cfg(test)]
 use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
 
@@ -35,9 +35,9 @@ pub struct GenerationSegmentData {
     /// Log of the maximal cpu length.
     pub(crate) max_cpu_len_log: Option<usize>,
 
-    #[cfg(test)]
+    // #[cfg(test)]
     // Counts the number of appearances of each opcode. For debugging purposes.
-    pub(crate) opcode_counts: HashMap<Operation, usize>,
+    pub(crate) opcode_counts: (HashMap<Operation, usize>, Vec<Operation>),
 }
 
 impl GenerationSegmentData {
@@ -86,7 +86,7 @@ fn build_segment_data<F: RichField>(
             access_lists_ptrs: interpreter.generation_state.access_lists_ptrs.clone(),
             state_ptrs: interpreter.generation_state.state_ptrs.clone(),
         },
-        #[cfg(test)]
+        // #[cfg(test)]
         opcode_counts: interpreter.opcode_count.clone(),
     }
 }
@@ -144,7 +144,7 @@ impl<F: RichField> SegmentDataIterator<F> {
 
         let segment_index = segment_data.segment_index;
 
-        #[cfg(test)]
+        // #[cfg(test)]
         {
             // Reset opcode counts before executing the segment
             self.interpreter.reset_opcode_counts();
@@ -165,9 +165,10 @@ impl<F: RichField> SegmentDataIterator<F> {
 
             segment_data.registers_after = updated_registers;
 
-            #[cfg(test)]
+            // #[cfg(test)]
             {
                 segment_data.opcode_counts = self.interpreter.opcode_count.clone();
+                log::info!("segment data opcode counts = {:?}", segment_data.opcode_counts);
             }
 
             Ok(Some(Box::new((segment_data, partial_segment_data))))

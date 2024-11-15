@@ -4,6 +4,7 @@ use keccak_hash::keccak;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
+use super::memory::MemOpMetadata;
 use super::state::KERNEL_CONTEXT;
 use super::transition::Transition;
 use super::util::{
@@ -78,7 +79,7 @@ pub(crate) fn generate_binary_logic_op<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(in0, _), (in1, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::BinaryLogic(op)))?;
     let operation = logic::Operation::new(op, in0, in1);
 
     push_no_write(generation_state, operation.result);
@@ -96,7 +97,7 @@ pub(crate) fn generate_binary_arithmetic_op<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(input0, _), (input1, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::BinaryArithmetic(operator)))?;
     let operation = arithmetic::Operation::binary(operator, input0, input1);
 
     if operator == arithmetic::BinaryOperator::AddFp254
@@ -127,7 +128,7 @@ pub(crate) fn generate_ternary_arithmetic_op<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(input0, _), (input1, log_in1), (input2, log_in2)] =
-        stack_pop_with_log_and_fill::<3, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<3, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::TernaryArithmetic(operator)))?;
     let operation = arithmetic::Operation::ternary(operator, input0, input1, input2);
 
     push_no_write(generation_state, operation.result());
@@ -145,7 +146,7 @@ pub(crate) fn generate_keccak_general<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(addr, _), (len, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::KeccakGeneral))?;
     let len = u256_to_usize(len)?;
 
     let base_address = MemoryAddress::new_bundle(addr)?;
@@ -280,7 +281,7 @@ pub(crate) fn generate_prover_input<F: RichField, T: Transition<F>>(
         input,
     );
 
-    push_with_write(state, &mut row, input)?;
+    push_with_write(state, &mut row, input, MemOpMetadata::Some(Operation::ProverInput))?;
 
     state.push_arithmetic(range_check_op);
     state.push_cpu(row);
@@ -292,7 +293,8 @@ pub(crate) fn generate_pop<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(_, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(_, _)] =
+        stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Pop))?;
 
     let diff = row.stack_len - F::ONE;
     if let Some(inv) = diff.try_inverse() {
@@ -318,6 +320,7 @@ pub(crate) fn generate_pc<F: RichField, T: Transition<F>>(
         state,
         &mut row,
         state.get_registers().program_counter.into(),
+        MemOpMetadata::Some(Operation::Pc),
     )?;
     state.push_cpu(row);
     Ok(())
@@ -352,6 +355,7 @@ pub(crate) fn generate_get_context<F: RichField, T: Transition<F>>(
             generation_state,
             &mut row,
             generation_state.registers.stack_top,
+            MemOpMetadata::Some(Operation::GetContext),
         );
         Some(res)
     };
@@ -372,7 +376,11 @@ pub(crate) fn generate_set_context<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(ctx, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(ctx, _)] = stack_pop_with_log_and_fill::<1, _>(
+        generation_state,
+        &mut row,
+        MemOpMetadata::Some(Operation::SetContext),
+    )?;
 
     let sp_to_save = generation_state.registers.stack_len.into();
 
@@ -391,8 +399,13 @@ pub(crate) fn generate_set_context<F: RichField, T: Transition<F>>(
     // memory operations: the old stack pointer write and the new stack pointer
     // read. Channels only matter for time stamps: the write must happen before
     // the read.
-    let log_write_old_sp =
-        mem_write_log(GeneralPurpose(1), old_sp_addr, generation_state, sp_to_save);
+    let log_write_old_sp = mem_write_log(
+        GeneralPurpose(1),
+        old_sp_addr,
+        generation_state,
+        sp_to_save,
+        MemOpMetadata::Some(Operation::SetContext),
+    );
     let (new_sp, log_read_new_sp) = if old_ctx == new_ctx {
         let op = MemoryOp::new(
             MemoryChannel::GeneralPurpose(2),
@@ -400,10 +413,16 @@ pub(crate) fn generate_set_context<F: RichField, T: Transition<F>>(
             new_sp_addr,
             MemoryOpKind::Read,
             sp_to_save,
+            MemOpMetadata::Some(Operation::SetContext),
         );
         (sp_to_save, op)
     } else {
-        mem_read_with_log(GeneralPurpose(2), new_sp_addr, generation_state)
+        mem_read_with_log(
+            GeneralPurpose(2),
+            new_sp_addr,
+            generation_state,
+            MemOpMetadata::Some(Operation::SetContext),
+        )
     };
 
     // If the new stack isn't empty, read stack_top from memory.
@@ -425,8 +444,13 @@ pub(crate) fn generate_set_context<F: RichField, T: Transition<F>>(
         // Even though we might be in the interpreter, `Stack` is not part of the
         // preinitialized segments, so we don't need to carry out the additional checks
         // when get the value from memory.
-        let (new_top, log_read_new_top) =
-            mem_read_gp_with_log_and_fill(2, new_top_addr, generation_state, &mut row);
+        let (new_top, log_read_new_top) = mem_read_gp_with_log_and_fill(
+            2,
+            new_top_addr,
+            generation_state,
+            &mut row,
+            MemOpMetadata::Some(Operation::SetContext),
+        );
         generation_state.registers.stack_top = new_top;
         Some(log_read_new_top)
     } else {
@@ -482,14 +506,14 @@ pub(crate) fn generate_push<F: RichField, T: Transition<F>>(
         .collect_vec();
 
     let val = U256::from_big_endian(&bytes);
-    push_with_write(state, &mut row, val)?;
+    push_with_write(state, &mut row, val, MemOpMetadata::Some(Operation::Push(n)))?;
 
     // This is necessary to filter out PUSH instructions from the BytePackingStark
     // CTl when happening in the KERNEL context.
     row.general.push_mut().is_not_kernel = F::ONE - row.is_kernel_mode;
 
     if code_context != KERNEL_CONTEXT {
-        byte_packing_log(state, base_address, bytes);
+        byte_packing_log(state, base_address, bytes, MemOpMetadata::Some(Operation::Push(n)));
     }
 
     state.push_cpu(row);
@@ -524,7 +548,14 @@ pub(crate) fn generate_dup<F: RichField, T: Transition<F>>(
         Segment::Stack,
         generation_state.registers.stack_len - 1,
     );
-    let log_push = mem_write_gp_log_and_fill(1, address, generation_state, &mut row, stack_top);
+    let log_push = mem_write_gp_log_and_fill(
+        1,
+        address,
+        generation_state,
+        &mut row,
+        stack_top,
+        MemOpMetadata::Some(Operation::Dup(n)),
+    );
 
     let other_addr = MemoryAddress::new(
         generation_state.registers.context,
@@ -542,6 +573,7 @@ pub(crate) fn generate_dup<F: RichField, T: Transition<F>>(
             other_addr,
             MemoryOpKind::Read,
             stack_top,
+            MemOpMetadata::Some(Operation::Dup(n)),
         );
 
         let channel = &mut row.mem_channels[2];
@@ -559,7 +591,13 @@ pub(crate) fn generate_dup<F: RichField, T: Transition<F>>(
 
         (stack_top, op)
     } else {
-        mem_read_gp_with_log_and_fill(2, other_addr, generation_state, &mut row)
+        mem_read_gp_with_log_and_fill(
+            2,
+            other_addr,
+            generation_state,
+            &mut row,
+            MemOpMetadata::Some(Operation::Dup(n)),
+        )
     };
     push_no_write(generation_state, val);
     state.push_memory(log_push);
@@ -585,10 +623,24 @@ pub(crate) fn generate_swap<F: RichField, T: Transition<F>>(
         other_addr_lo,
     );
 
-    let [(in0, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(in0, _)] =
+        stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Swap(n)))?;
 
-    let (in1, log_in1) = mem_read_gp_with_log_and_fill(1, other_addr, generation_state, &mut row);
-    let log_out0 = mem_write_gp_log_and_fill(2, other_addr, generation_state, &mut row, in0);
+    let (in1, log_in1) = mem_read_gp_with_log_and_fill(
+        1,
+        other_addr,
+        generation_state,
+        &mut row,
+        MemOpMetadata::Some(Operation::Swap(n)),
+    );
+    let log_out0 = mem_write_gp_log_and_fill(
+        2,
+        other_addr,
+        generation_state,
+        &mut row,
+        in0,
+        MemOpMetadata::Some(Operation::Swap(n)),
+    );
     push_no_write(generation_state, in1);
 
     state.push_memory(log_in1);
@@ -602,7 +654,8 @@ pub(crate) fn generate_not<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(x, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(x, _)] =
+        stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Not))?;
     let result = !x;
     push_no_write(generation_state, result);
 
@@ -626,7 +679,8 @@ pub(crate) fn generate_iszero<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(x, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(x, _)] =
+        stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Iszero))?;
     let is_zero = x.is_zero();
     let result = {
         let t: u64 = is_zero.into();
@@ -653,8 +707,17 @@ fn append_shift<F: RichField, T: Transition<F>>(
     const LOOKUP_CHANNEL: usize = 2;
     let lookup_addr = MemoryAddress::new(0, Segment::ShiftTable, input0.low_u32() as usize);
     let read_op = if input0.bits() <= 32 {
-        let (_, read) =
-            mem_read_gp_with_log_and_fill(LOOKUP_CHANNEL, lookup_addr, generation_state, &mut row);
+        let (_, read) = mem_read_gp_with_log_and_fill(
+            LOOKUP_CHANNEL,
+            lookup_addr,
+            generation_state,
+            &mut row,
+            MemOpMetadata::Some(Operation::BinaryArithmetic(if is_shl {
+                BinaryOperator::Shl
+            } else {
+                BinaryOperator::Shr
+            })),
+        );
         Some(read)
     } else {
         // The shift constraints still expect the address to be set, even though no read
@@ -692,8 +755,11 @@ pub(crate) fn generate_shl<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(input0, _), (input1, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+    let [(input0, _), (input1, log_in1)] = stack_pop_with_log_and_fill::<2, _>(
+        generation_state,
+        &mut row,
+        MemOpMetadata::Some(Operation::BinaryArithmetic(BinaryOperator::Shl)),
+    )?;
 
     let result = if input0 > U256::from(255u64) {
         U256::zero()
@@ -707,8 +773,11 @@ pub(crate) fn generate_shr<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
-    let [(input0, _), (input1, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(state.get_mut_generation_state(), &mut row)?;
+    let [(input0, _), (input1, log_in1)] = stack_pop_with_log_and_fill::<2, _>(
+        state.get_mut_generation_state(),
+        &mut row,
+        MemOpMetadata::Some(Operation::BinaryArithmetic(BinaryOperator::Shr)),
+    )?;
 
     let result = if input0 > U256::from(255u64) {
         U256::zero()
@@ -795,13 +864,31 @@ pub(crate) fn generate_syscall<F: RichField, T: Transition<F>>(
     generation_state.registers.is_kernel = true;
     generation_state.registers.gas_used = 0;
 
-    push_with_write(state, &mut row, syscall_info)?;
+    push_with_write(
+        state,
+        &mut row,
+        syscall_info,
+        MemOpMetadata::Some(Operation::Syscall(
+            opcode,
+            stack_values_read,
+            stack_len_increased,
+        )),
+    )?;
 
     state.log_debug(format!(
         "Syscall to {}",
         KERNEL.offset_name(new_program_counter)
     ));
-    byte_packing_log(state, base_address, bytes);
+    byte_packing_log(
+        state,
+        base_address,
+        bytes,
+        MemOpMetadata::Some(Operation::Syscall(
+            opcode,
+            stack_values_read,
+            stack_len_increased,
+        )),
+    );
 
     state.push_arithmetic(range_check_op);
     state.push_cpu(row);
@@ -815,7 +902,7 @@ pub(crate) fn generate_eq<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(in0, _), (in1, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Eq))?;
     let eq = in0 == in1;
     let result = U256::from(u64::from(eq));
 
@@ -832,7 +919,7 @@ pub(crate) fn generate_exit_kernel<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(kexit_info, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(kexit_info, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::ExitKernel))?;
     let kexit_info_u64 = kexit_info.0[0];
     let program_counter = kexit_info_u64 as u32 as usize;
     let is_kernel_mode_val = (kexit_info_u64 >> 32) as u32;
@@ -861,13 +948,14 @@ pub(crate) fn generate_mload_general<F: RichField, T: Transition<F>>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
-    let [(addr, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
+    let [(addr, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::MloadGeneral))?;
 
     let (val, log_read) = mem_read_gp_with_log_and_fill(
         1,
         MemoryAddress::new_bundle(addr)?,
         generation_state,
         &mut row,
+        MemOpMetadata::Some(Operation::MloadGeneral)
     );
     push_no_write(generation_state, val);
 
@@ -895,7 +983,7 @@ pub(crate) fn generate_mload_32bytes<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(addr, _), (len, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Mload32Bytes))?;
     let len = u256_to_usize(len)?;
     if len > 32 {
         // The call to `U256::from_big_endian()` would panic.
@@ -922,7 +1010,7 @@ pub(crate) fn generate_mload_32bytes<F: RichField, T: Transition<F>>(
     let packed_int = U256::from_big_endian(&bytes);
     push_no_write(generation_state, packed_int);
 
-    byte_packing_log(state, base_address, bytes);
+    byte_packing_log(state, base_address, bytes, MemOpMetadata::Some(Operation::Mload32Bytes));
 
     state.push_memory(log_in1);
     state.push_cpu(row);
@@ -935,10 +1023,10 @@ pub(crate) fn generate_mstore_general<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(val, _), (addr, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::MstoreGeneral))?;
 
     let address = MemoryAddress::new_bundle(addr)?;
-    let log_write = mem_write_partial_log_and_fill(address, generation_state, &mut row, val);
+    let log_write = mem_write_partial_log_and_fill(address, generation_state, &mut row, val, MemOpMetadata::Some(Operation::MstoreGeneral));
 
     let diff = row.stack_len - F::TWO;
     if let Some(inv) = diff.try_inverse() {
@@ -966,14 +1054,14 @@ pub(crate) fn generate_mstore_32bytes<F: RichField, T: Transition<F>>(
 ) -> Result<(), ProgramError> {
     let generation_state = state.get_mut_generation_state();
     let [(addr, _), (val, log_in1)] =
-        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row, MemOpMetadata::Some(Operation::Mstore32Bytes(n)))?;
 
     let base_address = MemoryAddress::new_bundle(addr)?;
 
     let new_addr = addr + n;
     push_no_write(generation_state, new_addr);
 
-    byte_unpacking_log(state, base_address, val, n as usize);
+    byte_unpacking_log(state, base_address, val, n as usize, MemOpMetadata::Some(Operation::Mstore32Bytes(n)));
     state.push_memory(log_in1);
     state.push_cpu(row);
     Ok(())
@@ -1068,8 +1156,8 @@ pub(crate) fn generate_exception<F: RichField, T: Transition<F>>(
     generation_state.registers.is_kernel = true;
     generation_state.registers.gas_used = 0;
 
-    push_with_write(generation_state, &mut row, exc_info)?;
-    byte_packing_log(state, base_address, bytes);
+    push_with_write(generation_state, &mut row, exc_info, MemOpMetadata::Exception)?;
+    byte_packing_log(state, base_address, bytes, MemOpMetadata::Exception);
 
     state.log_debug(format!(
         "Exception to {}",

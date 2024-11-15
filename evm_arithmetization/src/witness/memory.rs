@@ -4,6 +4,7 @@ use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
+use crate::cpu::kernel::stack::stack_manipulation::StackOp;
 use crate::cpu::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 
 #[derive(Clone, Copy, Debug)]
@@ -15,7 +16,7 @@ pub(crate) enum MemoryChannel {
 
 use MemoryChannel::{Code, GeneralPurpose, PartialChannel};
 
-use super::operation::CONTEXT_SCALING_FACTOR;
+use super::operation::{Operation, CONTEXT_SCALING_FACTOR};
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES, SEGMENT_SCALING_FACTOR};
 use crate::witness::errors::MemoryError::SegmentTooLarge;
@@ -83,6 +84,19 @@ pub(crate) enum MemoryOpKind {
     Write,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub(crate) enum MemOpMetadata {
+    DummyOp,
+    Initialization,
+    ReadCode,
+    FillStackFields,
+    FillGaps,
+    Padding,
+    MemBefore,
+    Exception,
+    Some(Operation)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct MemoryOp {
     /// true if this is an actual memory operation, or false if it's a padding
@@ -92,6 +106,7 @@ pub(crate) struct MemoryOp {
     pub address: MemoryAddress,
     pub kind: MemoryOpKind,
     pub value: U256,
+    pub metadata: MemOpMetadata,
 }
 
 pub(crate) static DUMMY_MEMOP: MemoryOp = MemoryOp {
@@ -104,6 +119,7 @@ pub(crate) static DUMMY_MEMOP: MemoryOp = MemoryOp {
     },
     kind: MemoryOpKind::Read,
     value: U256::zero(),
+    metadata: MemOpMetadata::DummyOp,
 };
 
 impl MemoryOp {
@@ -114,6 +130,7 @@ impl MemoryOp {
         address: MemoryAddress,
         kind: MemoryOpKind,
         value: U256,
+        metadata: MemOpMetadata,
     ) -> Self {
         // Since the CPU clock starts at 1, and the `clock` value is the CPU length, the
         // timestamps is: `timestamp = clock * NUM_CHANNELS + 1 + channel`
@@ -124,6 +141,7 @@ impl MemoryOp {
             address,
             kind,
             value,
+            metadata,
         }
     }
 
@@ -139,6 +157,7 @@ impl MemoryOp {
             address,
             kind: MemoryOpKind::Read,
             value,
+            metadata: MemOpMetadata::DummyOp,
         }
     }
 

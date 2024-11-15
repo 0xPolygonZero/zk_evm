@@ -6,14 +6,22 @@ mod common;
 
 use anyhow::Context as _;
 use common::{cases, Case};
+use evm_arithmetization::{
+    testing_utils::{init_logger, TEST_STARK_CONFIG},
+    AllStark, ProofWithPublicInputs, StarkConfig,
+};
 use libtest_mimic::{Arguments, Trial};
-use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::{
+    field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
+    util::timing::TimingTree,
+};
 use trace_decoder::observer::DummyObserver;
 use zero::prover::WIRE_DISPOSITION;
 
 fn main() -> anyhow::Result<()> {
+    init_logger();
     let mut trials = vec![];
-    for batch_size in [1, 3] {
+    for batch_size in [50] {
         for Case {
             name,
             header: _,
@@ -32,16 +40,28 @@ fn main() -> anyhow::Result<()> {
                 "error in `trace_decoder` for {name} at batch size {batch_size}"
             ))?;
             for (ix, gi) in gen_inputs.into_iter().enumerate() {
-                trials.push(Trial::test(
-                    format!("{name}@{batch_size}/{ix}"),
-                    move || {
-                        evm_arithmetization::prover::testing::simulate_execution_all_segments::<
-                            GoldilocksField,
-                        >(gi, 19)
-                        .map_err(|e| format!("{e:?}"))?; // get the full error chain
-                        Ok(())
-                    },
-                ))
+                if name == "b20240052_main" && ix == 0 {
+                    trials.push(Trial::test(
+                        format!("{name}@{batch_size}/{ix}"),
+                        move || {
+                            let all_stark = AllStark::<GoldilocksField, 2>::default();
+                            let config = TEST_STARK_CONFIG;
+                            let timing =
+                                &mut TimingTree::new(&format!("Blockproof"), log::Level::Info);
+                            //     evm_arithmetization::prover::testing::simulate_execution_all_segments::<
+                            //     GoldilocksField,
+                            // >(gi, 25)
+                            // .map_err(|e| format!("{e:?}"))?; // get the full error chain
+                            evm_arithmetization::prover::testing::prove_all_segments::<
+                                GoldilocksField,
+                                PoseidonGoldilocksConfig,
+                                2,
+                            >(&all_stark, &config, gi, 22, timing, None)
+                            .unwrap();
+                            Ok(())
+                        },
+                    ))
+                }
             }
         }
     }

@@ -161,6 +161,17 @@ impl<T: Copy + Field> Traces<T> {
             poseidon_ops,
         } = self;
 
+        let (memory_trace, final_values, unpadded_memory_length) = timed!(
+            timing,
+            "generate Memory trace",
+            all_stark.memory_stark.generate_trace(
+                memory_ops,
+                mem_before_values,
+                stale_contexts,
+                timing
+            )
+        );
+
         let arithmetic_trace = timed!(
             timing,
             "generate Arithmetic trace",
@@ -195,16 +206,6 @@ impl<T: Copy + Field> Traces<T> {
             all_stark
                 .logic_stark
                 .generate_trace(logic_ops, cap_elements, timing)
-        );
-        let (memory_trace, final_values, unpadded_memory_length) = timed!(
-            timing,
-            "generate Memory trace",
-            all_stark.memory_stark.generate_trace(
-                memory_ops,
-                mem_before_values,
-                stale_contexts,
-                timing
-            )
         );
 
         trace_lengths.memory_len = unpadded_memory_length;

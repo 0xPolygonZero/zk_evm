@@ -2,6 +2,7 @@ use log::log_enabled;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
+use super::memory::MemOpMetadata;
 use super::util::stack_pop_with_log_and_fill;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -27,6 +28,7 @@ pub(crate) const EXC_STOP_CODE: u8 = 6;
 pub(crate) fn read_code_memory<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
+    metadata: MemOpMetadata
 ) -> u8 {
     let generation_state = state.get_mut_generation_state();
     let code_context = generation_state.registers.code_context();
@@ -37,7 +39,7 @@ pub(crate) fn read_code_memory<F: RichField, T: Transition<F>>(
         Segment::Code,
         generation_state.registers.program_counter,
     );
-    let (opcode, mem_log) = mem_read_code_with_log_and_fill(address, generation_state, row);
+    let (opcode, mem_log) = mem_read_code_with_log_and_fill(address, generation_state, row, metadata);
 
     state.push_memory(mem_log);
 
@@ -378,7 +380,7 @@ where
 
     fn generate_jump(&mut self, mut row: CpuColumnsView<F>) -> Result<(), ProgramError> {
         let [(dst, _)] =
-            stack_pop_with_log_and_fill::<1, _>(self.get_mut_generation_state(), &mut row)?;
+            stack_pop_with_log_and_fill::<1, _>(self.get_mut_generation_state(), &mut row, MemOpMetadata::Some(Operation::Jump))?;
 
         let dst: u32 = dst
             .try_into()
@@ -404,6 +406,7 @@ where
                     ),
                     gen_state,
                     &mut row,
+                    MemOpMetadata::Some(Operation::Jump)
                 );
 
                 if gen_state.registers.is_kernel {
@@ -448,7 +451,7 @@ where
 
     fn generate_jumpi(&mut self, mut row: CpuColumnsView<F>) -> Result<(), ProgramError> {
         let [(dst, _), (cond, log_cond)] =
-            stack_pop_with_log_and_fill::<2, _>(self.get_mut_generation_state(), &mut row)?;
+            stack_pop_with_log_and_fill::<2, _>(self.get_mut_generation_state(), &mut row, MemOpMetadata::Some(Operation::Jumpi))?;
 
         let should_jump = !cond.is_zero();
         if should_jump {
@@ -490,6 +493,7 @@ where
                 ),
                 gen_state,
                 &mut row,
+                MemOpMetadata::Some(Operation::Jumpi)
             );
 
             if !should_jump || gen_state.registers.is_kernel {

@@ -11,7 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
-use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
+use super::{MemOpMetadata, TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -329,7 +329,7 @@ pub(crate) trait State<F: RichField> {
         row.stack_len = F::from_canonical_usize(generation_state.registers.stack_len);
         fill_channel_with_value(&mut row, 0, generation_state.registers.stack_top);
 
-        let opcode = read_code_memory(generation_state, &mut row);
+        let opcode = read_code_memory(generation_state, &mut row, MemOpMetadata::ReadCode);
         (row, opcode)
     }
 
@@ -746,6 +746,7 @@ impl<F: RichField> Transition<F> for GenerationState<F> {
                 address,
                 MemoryOpKind::Read,
                 self.registers.stack_top,
+                MemOpMetadata::FillStackFields,
             );
             self.push_memory(mem_op);
         }

@@ -53,6 +53,7 @@ where
         generate_traces(all_stark, &inputs, config, segment_data, timing)?
     );
 
+    panic!("Ayayai");
     check_abort_signal(abort_signal.clone())?;
 
     let proof = prove_with_traces(
@@ -402,9 +403,25 @@ pub mod testing {
         let segment_data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
         let inputs = inputs.trim();
         let mut proofs = vec![];
+        log::info!("que wea");
 
         for segment_run in segment_data_iterator {
             let (_, mut next_data) = segment_run?;
+            let total = next_data
+                .opcode_counts.0
+                .iter()
+                .map(|(_, &x)| x)
+                .sum::<usize>() as f32;
+            log::info!("total opcodes = {:?}", total);
+            // log::info!(
+            //     "segment data opcode freqs = {:?}",
+            //     next_data
+            //         .opcode_counts
+            //         .iter()
+            //         .map(|(y, &x)| (y, (x as f32 / total) * 100f32))
+            //         .sort_by(|&(_, x_1), &(_, x_2)|  x_1.total_cmp(&x_2))
+            // );
+            log::info!("opcodes seq = {:?}", next_data.opcode_counts.1);
             let proof = prove(
                 all_stark,
                 config,
