@@ -20,8 +20,8 @@ impl Runner {
         Self {
             cmd: cmd.into(),
             args: vec![],
-            stdout: Stdio::piped(),
-            stderr: Stdio::piped(),
+            stdout: Stdio::inherit(),
+            stderr: Stdio::inherit(),
         }
     }
 

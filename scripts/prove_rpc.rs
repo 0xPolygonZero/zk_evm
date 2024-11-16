@@ -108,39 +108,36 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
         eprintln!("WARNING: Unable to set file descriptor limit to recommended value: {RECOMMENDED_FILE_LIMIT}.");
     }
 
-    let log_output_filepath =
-        proof_output_dirpath.join(format!("b{}_{}.log", start_block, end_block));
-
-    let proof_runner = Runner::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--package=zero",
-            "--bin=leader",
-            "--",
-            "--runtime=in-memory",
-            "--load-strategy=on-demand",
-            "--proof-output-dir",
-            proof_output_dirpath.to_str().unwrap(),
-            "--block-batch-size",
-            &args.block_batch_size.to_string(),
-            "rpc",
-            "--rpc-type",
-            &args.rpc_type.to_string(),
-            "--rpc-url",
-            args.rpc_url.as_ref(),
-            "--start-block",
-            &start_block.to_string(),
-            "--checkpoint-block",
-            &checkpoint_block.to_string(),
-            "--end-block",
-            &end_block.to_string(),
-            "--backoff",
-            &args.backoff.to_string(),
-            "--max-retries",
-            &args.max_retries.to_string(),
-        ])
-        .pipe(log_output_filepath)?;
+    let cmd_args = &[
+        "run",
+        "--release",
+        "--package=zero",
+        "--bin=leader",
+        "--",
+        "--use-test-config",
+        "--runtime=in-memory",
+        "--load-strategy=on-demand",
+        "--proof-output-dir",
+        proof_output_dirpath.to_str().unwrap(),
+        "--block-batch-size",
+        &args.block_batch_size.to_string(),
+        "rpc",
+        "--rpc-type",
+        &args.rpc_type.to_string(),
+        "--rpc-url",
+        args.rpc_url.as_ref(),
+        "--start-block",
+        &block_string(start_block),
+        "--checkpoint-block",
+        &block_string(checkpoint_block),
+        "--end-block",
+        &block_string(end_block),
+        "--backoff",
+        &args.backoff.to_string(),
+        "--max-retries",
+        &args.max_retries.to_string(),
+    ];
+    //.pipe(log_output_filepath)?;
     match args.mode {
         RunMode::Test => {
             set_var("ARITHMETIC_CIRCUIT_SIZE", "16..21");
@@ -152,15 +149,23 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             set_var("MEMORY_CIRCUIT_SIZE", "17..24");
             set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
             set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
-            proof_runner.args(&["--test-only"]).run()
+            let cmd_args = cmd_args.map(|arg| {
+                if arg == "--use-test-config" {
+                    "--test-only"
+                } else {
+                    arg
+                }
+            });
+            Runner::new("cargo").args(&cmd_args).run()
         }
-        RunMode::Prove => proof_runner.args(&["--use-test-config"]).run(),
+        RunMode::Prove => Runner::new("cargo").args(cmd_args).run(),
         RunMode::Verify => {
             // Generate the proof.
-            proof_runner.args(&["--use-test-config"]).run()?;
+            Runner::new("cargo").args(cmd_args).run()?;
 
             // Verify the proof.
-            let proof_filepath = proof_output_dirpath.join(format!("b{end_block}.proof"));
+            let proof_filepath =
+                proof_output_dirpath.join(format!("b{}.proof", block_string(end_block)));
             let verify_output_filepath = proof_output_dirpath.join("verify.out");
             let verify_runner = Runner::new("cargo")
                 .args(&[
@@ -175,5 +180,13 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
                 .pipe(verify_output_filepath)?;
             verify_runner.run()
         }
+    }
+}
+
+/// Converts a block ID to an appropriate string based on its variant.
+fn block_string(block: BlockId) -> String {
+    match block {
+        BlockId::Number(number) => number.as_number().unwrap().to_string(),
+        BlockId::Hash(hash) => hash.to_string(),
     }
 }
