@@ -422,16 +422,16 @@ For testing proof generation for blocks, the `testing` branch should be used.
 
 ### Proving Blocks
 
-If you want to generate a full block proof, you can use `tools/prove_rpc.sh`:
+If you want to generate a full block proof, you can use `cargo xtask prove-rpc`:
 
 ```sh
-./prove_rpc.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT> <RPC_TYPE> <CHECKPOINT_BLOCK>
+cargo xtask prove-rpc -s <BLOCK_START> -e <BLOCK_END> -u <FULL_NODE_ENDPOINT> -t <RPC_TYPE> -c <CHECKPOINT_BLOCK> -m <MODE>
 ```
 
 Which may look like this:
 
 ```sh
-./prove_rpc.sh 17 18 http://127.0.0.1:8545 jerigon
+cargo xtask prove-rpc -u "$ETH_RPC_URL" -s 17 -e 18 -t jerigon -c 16 -b 3000 -r 100 -m verify
 ```
 
 Which will attempt to generate proofs for blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
@@ -444,16 +444,10 @@ A few other notes:
 
 ### Generating Witnesses Only
 
-If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/prove_rpc.sh` in the `test_only` mode:
+If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `cargo xtask prove-rpc` in the `test` mode:
 
 ```sh
-./prove_rpc.sh <START_BLOCK> <END_BLOCK> <FULL_NODE_ENDPOINT> <RPC_TYPE> <CHECKPOINT_BLOCK> <BACKOFF> <RETRIES> test_only
-```
-
-Filled in:
-
-```sh
-./prove_rpc.sh 18299898 18299899 http://34.89.57.138:8545 jerigon 18299897 0 0 test_only
+cargo xtask prove-rpc -u "$ETH_RPC_URL" -s 17 -e 18 -t jerigon -c 16 -b 3000 -r 100 -m test
 ```
 
 Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.

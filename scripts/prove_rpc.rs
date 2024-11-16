@@ -54,11 +54,11 @@ pub struct ProveRpcArgs {
     /// The end of the block range to prove (inclusive).
     #[arg(short = 'e', long)]
     end_block: Option<BlockId>,
-    /// Backoff in milliseconds for retry requests
+    /// Backoff in milliseconds for retry requests.
     #[arg(short = 'b', long, default_value_t = 0)]
     backoff: u64,
-    /// The maximum number of retries
-    #[arg(short = 'r', long, default_value_t = 0)]
+    /// The maximum number of retries.
+    #[arg(short = 'r', long, default_value_t = 7)]
     max_retries: u32,
     /// Whether to generate a proof and verify it or not.
     #[arg(short = 'm', long)]
@@ -140,7 +140,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             "--max-retries",
             &args.max_retries.to_string(),
         ])
-        .out(log_output_filepath)?;
+        .pipe(log_output_filepath)?;
     match args.mode {
         RunMode::Test => {
             set_var("ARITHMETIC_CIRCUIT_SIZE", "16..21");
@@ -172,7 +172,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
                     "-f",
                     proof_filepath.to_str().unwrap(),
                 ])
-                .out(verify_output_filepath)?;
+                .pipe(verify_output_filepath)?;
             verify_runner.run()
         }
     }

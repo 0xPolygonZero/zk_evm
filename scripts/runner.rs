@@ -4,8 +4,9 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{Context as _, Result};
+use anyhow::{ensure, Context as _, Result};
 
+/// A means of running a command as a subprocess.
 pub struct Runner {
     cmd: String,
     args: Vec<String>,
@@ -32,7 +33,7 @@ impl Runner {
 
     /// Create the file specified by `output_filepath` and set it as the stdout
     /// and stderr of the command.
-    pub fn out(mut self, output_filepath: impl Into<PathBuf>) -> Result<Self> {
+    pub fn pipe(mut self, output_filepath: impl Into<PathBuf>) -> Result<Self> {
         let out = File::create(output_filepath.into())?;
         let err = out.try_clone()?;
         self.stdout = Stdio::from(out);
@@ -48,6 +49,11 @@ impl Runner {
             .stderr(self.stderr)
             .output()
             .context(format!("couldn't exec `{}`", &self.cmd))?;
-        todo!()
+        ensure!(
+            output.status.success(),
+            "command failed with {}",
+            output.status
+        );
+        Ok(())
     }
 }
