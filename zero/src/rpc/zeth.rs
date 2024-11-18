@@ -1,18 +1,9 @@
 use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport};
-use serde::Deserialize;
-use trace_decoder::{BlockTrace, TxnInfo};
+use trace_decoder::BlockTrace;
 
 use super::fetch_other_block_data;
 use crate::prover::BlockProverInput;
 use crate::provider::CachedProvider;
-
-/// Transaction traces retrieved from Erigon zeroTracer.
-#[derive(Debug, Deserialize)]
-pub struct ZeroTxResult {
-    #[serde(rename(deserialize = "txHash"))]
-    pub tx_hash: alloy::primitives::TxHash,
-    pub result: TxnInfo,
-}
 
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: std::sync::Arc<CachedProvider<ProviderT, TransportT>>,
@@ -36,8 +27,7 @@ where
 
     let other_data =
         fetch_other_block_data(cached_provider, target_block_id, checkpoint_block_number).await?;
-    println!("block_prover_input: {:?}", block_trace);
-    // Assemble
+
     Ok(BlockProverInput {
         block_trace,
         other_data,
