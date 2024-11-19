@@ -7,14 +7,14 @@ use std::{
 use anyhow::{ensure, Context as _, Result};
 
 /// A means of running a command as a subprocess.
-pub struct Runner {
+pub struct Process {
     cmd: String,
     args: Vec<String>,
     stdout: Stdio,
     stderr: Stdio,
 }
 
-impl Runner {
+impl Process {
     /// Create a new runner with the given command.
     pub fn new(cmd: impl Into<String>) -> Self {
         Self {

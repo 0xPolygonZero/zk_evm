@@ -9,7 +9,7 @@ use alloy::{eips::BlockId, transports::http::reqwest::Url};
 use anyhow::Result;
 use clap::{arg, Args, ValueEnum, ValueHint};
 
-use crate::runner::Runner;
+use crate::process::Process;
 
 #[derive(ValueEnum, Clone)]
 enum RpcType {
@@ -146,14 +146,14 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
             set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
 
-            Runner::new("cargo")
+            Process::new("cargo")
                 .args(&test_command_args(leader_args))
                 .run()
         }
-        RunMode::Prove => Runner::new("cargo").args(&command_args(leader_args)).run(),
+        RunMode::Prove => Process::new("cargo").args(&command_args(leader_args)).run(),
         RunMode::Verify => {
             // Generate the proof.
-            Runner::new("cargo")
+            Process::new("cargo")
                 .args(&command_args(leader_args))
                 .run()?;
 
@@ -161,7 +161,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             let proof_filepath =
                 proof_output_dirpath.join(format!("b{}.zkproof", block_string(end_block)));
             let verify_output_filepath = proof_output_dirpath.join("verify.out");
-            let verify_runner = Runner::new("cargo")
+            let verify_runner = Process::new("cargo")
                 .args(&[
                     "run",
                     "--release",

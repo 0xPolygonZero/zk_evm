@@ -2,7 +2,7 @@
 
 mod outdated;
 mod prove_rpc;
-mod runner;
+mod process;
 
 use anyhow::Result;
 use clap::Parser;
