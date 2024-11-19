@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Stdio},
 };
 
