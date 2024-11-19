@@ -108,13 +108,8 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
         eprintln!("WARNING: Unable to set file descriptor limit to recommended value: {RECOMMENDED_FILE_LIMIT}.");
     }
 
-    let cmd_args = &[
-        "run",
-        "--release",
-        "--package=zero",
-        "--bin=leader",
-        "--",
-        "--use-test-config",
+    // Construct common args used for all run modes.
+    let leader_args = &[
         "--runtime=in-memory",
         "--load-strategy=on-demand",
         "--proof-output-dir",
@@ -137,7 +132,8 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
         "--max-retries",
         &args.max_retries.to_string(),
     ];
-    //.pipe(log_output_filepath)?;
+
+    // Run the appropriate command based on the run mode.
     match args.mode {
         RunMode::Test => {
             set_var("ARITHMETIC_CIRCUIT_SIZE", "16..21");
@@ -149,23 +145,21 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             set_var("MEMORY_CIRCUIT_SIZE", "17..24");
             set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
             set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
-            let cmd_args = cmd_args.map(|arg| {
-                if arg == "--use-test-config" {
-                    "--test-only"
-                } else {
-                    arg
-                }
-            });
-            Runner::new("cargo").args(&cmd_args).run()
+
+            Runner::new("cargo")
+                .args(&test_command_args(leader_args))
+                .run()
         }
-        RunMode::Prove => Runner::new("cargo").args(cmd_args).run(),
+        RunMode::Prove => Runner::new("cargo").args(&command_args(leader_args)).run(),
         RunMode::Verify => {
             // Generate the proof.
-            Runner::new("cargo").args(cmd_args).run()?;
+            Runner::new("cargo")
+                .args(&command_args(leader_args))
+                .run()?;
 
             // Verify the proof.
             let proof_filepath =
-                proof_output_dirpath.join(format!("b{}.proof", block_string(end_block)));
+                proof_output_dirpath.join(format!("b{}.zkproof", block_string(end_block)));
             let verify_output_filepath = proof_output_dirpath.join("verify.out");
             let verify_runner = Runner::new("cargo")
                 .args(&[
@@ -189,4 +183,33 @@ fn block_string(block: BlockId) -> String {
         BlockId::Number(number) => number.as_number().unwrap().to_string(),
         BlockId::Hash(hash) => hash.to_string(),
     }
+}
+
+/// Returns the command arguments for running the leader binary in test mode.
+fn test_command_args<'a>(leader_args: &'a [&str]) -> Vec<&'a str> {
+    let mut args = Vec::from(&[
+        "run",
+        "--release",
+        "--package=zero",
+        "--bin=leader",
+        "--",
+        "--test-only",
+    ]);
+    args.extend_from_slice(leader_args);
+    args
+}
+
+/// Returns the command arguments for running the leader binary in prove or
+/// verify mode.
+fn command_args<'a>(leader_args: &'a [&str]) -> Vec<&'a str> {
+    let mut args = Vec::from(&[
+        "run",
+        "--release",
+        "--package=zero",
+        "--bin=leader",
+        "--",
+        "--use-test-config",
+    ]);
+    args.extend_from_slice(leader_args);
+    args
 }
