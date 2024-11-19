@@ -1,7 +1,8 @@
 use std::{
     env::set_var,
     fmt::Display,
-    fs::create_dir_all,
+    fs::{create_dir_all, File},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
 };
 
@@ -171,8 +172,11 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
                     "-f",
                     proof_filepath.to_str().unwrap(),
                 ])
-                .pipe(verify_output_filepath)?;
-            verify_runner.run()
+                .pipe(&verify_output_filepath)?;
+            verify_runner.run()?;
+
+            // Validate the proof output file.
+            verify_proof_output(&verify_output_filepath)
         }
     }
 }
@@ -212,4 +216,16 @@ fn command_args<'a>(leader_args: &'a [&str]) -> Vec<&'a str> {
     ]);
     args.extend_from_slice(leader_args);
     args
+}
+
+/// Checks that the output file contains the expected success message.
+fn verify_proof_output(verify_output_filepath: &Path) -> Result<()> {
+    let verify_output_file = File::open(verify_output_filepath)?;
+    let reader = BufReader::new(verify_output_file);
+    for line in reader.lines() {
+        if line? == "All proofs verified successfully!" {
+            return Ok(());
+        }
+    }
+    anyhow::bail!("Proof verification failed!")
 }

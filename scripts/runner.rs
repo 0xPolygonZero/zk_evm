@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
@@ -33,8 +33,8 @@ impl Runner {
 
     /// Create the file specified by `output_filepath` and set it as the stdout
     /// and stderr of the command.
-    pub fn pipe(mut self, output_filepath: impl Into<PathBuf>) -> Result<Self> {
-        let out = File::create(output_filepath.into())?;
+    pub fn pipe(mut self, output_filepath: &Path) -> Result<Self> {
+        let out = File::create(output_filepath)?;
         let err = out.try_clone()?;
         self.stdout = Stdio::from(out);
         self.stderr = Stdio::from(err);
