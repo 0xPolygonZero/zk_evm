@@ -72,6 +72,7 @@ pub struct ProveRpcArgs {
     output_dir: PathBuf,
 }
 
+/// Run leader binary to prove a block range via RPC.
 pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
     // Set rustc environment variables.
     set_var("RUST_MIN_STACK", "33554432");
@@ -102,7 +103,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
     if !proof_output_dirpath.exists() {
         create_dir_all(proof_output_dirpath)?;
     }
-    /// Set file handle limit.
+    // Set file handle limit.
     const RECOMMENDED_FILE_LIMIT: isize = 8192;
     if !sysinfo::set_open_files_limit(RECOMMENDED_FILE_LIMIT) {
         eprintln!("WARNING: Unable to set file descriptor limit to recommended value: {RECOMMENDED_FILE_LIMIT}.");

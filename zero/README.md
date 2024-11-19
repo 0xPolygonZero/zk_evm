@@ -425,7 +425,7 @@ For testing proof generation for blocks, the `testing` branch should be used.
 If you want to generate a full block proof, you can use `cargo xtask prove-rpc`:
 
 ```sh
-cargo xtask prove-rpc -s <BLOCK_START> -e <BLOCK_END> -u <FULL_NODE_ENDPOINT> -t <RPC_TYPE> -c <CHECKPOINT_BLOCK> -m <MODE>
+cargo xtask prove-rpc <RPC_URL> <RPC_TYPE> <MODE> <BLOCK_START> -e <BLOCK_END> -c <CHECKPOINT_BLOCK>
 ```
 
 Which may look like this:
@@ -447,7 +447,7 @@ A few other notes:
 If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `cargo xtask prove-rpc` in the `test` mode:
 
 ```sh
-cargo xtask prove-rpc -u "$ETH_RPC_URL" -s 17 -e 18 -t jerigon -c 16 -b 3000 -r 100 -m test
+cargo xtask prove-rpc "$ETH_RPC_URL" jerigon test 17 -e 18 -c 16 -b 3000 -r 100
 ```
 
 Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.
