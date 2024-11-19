@@ -1,8 +1,8 @@
 //! General purpose scripts for development
 
 mod outdated;
-mod prove_rpc;
 mod process;
+mod prove_rpc;
 
 use anyhow::Result;
 use clap::Parser;
