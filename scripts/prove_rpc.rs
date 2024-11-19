@@ -40,13 +40,16 @@ enum RunMode {
 #[derive(Args)]
 pub struct ProveRpcArgs {
     /// The node RPC URL.
-    #[arg(short = 'u', value_hint = ValueHint::Url)]
+    #[arg(value_hint = ValueHint::Url)]
     rpc_url: Url,
     /// The RPC type (jerigon or native).
-    #[arg(short = 't', long)]
+    #[arg()]
     rpc_type: RpcType,
+    /// Whether to generate a proof and verify it or not.
+    #[arg()]
+    mode: RunMode,
     /// The start of the block range to prove (inclusive).
-    #[arg(short = 's', long)]
+    #[arg()]
     start_block: BlockId,
     /// The end of the block range to prove. If None, start_block-1 is used.
     #[arg(short = 'c', long)]
@@ -60,9 +63,6 @@ pub struct ProveRpcArgs {
     /// The maximum number of retries.
     #[arg(short = 'r', long, default_value_t = 7)]
     max_retries: u32,
-    /// Whether to generate a proof and verify it or not.
-    #[arg(short = 'm', long)]
-    mode: RunMode,
     /// The batch size for block fetching.
     #[arg(long, default_value_t = 8)]
     block_batch_size: u32,

@@ -76,14 +76,14 @@ jobs:
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           ulimit -n 8192
-          cargo xtask prove-rpc -u $ETH_RPC_URL -s 1 -e 15 -t native -c 0 -b 3000 -r 100 -m test
+          cargo xtask prove-rpc "$ETH_RPC_URL" native test 1 -e 15 -c 0 -b 3000 -r 100
           echo "Proving blocks in test_only mode finished"
 
       - name: Run prove blocks with native tracer in real mode
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-          cargo xtask prove-rpc -u $ETH_RPC_URL -s 4 -e 7 -t native -c 3 -b 3000 -r 100 -m verify
+          cargo xtask prove-rpc "$ETH_RPC_URL" native verify 4 -e 7 -c 3 -b 3000 -r 100
           echo "Proving blocks in real mode finished"
 
       - name: Shut down network
