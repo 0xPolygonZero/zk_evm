@@ -328,6 +328,8 @@ where
         Some(ctl_challenges),
         challenger,
         &[],
+        None,
+        None,
         timing,
     )
     .map(|proof_with_pis| StarkProofWithMetadata {

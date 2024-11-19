@@ -247,6 +247,7 @@ pub(crate) fn observe_public_values_target<
 
 pub mod testing {
     use plonky2::field::extension::Extendable;
+    use plonky2::fri::FriParams;
     use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
     use plonky2::iop::challenger::Challenger;
     use plonky2::plonk::config::GenericConfig;
@@ -273,6 +274,7 @@ pub mod testing {
         pub(crate) fn get_challenges(
             &self,
             config: &StarkConfig,
+            verifier_circuit_fri_params: Option<FriParams>,
         ) -> Result<AllProofChallenges<F, D>, ProgramError> {
             let mut challenger = Challenger::<F, C::Hasher>::new();
 
@@ -303,6 +305,7 @@ pub mod testing {
                             Some(&ctl_challenges),
                             true,
                             config,
+                            verifier_circuit_fri_params.clone(),
                         ))
                     } else {
                         None

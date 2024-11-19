@@ -62,12 +62,11 @@ pub type AllRecursiveCircuits =
 
 /// A type alias for the recursive chains of circuits needed to shrink EVM STARK
 /// proofs.
-pub type RecursiveCircuitsForTableSize =
-    crate::fixed_recursive_verifier::RecursiveCircuitsForTableSize<
-        Field,
-        RecursionConfig,
-        { EXTENSION_DEGREE },
-    >;
+pub type RecursiveCircuitsForTableSize = crate::fixed_recursive_verifier::RecursiveCircuitsForTable<
+    Field,
+    RecursionConfig,
+    { EXTENSION_DEGREE },
+>;
 
 /// A type alias for the verifier data necessary to verify succinct block
 /// proofs.

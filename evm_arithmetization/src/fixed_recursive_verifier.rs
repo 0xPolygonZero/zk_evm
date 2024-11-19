@@ -1,11 +1,7 @@
-use core::mem::{self, MaybeUninit};
-use core::ops::Range;
 use std::cmp::max;
-use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
@@ -55,7 +51,7 @@ use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_final_public_values_public_input,
     add_virtual_public_values_public_input, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
-    PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
+    PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit, MAX_DEGREE_BITS_TO_SUPPORT,
 };
 use crate::testing_utils::{
     TEST_RECURSION_CONFIG, TEST_STARK_CONFIG, TEST_THRESHOLD_DEGREE_BITS,
@@ -133,8 +129,7 @@ where
     /// The two-to-one block aggregation circuit, which verifies two unrelated
     /// block proofs.
     pub two_to_one_block: TwoToOneBlockCircuitData<F, C, D>,
-    /// Holds chains of circuits for each table and for each initial
-    /// `degree_bits`.
+    /// Holds chains of circuits for each table.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
     /// Dummy proofs of each table for the root circuit.
     pub table_dummy_proofs: [Option<ShrunkProofData<F, C, D>>; NUM_TABLES],
@@ -150,10 +145,6 @@ where
 {
     pub circuit: CircuitData<F, C, D>,
     proof_with_pis: [ProofWithPublicInputsTarget<D>; NUM_TABLES],
-    /// For each table, various inner circuits may be used depending on the
-    /// initial table size. This target holds the index of the circuit
-    /// (within `final_circuits()`) that was used.
-    index_verifier_data: [Target; NUM_TABLES],
     /// Public inputs containing public values.
     public_values: PublicValuesTarget,
     /// Public inputs used for cyclic verification. These aren't actually used
@@ -179,9 +170,6 @@ where
         for proof in &self.proof_with_pis {
             buffer.write_target_proof_with_public_inputs(proof)?;
         }
-        for index in self.index_verifier_data {
-            buffer.write_target(index)?;
-        }
         self.public_values.to_buffer(buffer)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         for table_in_use in self.table_in_use {
@@ -200,10 +188,6 @@ where
         for _ in 0..NUM_TABLES {
             proof_with_pis.push(buffer.read_target_proof_with_public_inputs()?);
         }
-        let mut index_verifier_data = Vec::with_capacity(NUM_TABLES);
-        for _ in 0..NUM_TABLES {
-            index_verifier_data.push(buffer.read_target()?);
-        }
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         let mut table_in_use = Vec::with_capacity(NUM_TABLES);
@@ -214,7 +198,6 @@ where
         Ok(Self {
             circuit,
             proof_with_pis: proof_with_pis.try_into().unwrap(),
-            index_verifier_data: index_verifier_data.try_into().unwrap(),
             public_values,
             cyclic_vk,
             table_in_use: table_in_use.try_into().unwrap(),
@@ -664,21 +647,15 @@ where
     ///
     /// # Arguments
     ///
-    /// - `skip_tables`: a boolean indicating whether to serialize only the
-    ///   upper circuits or the entire prover state, including recursive
-    ///   circuits to shrink STARK proofs.
     /// - `gate_serializer`: a custom gate serializer needed to serialize
     ///   recursive circuits common data.
     /// - `generator_serializer`: a custom generator serializer needed to
     ///   serialize recursive circuits proving data.
     pub fn to_bytes(
         &self,
-        skip_tables: bool,
         gate_serializer: &dyn GateSerializer<F, D>,
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Vec<u8>> {
-        // TODO: would be better to initialize it dynamically based on the supported max
-        // degree.
         let mut buffer = Vec::with_capacity(1 << 34);
         self.root
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
@@ -692,10 +669,8 @@ where
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         self.two_to_one_block
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-        if !skip_tables {
-            for table in &self.by_table {
-                table.to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-            }
+        for table in &self.by_table {
+            table.to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         }
         for table in &self.table_dummy_proofs {
             match table {
@@ -724,7 +699,6 @@ where
     ///   serialize recursive circuits proving data.
     pub fn from_bytes(
         bytes: &[u8],
-        skip_tables: bool,
         gate_serializer: &dyn GateSerializer<F, D>,
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Self> {
@@ -754,35 +728,14 @@ where
             generator_serializer,
         )?;
 
-        let by_table = match skip_tables {
-            true => (0..NUM_TABLES)
-                .map(|_| RecursiveCircuitsForTable {
-                    by_stark_size: BTreeMap::default(),
-                })
-                .collect_vec()
-                .try_into()
-                .unwrap(),
-            false => {
-                // Tricky use of MaybeUninit to remove the need for implementing Debug
-                // for all underlying types, necessary to convert a by_table Vec to an array.
-                let mut by_table: [MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES] =
-                    unsafe { MaybeUninit::uninit().assume_init() };
-                for table in &mut by_table[..] {
-                    let value = RecursiveCircuitsForTable::from_buffer(
-                        &mut buffer,
-                        gate_serializer,
-                        generator_serializer,
-                    )?;
-                    *table = MaybeUninit::new(value);
-                }
-                unsafe {
-                    mem::transmute::<
-                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
-                        [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
-                    >(by_table)
-                }
-            }
-        };
+        let by_table = core::array::from_fn(|_| {
+            RecursiveCircuitsForTable::from_buffer(
+                &mut buffer,
+                gate_serializer,
+                generator_serializer,
+            )
+            .unwrap()
+        });
 
         let table_dummy_proofs = core::array::from_fn(|_| {
             if buffer.read_bool().ok()? {
@@ -823,11 +776,7 @@ where
     /// - `config`: the set of configurations to be used for the different proof
     ///   layers. It will usually be a fast one yielding large proofs for the
     ///   base STARK prover, and a more flexible one for the recursive layers.
-    pub fn new(
-        all_stark: &AllStark<F, D>,
-        degree_bits_ranges: &[Range<usize>; NUM_TABLES],
-        config: RecursionConfig,
-    ) -> Self {
+    pub fn new(all_stark: &AllStark<F, D>, config: RecursionConfig) -> Self {
         let stark_config = &config.stark_config;
 
         // Sanity check on the provided config
@@ -838,7 +787,7 @@ where
                 RecursiveCircuitsForTable::new(
                     $table_enum,
                     &all_stark.$stark_field,
-                    degree_bits_ranges[*$table_enum].clone(),
+                    MAX_DEGREE_BITS_TO_SUPPORT,
                     &all_stark.cross_table_lookups,
                     stark_config,
                     &config.shrinking_circuit_config,
@@ -885,11 +834,7 @@ where
 
         let table_dummy_proofs = core::array::from_fn(|i| {
             if OPTIONAL_TABLE_INDICES.contains(&i) {
-                let init_degree = degree_bits_ranges[i].start;
-                let chain = by_table[i]
-                    .by_stark_size
-                    .get(&init_degree)
-                    .expect("Unable to get the shrinking circuits");
+                let chain = &by_table[i];
                 let common_circuit_data = chain
                     .shrinking_wrappers
                     .last()
@@ -946,7 +891,7 @@ where
         circuit_config: &CircuitConfig,
     ) -> RootCircuitData<F, C, D> {
         let inner_common_data: [_; NUM_TABLES] =
-            core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
+            core::array::from_fn(|i| &by_table[i].final_circuits().common);
 
         let mut builder = CircuitBuilder::new(circuit_config.clone());
 
@@ -964,7 +909,6 @@ where
                 stark_config,
             )
         });
-        let index_verifier_data = core::array::from_fn(|_i| builder.add_virtual_target());
 
         let mut challenger = RecursiveChallenger::<F, C::Hasher, D>::new(&mut builder);
         for pi in &pis {
@@ -1093,40 +1037,20 @@ where
         );
 
         for (i, table_circuits) in by_table.iter().enumerate() {
-            let final_circuits = table_circuits.final_circuits();
-            for final_circuit in &final_circuits {
-                assert_eq!(
-                    &final_circuit.common, inner_common_data[i],
-                    "common_data mismatch"
-                );
-            }
-            let mut possible_vks = final_circuits
-                .into_iter()
-                .map(|c| builder.constant_verifier_data(&c.verifier_only))
-                .collect_vec();
-            // random_access_verifier_data expects a vector whose length is a power of two.
-            // To satisfy this, we will just add some duplicates of the first VK.
-            while !possible_vks.len().is_power_of_two() {
-                possible_vks.push(possible_vks[0].clone());
-            }
-            let inner_verifier_data =
-                builder.random_access_verifier_data(index_verifier_data[i], possible_vks);
+            let final_circuit = table_circuits.final_circuits();
+            let vk = builder.constant_verifier_data(&final_circuit.verifier_only);
 
             if OPTIONAL_TABLE_INDICES.contains(&i) {
                 builder
                     .conditionally_verify_proof_or_dummy::<C>(
                         table_in_use[i],
                         &recursive_proofs[i],
-                        &inner_verifier_data,
+                        &vk,
                         inner_common_data[i],
                     )
                     .expect("Unable conditionally verify Keccak proofs in the root circuit");
             } else {
-                builder.verify_proof::<C>(
-                    &recursive_proofs[i],
-                    &inner_verifier_data,
-                    inner_common_data[i],
-                );
+                builder.verify_proof::<C>(&recursive_proofs[i], &vk, inner_common_data[i]);
             }
         }
 
@@ -1155,7 +1079,6 @@ where
         RootCircuitData {
             circuit: builder.build::<C>(),
             proof_with_pis: recursive_proofs,
-            index_verifier_data,
             public_values,
             cyclic_vk,
             table_in_use,
@@ -2068,13 +1991,12 @@ where
             timing,
             abort_signal.clone(),
         )?;
-        self.prove_segment_with_all_proofs(&all_proof, config, abort_signal.clone())
+        self.prove_segment_with_all_proofs(&all_proof, abort_signal.clone())
     }
 
     pub fn prove_segment_with_all_proofs(
         &self,
         all_proof: &AllProof<F, C, D>,
-        config: &StarkConfig,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut root_inputs = PartialWitness::new();
@@ -2085,27 +2007,8 @@ where
                 let stark_proof = &all_proof.multi_proof.stark_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
-                let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
-                let shrunk_proof = table_circuits
-                    .by_stark_size
-                    .get(&original_degree_bits)
-                    .ok_or_else(|| {
-                        anyhow!(format!(
-                            "Missing preprocessed circuits for {:?} table with size {}.",
-                            Table::all()[table],
-                            original_degree_bits,
-                        ))
-                    })?
-                    .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-                let index_verifier_data = table_circuits
-                    .by_stark_size
-                    .keys()
-                    .position(|&size| size == original_degree_bits)
-                    .unwrap();
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(index_verifier_data),
-                )?;
+                let shrunk_proof =
+                    table_circuits.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
                 root_inputs
                     .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof)?;
             } else {
@@ -2113,7 +2016,6 @@ where
                 let dummy_proof_data = self.table_dummy_proofs[table]
                     .as_ref()
                     .ok_or_else(|| anyhow::format_err!("No dummy_proof_data"))?;
-                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO)?;
                 root_inputs.set_proof_with_pis_target(
                     &self.root.proof_with_pis[table],
                     &dummy_proof_data.proof,
@@ -2152,123 +2054,6 @@ where
                 public_values: all_proof.public_values.clone(),
                 intern: root_proof,
             },
-        })
-    }
-
-    /// From an initial set of STARK proofs passed with their associated
-    /// recursive table circuits, generate a recursive transaction proof.
-    /// It is aimed at being used when preprocessed table circuits have not been
-    /// loaded to memory.
-    ///
-    /// **Note**:
-    /// The type of the `table_circuits` passed as arguments is
-    /// `&[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES]`. In
-    /// particular, for each STARK proof contained within the `AllProof`
-    /// object provided to this method, we need to pass a tuple
-    /// of [`RecursiveCircuitsForTableSize<F, C, D>`] and a [`u8`]. The former
-    /// is the recursive chain corresponding to the initial degree size of
-    /// the associated STARK proof. The latter is the index of this degree
-    /// in the range that was originally passed when constructing the entire
-    /// prover state.
-    ///
-    /// # Usage
-    ///
-    /// ```ignore
-    /// // Load a prover state without its recursive table circuits.
-    /// let gate_serializer = DefaultGateSerializer;
-    /// let generator_serializer = DefaultGeneratorSerializer::<C, D>::new();
-    /// let initial_ranges = [16..25, 10..20, 12..25, 14..25, 9..20, 12..20, 17..30];
-    /// let prover_state = AllRecursiveCircuits::<F, C, D>::new(
-    ///     &all_stark,
-    ///     &initial_ranges,
-    ///     &config,
-    /// );
-    ///
-    /// // Generate a proof from the provided inputs.
-    /// let stark_proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, abort_signal).unwrap();
-    ///
-    /// // Read the degrees of the internal STARK proofs.
-    /// // Indices to be passed along the recursive tables
-    /// // can be easily recovered as `initial_ranges[i]` - `degrees[i]`.
-    /// let degrees = proof.degree_bits(&config);
-    ///
-    /// // Retrieve the corresponding recursive table circuits for each table with the corresponding degree.
-    /// let table_circuits = { ... };
-    ///
-    /// // Finally shrink the STARK proof.
-    /// let (proof, public_values) = prove_segment_after_initial_stark(
-    ///     &all_stark,
-    ///     &config,
-    ///     &stark_proof,
-    ///     &table_circuits,
-    ///     &mut timing,
-    ///     abort_signal,
-    /// ).unwrap();
-    /// ```
-    pub fn prove_segment_after_initial_stark(
-        &self,
-        all_proof: AllProof<F, C, D>,
-        table_circuits: &[Option<(RecursiveCircuitsForTableSize<F, C, D>, u8)>; NUM_TABLES],
-        abort_signal: Option<Arc<AtomicBool>>,
-    ) -> anyhow::Result<ProofWithPublicValues<F, C, D>> {
-        let mut root_inputs = PartialWitness::new();
-
-        for table in 0..NUM_TABLES {
-            if all_proof.table_in_use[table] {
-                let (table_circuit, index_verifier_data) = &table_circuits[table]
-                    .as_ref()
-                    .ok_or_else(|| anyhow::format_err!("Unable to get circuits"))?;
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_u8(*index_verifier_data),
-                )?;
-                let stark_proof = all_proof.multi_proof.stark_proofs[table]
-                    .as_ref()
-                    .ok_or_else(|| anyhow::format_err!("Unable to get stark proof"))?;
-                let shrunk_proof =
-                    table_circuit.shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof)?;
-            } else {
-                assert!(OPTIONAL_TABLE_INDICES.contains(&table));
-                let dummy_proof = self.table_dummy_proofs[table]
-                    .as_ref()
-                    .ok_or_else(|| anyhow::format_err!("Unable to get dummpy proof"))?;
-                root_inputs.set_target(self.root.index_verifier_data[table], F::ZERO)?;
-                root_inputs.set_proof_with_pis_target(
-                    &self.root.proof_with_pis[table],
-                    &dummy_proof.proof,
-                )?;
-            }
-
-            check_abort_signal(abort_signal.clone())?;
-        }
-
-        root_inputs.set_verifier_data_target(
-            &self.root.cyclic_vk,
-            &self.segment_aggregation.circuit.verifier_only,
-        )?;
-
-        set_public_value_targets(
-            &mut root_inputs,
-            &self.root.public_values,
-            &all_proof.public_values,
-        )
-        .map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
-
-        self.root
-            .table_in_use
-            .iter()
-            .zip(all_proof.table_in_use.iter())
-            .try_for_each(|(target, value)| root_inputs.set_bool_target(*target, *value))?;
-
-        let root_proof = self.root.circuit.prove(root_inputs)?;
-
-        Ok(ProofWithPublicValues {
-            public_values: all_proof.public_values,
-            intern: root_proof,
         })
     }
 
@@ -2896,111 +2681,10 @@ where
     }
 }
 
-/// A map between initial degree sizes and their associated shrinking recursion
-/// circuits.
-#[derive(Eq, PartialEq, Debug)]
-pub struct RecursiveCircuitsForTable<F, C, const D: usize>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    C::Hasher: AlgebraicHasher<F>,
-{
-    /// A map from `log_2(height)` to a chain of shrinking recursion circuits
-    /// starting at that height.
-    pub by_stark_size: BTreeMap<usize, RecursiveCircuitsForTableSize<F, C, D>>,
-}
-
-impl<F, C, const D: usize> RecursiveCircuitsForTable<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    C::Hasher: AlgebraicHasher<F>,
-{
-    fn to_buffer(
-        &self,
-        buffer: &mut Vec<u8>,
-        gate_serializer: &dyn GateSerializer<F, D>,
-        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
-    ) -> IoResult<()> {
-        buffer.write_usize(self.by_stark_size.len())?;
-        for (&size, table) in &self.by_stark_size {
-            buffer.write_usize(size)?;
-            table.to_buffer(buffer, gate_serializer, generator_serializer)?;
-        }
-
-        Ok(())
-    }
-
-    fn from_buffer(
-        buffer: &mut Buffer,
-        gate_serializer: &dyn GateSerializer<F, D>,
-        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
-    ) -> IoResult<Self> {
-        let length = buffer.read_usize()?;
-        let mut by_stark_size = BTreeMap::new();
-        for _ in 0..length {
-            let key = buffer.read_usize()?;
-            let table = RecursiveCircuitsForTableSize::from_buffer(
-                buffer,
-                gate_serializer,
-                generator_serializer,
-            )?;
-            by_stark_size.insert(key, table);
-        }
-
-        Ok(Self { by_stark_size })
-    }
-
-    fn new<S: Stark<F, D>>(
-        table: Table,
-        stark: &S,
-        degree_bits_range: Range<usize>,
-        all_ctls: &[CrossTableLookup<F>],
-        stark_config: &StarkConfig,
-        shrinking_circuit_config: &CircuitConfig,
-        threshold_degree_bits: usize,
-    ) -> Self {
-        let by_stark_size = degree_bits_range
-            .map(|degree_bits| {
-                (
-                    degree_bits,
-                    RecursiveCircuitsForTableSize::new::<S>(
-                        table,
-                        stark,
-                        degree_bits,
-                        all_ctls,
-                        stark_config,
-                        shrinking_circuit_config,
-                        threshold_degree_bits,
-                    ),
-                )
-            })
-            .collect();
-
-        Self { by_stark_size }
-    }
-
-    /// For each initial `degree_bits`, get the final circuit at the end of that
-    /// shrinking chain. Each of these final circuits should have degree
-    /// `THRESHOLD_DEGREE_BITS`.
-    fn final_circuits(&self) -> Vec<&CircuitData<F, C, D>> {
-        self.by_stark_size
-            .values()
-            .map(|chain| {
-                chain
-                    .shrinking_wrappers
-                    .last()
-                    .map(|wrapper| &wrapper.circuit)
-                    .unwrap_or(&chain.initial_wrapper.circuit)
-            })
-            .collect()
-    }
-}
-
 /// A chain of shrinking wrapper circuits, ending with a final circuit with
 /// `degree_bits` `THRESHOLD_DEGREE_BITS`.
 #[derive(Eq, PartialEq, Debug)]
-pub struct RecursiveCircuitsForTableSize<F, C, const D: usize>
+pub struct RecursiveCircuitsForTable<F, C, const D: usize>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -3010,7 +2694,7 @@ where
     shrinking_wrappers: Vec<PlonkWrapperCircuit<F, C, D>>,
 }
 
-impl<F, C, const D: usize> RecursiveCircuitsForTableSize<F, C, D>
+impl<F, C, const D: usize> RecursiveCircuitsForTable<F, C, D>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -3176,6 +2860,13 @@ where
             proof = wrapper_circuit.prove(&proof)?;
         }
         Ok(proof)
+    }
+
+    fn final_circuits(&self) -> &CircuitData<F, C, D> {
+        self.shrinking_wrappers
+            .last()
+            .map(|wrapper| &wrapper.circuit)
+            .unwrap_or(&self.initial_wrapper.circuit)
     }
 }
 

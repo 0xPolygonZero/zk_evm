@@ -14,25 +14,20 @@
 use std::borrow::Borrow;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::{fmt::Display, sync::OnceLock};
+use std::sync::OnceLock;
 
-use clap::ValueEnum;
 use evm_arithmetization::testing_utils::TEST_STARK_CONFIG;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, prover::prove, AllProof, AllRecursiveCircuits,
-    AllStark, GenerationSegmentData, RecursiveCircuitsForTableSize, StarkConfig,
-    TrimmedGenerationInputs,
+    fixed_recursive_verifier::ProverOutputData, AllRecursiveCircuits, AllStark,
+    GenerationSegmentData, StarkConfig, TrimmedGenerationInputs,
 };
 use evm_arithmetization::{ProofWithPublicInputs, ProofWithPublicValues, VerifierData};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::util::timing::TimingTree;
 use tracing::info;
 
-use self::circuit::{CircuitConfig, NUM_TABLES};
-use crate::prover_state::persistence::{
-    BaseProverResource, DiskResource, MonolithicProverResource, RecursiveCircuitResource,
-    VerifierResource,
-};
+use self::circuit::CircuitConfig;
+use crate::prover_state::persistence::{DiskResource, MonolithicProverResource, VerifierResource};
 
 pub mod circuit;
 pub mod cli;
@@ -105,41 +100,18 @@ pub fn p_manager() -> &'static ProverStateManager {
         .expect("Prover state manager is not initialized")
 }
 
-/// Specifies how to load the table circuits.
-#[derive(Debug, Clone, Copy, Default, ValueEnum)]
-pub enum TableLoadStrategy {
-    #[default]
-    /// Load the circuit tables as needed for shrinking STARK proofs.
-    ///
-    /// - Generate a STARK proof.
-    /// - Compute the degree bits.
-    /// - Load the necessary table circuits.
-    OnDemand,
-    /// Load all the table circuits into a monolithic bundle.
-    Monolithic,
-}
-
-impl Display for TableLoadStrategy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TableLoadStrategy::OnDemand => write!(f, "on-demand"),
-            TableLoadStrategy::Monolithic => write!(f, "monolithic"),
-        }
-    }
-}
-
 /// Specifies whether to persist the processed circuits.
 #[derive(Debug, Clone, Copy)]
 pub enum CircuitPersistence {
     /// Do not persist the processed circuits.
     None,
     /// Persist the processed circuits to disk.
-    Disk(TableLoadStrategy),
+    Disk,
 }
 
 impl Default for CircuitPersistence {
     fn default() -> Self {
-        CircuitPersistence::Disk(TableLoadStrategy::default())
+        CircuitPersistence::Disk
     }
 }
 
@@ -154,87 +126,6 @@ pub struct ProverStateManager {
 }
 
 impl ProverStateManager {
-    pub const fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
-        match self.persistence {
-            CircuitPersistence::None => self,
-            CircuitPersistence::Disk(_) => Self {
-                circuit_config: self.circuit_config,
-                persistence: CircuitPersistence::Disk(load_strategy),
-            },
-        }
-    }
-
-    /// Load the table circuits necessary to shrink the STARK proof.
-    ///
-    /// [`AllProof`] provides the necessary degree bits for each circuit via the
-    /// [`AllProof::degree_bits`] method.
-    /// Using this information, for each circuit, a tuple is returned,
-    /// containing:
-    /// 1. The loaded table circuit at the specified size.
-    /// 2. An offset indicating the position of the specified size within the
-    ///    configured range used when pre-generating the circuits.
-    fn load_table_circuits(
-        &self,
-        config: &StarkConfig,
-        all_proof: &AllProof,
-    ) -> anyhow::Result<[Option<(RecursiveCircuitsForTableSize, u8)>; NUM_TABLES]> {
-        let degrees = all_proof.degree_bits(config);
-
-        // Given a recursive circuit index (e.g., Arithmetic / 0), return a
-        // tuple containing the loaded table at the specified size and
-        // its offset relative to the configured range used to pre-process the
-        // circuits.
-        let circuits = core::array::from_fn(|i| match degrees[i] {
-            Some(size) => RecursiveCircuitResource::get(&(i.into(), size))
-                .map(|circuit_resource| {
-                    Some((
-                        circuit_resource,
-                        (size - self.circuit_config[i].start) as u8,
-                    ))
-                })
-                .map_err(|e| {
-                    anyhow::Error::from(e)
-                        .context(format!("Attempting to load circuit: {i} at size: {size}"))
-                })
-                .unwrap_or(None),
-            None => None,
-        });
-
-        Ok(circuits)
-    }
-
-    /// Generate a segment proof using the specified input, loading
-    /// the circuit tables as needed to shrink the individual STARK proofs,
-    /// and finally aggregating them to a final transaction proof.
-    fn segment_proof_on_demand(
-        &self,
-        input: TrimmedGenerationInputs,
-        segment_data: &mut GenerationSegmentData,
-        config: &StarkConfig,
-        abort_signal: Option<Arc<AtomicBool>>,
-    ) -> anyhow::Result<ProofWithPublicValues> {
-        let all_stark = AllStark::default();
-
-        let all_proof = prove(
-            &all_stark,
-            config,
-            input,
-            segment_data,
-            &mut TimingTree::default(),
-            abort_signal.clone(),
-        )?;
-
-        let table_circuits = self.load_table_circuits(config, &all_proof)?;
-
-        let proof_with_pvs = p_state().state.prove_segment_after_initial_stark(
-            all_proof,
-            &table_circuits,
-            abort_signal,
-        )?;
-
-        Ok(proof_with_pvs)
-    }
-
     /// Generate a segment proof using the specified input on the monolithic
     /// circuit.
     fn segment_proof_monolithic(
@@ -283,26 +174,7 @@ impl ProverStateManager {
             StarkConfig::standard_fast_config()
         };
 
-        match self.persistence {
-            CircuitPersistence::None | CircuitPersistence::Disk(TableLoadStrategy::Monolithic) => {
-                info!("using monolithic circuit {:?}", self);
-                self.segment_proof_monolithic(
-                    generation_inputs,
-                    &mut segment_data,
-                    &config,
-                    abort_signal,
-                )
-            }
-            CircuitPersistence::Disk(TableLoadStrategy::OnDemand) => {
-                info!("using on demand circuit {:?}", self);
-                self.segment_proof_on_demand(
-                    generation_inputs,
-                    &mut segment_data,
-                    &config,
-                    abort_signal,
-                )
-            }
-        }
+        self.segment_proof_monolithic(generation_inputs, &mut segment_data, &config, abort_signal)
     }
 
     /// Initialize global prover state from the configuration.
@@ -316,15 +188,10 @@ impl ProverStateManager {
                     state: self.circuit_config.as_all_recursive_circuits(),
                 }
             }
-            CircuitPersistence::Disk(strategy) => {
+            CircuitPersistence::Disk => {
                 info!("attempting to load preprocessed circuits from disk...");
 
-                let disk_state = match strategy {
-                    TableLoadStrategy::OnDemand => BaseProverResource::get(&self.circuit_config),
-                    TableLoadStrategy::Monolithic => {
-                        MonolithicProverResource::get(&self.circuit_config)
-                    }
-                };
+                let disk_state = MonolithicProverResource::get(&self.circuit_config);
 
                 match disk_state {
                     Ok(circuits) => {
@@ -376,7 +243,7 @@ impl ProverStateManager {
                     state: prover_state.final_verifier_data(),
                 })
             }
-            CircuitPersistence::Disk(_) => {
+            CircuitPersistence::Disk => {
                 info!("attempting to load preprocessed verifier circuit from disk...");
                 let disk_state = VerifierResource::get(&self.circuit_config);
 

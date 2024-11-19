@@ -10,7 +10,6 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
-use starky::config::StarkConfig;
 use starky::lookup::GrandProductChallengeSet;
 use starky::proof::StarkProofWithMetadata;
 
@@ -51,17 +50,6 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     /// A flag indicating whether the table only contains padding values (i.e.,
     /// no meaningful data).
     pub table_in_use: [bool; NUM_TABLES],
-}
-
-impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
-    /// Returns the degree (i.e. the trace length) of each STARK.
-    pub fn degree_bits(&self, config: &StarkConfig) -> [Option<usize>; NUM_TABLES] {
-        core::array::from_fn(|i| {
-            self.multi_proof.stark_proofs[i]
-                .as_ref()
-                .map(|proof| proof.proof.recover_degree_bits(config))
-        })
-    }
 }
 
 /// Memory values which are public.
