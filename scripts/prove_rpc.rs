@@ -26,7 +26,7 @@ impl Display for RpcType {
     }
 }
 
-#[derive(ValueEnum, Clone)]
+#[derive(ValueEnum, Copy, Clone)]
 enum RunMode {
     /// Dummy proof is generated. Useful for quickly testing decoding and
     /// all other non-proving logic.
@@ -133,6 +133,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
         "--max-retries",
         &args.max_retries.to_string(),
     ];
+    let cmd_args = command_args(args.mode, leader_args);
 
     // Run the appropriate command based on the run mode.
     match args.mode {
@@ -147,16 +148,12 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> Result<()> {
             set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
             set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
 
-            Process::new("cargo")
-                .args(&test_command_args(leader_args))
-                .run()
+            Process::new("cargo").args(&cmd_args).run()
         }
-        RunMode::Prove => Process::new("cargo").args(&command_args(leader_args)).run(),
+        RunMode::Prove => Process::new("cargo").args(&cmd_args).run(),
         RunMode::Verify => {
             // Generate the proof.
-            Process::new("cargo")
-                .args(&command_args(leader_args))
-                .run()?;
+            Process::new("cargo").args(&cmd_args).run()?;
 
             // Verify the proof.
             let proof_filepath =
@@ -186,31 +183,14 @@ fn block_string(block: BlockId) -> String {
     }
 }
 
-/// Returns the command arguments for running the leader binary in test mode.
-fn test_command_args<'a>(leader_args: &'a [&str]) -> Vec<&'a str> {
-    let mut args = Vec::from(&[
-        "run",
-        "--release",
-        "--package=zero",
-        "--bin=leader",
-        "--",
-        "--test-only",
-    ]);
-    args.extend_from_slice(leader_args);
-    args
-}
-
-/// Returns the command arguments for running the leader binary in prove or
-/// verify mode.
-fn command_args<'a>(leader_args: &'a [&str]) -> Vec<&'a str> {
-    let mut args = Vec::from(&[
-        "run",
-        "--release",
-        "--package=zero",
-        "--bin=leader",
-        "--",
-        "--use-test-config",
-    ]);
+/// Constructs the full command arguments for running the leader binary with
+/// cargo.
+fn command_args<'a>(mode: RunMode, leader_args: &'a [&str]) -> Vec<&'a str> {
+    let mut args = Vec::from(&["run", "--release", "--package=zero", "--bin=leader", "--"]);
+    match mode {
+        RunMode::Prove | RunMode::Verify => args.push("--use-test-config"),
+        RunMode::Test => args.push("--test-only"),
+    }
     args.extend_from_slice(leader_args);
     args
 }
