@@ -130,7 +130,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
             cmd_args.extend_from_slice(leader_args);
 
             // Run the leader command.
-            let output = Command::new("cargo")
+            let status = Command::new("cargo")
                 .args(&cmd_args)
                 .env("ARITHMETIC_CIRCUIT_SIZE", "16..21")
                 .env("BYTE_PACKING_CIRCUIT_SIZE", "8..21")
@@ -141,12 +141,9 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
                 .env("MEMORY_CIRCUIT_SIZE", "17..24")
                 .env("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23")
                 .env("MEMORY_AFTER_CIRCUIT_SIZE", "7..23")
-                .output()?;
-            ensure!(
-                output.status.success(),
-                "command failed with {}",
-                output.status
-            );
+                .spawn()?
+                .wait()?;
+            ensure!(status.success(), "command failed with {}", status);
             Ok(())
         }
         RunMode::Prove | RunMode::Verify => {
@@ -156,12 +153,8 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
             cmd_args.extend_from_slice(leader_args);
 
             // Run the leader command.
-            let output = Command::new("cargo").args(&cmd_args).output()?;
-            ensure!(
-                output.status.success(),
-                "command failed with {}",
-                output.status
-            );
+            let status = Command::new("cargo").args(&cmd_args).spawn()?.wait()?;
+            ensure!(status.success(), "command failed with {}", status);
 
             // Verify proof if in verify mode.
             if let RunMode::Verify = args.mode {
@@ -171,7 +164,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
                     .join(format!("b{}.zkproof", block_string(end_block)?));
 
                 // Run the verifier command.
-                let output = Command::new("cargo")
+                let status = Command::new("cargo")
                     .args([
                         "run",
                         "--release",
@@ -181,12 +174,9 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
                         "-f",
                         proof_filepath.to_str().unwrap(),
                     ])
-                    .output()?;
-                ensure!(
-                    output.status.success(),
-                    "command failed with {}",
-                    output.status
-                );
+                    .spawn()?
+                    .wait()?;
+                ensure!(status.success(), "command failed with {}", status);
             }
             Ok(())
         }
