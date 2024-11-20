@@ -1,7 +1,6 @@
 //! General purpose scripts for development
 
 mod outdated;
-mod process;
 mod prove_rpc;
 
 use anyhow::Result;

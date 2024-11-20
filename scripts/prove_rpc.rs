@@ -1,9 +1,8 @@
-use std::{env::set_var, fmt::Display, fs::create_dir_all, path::PathBuf};
+use std::{env::set_var, fmt::Display, fs::create_dir_all, path::PathBuf, process::Command};
 
 use alloy::{eips::BlockId, transports::http::reqwest::Url};
+use anyhow::ensure;
 use clap::{arg, Args, ValueEnum, ValueHint};
-
-use crate::process::Process;
 
 #[derive(ValueEnum, Clone)]
 enum RpcType {
@@ -97,6 +96,7 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
     }
 
     // Construct common args used for all run modes.
+    let cargo_args = &["run", "--release", "--package=zero", "--bin=leader", "--"];
     let leader_args = &[
         "--runtime=in-memory",
         "--load-strategy=on-demand",
@@ -120,45 +120,75 @@ pub fn prove_via_rpc(args: ProveRpcArgs) -> anyhow::Result<()> {
         "--max-retries",
         &args.max_retries.to_string(),
     ];
-    let cmd_args = command_args(args.mode, leader_args);
 
     // Run the appropriate command based on the run mode.
     match args.mode {
         RunMode::Test => {
-            set_var("ARITHMETIC_CIRCUIT_SIZE", "16..21");
-            set_var("BYTE_PACKING_CIRCUIT_SIZE", "8..21");
-            set_var("CPU_CIRCUIT_SIZE", "8..21");
-            set_var("KECCAK_CIRCUIT_SIZE", "4..20");
-            set_var("KECCAK_SPONGE_CIRCUIT_SIZE", "8..17");
-            set_var("LOGIC_CIRCUIT_SIZE", "4..21");
-            set_var("MEMORY_CIRCUIT_SIZE", "17..24");
-            set_var("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23");
-            set_var("MEMORY_AFTER_CIRCUIT_SIZE", "7..23");
+            // Update the command args for test mode.
+            let mut cmd_args = Vec::from(cargo_args);
+            cmd_args.push("--test-only");
+            cmd_args.extend_from_slice(leader_args);
 
-            Process::new("cargo").args(&cmd_args).run()
+            // Run the leader command.
+            let output = Command::new("cargo")
+                .args(&cmd_args)
+                .env("ARITHMETIC_CIRCUIT_SIZE", "16..21")
+                .env("BYTE_PACKING_CIRCUIT_SIZE", "8..21")
+                .env("CPU_CIRCUIT_SIZE", "8..21")
+                .env("KECCAK_CIRCUIT_SIZE", "4..20")
+                .env("KECCAK_SPONGE_CIRCUIT_SIZE", "8..17")
+                .env("LOGIC_CIRCUIT_SIZE", "4..21")
+                .env("MEMORY_CIRCUIT_SIZE", "17..24")
+                .env("MEMORY_BEFORE_CIRCUIT_SIZE", "16..23")
+                .env("MEMORY_AFTER_CIRCUIT_SIZE", "7..23")
+                .output()?;
+            ensure!(
+                output.status.success(),
+                "command failed with {}",
+                output.status
+            );
+            Ok(())
         }
-        RunMode::Prove => Process::new("cargo").args(&cmd_args).run(),
-        RunMode::Verify => {
-            // Generate the proof.
-            Process::new("cargo").args(&cmd_args).run()?;
+        RunMode::Prove | RunMode::Verify => {
+            // Update the command args for prove mode.
+            let mut cmd_args = Vec::from(cargo_args);
+            cmd_args.push("--use-test-config");
+            cmd_args.extend_from_slice(leader_args);
 
-            // Verify the proof.
-            let proof_filepath = args
-                .output_dir
-                .join(format!("b{}.zkproof", block_string(end_block)?));
-            let verify_output_filepath = args.output_dir.join("verify.out");
-            let verify_runner = Process::new("cargo")
-                .args(&[
-                    "run",
-                    "--release",
-                    "--package=zero",
-                    "--bin=verifier",
-                    "--",
-                    "-f",
-                    proof_filepath.to_str().unwrap(),
-                ])
-                .pipe(&verify_output_filepath)?;
-            verify_runner.run()
+            // Run the leader command.
+            let output = Command::new("cargo").args(&cmd_args).output()?;
+            ensure!(
+                output.status.success(),
+                "command failed with {}",
+                output.status
+            );
+
+            // Verify proof if in verify mode.
+            if let RunMode::Verify = args.mode {
+                // Construct the proof file path.
+                let proof_filepath = args
+                    .output_dir
+                    .join(format!("b{}.zkproof", block_string(end_block)?));
+
+                // Run the verifier command.
+                let output = Command::new("cargo")
+                    .args([
+                        "run",
+                        "--release",
+                        "--package=zero",
+                        "--bin=verifier",
+                        "--",
+                        "-f",
+                        proof_filepath.to_str().unwrap(),
+                    ])
+                    .output()?;
+                ensure!(
+                    output.status.success(),
+                    "command failed with {}",
+                    output.status
+                );
+            }
+            Ok(())
         }
     }
 }
@@ -172,16 +202,4 @@ fn block_string(block: BlockId) -> anyhow::Result<String> {
             .to_string()),
         BlockId::Hash(hash) => Ok(hash.to_string()),
     }
-}
-
-/// Constructs the full command arguments for running the leader binary with
-/// cargo.
-fn command_args<'a>(mode: RunMode, leader_args: &'a [&str]) -> Vec<&'a str> {
-    let mut args = Vec::from(&["run", "--release", "--package=zero", "--bin=leader", "--"]);
-    match mode {
-        RunMode::Prove | RunMode::Verify => args.push("--use-test-config"),
-        RunMode::Test => args.push("--test-only"),
-    }
-    args.extend_from_slice(leader_args);
-    args
 }
