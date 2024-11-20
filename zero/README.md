@@ -431,7 +431,7 @@ cargo xtask prove-rpc <RPC_URL> <RPC_TYPE> <MODE> <BLOCK_START> -e <BLOCK_END> -
 Which may look like this:
 
 ```sh
-cargo xtask prove-rpc -u "$ETH_RPC_URL" -s 17 -e 18 -t jerigon -c 16 -b 3000 -r 100 -m verify
+cargo xtask prove-rpc "$ETH_RPC_URL" jerigon verify 17 -e 18 -c 16 -b 3000 -r 100
 ```
 
 Which will attempt to generate proofs for blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
