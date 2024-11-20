@@ -4,7 +4,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{ensure, Context as _};
 
 /// A means of running a command as a subprocess.
 pub struct Process {
@@ -33,7 +33,7 @@ impl Process {
 
     /// Create the file specified by `output_filepath` and set it as the stdout
     /// and stderr of the command.
-    pub fn pipe(mut self, output_filepath: &Path) -> Result<Self> {
+    pub fn pipe(mut self, output_filepath: &Path) -> anyhow::Result<Self> {
         let out = File::create(output_filepath)?;
         let err = out.try_clone()?;
         self.stdout = Stdio::from(out);
@@ -42,7 +42,7 @@ impl Process {
     }
 
     /// Run the command.
-    pub fn run(self) -> Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let output = Command::new(&self.cmd)
             .args(&self.args)
             .stdout(self.stdout)
