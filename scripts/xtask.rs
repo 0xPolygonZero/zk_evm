@@ -1,10 +1,12 @@
 //! General purpose scripts for development
 
-use std::process::{Command, Stdio};
+mod outdated;
+mod prove_rpc;
 
-use anyhow::{ensure, Context as _};
+use anyhow::Result;
 use clap::Parser;
-use serde::Deserialize;
+use outdated::list_outdated_deps;
+use prove_rpc::{prove_via_rpc, ProveRpcArgs};
 
 #[derive(Parser)]
 enum Args {
@@ -16,54 +18,13 @@ enum Args {
     /// Note that we only warn on our _direct_ dependencies,
     /// not the entire supply chain.
     Outdated,
+    /// Execute proving via RPC endpoint.
+    ProveRpc(Box<ProveRpcArgs>),
 }
 
-#[derive(Deserialize)]
-struct Outdated<'a> {
-    crate_name: &'a str,
-    dependencies: Vec<Dependency<'a>>,
-}
-
-#[derive(Deserialize)]
-struct Dependency<'a> {
-    name: &'a str,
-    project: &'a str,
-    latest: &'a str,
-}
-
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     match Args::parse() {
-        Args::Outdated => {
-            let output = Command::new("cargo")
-                .args(["outdated", "--root-deps-only", "--format=json"])
-                .stderr(Stdio::inherit())
-                .stdout(Stdio::piped())
-                .output()
-                .context("couldn't exec `cargo`")?;
-            ensure!(
-                output.status.success(),
-                "command failed with {}",
-                output.status
-            );
-            for Outdated {
-                crate_name,
-                dependencies,
-            } in serde_json::Deserializer::from_slice(&output.stdout)
-                .into_iter::<Outdated<'_>>()
-                .collect::<Result<Vec<_>, _>>()
-                .context("failed to parse output from `cargo outdated`")?
-            {
-                for Dependency {
-                    name,
-                    project,
-                    latest,
-                } in dependencies
-                {
-                    // https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#setting-a-warning-message
-                    println!("::warning title=outdated-dependency::dependency {name} of crate {crate_name} is at version {project}, but the latest is {latest}")
-                }
-            }
-        }
+        Args::Outdated => list_outdated_deps(),
+        Args::ProveRpc(args) => prove_via_rpc(*args),
     }
-    Ok(())
 }

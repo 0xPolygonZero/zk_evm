@@ -10,10 +10,12 @@ categories.workspace = true
 publish = false
 
 [dependencies]
+alloy.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+sysinfo = "0.32.0"
 
 [lints]
 workspace = true
