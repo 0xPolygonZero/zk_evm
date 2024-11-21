@@ -269,7 +269,7 @@ pub fn segment_with_empty_tables() -> Result<(
     let payload = empty_payload()?;
     let max_cpu_len_log = Some(7);
     let mut segment_iterator =
-        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log);
+        SegmentDataIterator::<GoldilocksField>::new(&payload, max_cpu_len_log, &None);
     let (trimmed_inputs, segment_data) = segment_iterator.next().unwrap()?;
 
     Ok((trimmed_inputs, segment_data))

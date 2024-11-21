@@ -295,3 +295,4 @@ pub use starky::config::StarkConfig;
 
 pub use crate::all_stark::{AllStark, NUM_TABLES};
 pub use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator};
+pub mod structlog;

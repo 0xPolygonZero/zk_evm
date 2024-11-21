@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
 use crate::generation::linked_list::LinkedListsPtrs;
@@ -30,6 +31,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::structlog::TxZeroStructLogs;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -66,6 +68,22 @@ pub(crate) struct Interpreter<F: RichField> {
     #[cfg(test)]
     // Counts the number of appearances of each opcode. For debugging purposes.
     pub(crate) opcode_count: HashMap<Operation, usize>,
+    /// Optional logs for transactions code.
+    pub(crate) struct_logs: Option<Vec<TxZeroStructLogs>>,
+    /// Counter within a transaction.
+    pub(crate) struct_log_debugger_info: StructLogDebuggerInfo,
+}
+
+/// Structure holding necessary information to check the kernel execution
+/// against struct logs.
+pub(crate) struct StructLogDebuggerInfo {
+    /// Opcode counter within a transaction.
+    pub(crate) counter: usize,
+    /// Gas value in the kernel for a transaction (starting at `GasLimit` and
+    /// decreasing with each user opcode).
+    pub(crate) gas: u64,
+    /// Gas consumed by the previous operation.
+    pub(crate) prev_op_gas: u64,
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -83,6 +101,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
                 state,
                 halt_pc,
                 initial_context,
+                None,
                 None,
             );
 
@@ -160,10 +179,11 @@ impl<F: RichField> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs<F>,
         max_cpu_len_log: Option<usize>,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         debug_inputs(inputs);
 
-        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
+        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log, struct_logs);
         result.initialize_interpreter_state(inputs);
         result
     }
@@ -172,6 +192,7 @@ impl<F: RichField> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         max_cpu_len_log: Option<usize>,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -186,6 +207,12 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
+            struct_logs: struct_logs.as_ref().map(|struct_log| struct_log.to_vec()),
+            struct_log_debugger_info: StructLogDebuggerInfo {
+                counter: 0,
+                gas: 0,
+                prev_op_gas: 0,
+            },
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -207,6 +234,7 @@ impl<F: RichField> Interpreter<F> {
         halt_offset: usize,
         halt_context: usize,
         max_cpu_len_log: Option<usize>,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
@@ -218,6 +246,12 @@ impl<F: RichField> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
+            struct_logs,
+            struct_log_debugger_info: StructLogDebuggerInfo {
+                counter: 0,
+                gas: 0,
+                prev_op_gas: 0,
+            },
         }
     }
 
@@ -529,6 +563,152 @@ impl<F: RichField> State<F> for Interpreter<F> {
         }
     }
 
+    fn check_against_struct_logs_before_op(
+        &mut self,
+        opcode: u8,
+        to_check: bool,
+    ) -> Result<(), ProgramError> {
+        if let Some(struct_logs) = &self.struct_logs
+            && to_check
+        {
+            let txn_idx = self.generation_state.next_txn_index;
+
+            if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
+                let counter = self.struct_log_debugger_info.counter;
+                if counter == 0 {
+                    // Initialize txn gas.
+                    let gas_limit_address = MemoryAddress::new(
+                        self.get_registers().context,
+                        Segment::ContextMetadata,
+                        ContextMetadata::GasLimit.unscale(), // context offsets are already scaled
+                    );
+                    let gas_limit = self.generation_state.get_from_memory(gas_limit_address);
+                    self.struct_log_debugger_info.gas = gas_limit.low_u64();
+                    // Check against actual initial gas.
+                    if gas_limit.low_u64() != txn_struct_logs[0].gas {
+                        log::warn!(
+                            "Wrong Initial txn gas: expected {:?}, got {:?}.",
+                            txn_struct_logs[0].gas,
+                            gas_limit.as_u64()
+                        );
+                        return Err(ProgramError::StructLogDebuggerError);
+                    }
+                }
+
+                // Check opcode.
+                let cur_txn_struct_logs = &txn_struct_logs[counter];
+                let struct_op = cur_txn_struct_logs.op.as_str();
+                let op_string_res = get_mnemonic(opcode);
+                match op_string_res {
+                    Ok(cur_op_str) => {
+                        let cur_op = cur_op_str.to_string();
+                        if struct_op != cur_op {
+                            log::warn!("Wrong opcode: expected {struct_op}, got {cur_op}.");
+                            return Err(ProgramError::StructLogDebuggerError);
+                        }
+                    }
+                    Err(_) => {
+                        // Update the counter since we will not get to the next
+                        // check.
+                        self.struct_log_debugger_info.counter += 1;
+                        if self.struct_log_debugger_info.counter == txn_struct_logs.len() {
+                            self.struct_log_debugger_info.counter = 0;
+                            self.struct_log_debugger_info.prev_op_gas = 0;
+                        }
+                        if (opcode == 0xfe && !struct_op.contains("INVALID"))
+                            || (opcode != 0xfe
+                                && (struct_op != format!("opcode {:#x} not defined", opcode)))
+                        {
+                            log::warn!(
+                                "Wrong invalid opcode: expected {} got error {}",
+                                opcode,
+                                struct_op
+                            );
+                            return Err(ProgramError::StructLogDebuggerError);
+                        }
+                    }
+                }
+
+                // Check pc.
+                let txn_pc = cur_txn_struct_logs.pc;
+                if txn_pc != self.get_registers().program_counter as u64 {
+                    log::warn!(
+                        "Wrong pc: expected {} but got {}.",
+                        txn_pc,
+                        self.get_registers().program_counter
+                    );
+                    return Err(ProgramError::StructLogDebuggerError);
+                }
+
+                // Check stack.
+                if let Some(txn_stack) = &cur_txn_struct_logs.stack {
+                    let cur_stack = self.get_full_stack();
+                    if !cur_stack
+                        .iter()
+                        .copied()
+                        .eq(txn_stack.iter().map(|s| U256(*s.as_limbs())))
+                    {
+                        log::warn!(
+                            "Wrong stack: expected {:?} but got {:?}.",
+                            txn_stack,
+                            cur_stack
+                        );
+                        return Err(ProgramError::StructLogDebuggerError);
+                    }
+                };
+            };
+        }
+        Ok(())
+    }
+
+    fn check_against_struct_logs_after_op(
+        &mut self,
+        res: &Result<Operation, ProgramError>,
+        consumed_gas: u64,
+        to_check: bool,
+    ) -> Result<(), ProgramError> {
+        if let Some(struct_logs) = &self.struct_logs
+            && to_check
+        {
+            let txn_idx = self.generation_state.next_txn_index;
+            // First, update the gas.
+            self.struct_log_debugger_info.gas -= self.struct_log_debugger_info.prev_op_gas;
+            self.struct_log_debugger_info.prev_op_gas = consumed_gas;
+
+            if let Some(txn_struct_logs) = &struct_logs[txn_idx - 1] {
+                // If the transaction errors, we simply log a warning, since struct logs do not
+                // actually return an error in that case.
+                let cur_txn_struct_logs = &txn_struct_logs[self.struct_log_debugger_info.counter];
+
+                if res.is_err() {
+                    log::warn!("Kernel execution errored with: {:?}.", res);
+                }
+
+                // Check opcode gas.
+                let txn_op_gas = self.struct_log_debugger_info.gas;
+                if txn_op_gas != cur_txn_struct_logs.gas {
+                    log::warn!(
+                        "Wrong gas update in the last operation: expected {} but got {}.",
+                        cur_txn_struct_logs.gas,
+                        txn_op_gas
+                    );
+                    return Err(ProgramError::StructLogDebuggerError);
+                }
+
+                // Update the user code counter.
+                self.struct_log_debugger_info.counter += 1;
+                if self.struct_log_debugger_info.counter == txn_struct_logs.len() {
+                    self.struct_log_debugger_info.counter = 0;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn update_struct_logs_gas(&mut self, n: u64) {
+        self.struct_log_debugger_info.gas = n;
+    }
+
     fn incr_gas(&mut self, n: u64) {
         self.generation_state.incr_gas(n);
     }
@@ -614,6 +794,15 @@ impl<F: RichField> State<F> for Interpreter<F> {
         stack
     }
 
+    fn get_full_stack(&self) -> Vec<U256> {
+        let mut stack: Vec<U256> = (0..self.get_registers().stack_len)
+            .map(|i| crate::witness::util::stack_peek(self.get_generation_state(), i).unwrap())
+            .collect();
+        stack.reverse();
+
+        stack
+    }
+
     fn get_halt_offsets(&self) -> Vec<usize> {
         self.halt_offsets.clone()
     }
@@ -672,6 +861,15 @@ impl<F: RichField> State<F> for Interpreter<F> {
         let registers = self.generation_state.registers;
         let (mut row, opcode) = self.base_row();
 
+        let is_user_mode = !self.is_kernel();
+
+        // If we are in user and debug mode, and have extracted the struct logs, check
+        // the kernel run against the struct logs.
+        let to_check = is_user_mode
+            && (self.get_registers().program_counter != 0 || opcode != 0x00)
+            && !self.is_jumpdest_analysis;
+        self.check_against_struct_logs_before_op(opcode, to_check)?;
+
         let op = decode(registers, opcode)?;
 
         #[cfg(test)]
@@ -704,7 +902,15 @@ impl<F: RichField> State<F> for Interpreter<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(op, row)
+        let res_and_gas = self.perform_state_op(op, row);
+        let (res, consumed_gas) = match res_and_gas {
+            Ok((res, consumed_gas)) => (Ok(res), consumed_gas),
+            Err(e) => (Err(e), 0),
+        };
+
+        // Final checks against struct logs in debug and user mode.
+        self.check_against_struct_logs_after_op(&res, consumed_gas, to_check)?;
+        res
     }
 
     fn log_debug(&self, msg: String) {
@@ -762,6 +968,162 @@ impl<F: RichField> Transition<F> for Interpreter<F> {
     }
 }
 
+fn get_mnemonic(opcode: u8) -> anyhow::Result<&'static str> {
+    match opcode {
+        0x00 => Ok("STOP"),
+        0x01 => Ok("ADD"),
+        0x02 => Ok("MUL"),
+        0x03 => Ok("SUB"),
+        0x04 => Ok("DIV"),
+        0x05 => Ok("SDIV"),
+        0x06 => Ok("MOD"),
+        0x07 => Ok("SMOD"),
+        0x08 => Ok("ADDMOD"),
+        0x09 => Ok("MULMOD"),
+        0x0a => Ok("EXP"),
+        0x0b => Ok("SIGNEXTEND"),
+        0x10 => Ok("LT"),
+        0x11 => Ok("GT"),
+        0x12 => Ok("SLT"),
+        0x13 => Ok("SGT"),
+        0x14 => Ok("EQ"),
+        0x15 => Ok("ISZERO"),
+        0x16 => Ok("AND"),
+        0x17 => Ok("OR"),
+        0x18 => Ok("XOR"),
+        0x19 => Ok("NOT"),
+        0x1a => Ok("BYTE"),
+        0x1b => Ok("SHL"),
+        0x1c => Ok("SHR"),
+        0x1d => Ok("SAR"),
+        0x20 => Ok("KECCAK256"),
+        0x30 => Ok("ADDRESS"),
+        0x31 => Ok("BALANCE"),
+        0x32 => Ok("ORIGIN"),
+        0x33 => Ok("CALLER"),
+        0x34 => Ok("CALLVALUE"),
+        0x35 => Ok("CALLDATALOAD"),
+        0x36 => Ok("CALLDATASIZE"),
+        0x37 => Ok("CALLDATACOPY"),
+        0x38 => Ok("CODESIZE"),
+        0x39 => Ok("CODECOPY"),
+        0x3a => Ok("GASPRICE"),
+        0x3b => Ok("EXTCODESIZE"),
+        0x3c => Ok("EXTCODECOPY"),
+        0x3d => Ok("RETURNDATASIZE"),
+        0x3e => Ok("RETURNDATACOPY"),
+        0x3f => Ok("EXTCODEHASH"),
+        0x40 => Ok("BLOCKHASH"),
+        0x41 => Ok("COINBASE"),
+        0x42 => Ok("TIMESTAMP"),
+        0x43 => Ok("NUMBER"),
+        0x44 => Ok("DIFFICULTY"),
+        0x45 => Ok("GASLIMIT"),
+        0x46 => Ok("CHAINID"),
+        0x47 => Ok("SELFBALANCE"),
+        0x48 => Ok("BASEFEE"),
+        #[cfg(feature = "eth_mainnet")]
+        0x49 => Ok("BLOBHASH"),
+        #[cfg(feature = "eth_mainnet")]
+        0x4a => Ok("BLOBBASEFEE"),
+        0x50 => Ok("POP"),
+        0x51 => Ok("MLOAD"),
+        0x52 => Ok("MSTORE"),
+        0x53 => Ok("MSTORE8"),
+        0x54 => Ok("SLOAD"),
+        0x55 => Ok("SSTORE"),
+        0x56 => Ok("JUMP"),
+        0x57 => Ok("JUMPI"),
+        0x58 => Ok("PC"),
+        0x59 => Ok("MSIZE"),
+        0x5a => Ok("GAS"),
+        0x5b => Ok("JUMPDEST"),
+        0x5c => Ok("TLOAD"),
+        0x5d => Ok("TSTORE"),
+        0x5e => Ok("MCOPY"),
+        0x5f => Ok("PUSH0"),
+        0x60 => Ok("PUSH1"),
+        0x61 => Ok("PUSH2"),
+        0x62 => Ok("PUSH3"),
+        0x63 => Ok("PUSH4"),
+        0x64 => Ok("PUSH5"),
+        0x65 => Ok("PUSH6"),
+        0x66 => Ok("PUSH7"),
+        0x67 => Ok("PUSH8"),
+        0x68 => Ok("PUSH9"),
+        0x69 => Ok("PUSH10"),
+        0x6a => Ok("PUSH11"),
+        0x6b => Ok("PUSH12"),
+        0x6c => Ok("PUSH13"),
+        0x6d => Ok("PUSH14"),
+        0x6e => Ok("PUSH15"),
+        0x6f => Ok("PUSH16"),
+        0x70 => Ok("PUSH17"),
+        0x71 => Ok("PUSH18"),
+        0x72 => Ok("PUSH19"),
+        0x73 => Ok("PUSH20"),
+        0x74 => Ok("PUSH21"),
+        0x75 => Ok("PUSH22"),
+        0x76 => Ok("PUSH23"),
+        0x77 => Ok("PUSH24"),
+        0x78 => Ok("PUSH25"),
+        0x79 => Ok("PUSH26"),
+        0x7a => Ok("PUSH27"),
+        0x7b => Ok("PUSH28"),
+        0x7c => Ok("PUSH29"),
+        0x7d => Ok("PUSH30"),
+        0x7e => Ok("PUSH31"),
+        0x7f => Ok("PUSH32"),
+        0x80 => Ok("DUP1"),
+        0x81 => Ok("DUP2"),
+        0x82 => Ok("DUP3"),
+        0x83 => Ok("DUP4"),
+        0x84 => Ok("DUP5"),
+        0x85 => Ok("DUP6"),
+        0x86 => Ok("DUP7"),
+        0x87 => Ok("DUP8"),
+        0x88 => Ok("DUP9"),
+        0x89 => Ok("DUP10"),
+        0x8a => Ok("DUP11"),
+        0x8b => Ok("DUP12"),
+        0x8c => Ok("DUP13"),
+        0x8d => Ok("DUP14"),
+        0x8e => Ok("DUP15"),
+        0x8f => Ok("DUP16"),
+        0x90 => Ok("SWAP1"),
+        0x91 => Ok("SWAP2"),
+        0x92 => Ok("SWAP3"),
+        0x93 => Ok("SWAP4"),
+        0x94 => Ok("SWAP5"),
+        0x95 => Ok("SWAP6"),
+        0x96 => Ok("SWAP7"),
+        0x97 => Ok("SWAP8"),
+        0x98 => Ok("SWAP9"),
+        0x99 => Ok("SWAP10"),
+        0x9a => Ok("SWAP11"),
+        0x9b => Ok("SWAP12"),
+        0x9c => Ok("SWAP13"),
+        0x9d => Ok("SWAP14"),
+        0x9e => Ok("SWAP15"),
+        0x9f => Ok("SWAP16"),
+        0xa0 => Ok("LOG0"),
+        0xa1 => Ok("LOG1"),
+        0xa2 => Ok("LOG2"),
+        0xa3 => Ok("LOG3"),
+        0xa4 => Ok("LOG4"),
+        0xf0 => Ok("CREATE"),
+        0xf1 => Ok("CALL"),
+        0xf2 => Ok("CALLCODE"),
+        0xf3 => Ok("RETURN"),
+        0xf4 => Ok("DELEGATECALL"),
+        0xf5 => Ok("CREATE2"),
+        0xfa => Ok("STATICCALL"),
+        0xfd => Ok("REVERT"),
+        0xff => Ok("SELFDESTRUCT"),
+        _ => Err(anyhow!("Invalid opcode: {}", opcode)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ethereum_types::U256;
@@ -792,7 +1154,7 @@ mod tests {
             0x60, 0xff, 0x60, 0x0, 0x52, 0x60, 0, 0x51, 0x60, 0x1, 0x51, 0x60, 0x42, 0x60, 0x27,
             0x53,
         ];
-        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
+        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None, &None);
 
         interpreter.set_code(1, code.to_vec());
 

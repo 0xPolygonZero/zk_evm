@@ -59,7 +59,7 @@ pub(crate) fn run_interpreter<F: RichField>(
     initial_offset: usize,
     initial_stack: Vec<U256>,
 ) -> anyhow::Result<Interpreter<F>> {
-    let mut interpreter = Interpreter::new(initial_offset, initial_stack, None);
+    let mut interpreter = Interpreter::new(initial_offset, initial_stack, None, &None);
     interpreter.run()?;
     Ok(interpreter)
 }
@@ -78,7 +78,7 @@ pub(crate) fn run_interpreter_with_memory<F: RichField>(
     let label = KERNEL.global_labels[&memory_init.label];
     let mut stack = memory_init.stack;
     stack.reverse();
-    let mut interpreter = Interpreter::new(label, stack, None);
+    let mut interpreter = Interpreter::new(label, stack, None, &None);
     for (pointer, data) in memory_init.memory {
         for (i, term) in data.iter().enumerate() {
             interpreter.generation_state.memory.set(

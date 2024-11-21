@@ -8,6 +8,7 @@ use std::{
 use anyhow::{anyhow, bail, ensure, Context as _};
 use either::Either;
 use ethereum_types::{Address, BigEndianHash as _, U256};
+use evm_arithmetization::structlog::TxZeroStructLogs;
 use evm_arithmetization::{
     generation::TrieInputs,
     proof::{BlockMetadata, TrieRoots},
@@ -39,14 +40,17 @@ pub enum WireDisposition {
     Type2,
 }
 
+type GenerationAndStructLogs = (Vec<GenerationInputs>, Option<Vec<Vec<TxZeroStructLogs>>>);
+
 /// TODO(0xaatif): document this after <https://github.com/0xPolygonZero/zk_evm/issues/275>
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
+    all_struct_logs: Option<Vec<TxZeroStructLogs>>,
     batch_size_hint: usize,
     observer: &mut impl Observer<Type1World>,
     wire_disposition: WireDisposition,
-) -> anyhow::Result<Vec<GenerationInputs>> {
+) -> anyhow::Result<GenerationAndStructLogs> {
     ensure!(batch_size_hint != 0);
 
     let BlockTrace {
@@ -115,65 +119,78 @@ pub fn entrypoint(
         }
     };
 
+    let batched_struct_logs = all_struct_logs.map(|struct_logs| {
+        struct_logs
+            .chunks(batch_size_hint)
+            .map(|c| c.to_vec())
+            .collect_vec()
+    });
+
     let mut running_gas_used = 0;
-    Ok(batches
-        .into_iter()
-        .map(
-            |Batch {
-                 first_txn_ix,
-                 gas_used,
-                 contract_code,
-                 byte_code,
-                 before:
-                     IntraBlockTries {
-                         world,
-                         transaction,
-                         receipt,
-                     },
-                 after,
-                 withdrawals,
-             }| {
-                let (state, storage) = world
-                    .clone()
-                    .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
-                    .into_state_and_storage();
-                GenerationInputs {
-                    txn_number_before: first_txn_ix.into(),
-                    gas_used_before: running_gas_used.into(),
-                    gas_used_after: {
-                        running_gas_used += gas_used;
-                        running_gas_used.into()
-                    },
-                    signed_txns: byte_code.into_iter().map(Into::into).collect(),
-                    withdrawals,
-                    ger_data,
-                    tries: TrieInputs {
-                        state_trie: state.into(),
-                        transactions_trie: transaction.into(),
-                        receipts_trie: receipt.into(),
-                        storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
-                    },
-                    trie_roots_after: after,
-                    checkpoint_state_trie_root,
-                    checkpoint_consolidated_hash,
-                    contract_code: contract_code
-                        .into_iter()
-                        .map(|it| match &world {
-                            Either::Left(_type1) => {
-                                (<Type1World as World>::CodeHasher::hash(&it), it)
-                            }
-                            Either::Right(_type2) => {
-                                (<Type2World as World>::CodeHasher::hash(&it), it)
-                            }
-                        })
-                        .collect(),
-                    block_metadata: b_meta.clone(),
-                    block_hashes: b_hashes.clone(),
-                    burn_addr,
-                }
-            },
-        )
-        .collect())
+    Ok((
+        batches
+            .into_iter()
+            .map(
+                |Batch {
+                     first_txn_ix,
+                     gas_used,
+                     contract_code,
+                     byte_code,
+                     before:
+                         IntraBlockTries {
+                             world,
+                             transaction,
+                             receipt,
+                         },
+                     after,
+                     withdrawals,
+                 }| {
+                    let (state, storage) = world
+                        .clone()
+                        .expect_left("TODO(0xaatif): evm_arithemetization accepts an SMT")
+                        .into_state_and_storage();
+                    GenerationInputs {
+                        txn_number_before: first_txn_ix.into(),
+                        gas_used_before: running_gas_used.into(),
+                        gas_used_after: {
+                            running_gas_used += gas_used;
+                            running_gas_used.into()
+                        },
+                        signed_txns: byte_code.into_iter().map(Into::into).collect(),
+                        withdrawals,
+                        ger_data,
+                        tries: TrieInputs {
+                            state_trie: state.into(),
+                            transactions_trie: transaction.into(),
+                            receipts_trie: receipt.into(),
+                            storage_tries: storage
+                                .into_iter()
+                                .map(|(k, v)| (k, v.into()))
+                                .collect(),
+                        },
+                        trie_roots_after: after,
+                        checkpoint_state_trie_root,
+                        checkpoint_consolidated_hash,
+                        contract_code: contract_code
+                            .into_iter()
+                            .map(|it| match &world {
+                                Either::Left(_type1) => {
+                                    (<Type1World as World>::CodeHasher::hash(&it), it)
+                                }
+                                Either::Right(_type2) => {
+                                    (<Type2World as World>::CodeHasher::hash(&it), it)
+                                }
+                            })
+                            .collect(),
+                        block_metadata: b_meta.clone(),
+                        block_hashes: b_hashes.clone(),
+                        burn_addr,
+                    }
+                },
+            )
+            .collect(),
+        batched_struct_logs,
+    ))
 }
 
 /// The user has either provided us with a [`serde`]-ed
@@ -456,6 +473,7 @@ where
                         byte_code,
                         new_receipt_trie_node_byte,
                         gas_used: txn_gas_used,
+                        struct_log: _,
                     },
             } = txn.unwrap_or_default();
 

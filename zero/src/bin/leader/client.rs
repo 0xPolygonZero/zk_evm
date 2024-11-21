@@ -5,7 +5,7 @@ use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::transports::Transport;
 use anyhow::{anyhow, Result};
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{info, warn};
 use zero::block_interval::{BlockInterval, BlockIntervalStream};
 use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
@@ -37,6 +37,10 @@ where
     use futures::StreamExt;
 
     let test_only = leader_config.prover_config.test_only;
+    let get_struct_logs = leader_config.prover_config.get_struct_logs && test_only;
+    if !test_only && get_struct_logs {
+        warn!("The struct logs are only used for checks in test_only mode.");
+    }
 
     if !test_only {
         // For actual proof runs, perform a sanity check on the provided inputs.
@@ -81,6 +85,7 @@ where
             cached_provider.clone(),
             block_id,
             leader_config.checkpoint_block_number,
+            get_struct_logs,
         )
         .await?;
         block_tx

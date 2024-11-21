@@ -18,6 +18,7 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
+use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
@@ -846,6 +847,24 @@ pub(crate) fn generate_exit_kernel<F: RichField, T: Transition<F>>(
     generation_state.registers.program_counter = program_counter;
     generation_state.registers.is_kernel = is_kernel_mode;
     generation_state.registers.gas_used = gas_used_val;
+
+    // If we are in debug mode and the next operation is in user mode, update the
+    // `gas` field so we can check against struct logs.
+    if !is_kernel_mode {
+        let gas_limit_address = MemoryAddress::new(
+            state.get_registers().context,
+            Segment::ContextMetadata,
+            ContextMetadata::GasLimit.unscale(), // context offsets are already scaled
+        );
+        let init_gas_limit = state
+            .get_mut_generation_state()
+            .get_from_memory(gas_limit_address)
+            .low_u64();
+        let txn_gas = init_gas_limit - gas_used_val;
+
+        state.update_struct_logs_gas(txn_gas);
+    }
+
     state.log_debug(format!(
         "Exiting to {}, is_kernel={}",
         program_counter, is_kernel_mode

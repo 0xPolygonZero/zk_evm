@@ -1,5 +1,9 @@
+use std::ops::Deref;
+
+use alloy::rpc::types::{Block, BlockTransactionsKind};
 use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport};
 use anyhow::Context as _;
+use evm_arithmetization::structlog::{get_structlog_for_debug, TxZeroStructLogs};
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
@@ -26,6 +30,7 @@ pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: std::sync::Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
     checkpoint_block_number: u64,
+    get_struct_logs: bool,
 ) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
@@ -39,7 +44,10 @@ where
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
         )
-        .await?;
+        .await?
+        .into_iter()
+        .map(|ztr| ztr.result)
+        .collect::<Vec<_>>();
 
     // Grab block witness info (packed as combined trie pre-images)
 
@@ -49,9 +57,22 @@ where
         .raw_request::<_, String>(WITNESS_ENDPOINT.into(), vec![target_block_id])
         .await?;
 
+    let block = cached_provider
+        .get_block(target_block_id, BlockTransactionsKind::Full)
+        .await?;
+
+    let struct_logs = match block {
+        Some(b) => {
+            if get_struct_logs {
+                Some(process_txns(&b, cached_provider.get_provider().await?.deref()).await?)
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
     let other_data =
         fetch_other_block_data(cached_provider, target_block_id, checkpoint_block_number).await?;
-
     // Assemble
     Ok(BlockProverInput {
         block_trace: BlockTrace {
@@ -61,9 +82,30 @@ where
                         "invalid hex returned from call to {WITNESS_ENDPOINT}"
                     ))?,
             }),
-            txn_info: tx_results.into_iter().map(|it| it.result).collect(),
+            txn_info: tx_results,
             code_db: Default::default(),
         },
         other_data,
+        struct_logs,
     })
+}
+
+async fn process_txns<ProviderT, TransportT>(
+    block: &Block,
+    provider: &ProviderT,
+) -> anyhow::Result<Vec<TxZeroStructLogs>>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    let all_txns = block
+        .transactions
+        .as_transactions()
+        .context("No transactions in block")?;
+    let mut struct_logs = Vec::with_capacity(all_txns.len());
+    for tx in all_txns {
+        struct_logs.push(get_structlog_for_debug(provider, &tx.hash).await?);
+    }
+
+    Ok(struct_logs)
 }

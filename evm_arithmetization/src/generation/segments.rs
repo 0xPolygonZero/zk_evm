@@ -13,6 +13,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::State;
 use crate::generation::{collect_debug_tries, debug_inputs, ErrorWithTries, GenerationInputs};
+use crate::structlog::TxZeroStructLogs;
 use crate::witness::memory::MemoryState;
 #[cfg(test)]
 use crate::witness::operation::Operation;
@@ -105,7 +106,11 @@ pub struct SegmentError {
 }
 
 impl<F: RichField> SegmentDataIterator<F> {
-    pub fn new(inputs: &GenerationInputs<F>, max_cpu_len_log: Option<usize>) -> Self {
+    pub fn new(
+        inputs: &GenerationInputs<F>,
+        max_cpu_len_log: Option<usize>,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
+    ) -> Self {
         debug_inputs(inputs);
 
         let interpreter = Interpreter::<F>::new_with_generation_inputs(
@@ -113,6 +118,7 @@ impl<F: RichField> SegmentDataIterator<F> {
             vec![],
             inputs,
             max_cpu_len_log,
+            struct_logs,
         );
 
         Self {

@@ -17,6 +17,8 @@ keywords.workspace = true
 [dependencies]
 alloy.workspace = true
 alloy-compat.workspace = true
+alloy-primitives.workspace = true
+alloy-serde.workspace = true
 anyhow.workspace = true
 bitvec.workspace = true
 bytes.workspace = true

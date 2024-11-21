@@ -47,6 +47,9 @@ pub struct CliProverConfig {
     /// be greater than zero.
     #[arg(long, env = "ZERO_BIN_BLOCK_POOL_SIZE", default_value_t = 16)]
     block_pool_size: usize,
+    /// If true, returns the struct_logs along with the generation data.
+    #[arg(long, help_heading = HELP_HEADING, default_value_t = false)]
+    get_struct_logs: bool,
 }
 
 impl From<CliProverConfig> for super::ProverConfig {
@@ -60,6 +63,7 @@ impl From<CliProverConfig> for super::ProverConfig {
             keep_intermediate_proofs: cli.keep_intermediate_proofs,
             block_batch_size: cli.block_batch_size,
             block_pool_size: cli.block_pool_size,
+            get_struct_logs: cli.get_struct_logs,
             save_tries_on_error: false,
         }
     }

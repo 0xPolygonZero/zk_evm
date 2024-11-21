@@ -57,6 +57,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_final_public_value_targets, set_public_value_targets,
     PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
+use crate::structlog::TxZeroStructLogs;
 use crate::testing_utils::{
     TEST_RECURSION_CONFIG, TEST_STARK_CONFIG, TEST_THRESHOLD_DEGREE_BITS,
     TWO_TO_ONE_BLOCK_CIRCUIT_TEST_THRESHOLD_DEGREE_BITS,
@@ -3265,13 +3266,17 @@ pub mod testing {
             config: &StarkConfig,
             generation_inputs: GenerationInputs<F>,
             max_cpu_len_log: usize,
+            struct_logs: Option<Vec<TxZeroStructLogs>>,
             timing: &mut TimingTree,
             abort_signal: Option<Arc<AtomicBool>>,
         ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
             features_check(&generation_inputs.clone().trim());
 
-            let segment_iterator =
-                SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
+            let segment_iterator = SegmentDataIterator::<F>::new(
+                &generation_inputs,
+                Some(max_cpu_len_log),
+                &struct_logs,
+            );
 
             let mut proofs = vec![];
 

@@ -111,9 +111,9 @@ fn get_test_block_proof(
 
     let timing = &mut TimingTree::new(&format!("Blockproof {timestamp}"), log::Level::Info);
     let dummy0_proof0 =
-        all_circuits.prove_all_segments(all_stark, config, dummy0, 20, timing, None)?;
+        all_circuits.prove_all_segments(all_stark, config, dummy0, 20, None, timing, None)?;
     let dummy1_proof =
-        all_circuits.prove_all_segments(all_stark, config, dummy1, 20, timing, None)?;
+        all_circuits.prove_all_segments(all_stark, config, dummy1, 20, None, timing, None)?;
 
     let inputs0_proof =
         all_circuits.prove_segment_aggregation(&dummy0_proof0[0], &dummy0_proof0[1])?;

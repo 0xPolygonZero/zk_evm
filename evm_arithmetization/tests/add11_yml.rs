@@ -218,6 +218,7 @@ fn add11_yml() -> anyhow::Result<()> {
         &config,
         inputs,
         max_cpu_len_log,
+        None,
         &mut timing,
         None,
     )?;

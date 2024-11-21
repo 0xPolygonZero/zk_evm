@@ -93,9 +93,10 @@ async fn main() -> Result<()> {
             .b_meta
             .block_number
             .low_u64();
-        let block_generation_inputs = trace_decoder::entrypoint(
+        let (block_generation_inputs, opt_struct_logs) = trace_decoder::entrypoint(
             block_prover_input.block_trace.clone(),
             block_prover_input.other_data.clone(),
+            block_prover_input.struct_logs.clone(),
             prover_config.batch_size,
             &mut observer,
             WIRE_DISPOSITION,
@@ -107,6 +108,7 @@ async fn main() -> Result<()> {
         );
 
         info!("Running trie diff simulation for block {block_number} ...");
+        let nb_gen_inps = block_generation_inputs.len();
         let simulation = Directive::map(
             IndexedStream::from(
                 block_generation_inputs
@@ -114,8 +116,11 @@ async fn main() -> Result<()> {
                     .into_iter()
                     .enumerate()
                     .zip(repeat(prover_config.max_cpu_len_log))
-                    .map(|((batch_index, inputs), max_cpu_len_log)| {
-                        (inputs, max_cpu_len_log, batch_index)
+                    .zip(opt_struct_logs.map_or(vec![None; nb_gen_inps], |x| {
+                        x.into_iter().map(Some).collect()
+                    }))
+                    .map(|(((batch_index, inputs), max_cpu_len_log), struct_log)| {
+                        (inputs, max_cpu_len_log, batch_index, struct_log)
                     }),
             ),
             &seg_ops,

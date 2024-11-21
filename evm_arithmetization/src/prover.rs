@@ -367,8 +367,10 @@ pub(crate) fn features_check<F: RichField>(inputs: &TrimmedGenerationInputs<F>) 
 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
+
     use super::*;
     use crate::generation::ErrorWithTries;
+    use crate::structlog::TxZeroStructLogs;
     use crate::{
         cpu::kernel::interpreter::Interpreter,
         generation::segments::{SegmentDataIterator, SegmentError},
@@ -381,8 +383,13 @@ pub mod testing {
 
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["init"];
-        let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
+        let mut interpreter: Interpreter<F> = Interpreter::new_with_generation_inputs(
+            initial_offset,
+            initial_stack,
+            &inputs,
+            None,
+            &None,
+        );
         interpreter.run()?;
         Ok(())
     }
@@ -392,6 +399,7 @@ pub mod testing {
         config: &StarkConfig,
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
+        struct_logs: Option<Vec<TxZeroStructLogs>>,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> Result<Vec<AllProof<F, C, D>>>
@@ -399,7 +407,8 @@ pub mod testing {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
     {
-        let segment_data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
+        let segment_data_iterator =
+            SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log), &struct_logs);
         let inputs = inputs.trim();
         let mut proofs = vec![];
 
@@ -422,13 +431,14 @@ pub mod testing {
     pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
+        struct_logs: &Option<Vec<TxZeroStructLogs>>,
     ) -> Result<(), ErrorWithTries<SegmentError>>
     where
         F: RichField,
     {
         features_check(&inputs.clone().trim());
 
-        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
+        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log), struct_logs) {
             segment?;
         }
 

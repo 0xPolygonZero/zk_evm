@@ -46,6 +46,9 @@ struct RpcToolConfig {
     /// The maximum number of retries.
     #[arg(long, env = "ZERO_BIN_MAX_RETRIES", default_value_t = 0)]
     max_retries: u32,
+    /// If true, get struct logs for debug purposes.
+    #[arg(long, default_value_t = false)]
+    get_struct_logs: bool,
 }
 
 #[derive(Subcommand)]
@@ -86,6 +89,7 @@ struct Cli {
 pub(crate) async fn fetch_block_prover_inputs<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     params: FetchParams,
+    get_struct_logs: bool,
 ) -> Result<Vec<BlockProverInput>, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -102,9 +106,13 @@ where
         let (block_num, _is_last_block) = block_interval_elem?;
         let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
         // Get the prover input for particular block.
-        let result =
-            rpc::block_prover_input(cached_provider.clone(), block_id, checkpoint_block_number)
-                .await?;
+        let result = rpc::block_prover_input(
+            cached_provider.clone(),
+            block_id,
+            checkpoint_block_number,
+            get_struct_logs,
+        )
+        .await?;
 
         block_prover_inputs.push(result);
     }
@@ -134,7 +142,8 @@ impl Cli {
                 };
 
                 let block_prover_inputs =
-                    fetch_block_prover_inputs(cached_provider, params).await?;
+                    fetch_block_prover_inputs(cached_provider, params, self.config.get_struct_logs)
+                        .await?;
                 serde_json::to_writer_pretty(std::io::stdout(), &block_prover_inputs)?;
             }
             Command::Extract { tx, batch_size } => {
@@ -158,8 +167,12 @@ impl Cli {
                             checkpoint_block_number: None,
                         };
 
-                        let block_prover_inputs =
-                            fetch_block_prover_inputs(cached_provider, params).await?;
+                        let block_prover_inputs = fetch_block_prover_inputs(
+                            cached_provider,
+                            params,
+                            self.config.get_struct_logs,
+                        )
+                        .await?;
 
                         let block_prover_input =
                             block_prover_inputs.into_iter().next().ok_or(anyhow!(
@@ -167,9 +180,10 @@ impl Cli {
                                 block_number
                             ))?;
 
-                        let generation_inputs = trace_decoder::entrypoint(
+                        let (generation_inputs, _struct_logs) = trace_decoder::entrypoint(
                             block_prover_input.block_trace,
                             block_prover_input.other_data,
+                            block_prover_input.struct_logs,
                             batch_size,
                             &mut DummyObserver::new(),
                             WIRE_DISPOSITION,
