@@ -121,7 +121,7 @@ cargo build --release --jobs "$num_procs"
 start_time=$(date +%s%N)
 
 cmd=("${REPO_ROOT}/target/release/leader" --runtime in-memory \
-    --load-strategy on-demand -n 1 \
+    --load-strategy on-demand \
     --block-batch-size "$BLOCK_BATCH_SIZE")
 
 if [[ "$USE_TEST_CONFIG" == "use_test_config" ]]; then

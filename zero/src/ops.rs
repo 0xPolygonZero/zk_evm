@@ -21,7 +21,7 @@ use crate::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
 
-#[derive(Deserialize, Serialize, RemoteExecute)]
+#[derive(Deserialize, Serialize, RemoteExecute, Clone)]
 pub struct SegmentProof {
     pub save_inputs_on_error: bool,
 }
@@ -207,7 +207,7 @@ impl Drop for SegmentProofSpan {
     }
 }
 
-#[derive(Deserialize, Serialize, RemoteExecute)]
+#[derive(Deserialize, Serialize, RemoteExecute, Clone)]
 pub struct SegmentAggProof {
     pub save_inputs_on_error: bool,
 }
@@ -289,7 +289,7 @@ impl Monoid for SegmentAggProof {
     }
 }
 
-#[derive(Deserialize, Serialize, RemoteExecute)]
+#[derive(Deserialize, Serialize, RemoteExecute, Clone)]
 pub struct BatchAggProof {
     pub save_inputs_on_error: bool,
 }
