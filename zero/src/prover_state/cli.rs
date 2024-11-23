@@ -5,8 +5,8 @@ use std::fmt::Display;
 use clap::{Args, ValueEnum};
 
 use super::{
-    circuit::{Circuit, CircuitConfig, CircuitSize},
-    ProverStateManager, TableLoadStrategy,
+    circuit::{Circuit, CircuitConfig},
+    ProverStateManager,
 };
 
 /// The help heading for the circuit arguments.
@@ -32,18 +32,6 @@ pub enum CircuitPersistence {
     Disk,
 }
 
-impl CircuitPersistence {
-    pub const fn with_load_strategy(
-        self,
-        load_strategy: TableLoadStrategy,
-    ) -> super::CircuitPersistence {
-        match self {
-            CircuitPersistence::None => super::CircuitPersistence::None,
-            CircuitPersistence::Disk => super::CircuitPersistence::Disk(load_strategy),
-        }
-    }
-}
-
 impl Display for CircuitPersistence {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -60,8 +48,6 @@ macro_rules! gen_prover_state_config {
         pub struct CliProverStateConfig {
             #[clap(long, help_heading = HEADING, default_value_t = CircuitPersistence::Disk)]
             pub persistence: CircuitPersistence,
-            #[clap(long, help_heading = HEADING, default_value_t = TableLoadStrategy::OnDemand)]
-            pub load_strategy: TableLoadStrategy,
             /// Run with a low-security but fast STARK configuration. Enable this only for testing.
             #[arg(long)]
             pub use_test_config: bool,
@@ -74,7 +60,7 @@ macro_rules! gen_prover_state_config {
                     env = $circuit.as_env_key(),
                     help = circuit_arg_desc($circuit.as_str()),
                 )]
-                pub $name: Option<CircuitSize>,
+                pub $name: Option<usize>,
             )*
         }
     };
@@ -117,7 +103,10 @@ impl CliProverStateConfig {
 
     pub fn into_prover_state_manager(self) -> ProverStateManager {
         ProverStateManager {
-            persistence: self.persistence.with_load_strategy(self.load_strategy),
+            persistence: match self.persistence {
+                CircuitPersistence::None => super::CircuitPersistence::None,
+                CircuitPersistence::Disk => super::CircuitPersistence::Disk,
+            },
             circuit_config: self.into_circuit_config(),
         }
     }

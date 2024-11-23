@@ -142,13 +142,13 @@ impl DiskResource for BaseProverResource {
         r
             // Note we are using the `true` flag to write only the upper circuits.
             // The individual circuit tables are written separately below.
-            .to_bytes(true, &gate_serializer, &witness_serializer)
+            .to_bytes(&gate_serializer, &witness_serializer)
             .map_err(DiskResourceError::Serialization)
     }
 
     fn deserialize(bytes: &[u8]) -> Result<AllRecursiveCircuits, DiskResourceError<Self::Error>> {
         let (gate_serializer, witness_serializer) = get_serializers();
-        AllRecursiveCircuits::from_bytes(bytes, true, &gate_serializer, &witness_serializer)
+        AllRecursiveCircuits::from_bytes(bytes, &gate_serializer, &witness_serializer)
             .map_err(DiskResourceError::Serialization)
     }
 }
@@ -177,13 +177,13 @@ impl DiskResource for MonolithicProverResource {
 
         r
             // Note we are using the `false` flag to write all circuits.
-            .to_bytes(false, &gate_serializer, &witness_serializer)
+            .to_bytes(&gate_serializer, &witness_serializer)
             .map_err(DiskResourceError::Serialization)
     }
 
     fn deserialize(bytes: &[u8]) -> Result<AllRecursiveCircuits, DiskResourceError<Self::Error>> {
         let (gate_serializer, witness_serializer) = get_serializers();
-        AllRecursiveCircuits::from_bytes(bytes, false, &gate_serializer, &witness_serializer)
+        AllRecursiveCircuits::from_bytes(bytes, &gate_serializer, &witness_serializer)
             .map_err(DiskResourceError::Serialization)
     }
 }
@@ -195,16 +195,15 @@ pub(crate) struct RecursiveCircuitResource;
 impl DiskResource for RecursiveCircuitResource {
     type Resource = RecursiveCircuitsForTableSize;
     type Error = IoError;
-    type PathConstrutor = (Circuit, usize);
+    type PathConstrutor = Circuit;
 
-    fn path((circuit_type, size): &Self::PathConstrutor) -> impl AsRef<Path> {
+    fn path(circuit_type: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
-            "{}/{}_{}_{}_{}",
+            "{}/{}_{}_{}",
             circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
             *KERNEL_HASH,
             circuit_type.as_short_str(),
-            size
         )
     }
 
@@ -321,9 +320,7 @@ fn prover_to_disk(
     // allows us to load only the necessary tables when needed.
     for (circuit_type, tables) in circuits.by_table.iter().enumerate() {
         let circuit_type: Circuit = circuit_type.into();
-        for (size, table) in tables.by_stark_size.iter() {
-            RecursiveCircuitResource::put(&(circuit_type, *size), table)?;
-        }
+        RecursiveCircuitResource::put(&circuit_type, tables)?;
     }
 
     Ok(())

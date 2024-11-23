@@ -44,6 +44,9 @@ use crate::proof::{
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
 
+pub const MIN_DEGREE_BITS_TO_SUPPORT: usize = 4;
+pub const MAX_DEGREE_BITS_TO_SUPPORT: usize = 30;
+
 pub(crate) struct PublicInputs<T: Copy + Default + Eq + PartialEq + Debug, P: PlonkyPermutation<T>>
 {
     pub(crate) trace_cap: Vec<Vec<T>>,
@@ -155,6 +158,7 @@ where
             &mut inputs,
             &self.stark_proof_target,
             &proof_with_metadata.proof,
+            proof_with_metadata.proof.degree_bits,
             self.zero_target,
         )?;
 
@@ -298,6 +302,8 @@ where
         challenges,
         Some(&ctl_vars),
         inner_config,
+        MAX_DEGREE_BITS_TO_SUPPORT,
+        Some(MIN_DEGREE_BITS_TO_SUPPORT),
     );
 
     add_common_recursion_gates(&mut builder);

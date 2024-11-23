@@ -83,6 +83,7 @@ pub mod testing {
     use hashbrown::HashMap;
     use itertools::Itertools;
     use plonky2::field::extension::Extendable;
+    use plonky2::fri::FriParams;
     use plonky2::hash::hash_types::RichField;
     use plonky2::plonk::config::{GenericConfig, GenericHashOut};
     use starky::config::StarkConfig;
@@ -178,12 +179,13 @@ pub mod testing {
         all_proof: AllProof<F, C, D>,
         config: &StarkConfig,
         is_initial: bool,
+        verifier_circuit_fri_params: Option<FriParams>,
     ) -> Result<()> {
         let AllProofChallenges {
             stark_challenges,
             ctl_challenges,
         } = all_proof
-            .get_challenges(config)
+            .get_challenges(config, verifier_circuit_fri_params)
             .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
 
         let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
@@ -519,13 +521,26 @@ pub mod testing {
         all_stark: &AllStark<F, D>,
         all_proofs: &[AllProof<F, C, D>],
         config: &StarkConfig,
+        verifier_circuit_fri_params: Option<FriParams>,
     ) -> Result<()> {
         assert!(!all_proofs.is_empty());
 
-        verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
+        verify_proof(
+            all_stark,
+            all_proofs[0].clone(),
+            config,
+            true,
+            verifier_circuit_fri_params.clone(),
+        )?;
 
         for all_proof in &all_proofs[1..] {
-            verify_proof(all_stark, all_proof.clone(), config, false)?;
+            verify_proof(
+                all_stark,
+                all_proof.clone(),
+                config,
+                false,
+                verifier_circuit_fri_params.clone(),
+            )?;
         }
 
         Ok(())
