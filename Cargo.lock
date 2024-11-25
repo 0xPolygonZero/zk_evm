@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "evm_arithmetization"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "alloy",
  "alloy-compat",
@@ -3109,7 +3109,7 @@ dependencies = [
 
 [[package]]
 name = "mpt_trie"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "enum-as-inner",
@@ -4676,7 +4676,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "smt_trie"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "alloy",
  "hex-literal",
@@ -5227,7 +5227,7 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "trace_decoder"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "alloy",
  "alloy-compat",
