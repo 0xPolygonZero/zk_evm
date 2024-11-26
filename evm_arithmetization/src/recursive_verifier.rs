@@ -4,6 +4,7 @@ use core::fmt::Debug;
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, U256};
 use plonky2::field::extension::Extendable;
+use plonky2::fri::FriConfig;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::exponentiation::ExponentiationGate;
 use plonky2::gates::gate::GateRef;
@@ -93,6 +94,7 @@ where
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
+    pub(crate) stark_fri_config: FriConfig,
     pub(crate) circuit: CircuitData<F, C, D>,
     pub(crate) stark_proof_target: StarkProofTarget<D>,
     pub(crate) ctl_challenges_target: GrandProductChallengeSet<Target>,
@@ -113,6 +115,7 @@ where
         gate_serializer: &dyn GateSerializer<F, D>,
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<()> {
+        buffer.write_fri_config(&self.stark_fri_config)?;
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
         buffer.write_target_vec(self.init_challenger_state_target.as_ref())?;
         buffer.write_target(self.zero_target)?;
@@ -127,6 +130,7 @@ where
         gate_serializer: &dyn GateSerializer<F, D>,
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Self> {
+        let stark_fri_config = buffer.read_fri_config()?;
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let target_vec = buffer.read_target_vec()?;
         let init_challenger_state_target =
@@ -136,6 +140,7 @@ where
         let ctl_challenges_target = GrandProductChallengeSet::from_buffer(buffer)?;
 
         Ok(Self {
+            stark_fri_config,
             circuit,
             stark_proof_target,
             ctl_challenges_target,
@@ -151,10 +156,18 @@ where
     ) -> Result<ProofWithPublicInputs<F, C, D>> {
         let mut inputs = PartialWitness::new();
 
+        let stark_config = StarkConfig {
+            fri_config: self.stark_fri_config.clone(),
+            // we only care about the FRI parameters
+            ..Default::default()
+        };
+        let degree_bits = proof_with_metadata.proof.recover_degree_bits(&stark_config);
+
         set_stark_proof_target(
             &mut inputs,
             &self.stark_proof_target,
             &proof_with_metadata.proof,
+            degree_bits,
             self.zero_target,
         )?;
 
@@ -298,6 +311,8 @@ where
         challenges,
         Some(&ctl_vars),
         inner_config,
+        degree_bits,
+        None,
     );
 
     add_common_recursion_gates(&mut builder);
@@ -309,6 +324,7 @@ where
 
     let circuit = builder.build::<C>();
     StarkWrapperCircuit {
+        stark_fri_config: inner_config.fri_config.clone(),
         circuit,
         stark_proof_target,
         ctl_challenges_target,

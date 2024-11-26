@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "evm_arithmetization"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "alloy",
  "alloy-compat",
@@ -2046,7 +2046,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "plonky2",
- "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "plonky2_maybe_rayon",
  "plonky2_util",
  "rand",
  "rand_chacha",
@@ -3109,7 +3109,7 @@ dependencies = [
 
 [[package]]
 name = "mpt_trie"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "enum-as-inner",
@@ -3427,8 +3427,8 @@ dependencies = [
 
 [[package]]
 name = "paladin-core"
-version = "0.4.3"
-source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
+version = "0.4.4"
+source = "git+https://github.com/0xPolygonZero/paladin.git?rev=f58cbc14a751f1000603cfd9fdd4f350986ec2e7#f58cbc14a751f1000603cfd9fdd4f350986ec2e7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3460,7 +3460,7 @@ dependencies = [
 [[package]]
 name = "paladin-opkind-derive"
 version = "0.4.4"
-source = "git+https://github.com/0xPolygonZero/paladin.git?branch=main#f1b6e254abb8068f4c2e7c489116a25e2d137a60"
+source = "git+https://github.com/0xPolygonZero/paladin.git?rev=f58cbc14a751f1000603cfd9fdd4f350986ec2e7#f58cbc14a751f1000603cfd9fdd4f350986ec2e7"
 dependencies = [
  "quote",
  "syn 2.0.77",
@@ -3700,8 +3700,9 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "plonky2"
-version = "0.2.2"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b#2488cdacd49ede15737bc1172546d82e9521b79b"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f856aea4c9a5a8632f310cd830005e612c563391a4cdb33d34c7f523edf1dc8"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3712,7 +3713,7 @@ dependencies = [
  "log",
  "num",
  "plonky2_field",
- "plonky2_maybe_rayon 0.2.0 (git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b)",
+ "plonky2_maybe_rayon",
  "plonky2_util",
  "rand",
  "rand_chacha",
@@ -3724,8 +3725,9 @@ dependencies = [
 
 [[package]]
 name = "plonky2_field"
-version = "0.2.2"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b#2488cdacd49ede15737bc1172546d82e9521b79b"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3ddfe8817d0c5c2d4557979c51c5253dab1b555ecc19833e5b7ea7dd86f39b8"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3739,25 +3741,18 @@ dependencies = [
 
 [[package]]
 name = "plonky2_maybe_rayon"
-version = "0.2.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92ff44a90aaca13e10e7ddf8fab815ba1b404c3f7c3ca82aaf11c46beabaa923"
-dependencies = [
- "rayon",
-]
-
-[[package]]
-name = "plonky2_maybe_rayon"
-version = "0.2.0"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b#2488cdacd49ede15737bc1172546d82e9521b79b"
+checksum = "9e1e554181dc95243b8d9948ae7bae5759c7fb2502fed28f671f95ef38079406"
 dependencies = [
  "rayon",
 ]
 
 [[package]]
 name = "plonky2_util"
-version = "0.2.0"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b#2488cdacd49ede15737bc1172546d82e9521b79b"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c32c137808ca984ab2458b612b7eb0462d853ee041a3136e83d54b96074c7610"
 
 [[package]]
 name = "plotters"
@@ -4681,7 +4676,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "smt_trie"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "alloy",
  "hex-literal",
@@ -4743,8 +4738,9 @@ checksum = "8acdd7dbfcfb5dd6e46c63512508bf71c2043f70b8f143813ad75cb5e8a589f2"
 
 [[package]]
 name = "starky"
-version = "0.4.0"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b#2488cdacd49ede15737bc1172546d82e9521b79b"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22eadeff1e044deb9c7dc8f513350a55435551c1de7c98211baab428aac91297"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4753,7 +4749,7 @@ dependencies = [
  "log",
  "num-bigint",
  "plonky2",
- "plonky2_maybe_rayon 0.2.0 (git+https://github.com/0xPolygonZero/plonky2.git?rev=2488cdacd49ede15737bc1172546d82e9521b79b)",
+ "plonky2_maybe_rayon",
  "plonky2_util",
  "serde",
 ]
@@ -5231,7 +5227,7 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "trace_decoder"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "alloy",
  "alloy-compat",
@@ -5260,7 +5256,7 @@ dependencies = [
  "mpt_trie",
  "nunny",
  "plonky2",
- "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "plonky2_maybe_rayon",
  "rlp",
  "serde",
  "serde_json",
@@ -5997,7 +5993,7 @@ dependencies = [
  "once_cell",
  "paladin-core",
  "plonky2",
- "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "plonky2_maybe_rayon",
  "rlp",
  "ruint",
  "serde",

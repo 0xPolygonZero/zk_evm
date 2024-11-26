@@ -303,6 +303,7 @@ pub mod testing {
                             Some(&ctl_challenges),
                             true,
                             config,
+                            None,
                         ))
                     } else {
                         None

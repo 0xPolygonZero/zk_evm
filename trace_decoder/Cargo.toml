@@ -2,7 +2,7 @@
 name = "trace_decoder"
 description = "Ethereum node witness -> Prover input"
 authors = ["Polygon Zero"]
-version = "0.6.0"
+version = "0.7.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
