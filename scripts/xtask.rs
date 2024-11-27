@@ -2,11 +2,13 @@
 
 mod outdated;
 mod prove_rpc;
+mod prove_stdio;
 
 use anyhow::Result;
 use clap::Parser;
 use outdated::list_outdated_deps;
 use prove_rpc::{prove_via_rpc, ProveRpcArgs};
+use prove_stdio::{prove_via_stdio, ProveStdioArgs};
 
 #[derive(Parser)]
 enum Args {
@@ -20,11 +22,14 @@ enum Args {
     Outdated,
     /// Execute proving via RPC endpoint.
     ProveRpc(Box<ProveRpcArgs>),
+    /// Execute proving via stdin.
+    ProveStdio(ProveStdioArgs),
 }
 
 fn main() -> Result<()> {
     match Args::parse() {
         Args::Outdated => list_outdated_deps(),
         Args::ProveRpc(args) => prove_via_rpc(*args),
+        Args::ProveStdio(args) => prove_via_stdio(args),
     }
 }
