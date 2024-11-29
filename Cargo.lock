@@ -5954,6 +5954,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "clap",
+ "num_cpus",
  "serde",
  "serde_json",
  "sysinfo",
