@@ -1,6 +1,6 @@
-use std::{env::set_var, fs::File, path::PathBuf, process::Command};
+use std::{fs::File, path::PathBuf, process::Command};
 
-use anyhow::{ensure, Ok};
+use anyhow::ensure;
 use clap::{arg, Args, ValueEnum, ValueHint};
 
 #[derive(ValueEnum, Copy, Clone)]
@@ -90,7 +90,10 @@ pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
                 ]);
             }
 
-            run_proof(args, envs)
+            let mut cmd = prove_command(args, envs)?;
+            let status = cmd.spawn()?.wait()?;
+            ensure!(status.success(), "command failed with {}", status);
+            Ok(())
         }
         RunMode::Verify => {
             // Build the targets before timing.
@@ -101,17 +104,20 @@ pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
                 .wait()?;
             ensure!(status.success(), "command failed with {}", status);
 
-            // Time the proof.
+            // Construct the command to run.
+            let mut cmd = prove_command(args, envs)?;
+            // Time the proving.
             let start = std::time::Instant::now();
-            run_proof(args, envs)?;
+            let status = cmd.spawn()?.wait()?;
+            ensure!(status.success(), "command failed with {}", status);
             let elapsed = start.elapsed();
-            println!("Elapsed: {:?}", elapsed);
+            println!("Proving duration: {elapsed:?}");
             Ok(())
         }
     }
 }
 
-fn run_proof(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Result<()> {
+fn prove_command(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Result<Command> {
     let witness_file = File::open(&args.input_witness_file)?;
     let mut cmd = Command::new("cargo");
     cmd.envs(envs).stdin(witness_file);
@@ -130,13 +136,13 @@ fn run_proof(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Result<()
         "--block-batch-size",
         args.block_batch_size.to_string().as_str(),
         "--proof-output-dir",
-        args.output_dir.to_str().unwrap(),
+        args.output_dir
+            .to_str()
+            .ok_or(anyhow::anyhow!("Invalid output dir path"))?,
         "stdio",
     ]);
     if args.use_test_config {
         cmd.arg("--use-test-config");
     }
-    let status = cmd.spawn()?.wait()?;
-    ensure!(status.success(), "command failed with {}", status);
-    Ok(())
+    Ok(cmd)
 }
