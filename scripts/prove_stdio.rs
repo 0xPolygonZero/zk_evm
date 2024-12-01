@@ -31,6 +31,8 @@ pub struct ProveStdioArgs {
     output_dir: PathBuf,
 }
 
+/// Runs prover against the provided witness file and outputs the proof to the
+/// specified directory.
 pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
     // Get number of cores of the system.
     let num_cpus = num_cpus::get().to_string();
@@ -74,11 +76,16 @@ pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
     }
 }
 
+/// Adds environment variables to the command for verifying the proof based on
+/// the input file.
 fn add_verify_envs(args: &ProveStdioArgs, envs: &mut Vec<(&str, &str)>) -> anyhow::Result<()> {
+    // Get the witness filename.
     let witness_filename = args
         .input_witness_file
         .to_str()
         .ok_or(anyhow::anyhow!("Invalid witness file path"))?;
+
+    // Set envs based on filename.
     if witness_filename.contains("witness_b19807080") {
         envs.extend([
             ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
@@ -123,6 +130,7 @@ fn add_verify_envs(args: &ProveStdioArgs, envs: &mut Vec<(&str, &str)>) -> anyho
     Ok(())
 }
 
+/// Constructs the command to run for proving via stdin.
 fn prove_command(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Result<Command> {
     let witness_file = File::open(&args.input_witness_file)?;
     let mut cmd = Command::new("cargo");
