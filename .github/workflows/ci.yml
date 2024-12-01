@@ -193,4 +193,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run the script
-        run: cargo xtask prove-stdio test artifacts/witness_b3_b6.json --use-test-config
+        run: cargo xtask prove-stdio verify artifacts/witness_b3_b6.json --use-test-config

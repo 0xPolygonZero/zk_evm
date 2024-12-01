@@ -146,6 +146,9 @@ fn prove_command(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Resul
             .to_str()
             .ok_or(anyhow::anyhow!("Invalid output dir path"))?,
     ]);
+    if let RunMode::Test = args.mode {
+        cmd.arg("--test-only");
+    }
     if args.use_test_config {
         cmd.arg("--use-test-config");
     }
