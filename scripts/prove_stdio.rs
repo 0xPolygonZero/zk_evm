@@ -27,7 +27,7 @@ pub struct ProveStdioArgs {
     block_batch_size: u32,
     /// The directory to output the proof files. If it does not exist, it will
     /// recursively be created.
-    #[arg(short = 'o', long, value_hint = ValueHint::DirPath, default_value = ".")]
+    #[arg(short = 'o', long, value_hint = ValueHint::DirPath, default_value = "./proofs")]
     output_dir: PathBuf,
 }
 
@@ -45,51 +45,6 @@ pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
 
     match args.mode {
         RunMode::Test => {
-            envs.extend([
-                ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
-                ("BYTE_PACKING_CIRCUIT_SIZE", "8..15"),
-                ("CPU_CIRCUIT_SIZE", "9..20"),
-                ("KECCAK_CIRCUIT_SIZE", "7..18"),
-                ("KECCAK_SPONGE_CIRCUIT_SIZE", "8..14"),
-                ("LOGIC_CIRCUIT_SIZE", "5..17"),
-                ("MEMORY_CIRCUIT_SIZE", "17..22"),
-                ("MEMORY_BEFORE_CIRCUIT_SIZE", "16..20"),
-                ("MEMORY_AFTER_CIRCUIT_SIZE", "7..20"),
-                // TODO(Robin): update Poseidon ranges here and below once Kernel ASM supports
-                ("POSEIDON_CIRCUIT_SIZE", "4..8"),
-            ]);
-            let witness_filename = args
-                .input_witness_file
-                .to_str()
-                .ok_or(anyhow::anyhow!("Invalid witness file path"))?;
-            if witness_filename.contains("witness_b19807080") {
-                envs.extend([
-                    ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
-                    ("BYTE_PACKING_CIRCUIT_SIZE", "8..15"),
-                    ("CPU_CIRCUIT_SIZE", "9..20"),
-                    ("KECCAK_CIRCUIT_SIZE", "7..18"),
-                    ("KECCAK_SPONGE_CIRCUIT_SIZE", "8..14"),
-                    ("LOGIC_CIRCUIT_SIZE", "5..17"),
-                    ("MEMORY_CIRCUIT_SIZE", "17..22"),
-                    ("MEMORY_BEFORE_CIRCUIT_SIZE", "16..20"),
-                    ("MEMORY_AFTER_CIRCUIT_SIZE", "7..20"),
-                    ("POSEIDON_CIRCUIT_SIZE", "4..8"),
-                ]);
-            } else if witness_filename.contains("witness_b3_b6") {
-                envs.extend([
-                    ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
-                    ("BYTE_PACKING_CIRCUIT_SIZE", "8..15"),
-                    ("CPU_CIRCUIT_SIZE", "10..20"),
-                    ("KECCAK_CIRCUIT_SIZE", "4..13"),
-                    ("KECCAK_SPONGE_CIRCUIT_SIZE", "8..9"),
-                    ("LOGIC_CIRCUIT_SIZE", "4..14"),
-                    ("MEMORY_CIRCUIT_SIZE", "17..22"),
-                    ("MEMORY_BEFORE_CIRCUIT_SIZE", "16..18"),
-                    ("MEMORY_AFTER_CIRCUIT_SIZE", "7..8"),
-                    ("POSEIDON_CIRCUIT_SIZE", "4..8"),
-                ]);
-            }
-
             let mut cmd = prove_command(args, envs)?;
             let status = cmd.spawn()?.wait()?;
             ensure!(status.success(), "command failed with {}", status);
@@ -105,7 +60,9 @@ pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
             ensure!(status.success(), "command failed with {}", status);
 
             // Construct the command to run.
+            add_verify_envs(&args, &mut envs)?;
             let mut cmd = prove_command(args, envs)?;
+
             // Time the proving.
             let start = std::time::Instant::now();
             let status = cmd.spawn()?.wait()?;
@@ -115,6 +72,55 @@ pub fn prove_via_stdio(args: ProveStdioArgs) -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+fn add_verify_envs(args: &ProveStdioArgs, envs: &mut Vec<(&str, &str)>) -> anyhow::Result<()> {
+    let witness_filename = args
+        .input_witness_file
+        .to_str()
+        .ok_or(anyhow::anyhow!("Invalid witness file path"))?;
+    if witness_filename.contains("witness_b19807080") {
+        envs.extend([
+            ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
+            ("BYTE_PACKING_CIRCUIT_SIZE", "8..15"),
+            ("CPU_CIRCUIT_SIZE", "9..20"),
+            ("KECCAK_CIRCUIT_SIZE", "7..18"),
+            ("KECCAK_SPONGE_CIRCUIT_SIZE", "8..14"),
+            ("LOGIC_CIRCUIT_SIZE", "5..17"),
+            ("MEMORY_CIRCUIT_SIZE", "17..22"),
+            ("MEMORY_BEFORE_CIRCUIT_SIZE", "16..20"),
+            ("MEMORY_AFTER_CIRCUIT_SIZE", "7..20"),
+            ("POSEIDON_CIRCUIT_SIZE", "4..8"),
+        ]);
+    } else if witness_filename.contains("witness_b3_b6") {
+        envs.extend([
+            ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
+            ("BYTE_PACKING_CIRCUIT_SIZE", "8..15"),
+            ("CPU_CIRCUIT_SIZE", "10..20"),
+            ("KECCAK_CIRCUIT_SIZE", "4..13"),
+            ("KECCAK_SPONGE_CIRCUIT_SIZE", "8..9"),
+            ("LOGIC_CIRCUIT_SIZE", "4..14"),
+            ("MEMORY_CIRCUIT_SIZE", "17..22"),
+            ("MEMORY_BEFORE_CIRCUIT_SIZE", "16..18"),
+            ("MEMORY_AFTER_CIRCUIT_SIZE", "7..8"),
+            ("POSEIDON_CIRCUIT_SIZE", "4..8"),
+        ]);
+    } else {
+        envs.extend([
+            ("ARITHMETIC_CIRCUIT_SIZE", "16..18"),
+            ("BYTE_PACKING_CIRCUIT_SIZE", "8..15"),
+            ("CPU_CIRCUIT_SIZE", "9..20"),
+            ("KECCAK_CIRCUIT_SIZE", "7..18"),
+            ("KECCAK_SPONGE_CIRCUIT_SIZE", "8..14"),
+            ("LOGIC_CIRCUIT_SIZE", "5..17"),
+            ("MEMORY_CIRCUIT_SIZE", "17..22"),
+            ("MEMORY_BEFORE_CIRCUIT_SIZE", "16..20"),
+            ("MEMORY_AFTER_CIRCUIT_SIZE", "7..20"),
+            // TODO(Robin): update Poseidon ranges here and below once Kernel ASM supports
+            ("POSEIDON_CIRCUIT_SIZE", "4..8"),
+        ]);
+    }
+    Ok(())
 }
 
 fn prove_command(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Result<Command> {
@@ -139,10 +145,10 @@ fn prove_command(args: ProveStdioArgs, envs: Vec<(&str, &str)>) -> anyhow::Resul
         args.output_dir
             .to_str()
             .ok_or(anyhow::anyhow!("Invalid output dir path"))?,
-        "stdio",
     ]);
     if args.use_test_config {
         cmd.arg("--use-test-config");
     }
+    cmd.arg("stdio");
     Ok(cmd)
 }

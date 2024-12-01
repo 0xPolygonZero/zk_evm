@@ -1,4 +1,4 @@
----   # Workflow with multiple jobs to test different parts of the project
+--- # Workflow with multiple jobs to test different parts of the project
 
 name: Continuous Integration
 
@@ -66,7 +66,7 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: build  # build separately so test logs are actually nice
+      - name: build # build separately so test logs are actually nice
         run: cargo build --tests --manifest-path trace_decoder/Cargo.toml
 
       - name: test
@@ -171,7 +171,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json
+        run: cargo xtask prove-stdio verify artifacts/witness_b19807080.json
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -182,7 +182,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b19807080.json test_only
+        run: cargo xtask prove-stdio test artifacts/witness_b19807080.json
 
   multi_blocks_proof_regular:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
@@ -193,4 +193,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run the script
-        run: ./scripts/prove_stdio.sh artifacts/witness_b3_b6.json "" use_test_config
+        run: cargo xtask prove-stdio test artifacts/witness_b3_b6.json --use-test-config
