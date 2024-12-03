@@ -62,26 +62,26 @@ jobs:
       - name: Run cancun test network
         run: |
           docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
-          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.0.0 \
+          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.4.0 \
             --args-file jerigon-test-network/network_params.yml
 
       - name: Generate blocks with transactions
         run: |
-          ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
+          ETH_RPC_URL="http://$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           cast rpc eth_blockNumber --rpc-url $ETH_RPC_URL
           cd jerigon-test-network && set -a && source .env && set +a
           bash ./tests/generate_transactions.sh
 
       - name: Run prove blocks with native tracer in test_only mode
         run: |
-          ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
+          ETH_RPC_URL="http://$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           ulimit -n 8192
           cargo xtask prove-rpc "$ETH_RPC_URL" native test 1 -e 15 -c 0 -b 3000 -r 100
           echo "Proving blocks in test_only mode finished"
 
       - name: Run prove blocks with native tracer in real mode
         run: |
-          ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
+          ETH_RPC_URL="http://$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
           cargo xtask prove-rpc "$ETH_RPC_URL" native verify 4 -e 7 -c 3 -b 3000 -r 100
           echo "Proving blocks in real mode finished"

@@ -208,6 +208,7 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
+    use alloy_compat::Compat;
     use smt_trie::{code::poseidon_hash_padded_byte_vec, utils::hashout2u};
 
     use crate::{
@@ -250,7 +251,7 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
 
     let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
 
-    push_no_write(generation_state, hash.into());
+    push_no_write(generation_state, hash.compat());
 
     state.push_poseidon(poseidon_op);
 
