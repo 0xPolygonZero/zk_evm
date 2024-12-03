@@ -1,4 +1,5 @@
----   # Proof generation benchmarking workflow
+---
+# Proof generation benchmarking workflow
 
 name: Benchmark proving
 

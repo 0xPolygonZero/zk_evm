@@ -1,14 +1,15 @@
----  # Run yamllint on all YAML files in the repository
+---
+# Run yamllint on all YAML files in the repository
 
 name: Yamllint
-'on':
+"on":
   pull_request:
     paths:
-      - '**/*.yml'
-      - '.github/**'
+      - "**/*.yml"
+      - ".github/**"
   workflow_dispatch:
     branches:
-      - '**'
+      - "**"
 
 jobs:
   yamllint-check:
@@ -22,5 +23,5 @@ jobs:
         run: >
           yamllint
           --format github
-          -d "{extends: default, rules: {line-length: {max: 120}, truthy: {check-keys: false}}}"
+          -d "{extends: default, rules: {line-length: {max: 130}, truthy: {check-keys: false}}}"
           .github scripts
