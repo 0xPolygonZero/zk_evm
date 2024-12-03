@@ -13,6 +13,7 @@ publish = false
 alloy.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
+num_cpus = "1.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sysinfo = "0.32.0"
