@@ -103,7 +103,7 @@ url = "2.5.2"
 winnow = "0.6.13"
 
 # local dependencies
-evm_arithmetization = { path = "evm_arithmetization", version = "0.5.0", default-features = false }
+evm_arithmetization = { path = "evm_arithmetization", version = "0.5.1", default-features = false }
 mpt_trie = { path = "mpt_trie", version = "0.5.0" }
 smt_trie = { path = "smt_trie", version = "0.2.0" }
 trace_decoder = { path = "trace_decoder", version = "0.7.0", default-features = false }
