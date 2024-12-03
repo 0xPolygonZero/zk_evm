@@ -68,7 +68,7 @@ mod type1;
 mod type2;
 mod wire;
 
-pub use core::{entrypoint, WireDisposition};
+pub use core::{entrypoint, is_precompile, WireDisposition};
 
 mod core;
 

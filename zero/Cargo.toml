@@ -11,6 +11,8 @@ categories.workspace = true
 [dependencies]
 alloy.workspace = true
 alloy-compat = "0.1.1"
+alloy-primitives.workspace = true
+alloy-serde.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true

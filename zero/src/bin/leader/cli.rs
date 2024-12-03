@@ -1,11 +1,13 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use alloy::eips::BlockId;
 use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueEnum, ValueHint};
+use zero::parsing::parse_duration;
 use zero::prover::cli::CliProverConfig;
 use zero::prover_state::cli::CliProverStateConfig;
-use zero::rpc::RpcType;
+use zero::rpc::{JumpdestSrc, RpcType};
 
 const WORKER_HELP_HEADING: &str = "Worker Config options";
 
@@ -70,6 +72,14 @@ pub(crate) enum Command {
             default_value = "jerigon"
         )]
         rpc_type: RpcType,
+        /// The source of jumpdest tables.
+        #[arg(
+            short = 'j',
+            long,
+            default_value = "client-fetched-structlogs",
+            required = false
+        )]
+        jumpdest_src: JumpdestSrc,
         /// The start of the block range to prove (inclusive).
         #[arg(short = 's', long, env = "ZERO_BIN_START_BLOCK")]
         start_block: BlockId,
@@ -94,6 +104,9 @@ pub(crate) enum Command {
         /// The maximum number of retries
         #[arg(long, env = "ZERO_BIN_MAX_RETRIES", default_value_t = 0)]
         max_retries: u32,
+        /// Timeout for fetching structlog traces
+        #[arg(long, default_value = "60", value_parser = parse_duration)]
+        timeout: Duration,
     },
     /// Reads input from HTTP and writes output to a directory.
     Http {

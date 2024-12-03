@@ -1,6 +1,6 @@
 zk_evm_common::check_chain_features!();
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use alloy::{
     primitives::{Address, Bloom, Bytes, FixedBytes, B256, U256},
@@ -23,6 +23,7 @@ use tracing::warn;
 use crate::prover::BlockProverInput;
 
 pub mod jerigon;
+pub mod jumpdest;
 pub mod native;
 pub mod retry;
 
@@ -39,11 +40,21 @@ pub enum RpcType {
     Native,
 }
 
+/// The Jumpdest source type.
+#[derive(ValueEnum, Clone, Debug, Copy)]
+pub enum JumpdestSrc {
+    ProverSimulation,
+    ClientFetchedStructlogs,
+    Serverside, // later
+}
+
 /// Obtain the prover input for one block
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_id: BlockId,
     checkpoint_block_number: u64,
+    jumpdest_src: JumpdestSrc,
+    fetch_timeout: Duration,
 ) -> Result<BlockProverInput, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -51,10 +62,24 @@ where
 {
     match cached_provider.rpc_type {
         RpcType::Jerigon => {
-            jerigon::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
+            jerigon::block_prover_input(
+                cached_provider,
+                block_id,
+                checkpoint_block_number,
+                jumpdest_src,
+                fetch_timeout,
+            )
+            .await
         }
         RpcType::Native => {
-            native::block_prover_input(cached_provider, block_id, checkpoint_block_number).await
+            native::block_prover_input(
+                cached_provider,
+                block_id,
+                checkpoint_block_number,
+                jumpdest_src,
+                fetch_timeout,
+            )
+            .await
         }
     }
 }

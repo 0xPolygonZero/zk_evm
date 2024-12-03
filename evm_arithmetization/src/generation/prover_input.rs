@@ -6,10 +6,12 @@ use std::str::FromStr;
 use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
+use keccak_hash::keccak;
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
+use super::jumpdest::{JumpDestTableProcessed, JumpDestTableWitness};
 #[cfg(test)]
 use super::linked_list::testing::{LinkedList, ADDRESSES_ACCESS_LIST_LEN};
 use super::linked_list::{
@@ -22,7 +24,9 @@ use crate::cpu::kernel::constants::cancun_constants::{
     POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
+use crate::cpu::kernel::interpreter::{
+    get_jumpdest_analysis_inputs_rpc, simulate_cpu_and_get_user_jumps,
+};
 use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
 use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
@@ -39,6 +43,9 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 use crate::witness::util::{current_context_peek, stack_peek};
+
+/// A set to hold contract code as a byte vectors.
+pub type CodeDb = BTreeSet<Vec<u8>>;
 
 /// Prover input function represented as a scoped function name.
 /// Example: `PROVER_INPUT(ff::bn254_base::inverse)` is represented as
@@ -79,7 +86,7 @@ impl<F: RichField> GenerationState<F> {
 
     fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
         // Reset the jumpdest table before the next transaction.
-        self.jumpdest_table = None;
+        // self.jumpdest_table = None;
         let end = self.next_txn_index == self.inputs.txn_hashes.len();
         if end {
             Ok(U256::one())
@@ -350,26 +357,43 @@ impl<F: RichField> GenerationState<F> {
             .ok_or(ProgramError::ProverInputError(OutOfGerData))
     }
 
-    /// Returns the next used jump address.
+    /// Returns the next used jumpdest address.
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
-        let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
+        let batch_context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
-        if self.jumpdest_table.is_none() {
+        log::info!(
+            "Current ctx {}  current tx {}",
+            batch_context,
+            self.next_txn_index - 1
+        );
+        let tx_in_batch_idx = self.next_txn_index - 1;
+
+        if self.jumpdest_tables[tx_in_batch_idx].is_none() {
             self.generate_jumpdest_table()?;
         }
 
-        let Some(jumpdest_table) = &mut self.jumpdest_table else {
+        let Some(jumpdest_table) = &mut self.jumpdest_tables[tx_in_batch_idx] else {
             return Err(ProgramError::ProverInputError(
                 ProverInputError::InvalidJumpdestSimulation,
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_batch_ctx_mut(&batch_context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
+            log::info!(
+                "run_next_jumpdest_table_address,     ctx {:>5}, address {:>5}",
+                batch_context,
+                next_jumpdest_address + 1
+            );
             Ok((next_jumpdest_address + 1).into())
         } else {
-            jumpdest_table.remove(&context);
+            log::info!(
+                "run_next_jumpdest_table_address,     ctx {:>5}, address {:>5}",
+                batch_context,
+                0
+            );
+            jumpdest_table.remove_batch_ctx(&batch_context);
             Ok(U256::zero())
         }
     }
@@ -377,15 +401,21 @@ impl<F: RichField> GenerationState<F> {
     /// Returns the proof for the last jump address.
     fn run_next_jumpdest_table_proof(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 1)? >> CONTEXT_SCALING_FACTOR)?;
-        let Some(jumpdest_table) = &mut self.jumpdest_table else {
+        let tx_in_batch_idx = self.next_txn_index - 1;
+        let Some(jumpdest_table) = &mut self.jumpdest_tables[tx_in_batch_idx] else {
             return Err(ProgramError::ProverInputError(
                 ProverInputError::InvalidJumpdestSimulation,
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
+        if let Some(ctx_jumpdest_table) = jumpdest_table.try_get_batch_ctx_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
+            log::info!(
+                "run_next_jumpdest_table_proof,       ctx {:>5},   proof {:>5}",
+                context,
+                next_jumpdest_proof
+            );
             Ok(next_jumpdest_proof.into())
         } else {
             Err(ProgramError::ProverInputError(
@@ -402,8 +432,18 @@ impl<F: RichField> GenerationState<F> {
         let address = u256_to_usize(stack_peek(self, 0)?)?;
         let closest_opcode_addr = get_closest_opcode_address(&code, address);
         Ok(if closest_opcode_addr < 32 {
+            log::info!(
+                "run_next_non_jumpdest_proof address {:>5}, closest_opcode_addr {:>5}, returns 0",
+                address,
+                closest_opcode_addr,
+            );
             U256::zero()
         } else {
+            log::info!(
+                "run_next_non_jumpdest_proof address,     {:>5}, closest_opcode_addr {:>5}",
+                address,
+                closest_opcode_addr,
+            );
             closest_opcode_addr.into()
         })
     }
@@ -784,23 +824,70 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
+        let tx_in_batch_idx = self.next_txn_index - 1;
+        let prev_max_witness_ctx: usize = self
+            .jumpdest_tables
+            .get(tx_in_batch_idx - 1)
+            .map(|x| x.as_ref())
+            .flatten()
+            .map(|x| x.max_batch_ctx())
+            .unwrap_or(0);
+        log::info!("TX BATCH: {:#?}", self.inputs.txn_hashes);
+        log::info!("BATCH LEN: {}", self.inputs.txn_hashes.len());
+        log::info!("TXN_NUM_BEFORE: {}", self.inputs.txn_number_before);
+        log::info!("Maximum CTX in previous tx: {}", prev_max_witness_ctx);
+        log::info!("TXIDX: {}", tx_in_batch_idx);
+        log::info!("TX HASH: {:#?}", self.inputs.txn_hashes[tx_in_batch_idx]);
+        let rpcw = self.inputs.jumpdest_table[tx_in_batch_idx].clone();
+        let rpcp: Option<JumpDestTableProcessed> =
+            rpcw.as_ref().map(|jdt: &JumpDestTableWitness| {
+                get_jumpdest_analysis_inputs_rpc(
+                    jdt,
+                    &self.inputs.contract_code,
+                    prev_max_witness_ctx,
+                )
+                .normalize()
+            });
+        log::info!("RPCW {:#?}", &rpcw);
+        log::info!("RPCP {:#?}", &rpcp);
+        if rpcp.is_some() {
+            self.jumpdest_tables[tx_in_batch_idx] = rpcp;
+            return Ok(());
+        }
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
-        self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
+        self.jumpdest_tables[tx_in_batch_idx] = None;
+        let (simp, simw) = simulate_cpu_and_get_user_jumps("terminate_common", &*self)
+            .ok_or(ProgramError::ProverInputError(InvalidJumpdestSimulation))?;
+        log::info!("SIMW {:#?}", &simw);
+        log::info!("SIMP {:#?}", &simp);
 
-        Ok(())
+        if let Some(rpcp) = rpcp {
+            if &rpcp != &simp {
+                log::warn!("MISMATCH");
+                dbg!(Some(&rpcp), Some(&simp));
+            }
+        }
+
+        self.jumpdest_tables[tx_in_batch_idx] = Some(simp);
+        return Ok(());
     }
 
     /// Given a HashMap containing the contexts and the jumpdest addresses,
     /// compute their respective proofs, by calling
     /// `get_proofs_and_jumpdests`
-    pub(crate) fn set_jumpdest_analysis_inputs(
-        &mut self,
+    pub(crate) fn get_jumpdest_analysis_inputs(
+        &self,
         jumpdest_table: HashMap<usize, BTreeSet<usize>>,
-    ) {
-        self.jumpdest_table = Some(HashMap::from_iter(jumpdest_table.into_iter().map(
+    ) -> (JumpDestTableProcessed, JumpDestTableWitness) {
+        let mut jdtw = JumpDestTableWitness::default();
+        let jdtp = JumpDestTableProcessed::new(HashMap::from_iter(jumpdest_table.into_iter().map(
             |(ctx, jumpdest_table)| {
                 let code = self.get_code(ctx).unwrap();
+                let code_hash = keccak(code.clone());
+                for offset in jumpdest_table.clone() {
+                    jdtw.insert(code_hash, ctx, Some(offset));
+                }
                 if let Some(&largest_address) = jumpdest_table.last() {
                     let proofs = get_proofs_and_jumpdests(&code, largest_address, jumpdest_table);
                     (ctx, proofs)
@@ -809,6 +896,7 @@ impl<F: RichField> GenerationState<F> {
                 }
             },
         )));
+        (jdtp, jdtw)
     }
 
     pub(crate) fn get_current_code(&self) -> Result<Vec<u8>, ProgramError> {
@@ -855,7 +943,7 @@ impl<F: RichField> GenerationState<F> {
 /// for which none of the previous 32 bytes in the code (including opcodes
 /// and pushed bytes) is a PUSHXX and the address is in its range. It returns
 /// a vector of even size containing proofs followed by their addresses.
-fn get_proofs_and_jumpdests(
+pub(crate) fn get_proofs_and_jumpdests(
     code: &[u8],
     largest_address: usize,
     jumpdest_table: std::collections::BTreeSet<usize>,

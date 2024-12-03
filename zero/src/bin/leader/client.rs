@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use alloy::providers::Provider;
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
@@ -11,7 +12,7 @@ use zero::pre_checks::check_previous_proof_and_checkpoint;
 use zero::proof_types::GeneratedBlockProof;
 use zero::prover::{self, BlockProverInput, ProverConfig};
 use zero::provider::CachedProvider;
-use zero::rpc;
+use zero::rpc::{self, JumpdestSrc};
 
 use crate::ProofRuntime;
 
@@ -29,6 +30,8 @@ pub(crate) async fn client_main<ProviderT, TransportT>(
     block_time: u64,
     block_interval: BlockInterval,
     mut leader_config: LeaderConfig,
+    jumpdest_src: JumpdestSrc,
+    timeout: Duration,
 ) -> Result<()>
 where
     ProviderT: Provider<TransportT> + 'static,
@@ -81,6 +84,8 @@ where
             cached_provider.clone(),
             block_id,
             leader_config.checkpoint_block_number,
+            jumpdest_src,
+            timeout,
         )
         .await?;
         block_tx

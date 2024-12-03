@@ -5,6 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ethereum_types::{Address, U256};
+use evm_arithmetization::jumpdest::JumpDestTableWitness;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::ConsolidatedHash;
 use keccak_hash::H256;
@@ -111,6 +112,9 @@ pub struct TxnMeta {
 
     /// Gas used by this txn (Note: not cumulative gas used).
     pub gas_used: u64,
+
+    /// JumpDest table
+    pub jumpdest_table: Option<JumpDestTableWitness>,
 }
 
 /// A "trace" specific to an account for a txn.

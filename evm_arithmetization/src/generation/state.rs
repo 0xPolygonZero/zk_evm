@@ -8,6 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
+use super::jumpdest::JumpDestTableProcessed;
 use super::linked_list::LinkedListsPtrs;
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
@@ -100,6 +101,7 @@ pub(crate) trait State<F: RichField> {
     }
 
     /// Returns the context in which the jumpdest analysis should end.
+    // this seems pointless
     fn get_halt_context(&self) -> Option<usize> {
         None
     }
@@ -353,6 +355,7 @@ pub struct GenerationState<F: RichField> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
+    /// In the batch / block??
     pub(crate) next_txn_index: usize,
 
     /// Memory used by stale contexts can be pruned so proving segments can be
@@ -386,8 +389,8 @@ pub struct GenerationState<F: RichField> {
     /// "proof" for a jump destination is either 0 or an address i > 32 in
     /// the code (not necessarily pointing to an opcode) such that for every
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
-    pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
-
+    // jumpdest_table: Option<JumpDestTableProcessed>,
+    pub(crate) jumpdest_tables: Vec<Option<JumpDestTableProcessed>>,
     /// Provides quick access to pointers that reference the location
     /// of either and account or a slot in the respective access list.
     pub(crate) access_lists_ptrs: LinkedListsPtrs,
@@ -456,7 +459,7 @@ impl<F: RichField> GenerationState<F> {
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
-            jumpdest_table: None,
+            jumpdest_tables: vec![],
             access_lists_ptrs: LinkedListsPtrs::default(),
             state_ptrs: LinkedListsPtrs::default(),
             ger_prover_inputs,
@@ -494,12 +497,12 @@ impl<F: RichField> GenerationState<F> {
             // We cannot observe anything as the stack is empty.
             return Ok(());
         }
-        if dst == KERNEL.global_labels["observe_new_address"] {
+        if dst == KERNEL.global_labels["observe_new_address"] && self.is_kernel() {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             let tip_h160 = H160::from(tip_h256);
             self.observe_address(tip_h160);
-        } else if dst == KERNEL.global_labels["observe_new_contract"] {
+        } else if dst == KERNEL.global_labels["observe_new_contract"] && self.is_kernel() {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             self.observe_contract(tip_h256)?;
@@ -572,7 +575,7 @@ impl<F: RichField> GenerationState<F> {
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
-            jumpdest_table: None,
+            jumpdest_tables: self.jumpdest_tables.clone(),
             access_lists_ptrs: self.access_lists_ptrs.clone(),
             state_ptrs: self.state_ptrs.clone(),
         }
@@ -589,7 +592,8 @@ impl<F: RichField> GenerationState<F> {
             .clone_from(&segment_data.extra_data.ger_prover_inputs);
         self.trie_root_ptrs
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
-        self.jumpdest_table
+        // todo verify
+        self.jumpdest_tables
             .clone_from(&segment_data.extra_data.jumpdest_table);
         self.state_ptrs
             .clone_from(&segment_data.extra_data.state_ptrs);

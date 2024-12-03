@@ -81,7 +81,8 @@ fn build_segment_data<F: RichField>(
                 .clone(),
             ger_prover_inputs: interpreter.generation_state.ger_prover_inputs.clone(),
             trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
-            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            // todo verify
+            jumpdest_table: interpreter.generation_state.jumpdest_tables.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
             access_lists_ptrs: interpreter.generation_state.access_lists_ptrs.clone(),
             state_ptrs: interpreter.generation_state.state_ptrs.clone(),
