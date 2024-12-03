@@ -1,0 +1,60 @@
+---
+# Zeth Integration
+
+name: Zeth Integration
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+    branches:
+      - "**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  zeth_integration:
+    name: Zeth Integration
+    runs-on: zero-ci
+    timeout-minutes: 30
+    steps:
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Clone Repositories
+        uses: actions/checkout@v4
+        with:
+          repository: 0xPolygonZero/zeth
+          ref: "arpit/1"
+          path: zeth
+
+      - name: Run zeth network
+        run: |
+          cd zeth
+          touch polygon-zero.db
+          cargo run -- node --dev --http.api all &
+          # TODO - @temaniarpit27 - This is a hack to wait for the network to start
+          echo "Zeth network started, Sleeping for sometime to let the network start"
+          sleep 120
+
+      - name: Generate txn
+        run: |
+          cast send --async --legacy \
+          --from "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" \
+          --private-key "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" \
+          --rpc-url http://localhost:8545 --gas-limit 100000 --value 1 "0x852DA15b70a3e197d1D668a9a481B1F4c2168a5D"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: zk_evm
+
+      - name: Run prove blocks with zero tracer in test_only mode
+        run: |
+          cd zk_evm
+          OUTPUT_TO_TERMINAL=true ./scripts/prove_rpc.sh 1 1 http://localhost:8545 zeth 0 3000 100 test_only
+          echo "Proving blocks in test_only mode finished"
