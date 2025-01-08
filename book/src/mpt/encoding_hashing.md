@@ -4,7 +4,7 @@ Encoding is done recursively starting from the trie root. Leaf, branch
 and extension nodes are encoded as the RLP encoding of list containing
 the hex prefix encoding of the node key as well as
 
-- Leaf Node: the encoding of the the payload,
+- Leaf Node: the encoding of the payload,
 
 - Branch Node: the hash or encoding of the 16 children and the encoding of the payload,
 
