@@ -27,7 +27,7 @@ Nodes are thus given in depth-first order, enabling natural recursive
 methods for encoding and decoding this format. The payload of state and
 receipt tries is given in the natural sequential way. The transaction an
 receipt payloads contain variable size data, thus the input is slightly
-different. The prover input for for the transactions is the transaction
+different. The prover input for the transactions is the transaction
 RLP encoding preceded by its length. For the receipts is in the natural
 sequential way, except that topics and data are preceded by their
 lengths, respectively.
