@@ -285,16 +285,23 @@ where
         &num_helpers_by_ctl,
     );
 
+    println!("recursive verifier {:?}", ctl_vars);
+
     let init_challenger_state_target =
         <C::Hasher as AlgebraicHasher<F>>::AlgebraicPermutation::new(std::iter::from_fn(|| {
             Some(builder.add_virtual_public_input())
         }));
     let mut challenger =
         RecursiveChallenger::<F, C::Hasher, D>::from_state(init_challenger_state_target);
-    let challenges = stark_proof_target.get_challenges::<F, C>(
+    let challenges = stark_proof_target.get_challenges::<F, C, S>(
         &mut builder,
+        stark,
+        &[],
         &mut challenger,
         Some(&ctl_challenges_target),
+        Some(&ctl_vars),
+        degree_bits,
+        stark_proof_target.degree_bits,
         true,
         inner_config,
     );

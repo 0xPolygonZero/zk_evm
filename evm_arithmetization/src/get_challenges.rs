@@ -251,14 +251,16 @@ pub mod testing {
     use plonky2::iop::challenger::Challenger;
     use plonky2::plonk::config::GenericConfig;
     use starky::config::StarkConfig;
+    use starky::cross_table_lookup::{CrossTableLookup, CtlCheckVars};
     use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet};
     use starky::proof::StarkProofChallenges;
+    use starky::stark::Stark;
 
-    use crate::all_stark::OPTIONAL_TABLE_INDICES;
+    use crate::all_stark::{Table, OPTIONAL_TABLE_INDICES};
     use crate::get_challenges::observe_public_values;
-    use crate::proof::*;
     use crate::witness::errors::ProgramError;
     use crate::NUM_TABLES;
+    use crate::{proof::*, AllStark};
 
     /// Randomness for all STARKs.
     pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usize> {
@@ -273,6 +275,7 @@ pub mod testing {
         pub(crate) fn get_challenges(
             &self,
             config: &StarkConfig,
+            all_stark: &AllStark<F, D>,
         ) -> Result<AllProofChallenges<F, D>, ProgramError> {
             let mut challenger = Challenger::<F, C::Hasher>::new();
 
@@ -294,21 +297,286 @@ pub mod testing {
             let ctl_challenges =
                 get_grand_product_challenge_set(&mut challenger, config.num_challenges);
 
-            Ok(AllProofChallenges {
-                stark_challenges: core::array::from_fn(|i| {
-                    if let Some(stark_proof) = &stark_proofs[i] {
-                        challenger.compact();
-                        Some(stark_proof.proof.get_challenges(
-                            &mut challenger,
-                            Some(&ctl_challenges),
-                            true,
-                            config,
-                            None,
-                        ))
-                    } else {
-                        None
+            let mut get_stark_proof = |i: usize| -> Option<StarkProofChallenges<F, D>> {
+                if let Some(stark_proof) = &stark_proofs[i] {
+                    challenger.compact();
+                    let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
+
+                    match i {
+                        0 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::Arithmetic as usize,
+                                    config.num_challenges,
+                                    all_stark.arithmetic_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+
+                            println!("arithmetic ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.arithmetic_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        1 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::BytePacking as usize,
+                                    config.num_challenges,
+                                    all_stark.byte_packing_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+
+                            println!("byte packing ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.byte_packing_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        2 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::Cpu as usize,
+                                    config.num_challenges,
+                                    all_stark.cpu_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+
+                            println!("cpu ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.cpu_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        3 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::Keccak as usize,
+                                    config.num_challenges,
+                                    all_stark.keccak_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+
+                            println!("keccak ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.keccak_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        4 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::KeccakSponge as usize,
+                                    config.num_challenges,
+                                    all_stark.keccak_sponge_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+
+                            println!("keccak sponge ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.keccak_sponge_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        5 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::Logic as usize,
+                                    config.num_challenges,
+                                    all_stark.logic_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+                            println!("logic ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.logic_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        6 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::Memory as usize,
+                                    config.num_challenges,
+                                    all_stark.memory_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+                            println!("memory ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.memory_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        7 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::MemBefore as usize,
+                                    config.num_challenges,
+                                    all_stark.mem_before_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+                            println!("mem_before ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.mem_before_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        8 => {
+                            let (total_num_helpers, _, num_helpers_by_ctl) =
+                                CrossTableLookup::num_ctl_helpers_zs_all(
+                                    &all_stark.cross_table_lookups,
+                                    Table::MemAfter as usize,
+                                    config.num_challenges,
+                                    all_stark.mem_after_stark.constraint_degree(),
+                                );
+                            let ctl_vars = CtlCheckVars::from_proof(
+                                i,
+                                &stark_proof.proof,
+                                &all_stark.cross_table_lookups,
+                                &ctl_challenges,
+                                num_lookup_columns[i],
+                                total_num_helpers,
+                                &num_helpers_by_ctl,
+                            );
+                            println!("mem after ctl vars {:?}", ctl_vars);
+                            Some(stark_proof.proof.get_challenges(
+                                &all_stark.mem_after_stark,
+                                &[],
+                                &mut challenger,
+                                Some(&ctl_challenges),
+                                Some(&ctl_vars),
+                                true,
+                                config,
+                                None,
+                            ))
+                        }
+                        _ => panic!(),
                     }
-                }),
+                } else {
+                    None
+                }
+            };
+            Ok(AllProofChallenges {
+                stark_challenges: core::array::from_fn(|i| get_stark_proof(i)),
                 ctl_challenges,
             })
         }

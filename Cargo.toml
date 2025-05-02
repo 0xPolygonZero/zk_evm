@@ -112,10 +112,10 @@ zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 zero = { path = "zero", default-features = false }
 
 # plonky2-related dependencies
-plonky2 = "1.0.0"
-plonky2_maybe_rayon = "1.0.0"
-plonky2_util = "1.0.0"
-starky = "1.0.0"
+plonky2 = { path = "../plonky2/plonky2" }
+plonky2_maybe_rayon = "0.2.0"
+plonky2_util = { path = "../plonky2/util" }
+starky = {  path = "../plonky2/starky" }
 
 [workspace.lints.clippy]
 too_long_first_doc_paragraph = "allow"

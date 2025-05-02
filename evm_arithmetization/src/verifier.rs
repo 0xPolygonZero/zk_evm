@@ -183,7 +183,7 @@ pub mod testing {
             stark_challenges,
             ctl_challenges,
         } = all_proof
-            .get_challenges(config)
+            .get_challenges(config, &all_stark)
             .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
 
         let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
