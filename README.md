@@ -18,8 +18,7 @@ understood by the zkEVM prover.
 * [evm_arithmetization](./evm_arithmetization/README.md): Defines all the STARK constraints and recursive circuits to generate succinct proofs of EVM execution.
 It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/plonky2.
 
-* [zero_bin](./zero_bin/README.md): A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`evm_arithmetization`](./evm_arithmetization/README.md) to generate
-EVM block proofs.
+* [zero](./zero/README.md): A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`evm_arithmetization`](./evm_arithmetization/README.md) to generate
 
 ## Dependency graph
 
