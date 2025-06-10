@@ -75,7 +75,7 @@ enum Command {
 #[derive(Parser)]
 #[command(version = zero::version(), propagate_version = true)]
 struct Cli {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub(crate) config: RpcToolConfig,
 
     /// Fetch and generate prover input from the RPC endpoint.

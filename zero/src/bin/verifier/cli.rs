@@ -11,6 +11,6 @@ pub(crate) struct Cli {
     pub(crate) file_path: PathBuf,
     /// The prover configuration used to generate the preprocessed circuits
     /// and the verifier state.
-    #[clap(flatten)]
+    #[command(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
 }

@@ -16,9 +16,9 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[derive(Parser)]
 #[command(version = zero::version(), propagate_version = true)]
 struct Cli {
-    #[clap(flatten)]
+    #[command(flatten)]
     paladin: paladin::config::Config,
-    #[clap(flatten)]
+    #[command(flatten)]
     prover_state_config: CliProverStateConfig,
 }
 

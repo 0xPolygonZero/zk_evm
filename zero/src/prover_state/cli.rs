@@ -58,16 +58,16 @@ macro_rules! gen_prover_state_config {
     ($($name:ident: $circuit:expr),*) => {
         #[derive(Args, Debug)]
         pub struct CliProverStateConfig {
-            #[clap(long, help_heading = HEADING, default_value_t = CircuitPersistence::Disk)]
+            #[arg(long, help_heading = HEADING, default_value_t = CircuitPersistence::Disk)]
             pub persistence: CircuitPersistence,
-            #[clap(long, help_heading = HEADING, default_value_t = TableLoadStrategy::OnDemand)]
+            #[arg(long, help_heading = HEADING, default_value_t = TableLoadStrategy::OnDemand)]
             pub load_strategy: TableLoadStrategy,
             /// Run with a low-security but fast STARK configuration. Enable this only for testing.
             #[arg(long)]
             pub use_test_config: bool,
 
             $(
-                #[clap(
+                #[arg(
                     long,
                     value_name = VALUE_NAME,
                     help_heading = HEADING,

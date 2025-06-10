@@ -40,7 +40,7 @@ use zero::prover::{cli::CliProverConfig, BlockProverInput, ProverConfig};
 #[command(version = zero::version(), propagate_version = true)]
 pub(crate) struct Cli {
     /// Prover configuration
-    #[clap(flatten)]
+    #[command(flatten)]
     pub(crate) prover_config: CliProverConfig,
 
     /// The previous proof output.

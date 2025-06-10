@@ -16,15 +16,15 @@ pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
 
-    #[clap(flatten)]
+    #[command(flatten)]
     pub(crate) paladin: paladin::config::Config,
 
-    #[clap(flatten)]
+    #[command(flatten)]
     pub(crate) prover_config: CliProverConfig,
 
     // Note this is only relevant for the leader when running in in-memory
     // mode.
-    #[clap(flatten)]
+    #[command(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
 
     // Mode to use for worker for setup (affinity or default)
